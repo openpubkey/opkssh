@@ -28,5 +28,5 @@ var (
 	_, b, _, _ = runtime.Caller(0)
 
 	// Root is the root folder of the opkssh project
-	Root = filepath.Join(filepath.Dir(b), "../../..")
+	Root = filepath.Join(filepath.Dir(b), "../..")
 )

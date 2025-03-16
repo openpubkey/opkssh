@@ -43,7 +43,7 @@ func RunExampleOpContainer(ctx context.Context, networkName string, env map[stri
 	req := testcontainers.ContainerRequest{
 		FromDockerfile: testcontainers.FromDockerfile{
 			Context:       projectpath.Root,
-			Dockerfile:    filepath.Join("opkssh", "test", "integration", "provider", "exampleop.Dockerfile"),
+			Dockerfile:    filepath.Join("test", "integration", "provider", "exampleop.Dockerfile"),
 			PrintBuildLog: true,
 			KeepImage:     true,
 		},

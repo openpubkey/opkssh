@@ -43,7 +43,7 @@ func RunOpkSshContainer(ctx context.Context, issuerHostIp string, issuerPort str
 	req := testcontainers.ContainerRequest{
 		FromDockerfile: testcontainers.FromDockerfile{
 			Context:       projectpath.Root,
-			Dockerfile:    filepath.Join("opkssh", "test", "integration", "ssh_server", "debian_opkssh.Dockerfile"),
+			Dockerfile:    filepath.Join("test", "integration", "ssh_server", "debian_opkssh.Dockerfile"),
 			PrintBuildLog: true,
 			KeepImage:     true,
 			BuildArgs:     make(map[string]*string),
@@ -101,7 +101,7 @@ func RunUbuntuContainer(ctx context.Context) (*SshServerContainer, error) {
 	req := testcontainers.ContainerRequest{
 		FromDockerfile: testcontainers.FromDockerfile{
 			Context:    projectpath.Root,
-			Dockerfile: filepath.Join("opkssh", "test", "integration", "ssh_server", "ubuntu.Dockerfile"),
+			Dockerfile: filepath.Join("test", "integration", "ssh_server", "ubuntu.Dockerfile"),
 			KeepImage:  true,
 		},
 		ExposedPorts:  []string{"22/tcp"},
