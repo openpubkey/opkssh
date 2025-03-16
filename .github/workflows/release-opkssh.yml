@@ -27,12 +27,14 @@ jobs:
       - name: Build binaries
         run: |
           GOOS=linux GOARCH=amd64 go build -ldflags="-X main.Version=${VERSION}" -o opkssh-linux-amd64 ./opkssh 
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-X main.Version=${VERSION}" -o opkssh-osx-amd64 ./opkssh
 
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v1
         with:
           files: |
             opkssh-linux-amd64
+            opkssh-osx-amd64
           tag_name: ${{ github.event.release.tag_name }}
           name: Release ${{ github.event.release.tag_name }}
           body: ${{ github.event.release.body }}
