@@ -25,7 +25,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/openpubkey/opkssh/opkssh/internal/projectpath"
+	"github.com/openpubkey/opkssh/internal/projectpath"
 
 	"github.com/docker/go-connections/nat"
 	"github.com/testcontainers/testcontainers-go"
