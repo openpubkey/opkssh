@@ -25,7 +25,7 @@ This is useful if you want to install a locally built opkssh binary.
 **1: Build opkssh.** Run the following from the root directory, replace GOARCH and GOOS to match with server you wish to install OPKSSH. This will generate the opkssh binary.
 
 ```bash
-go build ./opkssh
+go build
 ```
 
 **2: Copy opkssh to server.** Copy the opkssh binary you just built in the previous step to the SSH server you want to configure

@@ -28,7 +28,7 @@ jobs:
     - name: Install dependencies
       run: go mod download
     - name: Build
-      run: go build -v -o /dev/null ./opkssh/
+      run: go build -v -o /dev/null
   # Run integration tests
   test:
     needs: build

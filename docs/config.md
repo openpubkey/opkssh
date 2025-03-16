@@ -100,8 +100,8 @@ sudo chmod 640 /etc/opk/auth_id
 
 cd /tmp
 git clone https://github.com/openpubkey/opkssh.git
-cd openpubkey
-sudo go build -v -o /usr/local/bin/opkssh ./opkssh
+cd opkssh
+sudo go build -v -o /usr/local/bin/opkssh
 sudo chmod 711 /usr/local/bin/opkssh
 sudo chown root /usr/local/bin/opkssh
 
