@@ -25,13 +25,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openpubkey/openpubkey/opkssh/policy"
-	"github.com/openpubkey/openpubkey/opkssh/policy/files"
-	"github.com/openpubkey/openpubkey/opkssh/test/integration/ssh_server"
-	"github.com/testcontainers/testcontainers-go"
-
+	"github.com/openpubkey/opkssh/policy"
+	"github.com/openpubkey/opkssh/policy/files"
+	"github.com/openpubkey/opkssh/test/integration/ssh_server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
 	tcexec "github.com/testcontainers/testcontainers-go/exec"
 )
 

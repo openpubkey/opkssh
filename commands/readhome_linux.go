@@ -28,7 +28,7 @@ import (
 	"strconv"
 	"syscall"
 
-	"github.com/openpubkey/openpubkey/opkssh/policy/files"
+	"github.com/openpubkey/opkssh/policy/files"
 )
 
 // ReadHome is used to read the home policy file for the user with

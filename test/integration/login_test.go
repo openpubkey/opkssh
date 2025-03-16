@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openpubkey/openpubkey/opkssh/commands"
+	"github.com/openpubkey/opkssh/commands"
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh"

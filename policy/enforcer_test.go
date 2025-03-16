@@ -21,9 +21,9 @@ import (
 	"testing"
 
 	"github.com/openpubkey/openpubkey/client"
-	"github.com/openpubkey/openpubkey/opkssh/policy"
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/openpubkey/providers/mocks"
+	"github.com/openpubkey/opkssh/policy"
 	"github.com/stretchr/testify/require"
 )
 

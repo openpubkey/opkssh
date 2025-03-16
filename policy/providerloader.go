@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/openpubkey/openpubkey/opkssh/policy/files"
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/openpubkey/verifier"
+	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/spf13/afero"
 )
 

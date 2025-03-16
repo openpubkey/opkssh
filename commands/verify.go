@@ -19,10 +19,10 @@ package commands
 import (
 	"context"
 
-	"github.com/openpubkey/openpubkey/opkssh/policy"
-	"github.com/openpubkey/openpubkey/opkssh/sshcert"
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/openpubkey/verifier"
+	"github.com/openpubkey/opkssh/policy"
+	"github.com/openpubkey/opkssh/sshcert"
 	"golang.org/x/crypto/ssh"
 )
 

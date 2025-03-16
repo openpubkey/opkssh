@@ -35,12 +35,12 @@ import (
 
 	"github.com/openpubkey/openpubkey/discover"
 	simpleoidc "github.com/openpubkey/openpubkey/oidc"
-	"github.com/openpubkey/openpubkey/opkssh/commands"
-	testprovider "github.com/openpubkey/openpubkey/opkssh/test/integration/provider"
-	"github.com/openpubkey/openpubkey/opkssh/test/integration/ssh_server"
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/openpubkey/pktoken/clientinstance"
 	"github.com/openpubkey/openpubkey/providers"
+	"github.com/openpubkey/opkssh/commands"
+	testprovider "github.com/openpubkey/opkssh/test/integration/provider"
+	"github.com/openpubkey/opkssh/test/integration/ssh_server"
 
 	"github.com/melbahja/goph"
 	"github.com/stretchr/testify/assert"

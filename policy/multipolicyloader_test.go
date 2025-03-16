@@ -21,7 +21,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openpubkey/openpubkey/opkssh/policy"
+	"github.com/openpubkey/opkssh/policy"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
