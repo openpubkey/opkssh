@@ -1,5 +1,7 @@
 # OpenPubkey SSH (OPKSSH)
 
+[![Go Coverage](https://github.com/openpubkey/opkssh/wiki/coverage.svg)](https://raw.githack.com/wiki/openpubkey/opkssh/coverage.html)
+
 opkssh is a tool which enables OpenID Connect to be used with ssh.
 It does not replace ssh, but rather generates ssh public keys that contain PK Tokens and configures sshd to verify the PK Token in the ssh public keys.
 PK Tokens are a backwards compatible extension of ID Tokens which contain a public key.
@@ -12,7 +14,7 @@ Currently opkssh supports Google, Microsoft/Azure and Gitlab. If you have a gmai
 To configure a linux server to use opkssh simply run (root level privileges):
 
 ```bash
-wget -qO- "https://raw.githubusercontent.com/openpubkey/openpubkey/main/opkssh/scripts/install-linux.sh" | sudo bash
+wget -qO- "https://raw.githubusercontent.com/openpubkey/opkssh/main/scripts/install-linux.sh" | sudo bash
 ```
 
  This will download the opkssh binary, install it as `/usr/local/bin/opkssh`, and then configure ssh to use opkssh as an additional authentication mechanism.
@@ -27,14 +29,14 @@ To ssh, Alice first needs to download the opkssh binary:
 
 |           | Download URL |
 |-----------|--------------|
-|🐧 Linux   | [github.com/openpubkey/openpubkey/releases/latest/download/opkssh-linux-amd64](https://github.com/openpubkey/openpubkey/releases/latest/download/opkssh-linux-amd64) |
-|🍎 OSX   | [github.com/openpubkey/openpubkey/releases/latest/download/opkssh-osx-amd64](https://github.com/openpubkey/openpubkey/releases/latest/download/opkssh-osx-amd64) |
-| ⊞ Win   | [github.com/openpubkey/openpubkey/releases/latest/download/opkssh-windows-amd64.exe](https://github.com/openpubkey/openpubkey/releases/latest/download/opkssh-windows-amd64.exe) |
+|🐧 Linux   | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64) |
+|🍎 OSX   | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64) |
+| ⊞ Win   | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-windows-amd64.exe](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-windows-amd64.exe) |
 
 On OSX she can install opkssh by running:
 
 ```bash
-curl -L https://github.com/openpubkey/openpubkey/releases/latest/download/opkssh-osx-amd64 -o opkssh; chmod +x opkssh
+curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64 -o opkssh; chmod +x opkssh
 ```
 
 On her local computer Alice runs:
@@ -190,4 +192,4 @@ AuthorizedKeysCommandUser opksshuser
 
 ## More information
 
-We document how to manually install opkssh [here](https://raw.githubusercontent.com/openpubkey/openpubkey/main/opkssh/scripts/installing.md).
+We document how to manually install opkssh [here](https://raw.githubusercontent.com/openpubkey/opkssh/main/opkssh/scripts/installing.md).

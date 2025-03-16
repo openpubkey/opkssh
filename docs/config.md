@@ -99,7 +99,7 @@ sudo chown root:opksshuser /etc/opk/auth_id
 sudo chmod 640 /etc/opk/auth_id
 
 cd /tmp
-git clone https://github.com/openpubkey/openpubkey.git
+git clone https://github.com/openpubkey/opkssh.git
 cd openpubkey
 sudo go build -v -o /usr/local/bin/opkssh ./opkssh
 sudo chmod 711 /usr/local/bin/opkssh

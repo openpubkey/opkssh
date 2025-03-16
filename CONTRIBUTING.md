@@ -1,17 +1,19 @@
 # Contributing to OpenPubkey
 
-Welcome to OpenPubkey! We are so excited you are here. Thank you for your interest in contributing your time and expertise to the project. The following document details contribution guidelines.
+Welcome to OpenPubkey SSH! We are so excited you are here. Thank you for your interest in contributing your time and expertise to the project. The following document details contribution guidelines.
 
 # Getting Started
 
 Whether you're addressing an open issue (or filing a new one), fixing a typo in our documentation, adding to core capabilities of the project, or introducing a new use case, anyone from the community is welcome here at OpenPubkey.
 
 ## Include Licensing at the Top of Each File
-At the top of each file in your commit, please ensure the following is captured in a comment: 
+
+At the top of each file in your commit, please ensure the following is captured in a comment:
 
 ` SPDX-License-Identifier: Apache-2.0 `
 
 ## Sign Off on Your Commits
+
 Contributors are required to sign off on their commits. A sign off certifies that you wrote the associated change or have permission to submit it as an open-source patch. All submissions are bound by the [Developer's Certificate of Origin 1.1](https://developercertificate.org/) and [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
 
 ```
@@ -63,11 +65,12 @@ Date:   Thurs Nov 9 06:14:13 2023 -0400
 
 OpenPubkey is managed from the `main` branch. To ensure your contribution is reviewed, all pull requests must be made against the `main` branch.
 
-PRs must include a brief summary of what the change is, any issues associated with the change, and any fixes the change addresses. Please include the relevant link(s) for any fixed issues. 
+PRs must include a brief summary of what the change is, any issues associated with the change, and any fixes the change addresses. Please include the relevant link(s) for any fixed issues.
 
 Pull requests do not have to pass all automated checks before being opened, but all checks must pass before merging. This can be useful if you need help figuring out why a required check is failing.
 
 Our automated PR checks verify that:
+
  1. All unit tests pass, which can be done locally by running `go test ./...`.
  2. The code has been formatted correctly, according to `go fmt`.
  3. There are no obvious errors, according to `go vet`.

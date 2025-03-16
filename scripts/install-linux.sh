@@ -7,7 +7,7 @@ set -e  # Exit if any command fails
 # Define variables
 INSTALL_DIR="/usr/local/bin"
 BINARY_NAME="opkssh"
-GITHUB_REPO="openpubkey/openpubkey"
+GITHUB_REPO="openpubkey/opkssh"
 
 # Define the default OpenID Providers
 PROVIDER_GOOGLE="https://accounts.google.com 411517154569-7f10v0ftgp5elms1q8fm7avtp33t7i7n.apps.googleusercontent.com 24h"

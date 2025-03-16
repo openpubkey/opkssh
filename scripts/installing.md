@@ -1,12 +1,12 @@
 
 # Installing opkssh
 
-This document provides a detailed description of how our [install-linux.sh](https://raw.githubusercontent.com/openpubkey/openpubkey/main/opkssh/scripts/install-linux.sh) script works and the security protections used.
+This document provides a detailed description of how our [install-linux.sh](https://raw.githubusercontent.com/openpubkey/opkssh/main/scripts/install-linux.sh) script works and the security protections used.
 
 If you just want to install opkssh you should run:
 
 ```bash
-wget -qO- "https://raw.githubusercontent.com/openpubkey/openpubkey/main/opkssh/scripts/install-linux.sh" | sudo bash
+wget -qO- "https://raw.githubusercontent.com/openpubkey/opkssh/main/scripts/install-linux.sh" | sudo bash
 ```
 
 ## Script commands
