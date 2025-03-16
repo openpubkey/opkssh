@@ -32,15 +32,17 @@ curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx
 |🍎 OSX   | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64) |
 | ⊞ Win   | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-windows-amd64.exe](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-windows-amd64.exe) |
 
+
 Once Alice downloads opkssh on her local computer, she Alice runs:
 
 ```bash
 opkssh login
 ```
 
-which opens a browser window to authenticate to google and then generate an SSH public key in `~/.ssh/id_dsaKeys`.
+which opens a browser window to authenticate to google and then generates an SSH public key in `~/.ssh/id_ecdsas` which contains her PK Token.
+By default this key will expire after 24 hours and Alice must run `opkssh login` to generate a new ssh key.
 
-After this she can SSH as normal:
+Since her PK Token has been saved as an SSH key she can SSH as normal:
 
 ```bash
 ssh root@server.example.com
