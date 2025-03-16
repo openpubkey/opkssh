@@ -11,7 +11,46 @@ Currently opkssh supports Google, Microsoft/Azure and Gitlab. If you have a gmai
 
 ## Getting Started
 
-To configure a linux server to use opkssh simply run (root level privileges):
+To ssh with opkssh, Alice first needs to install opkssh using homebrew or manually downloading the binary.
+
+To install with homebrew run:
+
+```bash
+brew tap openpubkey/opkssh
+brew install opkssh
+```
+
+To install manually, you can download the opkssh binary and run it:
+
+```bash
+curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64 -o opkssh; chmod +x opkssh
+```
+
+|           | Download URL |
+|-----------|--------------|
+|🐧 Linux   | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64) |
+|🍎 OSX   | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64) |
+| ⊞ Win   | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-windows-amd64.exe](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-windows-amd64.exe) |
+
+Once Alice downloads opkssh on her local computer, she Alice runs:
+
+```bash
+opkssh login
+```
+
+which opens a browser window to authenticate to google and then generate an SSH public key in `~/.ssh/id_dsaKeys`.
+
+After this she can SSH as normal:
+
+```bash
+ssh root@server.example.com
+```
+
+This works because SSH will send the public key opkssh wrote in `~/.ssh/id_dsaKey` to the server and sshd running on the server will send the public key to opkssh to verify.
+
+### Installing on a server
+
+To configure a linux server to use opkssh simply run (with root level privileges):
 
 ```bash
 wget -qO- "https://raw.githubusercontent.com/openpubkey/opkssh/main/scripts/install-linux.sh" | sudo bash
@@ -25,48 +64,13 @@ To allow a user, `alice@gmail.com`, to ssh to your server as `root`, run:
 sudo opkssh add root alice@gmail.com google
 ```
 
-To ssh, Alice first needs to install opkssh.
-The recommended approach is with home brew
-
-```bash
-brew tap openpubkey/opkssh
-brew install opkssh
-```
-
-To install manually, you can download the opkssh binary and run it:
-
-|           | Download URL |
-|-----------|--------------|
-|🐧 Linux   | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64) |
-|🍎 OSX   | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64) |
-| ⊞ Win   | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-windows-amd64.exe](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-windows-amd64.exe) |
-
-```bash
-curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64 -o opkssh; chmod +x opkssh
-```
-
-Once Alice opkssh on her local computer, she Alice runs:
-
-```bash
-opkssh login
-```
-
-which opens a browser window to authenticate to google and then generate an SSH public key in `~/.ssh/id_dsaKeys`.
-
-She can SSH as normal:
-
-```bash
-ssh root@server.example.com
-```
-
-This works because SSH will send the public key opkssh wrote in `~/.ssh/id_dsaKey` to the server and sshd running on the server will send the public key to opkssh to verify.
-
 ## How it works
 
 We use two features of SSH to make this work.
 First we leverage the fact that SSH public keys can be SSH certificates and SSH Certificates support arbitrary extensions.
 This allows us to smuggle your PK Token, which includes your ID Token, into the SSH authentication protocol via an extension field of the SSH certificate.
 Second, we use the `AuthorizedKeysCommand` configuration option in `sshd_config` (see [sshd_config manpage](https://man.openbsd.org/sshd_config.5#AuthorizedKeysCommand)) so that the SSH server will send the SSH certificate to an installed program that knows how to verify PK Tokens.
+
 
 ## What is supported
 
@@ -181,7 +185,7 @@ chmod 600 /home/{USER}/.opk/auth_id
 
 ### AuthorizedKeysCommandUser
 
-As recommended we use a low privileged user for the SSH AuthorizedKeysCommandUser.
+We use a low privilege user for the SSH AuthorizedKeysCommandUser.
 Our install script creates this user and group automatically by running:
 
 ```bash
