@@ -25,7 +25,15 @@ To allow a user, `alice@gmail.com`, to ssh to your server as `root`, run:
 sudo opkssh add root alice@gmail.com google
 ```
 
-To ssh, Alice first needs to download the opkssh binary:
+To ssh, Alice first needs to install opkssh.
+The recommended approach is with home brew
+
+```bash
+brew tap openpubkey/opkssh
+brew install opkssh
+```
+
+To install manually, you can download the opkssh binary and run it:
 
 |           | Download URL |
 |-----------|--------------|
@@ -33,13 +41,11 @@ To ssh, Alice first needs to download the opkssh binary:
 |🍎 OSX   | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64) |
 | ⊞ Win   | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-windows-amd64.exe](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-windows-amd64.exe) |
 
-On OSX she can install opkssh by running:
-
 ```bash
 curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64 -o opkssh; chmod +x opkssh
 ```
 
-On her local computer Alice runs:
+Once Alice opkssh on her local computer, she Alice runs:
 
 ```bash
 opkssh login
@@ -192,4 +198,4 @@ AuthorizedKeysCommandUser opksshuser
 
 ## More information
 
-We document how to manually install opkssh [here](https://raw.githubusercontent.com/openpubkey/opkssh/main/opkssh/scripts/installing.md).
+We document how to manually install opkssh on a server [here](https://raw.githubusercontent.com/openpubkey/opkssh/main/opkssh/scripts/installing.md).
