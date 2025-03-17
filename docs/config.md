@@ -26,7 +26,7 @@ The file lives at `/etc/opk/providers` and the default values are:
 
 ```bash
 # Issuer Client-ID expiration-policy 
-https://accounts.google.com 411517154569-7f10v0ftgp5elms1q8fm7avtp33t7i7n.apps.googleusercontent.com 24h
+https://accounts.google.com 206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com 24h
 https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0 096ce0a3-5e72-4da8-9c86-12924b294a01 24h
 ```
 
@@ -115,7 +115,7 @@ sed -i '/^AuthorizedKeysCommandUser /s/^/#/' /etc/ssh/sshd_config
 echo "AuthorizedKeysCommand /usr/local/bin/opkssh verify %u %k %t\nAuthorizedKeysCommandUser opksshuser" >> /etc/ssh/sshd_config
 sudo systemctl restart ssh
 
-echo "https://accounts.google.com 411517154569-7f10v0ftgp5elms1q8fm7avtp33t7i7n.apps.googleusercontent.com 24h" >> /etc/opk/providers
+echo "https://accounts.google.com 206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com 24h" >> /etc/opk/providers
 echo "https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0 096ce0a3-5e72-4da8-9c86-12924b294a01 24h" >> /etc/opk/providers
 ```
 
