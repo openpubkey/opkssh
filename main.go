@@ -173,7 +173,7 @@ func run() int {
 		//	%k The base64-encoded public key for authentication.
 		//	%t The public key type, in this case an ssh certificate being used as a public key.
 		if len(os.Args) != 5 {
-			log.Println("Invalid number of arguments for verify, expected: `<User (TOKEN u)> <Key type (TOKEN t)> <Cert (TOKEN k)>`")
+			log.Println("Invalid number of arguments for verify, expected: `<User (TOKEN u)> <Cert (TOKEN k)> <Key type (TOKEN t)>`")
 			return 1
 		}
 		userArg := os.Args[2]
@@ -299,12 +299,12 @@ func checkOpenSSHVersion() {
 	cmd := exec.Command("ssh", "-V")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		fmt.Println("Error executing sshd -V:", err)
+		log.Println("Warning: Error executing ssh -V:", err)
 		return
 	}
 
 	if ok, _ := isOpenSSHVersion8Dot1OrGreater(string(output)); !ok {
-		log.Println("OpenPubkey SSH requires OpenSSH v. 8.1 or greater")
+		log.Println("Warning: OpenPubkey SSH requires OpenSSH v. 8.1 or greater")
 	}
 }
 
