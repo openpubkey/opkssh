@@ -159,7 +159,7 @@ func run() int {
 		}
 
 		// Logs if using an unsupported OpenSSH version
-		checkOpenSSHVersion()
+		// checkOpenSSHVersion()
 
 		// The "AuthorizedKeysCommand" func is designed to be used by sshd and specified as an AuthorizedKeysCommand
 		// ref: https://man.openbsd.org/sshd_config#AuthorizedKeysCommand
