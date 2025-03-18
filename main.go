@@ -293,7 +293,10 @@ func printConfigProblems() {
 // system running the verifier is greater than or equal to 8.1;
 // if not then prints a warning
 func checkOpenSSHVersion() {
-	cmd := exec.Command("sshd", "-V")
+
+	// Redhat/centos does not recognize `sshd -V` but does recognize `ssh -V`
+	// Ubuntu recognizes both
+	cmd := exec.Command("ssh", "-V")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		fmt.Println("Error executing sshd -V:", err)
