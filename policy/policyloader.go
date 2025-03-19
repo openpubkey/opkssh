@@ -170,7 +170,7 @@ func (h *HomePolicyLoader) LoadHomePolicy(username string, skipInvalidEntries bo
 		} else if len(optLoader) > 1 {
 			return nil, "", fmt.Errorf("only one optional loaders allowed, got %d", len(optLoader))
 		} else {
-			return nil, "", fmt.Errorf("failed to read user policy file %s: %w", policyFilePath, err)
+			return nil, "", fmt.Errorf("failed to read user policy file %s: %w", policyFilePath, userPolicyErr)
 		}
 	}
 	policy := FromTable(policyBytes, policyFilePath)
