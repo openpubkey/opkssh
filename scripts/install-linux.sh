@@ -155,15 +155,19 @@ if command -v getenforce >/dev/null 2>&1; then
 module opkssh 1.0;
 
 require {
-    type var_log_t;
-    type sshd_t;
-    type http_port_t;
-    class file open;
-    class tcp_socket name_connect;
+        type var_log_t;
+        type ssh_exec_t;
+        type sshd_t;
+        type sudo_exec_t;
+        type http_port_t;
+        class file { execute open };
+        class tcp_socket name_connect;
 }
 
-allow sshd_t var_log_t:file open;
 allow sshd_t http_port_t:tcp_socket name_connect;
+allow sshd_t ssh_exec_t:file execute;
+allow sshd_t sudo_exec_t:file execute;
+allow sshd_t var_log_t:file open;
 EOF
 
         echo "  Compiling SELinux module..."
