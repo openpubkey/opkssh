@@ -142,7 +142,7 @@ if command -v getenforce >/dev/null 2>&1; then
         # Create temporary files for the compiled module and package
         TE_TMP="/tmp/opkssh.te"
         MOD_TMP="/tmp/opkssh.mod" # SELinux requires that modules have the same file name as the module name
-        PP_TMP="/tmp/opkssh.pp)
+        PP_TMP="/tmp/opkssh.pp"
 
         # Pipe the TE directives into checkmodule via /dev/stdin
         # This module grants the ability to:
