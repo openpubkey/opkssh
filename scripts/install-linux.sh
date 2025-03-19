@@ -140,6 +140,7 @@ if command -v getenforce >/dev/null 2>&1; then
         restorecon -v "$INSTALL_DIR/$BINARY_NAME"
 
         # Create temporary files for the compiled module and package
+        TE_TMP=$(mktemp /tmp/opkssh.XXXXXX.te)
         MOD_TMP=$(mktemp /tmp/opkssh.XXXXXX.mod)
         PP_TMP=$(mktemp /tmp/opkssh.XXXXXX.pp)
 
@@ -151,8 +152,8 @@ if command -v getenforce >/dev/null 2>&1; then
         # 2. Make TCP connections to ports labeled http_port_t. This is
         #  needed so opkssh can download the public keys of the OpenID
         #  providers.
-        checkmodule -M -m -o "$MOD_TMP" /dev/stdin << 'EOF'
-module opkssh-perms 1.0;
+        cat << 'EOF' > "$TMP_TE"
+module opkssh 1.0;
 
 require {
     type var_log_t;
@@ -162,12 +163,11 @@ require {
     class tcp_socket name_connect;
 }
 
-# Allow processes in the sshd_t domain to open files labeled var_log_t
 allow sshd_t var_log_t:file open;
-
-# Allow processes in the sshd_t domain to initiate TCP connections to ports labeled http_port_t
 allow sshd_t http_port_t:tcp_socket name_connect;
 EOF
+
+        checkmodule -M -m -o "$MOD_TMP" "$TMP_TE"
 
         echo "  Packaging module..."
         semodule_package -o "$PP_TMP" -m "$MOD_TMP"
@@ -175,7 +175,7 @@ EOF
         echo "  Installing module..."
         semodule -i "$PP_TMP"
 
-        rm -f "$MOD_TMP" "$PP_TMP"
+        rm -f "$TE_TMP" "$MOD_TMP" "$PP_TMP"
         echo "SELinux module installed successfully!"
     fi
 fi
