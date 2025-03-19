@@ -18,13 +18,16 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 
@@ -156,7 +159,7 @@ func run() int {
 		}
 
 		// Logs if using an unsupported OpenSSH version
-		// checkOpenSSHVersion()
+		checkOpenSSHVersion()
 
 		// The "AuthorizedKeysCommand" func is designed to be used by sshd and specified as an AuthorizedKeysCommand
 		// ref: https://man.openbsd.org/sshd_config#AuthorizedKeysCommand
@@ -289,47 +292,47 @@ func printConfigProblems() {
 // The following two functions check whether the OpenSSH version on the
 // system running the verifier is greater than or equal to 8.1;
 // if not then prints a warning
-// func checkOpenSSHVersion() {
+func checkOpenSSHVersion() {
 
-// 	// Redhat/centos does not recognize `sshd -V` but does recognize `ssh -V`
-// 	// Ubuntu recognizes both
-// 	cmd := exec.Command("ssh", "-V")
-// 	output, err := cmd.CombinedOutput()
-// 	if err != nil {
-// 		log.Println("Warning: Error executing ssh -V:", err)
-// 		return
-// 	}
+	// Redhat/centos does not recognize `sshd -V` but does recognize `ssh -V`
+	// Ubuntu recognizes both
+	cmd := exec.Command("ssh", "-V")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Println("Warning: Error executing ssh -V:", err)
+		return
+	}
 
-// 	if ok, _ := isOpenSSHVersion8Dot1OrGreater(string(output)); !ok {
-// 		log.Println("Warning: OpenPubkey SSH requires OpenSSH v. 8.1 or greater")
-// 	}
-// }
+	if ok, _ := isOpenSSHVersion8Dot1OrGreater(string(output)); !ok {
+		log.Println("Warning: OpenPubkey SSH requires OpenSSH v. 8.1 or greater")
+	}
+}
 
-// func isOpenSSHVersion8Dot1OrGreater(opensshVersion string) (bool, error) {
-// 	// To handle versions like 9.9p1; we only need the initial numeric part for the comparison
-// 	re, err := regexp.Compile(`^(\d+(?:\.\d+)*).*`)
-// 	if err != nil {
-// 		fmt.Println("Error compiling regex:", err)
-// 		return false, err
-// 	}
+func isOpenSSHVersion8Dot1OrGreater(opensshVersion string) (bool, error) {
+	// To handle versions like 9.9p1; we only need the initial numeric part for the comparison
+	re, err := regexp.Compile(`^(\d+(?:\.\d+)*).*`)
+	if err != nil {
+		fmt.Println("Error compiling regex:", err)
+		return false, err
+	}
 
-// 	opensshVersion = strings.TrimPrefix(
-// 		strings.Split(opensshVersion, ", ")[0],
-// 		"OpenSSH_",
-// 	)
+	opensshVersion = strings.TrimPrefix(
+		strings.Split(opensshVersion, ", ")[0],
+		"OpenSSH_",
+	)
 
-// 	matches := re.FindStringSubmatch(opensshVersion)
+	matches := re.FindStringSubmatch(opensshVersion)
 
-// 	if len(matches) <= 0 {
-// 		fmt.Println("Invalid OpenSSH version")
-// 		return false, errors.New("invalid OpenSSH version")
-// 	}
+	if len(matches) <= 0 {
+		fmt.Println("Invalid OpenSSH version")
+		return false, errors.New("invalid OpenSSH version")
+	}
 
-// 	version := matches[1]
+	version := matches[1]
 
-// 	if version >= "8.1" {
-// 		return true, nil
-// 	}
+	if version >= "8.1" {
+		return true, nil
+	}
 
-// 	return false, nil
-// }
+	return false, nil
+}
