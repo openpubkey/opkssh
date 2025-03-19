@@ -135,8 +135,48 @@ chmod 755 "$INSTALL_DIR/$BINARY_NAME"
 # Checks if SELinux is enabled and if so, ensures the context is set correctly
 if command -v getenforce >/dev/null 2>&1; then
     if [ "$(getenforce)" != "Disabled" ]; then
-        echo "SELinux is enabled. Restoring context for $INSTALL_DIR/$BINARY_NAME..."
+        echo "SELinux detected. Configuring SELinux for opkssh"
+        echo "  Restoring context for $INSTALL_DIR/$BINARY_NAME..."
         restorecon -v "$INSTALL_DIR/$BINARY_NAME"
+
+        # Create temporary files for the compiled module and package
+        MOD_TMP=$(mktemp /tmp/opkssh.XXXXXX.mod)
+        PP_TMP=$(mktemp /tmp/opkssh.XXXXXX.pp)
+
+        echo "  Compiling SELinux module..."
+        # Pipe the TE directives into checkmodule via /dev/stdin
+        # This module grants the ability to:
+        # 1. open files labeled in SELinux as var_log_t, i.e. log files.
+        #  This is needed for opkssh to be log errors to its log file.
+        # 2. Make TCP connections to ports labeled http_port_t. This is
+        #  needed so opkssh can download the public keys of the OpenID
+        #  providers.
+        checkmodule -M -m -o "$MOD_TMP" /dev/stdin << 'EOF'
+module opkssh-perms 1.0;
+
+require {
+    type var_log_t;
+    type sshd_t;
+    type http_port_t;
+    class file open;
+    class tcp_socket name_connect;
+}
+
+# Allow processes in the sshd_t domain to open files labeled var_log_t
+allow sshd_t var_log_t:file open;
+
+# Allow processes in the sshd_t domain to initiate TCP connections to ports labeled http_port_t
+allow sshd_t http_port_t:tcp_socket name_connect;
+EOF
+
+        echo "  Packaging module..."
+        semodule_package -o "$PP_TMP" -m "$MOD_TMP"
+
+        echo "  Installing module..."
+        semodule -i "$PP_TMP"
+
+        rm -f "$MOD_TMP" "$PP_TMP"
+        echo "SELinux module installed successfully!"
     fi
 fi
 
