@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os/user"
 	"path"
+	"path/filepath"
 
 	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/spf13/afero"
@@ -28,7 +29,7 @@ import (
 
 // SystemDefaultPolicyPath is the default filepath where opkssh policy is
 // defined
-const SystemDefaultPolicyPath = "/etc/opk/auth_id"
+var SystemDefaultPolicyPath = filepath.FromSlash("/etc/opk/auth_id")
 
 // UserLookup defines the minimal interface to lookup users on the current
 // system
