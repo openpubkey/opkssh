@@ -154,12 +154,13 @@ if command -v getenforce >/dev/null 2>&1; then
         cat << 'EOF' > "$TE_TMP"
 module opkssh 1.0;
 
+
 require {
-        type sudo_exec_t;
-        type http_port_t;
         type sshd_t;
-        type ssh_exec_t;
         type var_log_t;
+        type ssh_exec_t;
+        type http_port_t;
+        type sudo_exec_t;
         class file { execute execute_no_trans open read };
         class tcp_socket name_connect;
 }
@@ -170,12 +171,10 @@ require {
 allow sshd_t http_port_t:tcp_socket name_connect;
 
 #!!!! This avc is allowed in the current policy
-allow sshd_t ssh_exec_t:file { execute open read };
-allow sshd_t ssh_exec_t:file execute_no_trans;
+allow sshd_t ssh_exec_t:file { execute execute_no_trans open read };
 
 #!!!! This avc is allowed in the current policy
-allow sshd_t sudo_exec_t:file { execute open read };
-allow sshd_t sudo_exec_t:file execute_no_trans;
+allow sshd_t sudo_exec_t:file { execute execute_no_trans open read };
 
 #!!!! This avc is allowed in the current policy
 allow sshd_t var_log_t:file open;
