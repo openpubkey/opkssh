@@ -144,7 +144,6 @@ if command -v getenforce >/dev/null 2>&1; then
         MOD_TMP=$(mktemp /tmp/opkssh.XXXXXX.mod)
         PP_TMP=$(mktemp /tmp/opkssh.XXXXXX.pp)
 
-        echo "  Compiling SELinux module..."
         # Pipe the TE directives into checkmodule via /dev/stdin
         # This module grants the ability to:
         # 1. open files labeled in SELinux as var_log_t, i.e. log files.
@@ -152,7 +151,7 @@ if command -v getenforce >/dev/null 2>&1; then
         # 2. Make TCP connections to ports labeled http_port_t. This is
         #  needed so opkssh can download the public keys of the OpenID
         #  providers.
-        cat << 'EOF' > "$TMP_TE"
+        cat << 'EOF' > "$TE_TMP"
 module opkssh 1.0;
 
 require {
@@ -167,7 +166,8 @@ allow sshd_t var_log_t:file open;
 allow sshd_t http_port_t:tcp_socket name_connect;
 EOF
 
-        checkmodule -M -m -o "$MOD_TMP" "$TMP_TE"
+        echo "  Compiling SELinux module..."
+        checkmodule -M -m -o "$MOD_TMP" "$TE_TMP"
 
         echo "  Packaging module..."
         semodule_package -o "$PP_TMP" -m "$MOD_TMP"
