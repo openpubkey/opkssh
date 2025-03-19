@@ -137,7 +137,7 @@ if command -v getenforce >/dev/null 2>&1; then
     if [ "$(getenforce)" != "Disabled" ]; then
         echo "SELinux detected. Configuring SELinux for opkssh"
         echo "  Restoring context for $INSTALL_DIR/$BINARY_NAME..."
-        restorecon -v "$INSTALL_DIR/$BINARY_NAME"
+        restorecon "$INSTALL_DIR/$BINARY_NAME"
 
         # Create temporary files for the compiled module and package
         TE_TMP="/tmp/opkssh.te"
@@ -161,7 +161,7 @@ require {
         type ssh_exec_t;
         type http_port_t;
         type sudo_exec_t;
-        class file { execute execute_no_trans open read map };
+        class file { append execute execute_no_trans open read map };
         class tcp_socket name_connect;
 }
 
