@@ -42,8 +42,9 @@ type SshServerContainer struct {
 func RunOpkSshContainer(ctx context.Context, issuerHostIp string, issuerPort string, networkName string, bootstrapPolicy bool) (*SshServerContainer, error) {
 	req := testcontainers.ContainerRequest{
 		FromDockerfile: testcontainers.FromDockerfile{
-			Context:       projectpath.Root,
-			Dockerfile:    filepath.Join("test", "integration", "ssh_server", "debian_opkssh.Dockerfile"),
+			Context: projectpath.Root,
+			// Dockerfile:    filepath.Join("test", "integration", "ssh_server", "debian_opkssh.Dockerfile"),
+			Dockerfile:    filepath.Join("test", "integration", "ssh_server", "centos_opkssh.Dockerfile"),
 			PrintBuildLog: true,
 			KeepImage:     true,
 			BuildArgs:     make(map[string]*string),

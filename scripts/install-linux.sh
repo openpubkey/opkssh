@@ -11,7 +11,7 @@ else
     echo "Unsupported OS type."
     exit 1
 fi
-echo "Detect linux flavor is $OS_TYPE"
+echo "Detected OS is $OS_TYPE"
 
 # Define variables
 INSTALL_DIR="/usr/local/bin"
