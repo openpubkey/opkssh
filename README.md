@@ -73,7 +73,6 @@ First we leverage the fact that SSH public keys can be SSH certificates and SSH 
 This allows us to smuggle your PK Token, which includes your ID Token, into the SSH authentication protocol via an extension field of the SSH certificate.
 Second, we use the `AuthorizedKeysCommand` configuration option in `sshd_config` (see [sshd_config manpage](https://man.openbsd.org/sshd_config.5#AuthorizedKeysCommand)) so that the SSH server will send the SSH certificate to an installed program that knows how to verify PK Tokens.
 
-
 ## What is supported
 
 ### Client support
@@ -89,6 +88,7 @@ Second, we use the `AuthorizedKeysCommand` configuration option in `sshd_config`
 | OS               | Supported | Tested | Version Tested         | Possible Future Support |
 | --------        | --------      | ------- | ---------------------- |----------- |
 | Linux       | ✅             |  ✅     |  Ubuntu 24.04.1 LTS  | -  |
+| Linux       | ✅             |  ✅     |  Centos 9  | -  |
 | OSX       | ❌             |  ❌     |  -  | Likely  |
 | Windows11 | ❌            |   ❌     |  -                              | Likely |
 

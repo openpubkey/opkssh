@@ -46,7 +46,7 @@ func RunOpkSshContainer(ctx context.Context, issuerHostIp string, issuerPort str
 	var err error
 
 	if osType == "ubuntu" {
-		dockerFile = filepath.Join("test", "integration", "ssh_server", "debian_opkssh.Dockerfilee")
+		dockerFile = filepath.Join("test", "integration", "ssh_server", "debian_opkssh.Dockerfile")
 	} else if osType == "centos" {
 		dockerFile = filepath.Join("test", "integration", "ssh_server", "centos_opkssh.Dockerfile")
 	} else {
