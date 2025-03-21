@@ -16,95 +16,100 @@
 
 package main
 
-// func TestIsOpenSSHVersion8Dot1OrGreater(t *testing.T) {
-// 	tests := []struct {
-// 		name          string
-// 		input         string
-// 		wantIsGreater bool
-// 		wantErr       error
-// 	}{
-// 		{
-// 			name:          "Exact 8.1",
-// 			input:         "OpenSSH_8.1",
-// 			wantIsGreater: true,
-// 			wantErr:       nil,
-// 		},
-// 		{
-// 			name:          "Above 8.1 (8.4)",
-// 			input:         "OpenSSH_8.4",
-// 			wantIsGreater: true,
-// 			wantErr:       nil,
-// 		},
-// 		{
-// 			name:          "Above 8.1 with patch (9.9p1)",
-// 			input:         "OpenSSH_9.9p1",
-// 			wantIsGreater: true,
-// 			wantErr:       nil,
-// 		},
-// 		{
-// 			name:          "Below 8.1 (7.9)",
-// 			input:         "OpenSSH_7.9",
-// 			wantIsGreater: false,
-// 			wantErr:       nil,
-// 		},
-// 		{
-// 			name:          "Multiple dotted version above 8.1 (8.1.2)",
-// 			input:         "OpenSSH_8.1.2",
-// 			wantIsGreater: true,
-// 			wantErr:       nil,
-// 		},
-// 		{
-// 			name:          "Multiple dotted version below 8.1 (7.10.3)",
-// 			input:         "OpenSSH_7.10.3",
-// 			wantIsGreater: false,
-// 			wantErr:       nil,
-// 		},
-// 		{
-// 			name:          "Malformed version string",
-// 			input:         "OpenSSH_, something not right",
-// 			wantIsGreater: false,
-// 			wantErr:       errors.New("invalid OpenSSH version"),
-// 		},
-// 		{
-// 			name:          "No OpenSSH prefix at all",
-// 			input:         "Completely invalid input",
-// 			wantIsGreater: false,
-// 			wantErr:       errors.New("invalid OpenSSH version"),
-// 		},
-// 		{
-// 			name:          "Includes trailing info (8.2, Raspbian-1)",
-// 			input:         "OpenSSH_8.2, Raspbian-1",
-// 			wantIsGreater: true,
-// 			wantErr:       nil,
-// 		},
-// 	}
+import (
+	"errors"
+	"testing"
+)
 
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			gotIsGreater, gotErr := isOpenSSHVersion8Dot1OrGreater(tt.input)
+func TestIsOpenSSHVersion8Dot1OrGreater(t *testing.T) {
+	tests := []struct {
+		name          string
+		input         string
+		wantIsGreater bool
+		wantErr       error
+	}{
+		{
+			name:          "Exact 8.1",
+			input:         "OpenSSH_8.1",
+			wantIsGreater: true,
+			wantErr:       nil,
+		},
+		{
+			name:          "Above 8.1 (8.4)",
+			input:         "OpenSSH_8.4",
+			wantIsGreater: true,
+			wantErr:       nil,
+		},
+		{
+			name:          "Above 8.1 with patch (9.9p1)",
+			input:         "OpenSSH_9.9p1",
+			wantIsGreater: true,
+			wantErr:       nil,
+		},
+		{
+			name:          "Below 8.1 (7.9)",
+			input:         "OpenSSH_7.9",
+			wantIsGreater: false,
+			wantErr:       nil,
+		},
+		{
+			name:          "Multiple dotted version above 8.1 (8.1.2)",
+			input:         "OpenSSH_8.1.2",
+			wantIsGreater: true,
+			wantErr:       nil,
+		},
+		{
+			name:          "Multiple dotted version below 8.1 (7.10.3)",
+			input:         "OpenSSH_7.10.3",
+			wantIsGreater: false,
+			wantErr:       nil,
+		},
+		{
+			name:          "Malformed version string",
+			input:         "OpenSSH_, something not right",
+			wantIsGreater: false,
+			wantErr:       errors.New("invalid OpenSSH version"),
+		},
+		{
+			name:          "No OpenSSH prefix at all",
+			input:         "Completely invalid input",
+			wantIsGreater: false,
+			wantErr:       errors.New("invalid OpenSSH version"),
+		},
+		{
+			name:          "Includes trailing info (8.2, Raspbian-1)",
+			input:         "OpenSSH_8.2, Raspbian-1",
+			wantIsGreater: true,
+			wantErr:       nil,
+		},
+	}
 
-// 			if gotIsGreater != tt.wantIsGreater {
-// 				t.Errorf(
-// 					"isOpenSSHVersion8Dot1OrGreater(%q) got %v; want %v",
-// 					tt.input,
-// 					gotIsGreater,
-// 					tt.wantIsGreater,
-// 				)
-// 			}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotIsGreater, gotErr := isOpenSSHVersion8Dot1OrGreater(tt.input)
 
-// 			if (gotErr != nil) != (tt.wantErr != nil) {
-// 				t.Errorf(
-// 					"isOpenSSHVersion8Dot1OrGreater(%q) error = %v; want %v",
-// 					tt.input,
-// 					gotErr,
-// 					tt.wantErr,
-// 				)
-// 			} else if gotErr != nil && tt.wantErr != nil {
-// 				if gotErr.Error() != tt.wantErr.Error() {
-// 					t.Errorf("Unexpected error message. got %q; want %q",
-// 						gotErr.Error(), tt.wantErr.Error())
-// 				}
-// 			}
-// 		})
-// 	}
-// }
+			if gotIsGreater != tt.wantIsGreater {
+				t.Errorf(
+					"isOpenSSHVersion8Dot1OrGreater(%q) got %v; want %v",
+					tt.input,
+					gotIsGreater,
+					tt.wantIsGreater,
+				)
+			}
+
+			if (gotErr != nil) != (tt.wantErr != nil) {
+				t.Errorf(
+					"isOpenSSHVersion8Dot1OrGreater(%q) error = %v; want %v",
+					tt.input,
+					gotErr,
+					tt.wantErr,
+				)
+			} else if gotErr != nil && tt.wantErr != nil {
+				if gotErr.Error() != tt.wantErr.Error() {
+					t.Errorf("Unexpected error message. got %q; want %q",
+						gotErr.Error(), tt.wantErr.Error())
+				}
+			}
+		})
+	}
+}
