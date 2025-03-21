@@ -21,6 +21,7 @@ package ssh_server
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -40,11 +41,22 @@ type SshServerContainer struct {
 }
 
 func RunOpkSshContainer(ctx context.Context, issuerHostIp string, issuerPort string, networkName string, bootstrapPolicy bool) (*SshServerContainer, error) {
+	osType := os.Getenv("OS_TYPE")
+	var dockerFile string
+	var err error
+
+	if osType == "ubuntu" {
+		dockerFile = filepath.Join("test", "integration", "ssh_server", "debian_opkssh.Dockerfilee")
+	} else if osType == "centos" {
+		dockerFile = filepath.Join("test", "integration", "ssh_server", "centos_opkssh.Dockerfile")
+	} else {
+		return nil, fmt.Errorf("unsupported OS type: %s", osType)
+	}
+
 	req := testcontainers.ContainerRequest{
 		FromDockerfile: testcontainers.FromDockerfile{
-			Context: projectpath.Root,
-			// Dockerfile:    filepath.Join("test", "integration", "ssh_server", "debian_opkssh.Dockerfile"),
-			Dockerfile:    filepath.Join("test", "integration", "ssh_server", "centos_opkssh.Dockerfile"),
+			Context:       projectpath.Root,
+			Dockerfile:    dockerFile,
 			PrintBuildLog: true,
 			KeepImage:     true,
 			BuildArgs:     make(map[string]*string),
