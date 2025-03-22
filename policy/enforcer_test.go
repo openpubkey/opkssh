@@ -142,6 +142,35 @@ func TestPolicyApproved(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestPolicyEmailDifferentCase(t *testing.T) {
+	t.Parallel()
+
+	op, err := NewMockOpenIdProvider()
+	require.NoError(t, err)
+
+	opkClient, err := client.New(op)
+	require.NoError(t, err)
+	pkt, err := opkClient.Auth(context.Background())
+	require.NoError(t, err)
+
+	var policyWithDiffCapitalizationThanEmail = &policy.Policy{
+		Users: []policy.User{
+			{
+				EmailOrSub: "ArThuR.AArdVARK@Example.COM",
+				Principals: []string{"test"},
+				Issuer:     "https://accounts.example.com",
+			},
+		},
+	}
+
+	policyEnforcer := &policy.Enforcer{
+		PolicyLoader: &MockPolicyLoader{Policy: policyWithDiffCapitalizationThanEmail},
+	}
+
+	err = policyEnforcer.CheckPolicy("test", pkt)
+	require.NoError(t, err, "user should have access despite email capitalization differences")
+}
+
 func TestPolicyDeniedBadUser(t *testing.T) {
 	t.Parallel()
 
@@ -178,4 +207,33 @@ func TestPolicyDeniedNoUserEntry(t *testing.T) {
 
 	err = policyEnforcer.CheckPolicy("test", pkt)
 	require.Error(t, err, "user should not have access")
+}
+
+func TestPolicyDeniedWrongIssuer(t *testing.T) {
+	t.Parallel()
+
+	op, err := NewMockOpenIdProvider()
+	require.NoError(t, err)
+
+	opkClient, err := client.New(op)
+	require.NoError(t, err)
+	pkt, err := opkClient.Auth(context.Background())
+	require.NoError(t, err)
+
+	var policyWithDiffCapitalizationThanEmail = &policy.Policy{
+		Users: []policy.User{
+			{
+				EmailOrSub: "arthur.aardvark@example.com",
+				Principals: []string{"test"},
+				Issuer:     "https://differentIssuer.example.com",
+			},
+		},
+	}
+
+	policyEnforcer := &policy.Enforcer{
+		PolicyLoader: &MockPolicyLoader{Policy: policyWithDiffCapitalizationThanEmail},
+	}
+
+	err = policyEnforcer.CheckPolicy("test", pkt)
+	require.Error(t, err, "user should not have access due to wrong issuer")
 }

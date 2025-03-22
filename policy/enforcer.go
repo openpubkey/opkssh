@@ -19,6 +19,7 @@ package policy
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/openpubkey/openpubkey/pktoken"
 	"golang.org/x/exp/slices"
@@ -62,7 +63,9 @@ func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken) er
 	}
 	for _, user := range policy.Users {
 		// check each entry to see if the user in the claims is included
-		if string(claims.Email) == user.EmailOrSub || string(claims.Sub) == user.EmailOrSub {
+		// email should be a case insensitive check
+		// sub should be a case sensitive check
+		if strings.EqualFold(claims.Email, user.EmailOrSub) || string(claims.Sub) == user.EmailOrSub {
 			if issuer != user.Issuer {
 				continue
 			}
