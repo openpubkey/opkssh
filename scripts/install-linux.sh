@@ -171,6 +171,7 @@ allow sshd_t var_log_t:file { open append };
 EOF
 
         else
+            echo "  Using SELinux module does not permits home policy"
             # Redefine the tmp file names since SELinux modules must have the same name as the file
             TE_TMP="/tmp/opkssh-no-home.te"
             MOD_TMP="/tmp/opkssh-no-home.mod" # SELinux requires that modules have the same file name as the module name
@@ -221,7 +222,7 @@ fi
 echo "Installed $BINARY_NAME to $INSTALL_DIR/$BINARY_NAME"
 
 # Verify installation
-if command -v $BINARY_NAME &> /dev/null; then
+if command -v $INSTALL_DIR/$BINARY_NAME &> /dev/null; then
     # Setup configuration
     echo "Configuring opkssh:"
     mkdir -p /etc/opk
