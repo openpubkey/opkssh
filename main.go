@@ -120,7 +120,7 @@ func run() int {
 			var err error
 			provider, err = choosers.NewWebChooser(
 				[]providers.BrowserOpenIdProvider{googleOp, azureOp, gitlabOp},
-			).ChooseOp(context.Background())
+			).ChooseOp(ctx)
 			if err != nil {
 				log.Println("ERROR selecting op:", err)
 				return 1
