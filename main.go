@@ -89,7 +89,7 @@ func run() int {
 		providerArg := loginCmd.String("provider", "", "Specify the issuer and client ID to use for OpenID Connect provider. Format is: <issuer>,<client_id> or <issuer>,<client_id>,<client_secret>")
 
 		if err := loginCmd.Parse(os.Args[2:]); err != nil {
-			log.Println("ERROR parsing args:", err)
+			fmt.Println("ERROR parsing args:", err)
 			return 1
 		}
 
@@ -103,6 +103,8 @@ func run() int {
 				log.SetOutput(multiWriter)
 				log.Printf("Failed to open log for writing: %v \n", err)
 			}
+		} else {
+			log.SetOutput(os.Stdout)
 		}
 
 		// If the user has supplied commandline arguments for the provider, use those instead of the web chooser
@@ -117,12 +119,12 @@ func run() int {
 			clientIDArg := parts[1]
 
 			if !strings.HasPrefix(issuerArg, "https://") {
-				log.Printf("ERROR Invalid provider issuer value. Expected issuer to start with 'https://' got %s \n", issuerArg)
+				log.Printf("ERROR Invalid provider issuer value. Expected issuer to start with 'https://' got (%s) \n", issuerArg)
 				return 1
 			}
 
 			if clientIDArg == "" {
-				log.Printf("ERROR Invalid provider client-ID value got %s \n", clientIDArg)
+				log.Printf("ERROR Invalid provider client-ID value got (%s) \n", clientIDArg)
 				return 1
 			}
 
@@ -135,7 +137,7 @@ func run() int {
 				}
 				clientSecretArg := parts[2]
 				if clientSecretArg == "" {
-					log.Printf("ERROR Invalid provider client secret value got %s \n", clientIDArg)
+					log.Printf("ERROR Invalid provider client secret value got (%s) \n", clientSecretArg)
 					return 1
 				}
 
@@ -274,12 +276,12 @@ func run() int {
 		// script to inject user entries into the policy file
 		//
 		// Example line to add a user:
-		// 		./opkssh add %p %e %i
-		//	%p The desired principal being assumed on the target (aka requested principal).
-		//  %e The email of the user to be added to the policy file.
-		//	%i The desired OpenID Provider for email, e.g. https://accounts.google.com.
+		// 		./opkssh add <Principal> <Email> <Issuer>
+		//	<Principal> The desired principal being assumed on the target (aka requested principal).
+		//  <Email> The email of the user to be added to the policy file.
+		//	<Issuer> The desired OpenID Provider for email, e.g. https://accounts.google.com.
 		if len(os.Args) != 5 {
-			fmt.Println("Invalid number of arguments for add, expected: `<Principal (TOKEN p)> <Email (TOKEN e)> <Issuer (TOKEN i)`")
+			fmt.Println("Invalid number of arguments for add, expected: `<Principal> <Email> <Issuer>`")
 			return 1
 		}
 		inputPrincipal := os.Args[2]

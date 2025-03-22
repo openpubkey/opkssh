@@ -18,7 +18,12 @@ package main
 
 import (
 	"errors"
+	"io"
+	"os"
+	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestIsOpenSSHVersion8Dot1OrGreater(t *testing.T) {
@@ -110,6 +115,114 @@ func TestIsOpenSSHVersion8Dot1OrGreater(t *testing.T) {
 						gotErr.Error(), tt.wantErr.Error())
 				}
 			}
+		})
+	}
+}
+
+func RunCliAndCaptureResult(t *testing.T, args []string) (string, int) {
+	// Backup and defer restore of os.Args
+	oldArgs := os.Args
+	defer func() { os.Args = oldArgs }()
+	os.Args = args
+
+	// Capture output
+	oldStdout := os.Stdout
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	os.Stderr = w
+
+	// Run the opkssh cli
+	exitCode := run()
+
+	// Restore stdout and stderr
+	w.Close()
+	os.Stdout = oldStdout
+	os.Stderr = oldStderr
+
+	// Read captured output
+	var cmdOutput strings.Builder
+	_, err := io.Copy(&cmdOutput, r)
+	require.NoError(t, err)
+
+	return cmdOutput.String(), exitCode
+}
+
+func TestRun(t *testing.T) {
+	tests := []struct {
+		name       string
+		args       []string
+		wantOutput string
+		wantExit   int
+	}{
+		{
+			name:       "No arguments",
+			args:       []string{"opkssh"},
+			wantOutput: "OPKSSH (OpenPubkey SSH) CLI: command choices are: login, verify, and add",
+			wantExit:   1,
+		},
+		{
+			name:       "Version flag",
+			args:       []string{"opkssh", "--version"},
+			wantOutput: "unversioned",
+			wantExit:   0,
+		},
+		{
+			name:       "Unrecognized command",
+			args:       []string{"opkssh", "unknown"},
+			wantOutput: "ERROR! Unrecognized command: unknown",
+			wantExit:   1,
+		},
+		{
+			name:       "Add command with missing arguments",
+			args:       []string{"opkssh", "add"},
+			wantOutput: "Invalid number of arguments for add, expected: `<Principal> <Email> <Issuer>`",
+			wantExit:   1,
+		},
+		{
+			name:       "Login command with provider bad provider value",
+			args:       []string{"opkssh", "login", "-provider=badvalue"},
+			wantOutput: "ERROR Invalid provider argument format. Expected format <issuer>,<client_id> or <issuer>,<client_id>,<client_secret>",
+			wantExit:   1,
+		},
+		{
+			name:       "Login command with provider bad provider issuer value",
+			args:       []string{"opkssh", "login", "-provider=badissuer.com,client_id"},
+			wantOutput: "ERROR Invalid provider issuer value. Expected issuer to start with 'https://' got (badissuer.com)",
+			wantExit:   1,
+		},
+		{
+			name:       "Login command with provider bad provider issuer value",
+			args:       []string{"opkssh", "login", "-provider=https://badissuer.com,client_id"},
+			wantOutput: "ERROR Unknown issuer supplied: https://badissuer.com",
+			wantExit:   1,
+		},
+
+		{
+			name:       "Login command with provider bad provider good azure issuer but no client id value",
+			args:       []string{"opkssh", "login", "-provider=https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0,"},
+			wantOutput: "ERROR Invalid provider client-ID value got ()",
+			wantExit:   1,
+		},
+		{
+			name:       "Login command with provider bad provider good google issuer but no client id value",
+			args:       []string{"opkssh", "login", "-provider=https://accounts.google.com,client_id"},
+			wantOutput: "ERROR Invalid provider argument format. Expected format for google: <issuer>,<client_id>,<client_secret>",
+			wantExit:   1,
+		},
+		{
+			name:       "Login command with provider bad provider good google issuer but no client secret value",
+			args:       []string{"opkssh", "login", "-provider=https://accounts.google.com,client_id,"},
+			wantOutput: "ERROR Invalid provider client secret value got ()",
+			wantExit:   1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmdOutput, exitCode := RunCliAndCaptureResult(t, tt.args)
+			require.Contains(t, cmdOutput, tt.wantOutput, "Incorrect command output")
+			require.Equal(t, tt.wantExit, exitCode, "Incorrect Exit code")
+
 		})
 	}
 }
