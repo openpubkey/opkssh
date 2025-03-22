@@ -171,13 +171,12 @@ allow sshd_t var_log_t:file { open append };
 EOF
 
         else
-            echo "  Using SELinux module does not permits home policy"
+            echo "  Using SELinux module does not permits home policy (--no-home-policy option supplied)"
             # Redefine the tmp file names since SELinux modules must have the same name as the file
             TE_TMP="/tmp/opkssh-no-home.te"
             MOD_TMP="/tmp/opkssh-no-home.mod" # SELinux requires that modules have the same file name as the module name
             PP_TMP="/tmp/opkssh-no-home.pp"
 
-            echo "  Using SELinux module (--no-home-policy option supplied)"
             # Pipe the TE directives into checkmodule via /dev/stdin
             cat << 'EOF' > "$TE_TMP"
 module opkssh-no-home 1.0;
