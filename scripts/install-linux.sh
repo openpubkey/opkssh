@@ -40,7 +40,7 @@ RESTART_SSH=true
 LOCAL_INSTALL_FILE=""
 INSTALL_VERSION="latest"
 for arg in "$@"; do
-    if [[ "$arg" == "--disable-home-policy" ]]; then
+    if [[ "$arg" == "--no-home-policy" ]]; then
         HOME_POLICY=false
     elif [ "$arg" == "--no-sshd-restart" ]; then
         RESTART_SSH=false
@@ -105,9 +105,9 @@ else
     echo "Added $AUTH_CMD_USER to group: $AUTH_CMD_GROUP"
 fi
 
-echo "--install-from option supplied, installing from local file: $LOCAL_INSTALL_FILE"
 # Check if we should install from a local file
 if [ -n "$LOCAL_INSTALL_FILE" ]; then
+    echo "--install-from option supplied, installing from local file: $LOCAL_INSTALL_FILE"
     BINARY_PATH=$LOCAL_INSTALL_FILE
     if [ ! -f "$BINARY_PATH" ]; then
         echo "Error: Specified binary path does not exist."
@@ -188,7 +188,7 @@ EOF
             MOD_TMP="/tmp/opkssh-no-home.mod" # SELinux requires that modules have the same file name as the module name
             PP_TMP="/tmp/opkssh-no-home.pp"
 
-            echo "  Using SELinux module (--disable-home-policy option supplied)"
+            echo "  Using SELinux module (--no-home-policy option supplied)"
             # Pipe the TE directives into checkmodule via /dev/stdin
             cat << 'EOF' > "$TE_TMP"
 module opkssh-no-home 1.0;
@@ -284,7 +284,7 @@ if command -v $BINARY_NAME &> /dev/null; then
             echo "$SUDOERS_RULE_READ_HOME" >> "$SUDOERS_PATH"
         fi
     else
-        echo "  Skipping sudoers configuration as it is only needed for home policy (--disable-home-policy option supplied)"
+        echo "  Skipping sudoers configuration as it is only needed for home policy (--no-home-policy option supplied)"
     fi
 
 
