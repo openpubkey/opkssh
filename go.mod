@@ -7,7 +7,7 @@ require (
 	github.com/jeremija/gosubmit v0.2.7
 	github.com/lestrrat-go/jwx/v2 v2.0.21
 	github.com/melbahja/goph v1.4.0
-	github.com/openpubkey/openpubkey v0.7.1
+	github.com/openpubkey/openpubkey v0.7.2
 	github.com/stretchr/testify v1.10.0
 	github.com/testcontainers/testcontainers-go v0.35.0
 	github.com/zitadel/oidc/v3 v3.23.2
