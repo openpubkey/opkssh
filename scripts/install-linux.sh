@@ -281,7 +281,7 @@ if command -v $INSTALL_DIR/$BINARY_NAME &> /dev/null; then
     chown root:${AUTH_CMD_GROUP} /var/log/opkssh.log
     chmod 660 /var/log/opkssh.log
 
-    VERSION_INSTALLED=$($BINARY_NAME --version)
+    VERSION_INSTALLED=$($INSTALL_DIR/$BINARY_NAME --version)
     INSTALLED_ON=$(date)
     # Log the installation details to /var/log/opkssh.log to help with debugging
     echo "Successfully installed opkssh (INSTALLED_ON: $INSTALLED_ON, VERSION_INSTALLED: $VERSION_INSTALLED, INSTALL_VERSION: $INSTALL_VERSION, LOCAL_INSTALL_FILE: $LOCAL_INSTALL_FILE, HOME_POLICY: $HOME_POLICY, RESTART_SSH: $RESTART_SSH)" >> /var/log/opkssh.log
