@@ -77,18 +77,6 @@ if ! command -v wget &> /dev/null; then
     exit 1
 fi
 
-if ! command -v jq &> /dev/null; then
-    echo "Error: jq is required but not installed. Please install it first."
-    if [ "$OS_TYPE" == "debian" ]; then
-        echo "sudo apt install jq"
-    elif [ "$OS_TYPE" == "redhat" ]; then
-            echo "sudo yum install jq"
-    else
-        echo "Unsupported OS type."
-    fi
-    exit 1
-fi
-
 # Checks if the group and user used by the AuthorizedKeysCommand exists if not creates it
 if ! getent group "$AUTH_CMD_GROUP" >/dev/null; then
     groupadd --system "$AUTH_CMD_GROUP"
