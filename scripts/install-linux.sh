@@ -35,11 +35,14 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 
+HOME_POLICY=true
 RESTART_SSH=true
 LOCAL_INSTALL_FILE=""
 INSTALL_VERSION="latest"
 for arg in "$@"; do
-    if [ "$arg" == "--no-sshd-restart" ]; then
+    if [[ "$arg" == "--disable-home-policy" ]]; then
+        HOME_POLICY=false
+    elif [ "$arg" == "--no-sshd-restart" ]; then
         RESTART_SSH=false
     elif [[ "$arg" == --install-from=* ]]; then
         LOCAL_INSTALL_FILE="${arg#*=}"
@@ -53,6 +56,7 @@ if [[ "$1" == "--help" ]]; then
     echo "Usage: $0 [OPTIONS]"
     echo ""
     echo "Options:"
+    echo "  --no-home-policy        Disables configuration that allows opkssh see policy files in user's home directory (/home/<username>/auth_id). Greatly simplifies install, try this if you are having install failures."
     echo "  --no-sshd-restart       Do not restart SSH after installation"
     echo "  --install-from=FILEPATH Install using a local file"
     echo "  --install-version=VER   Install a specific version from GitHub"
@@ -138,20 +142,17 @@ if command -v getenforce >/dev/null 2>&1; then
         echo "SELinux detected. Configuring SELinux for opkssh"
         echo "  Restoring context for $INSTALL_DIR/$BINARY_NAME..."
         restorecon "$INSTALL_DIR/$BINARY_NAME"
-
+        
         # Create temporary files for the compiled module and package
         TE_TMP="/tmp/opkssh.te"
         MOD_TMP="/tmp/opkssh.mod" # SELinux requires that modules have the same file name as the module name
         PP_TMP="/tmp/opkssh.pp"
 
-        # Pipe the TE directives into checkmodule via /dev/stdin
-        # This module grants the ability to:
-        # 1. open files labeled in SELinux as var_log_t, i.e. log files.
-        #  This is needed for opkssh to be log errors to its log file.
-        # 2. Make TCP connections to ports labeled http_port_t. This is
-        #  needed so opkssh can download the public keys of the OpenID
-        #  providers.
-        cat << 'EOF' > "$TE_TMP"
+        if [ "$HOME_POLICY" = true ]; then
+            echo "  Using SELinux module that permits home policy"
+
+            # Pipe the TE directives into checkmodule via /dev/stdin
+            cat << 'EOF' > "$TE_TMP"
 module opkssh 1.0;
 
 
@@ -180,6 +181,40 @@ allow sshd_t sudo_exec_t:file { execute execute_no_trans open read map };
 # 4. Needed to allow opkssh to write to its log file
 allow sshd_t var_log_t:file { open append };
 EOF
+
+        else
+            # Redefine the tmp file names since SELinux modules must have the same name as the file
+            TE_TMP="/tmp/opkssh-no-home.te"
+            MOD_TMP="/tmp/opkssh-no-home.mod" # SELinux requires that modules have the same file name as the module name
+            PP_TMP="/tmp/opkssh-no-home.pp"
+
+            echo "  Using SELinux module (--disable-home-policy option supplied)"
+            # Pipe the TE directives into checkmodule via /dev/stdin
+            cat << 'EOF' > "$TE_TMP"
+module opkssh-no-home 1.0;
+
+require {
+        type sshd_t;
+        type var_log_t;
+        type ssh_exec_t;
+        type http_port_t;
+        class file { append execute execute_no_trans open read map };
+        class tcp_socket name_connect;
+}
+
+
+# We need to allow the AuthorizedKeysCommand opkssh process launched by sshd to:
+
+# 1. Make TCP connections to ports labeled http_port_t. This is so opkssh can download the public keys of the OpenID providers.
+allow sshd_t http_port_t:tcp_socket name_connect;
+
+# 2. Needed to allow opkssh to call `ssh -V` to determine if the version is supported by opkssh
+allow sshd_t ssh_exec_t:file { execute execute_no_trans open read map };
+
+# 3. Needed to allow opkssh to write to its log file
+allow sshd_t var_log_t:file { open append };
+EOF
+        fi
 
         echo "  Compiling SELinux module..."
         checkmodule -M -m -o "$MOD_TMP" "$TE_TMP"
@@ -236,22 +271,32 @@ if command -v $BINARY_NAME &> /dev/null; then
         echo "  --no-sshd-restart option supplied, skipping SSH restart."
     fi
 
-    if [ ! -f "$SUDOERS_PATH" ]; then
-        echo "  Creating sudoers file at $SUDOERS_PATH..."
-        touch "$SUDOERS_PATH"
-        chmod 440 "$SUDOERS_PATH"
+    if [ "$HOME_POLICY" = true ]; then
+        if [ ! -f "$SUDOERS_PATH" ]; then
+            echo "  Creating sudoers file at $SUDOERS_PATH..."
+            touch "$SUDOERS_PATH"
+            chmod 440 "$SUDOERS_PATH"
+        fi
+        SUDOERS_RULE_READ_HOME="$AUTH_CMD_USER ALL=(ALL) NOPASSWD: /usr/local/bin/opkssh readhome *"
+        if ! grep -qxF "$SUDOERS_RULE_READ_HOME" "$SUDOERS_PATH"; then
+            echo "  Adding sudoers rule for $AUTH_CMD_USER..."
+            echo "# This allows opkssh to call opkssh readhome <username> to read the user's policy file in /home/<username>/auth_id" >> "$SUDOERS_PATH"
+            echo "$SUDOERS_RULE_READ_HOME" >> "$SUDOERS_PATH"
+        fi
+    else
+        echo "  Skipping sudoers configuration as it is only needed for home policy (--disable-home-policy option supplied)"
     fi
-    SUDOERS_RULE_READ_HOME="$AUTH_CMD_USER ALL=(ALL) NOPASSWD: /usr/local/bin/opkssh readhome *"
-    if ! grep -qxF "$SUDOERS_RULE_READ_HOME" "$SUDOERS_PATH"; then
-        echo "  Adding sudoers rule for $AUTH_CMD_USER..."
-        echo "# This allows opkssh to call opkssh readhome <username> to read the user's policy file in /home/<username>/auth_id" >> "$SUDOERS_PATH"
-        echo "$SUDOERS_RULE_READ_HOME" >> "$SUDOERS_PATH"
-    fi
+
 
     touch /var/log/opkssh.log
     chown root:${AUTH_CMD_GROUP} /var/log/opkssh.log
     chmod 660 /var/log/opkssh.log
 
+    VERSION_INSTALLED=$($BINARY_NAME --version)
+    INSTALLED_ON=$(date)
+    # Log the installation details to /var/log/opkssh.log to help with debugging
+    echo "Successfully installed opkssh (INSTALLED_ON: $INSTALLED_ON, VERSION_INSTALLED: $VERSION_INSTALLED, INSTALL_VERSION: $INSTALL_VERSION, LOCAL_INSTALL_FILE: $LOCAL_INSTALL_FILE, HOME_POLICY: $HOME_POLICY, RESTART_SSH: $RESTART_SSH)" >> /var/log/opkssh.log
+    
     echo "Installation successful! Run '$BINARY_NAME' to use it."
 else
     echo "Installation failed."
