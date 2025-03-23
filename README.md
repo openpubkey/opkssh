@@ -1,17 +1,30 @@
-# OpenPubkey SSH (OPKSSH)
+# opkssh (OpenPubkey SSH)
 
 [![Go Coverage](https://github.com/openpubkey/opkssh/wiki/coverage.svg)](https://raw.githack.com/wiki/openpubkey/opkssh/coverage.html)
 
-opkssh is a tool which enables OpenID Connect to be used with ssh.
-It does not replace ssh, but rather generates ssh public keys that contain PK Tokens and configures sshd to verify the PK Token in the ssh public keys.
-PK Tokens are a backwards compatible extension of ID Tokens which contain a public key.
-For more details on PK Tokens see [OpenPubkey](https://github.com/openpubkey/openpubkey/blob/main/README.md)
+**opkssh** is a tool which enables ssh to be used with OpenID Connect allowing SSH access management via identities like `alice@example.com` instead of long-lived SSH keys.
+It does not replace ssh, but rather generates ssh public keys that contain PK Tokens and configures sshd to verify the PK Token in the ssh public key. These PK Tokens contain standard OpenID Connect ID Tokens. This protocol builds on the [OpenPubkey](https://github.com/openpubkey/openpubkey/blob/main/README.md) which adds user public keys to OpenID Connect without breaking compatibility with existing OpenID Provider.
 
-Currently opkssh supports Google, Microsoft/Azure and Gitlab. If you have a gmail, microsoft or a gitlab account you can ssh with that account.
+Currently opkssh is compatible with Google, Microsoft/Azure and Gitlab OpenID Providers (OP). If you have a gmail, microsoft or a gitlab account you can ssh with that account.
+
+To ssh with opkssh you first need to download the opkssh binary and then run:
+
+```bash
+opkssh login
+```
+
+This will open a browser window where you can authenticate to your OpenID Provider. This will generates an SSH key in `~/.ssh/id_ecdsas` which contains your OpenID Connect identity.
+Then you can ssh under this identity to any ssh server which is configured to use opkssh to authenticate users using their OpenID Connect identities.
+
+```bash
+ssh user@example.com
+```
 
 ## Getting Started
 
 To ssh with opkssh, Alice first needs to install opkssh using homebrew or manually downloading the binary.
+
+### Homebrew Install (OSX)
 
 To install with homebrew run:
 
@@ -20,11 +33,9 @@ brew tap openpubkey/opkssh
 brew install opkssh
 ```
 
-To install manually, you can download the opkssh binary and run it:
+### Manual Install (Windows, Linux, OSX)
 
-```bash
-curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64 -o opkssh; chmod +x opkssh
-```
+To install manually, download the opkssh binary and run it:
 
 |           | Download URL |
 |-----------|--------------|
@@ -32,25 +43,51 @@ curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx
 |🍎 OSX   | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64) |
 | ⊞ Win   | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-windows-amd64.exe](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-windows-amd64.exe) |
 
+To install on Windows run:
 
-Once Alice downloads opkssh on her local computer, she Alice runs:
+```powershell
+curl https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-windows-amd64.exe -o opkssh.exe
+```
+
+To install on OSX run:
 
 ```bash
+curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64 -o opkssh; chmod +x opkssh
+```
+
+To install on linux run:
+
+```bash
+curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64 -o opkssh; chmod +x opkssh
+```
+
+### SSHing with opkssh
+
+After downloading opkssh, on OSX or Linux run:
+
+```cmd
 opkssh login
 ```
 
-which opens a browser window to authenticate to google and then generates an SSH public key in `~/.ssh/id_ecdsas` which contains her PK Token.
-By default this key will expire after 24 hours and Alice must run `opkssh login` to generate a new ssh key.
+on Windows run:
 
-Since her PK Token has been saved as an SSH key she can SSH as normal:
-
-```bash
-ssh root@server.example.com
+```powershell
+.\opkssh.exe login
 ```
 
-This works because SSH will send the public key opkssh wrote in `~/.ssh/id_dsaKey` to the server and sshd running on the server will send the public key to opkssh to verify.
+This will opens a browser window to select which  OpenID Provider you want to authenticate against.
+After successfully authenticating opkssh will generates an SSH public key in `~/.ssh/id_ecdsas` which contains your PK Token.
+By default this ssh key will expire after 24 hours and you must run `opkssh login` to generate a new ssh key.
 
-### Installing on a server
+Since your PK Token has been saved as an SSH key you can SSH as normal:
+
+```bash
+ssh root@example.com
+```
+
+This works because SSH will send the SSH public key opkssh wrote in `~/.ssh/id_ecdsas` to the server and sshd running on the server will send the public key to the opkssh command to verify.
+
+### Installing on a Server
 
 To configure a linux server to use opkssh simply run (with root level privileges):
 
@@ -80,8 +117,8 @@ Second, we use the `AuthorizedKeysCommand` configuration option in `sshd_config`
 | OS               | Supported | Tested | Version Tested         | Possible Future Support |
 | --------        | --------      | ------- | ---------------------- |----------- |
 | Linux       | ✅             |  ✅     |  Ubuntu 24.04.1 LTS  | -  |
-| OSX       | ✅             |  ✅     |  -  | -  |
-| Windows11 | ✅            |   ✅     |  -  | -  |
+| OSX       | ✅             |  ✅     |  OSX 15.3.2 (Sequoia)  | -  |
+| Windows11 | ✅            |   ✅     |  Windows 11  | -  |
 
 ### Server support
 
@@ -204,4 +241,4 @@ AuthorizedKeysCommandUser opksshuser
 
 ## More information
 
-We document how to manually install opkssh on a server [here](https://raw.githubusercontent.com/openpubkey/opkssh/main/opkssh/scripts/installing.md).
+We document how to manually install opkssh on a server [here](scripts/installing.md).

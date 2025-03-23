@@ -1,7 +1,7 @@
 
 # Installing opkssh
 
-This document provides a detailed description of how our [install-linux.sh](https://raw.githubusercontent.com/openpubkey/opkssh/main/scripts/install-linux.sh) script works and the security protections used.
+This document provides a detailed description of how our [install-linux.sh](install-linux.sh) script works and the security protections used.
 
 If you just want to install opkssh you should run:
 
@@ -12,6 +12,8 @@ wget -qO- "https://raw.githubusercontent.com/openpubkey/opkssh/main/scripts/inst
 ## Script commands
 
 Running `./install-linux.sh --help` will show you all available flags.
+
+`--no-home-policy` disables configuration steps which allows opkssh see policy files in user's home directory (/home/{username}/auth_id). Try this if you are having install failures.
 
 `--nosshd-restart` turns off the sshd restart. This is useful in some docker setups where restarting sshd can break docker.
 
@@ -89,9 +91,7 @@ sudo groupadd --system opksshuser
 sudo useradd -r -M -s /sbin/nologin -g opksshuser opksshuser
 ```
 
-**5: Restart sshd.**
-
-Configures a sudoer command so that the opkssh AuthorizedKeysCommand process can call out to the shell to run `opkssh readhome <username>` and thereby read the policy file for the user in `/home/<username>/.opk/auth_id`.
+**5: Configure sudoer and SELINUX.** Configures a sudoer command so that the opkssh AuthorizedKeysCommand process can call out to the shell to run `opkssh readhome {USER}` and thereby read the policy file for the user in `/home/{USER}/.opk/auth_id`.
 
 ```bash
 "opksshuser ALL=(ALL) NOPASSWD: /usr/local/bin/opkssh readhome *"
@@ -99,7 +99,17 @@ Configures a sudoer command so that the opkssh AuthorizedKeysCommand process can
 
 This config lives in `/etc/sudoers.d/opkssh` and must have the permissions `440` with root being the owner.
 
+If SELinux is configured we need to install an SELinux module to allow opkssh to read the policy in the user's home directory. See our install script [install-linux.sh](install-linux.sh) for details.
+
 **6: Restart sshd.**
+
+On Ubuntu and Debian Linux:
+
+```bash
+systemctl restart ssh
+```
+
+On Redhat and centos Linux:
 
 ```bash
 sudo systemctl restart sshd
