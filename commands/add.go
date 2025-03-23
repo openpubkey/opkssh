@@ -95,16 +95,16 @@ func (a *AddCmd) GetPolicyPath(principal string, userEmail string, issuer string
 // If successful, returns the policy filepath updated. Otherwise, returns a
 // non-nil error
 func (a *AddCmd) Add(principal string, userEmail string, issuer string) (string, error) {
-	policyPath, homePolicy, err := a.GetPolicyPath(principal, userEmail, issuer)
+	policyPath, useSystemPolicy, err := a.GetPolicyPath(principal, userEmail, issuer)
 	if err != nil {
 		return "", fmt.Errorf("failed to load policy: %w", err)
 	}
 
 	var policyLoader *policy.PolicyLoader
-	if homePolicy {
-		policyLoader = a.HomePolicyLoader.PolicyLoader
-	} else {
+	if useSystemPolicy {
 		policyLoader = a.SystemPolicyLoader.PolicyLoader
+	} else {
+		policyLoader = a.HomePolicyLoader.PolicyLoader
 	}
 
 	err = policyLoader.CreateIfDoesNotExist(policyPath)
