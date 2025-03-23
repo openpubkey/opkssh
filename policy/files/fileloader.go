@@ -19,6 +19,7 @@ package files
 import (
 	"fmt"
 	"io/fs"
+	"path/filepath"
 
 	"github.com/spf13/afero"
 )
@@ -38,7 +39,8 @@ func (l FileLoader) CreateIfDoesNotExist(path string) error {
 		return err
 	}
 	if !exists {
-		if err := l.Fs.MkdirAll(path, 0750); err != nil {
+		dirPath := filepath.Dir(path)
+		if err := l.Fs.MkdirAll(dirPath, 0750); err != nil {
 			return fmt.Errorf("failed to create directory: %w", err)
 		}
 		file, err := l.Fs.Create(path)
