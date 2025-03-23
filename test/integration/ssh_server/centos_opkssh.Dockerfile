@@ -61,13 +61,13 @@ RUN ls -l /usr/local/bin
 RUN printenv PATH
 
 # Setup OPK directories/files (unprivileged "test2" user)
-# RUN mkdir -p /home/test2/.opk 
-# RUN chown test2:test2 /home/test2/.opk
-# RUN chmod 750 /home/test2/.opk
+RUN mkdir -p /home/test2/.opk 
+RUN chown test2:test2 /home/test2/.opk
+RUN chmod 750 /home/test2/.opk
 # Create personal policy file in user's home directory
-# RUN touch /home/test2/.opk/auth_id
-# RUN chown test2:test2 /home/test2/.opk/auth_id
-# RUN chmod 600 /home/test2/.opk/auth_id
+RUN touch /home/test2/.opk/auth_id
+RUN chown test2:test2 /home/test2/.opk/auth_id
+RUN chmod 600 /home/test2/.opk/auth_id
 ARG ISSUER_PORT="9998"
 RUN echo "http://oidc.local:${ISSUER_PORT}/ web oidc_refreshed" >> /etc/opk/providers
 
