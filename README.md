@@ -143,8 +143,8 @@ This file functions as an access control list that enables admins to determine t
 - Column 2: Client-ID, the audience claim in the ID Token
 - Column 3: Expiration policy, options are:
   - `24h` - user's ssh public key expires after 24 hours,
-  - `48h` - user's ssh public key expires after 24 hours,
-  - `1week` - user's ssh public key expires after 24 hours,
+  - `48h` - user's ssh public key expires after 48 hours,
+  - `1week` - user's ssh public key expires after 1 week,
   - `oidc` - user's ssh public key expires when the ID Token expires
   - `oidc-refreshed` - user's ssh public key expires when their refreshed ID Token expires.
 
