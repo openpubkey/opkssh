@@ -13,7 +13,7 @@ To ssh with opkssh you first need to download the opkssh binary and then run:
 opkssh login
 ```
 
-This will open a browser window where you can authenticate to your OpenID Provider. This will generates an SSH key in `~/.ssh/id_ecdsas` which contains your OpenID Connect identity.
+This opens a browser window where you can authenticate to your OpenID Provider. This will generate an SSH key in `~/.ssh/id_ecdsas` which contains your OpenID Connect identity.
 Then you can ssh under this identity to any ssh server which is configured to use opkssh to authenticate users using their OpenID Connect identities.
 
 ```bash
@@ -75,9 +75,9 @@ on Windows run:
 .\opkssh.exe login
 ```
 
-This will opens a browser window to select which  OpenID Provider you want to authenticate against.
-After successfully authenticating opkssh will generates an SSH public key in `~/.ssh/id_ecdsas` which contains your PK Token.
-By default this ssh key will expire after 24 hours and you must run `opkssh login` to generate a new ssh key.
+This opens a browser window to select which  OpenID Provider you want to authenticate against.
+After successfully authenticating opkssh generates an SSH public key in `~/.ssh/id_ecdsas` which contains your PK Token.
+By default this ssh key expires after 24 hours and you must run `opkssh login` to generate a new ssh key.
 
 Since your PK Token has been saved as an SSH key you can SSH as normal:
 
@@ -85,7 +85,7 @@ Since your PK Token has been saved as an SSH key you can SSH as normal:
 ssh root@example.com
 ```
 
-This works because SSH will send the SSH public key opkssh wrote in `~/.ssh/id_ecdsas` to the server and sshd running on the server will send the public key to the opkssh command to verify.
+This works because SSH sends the SSH public key opkssh wrote in `~/.ssh/id_ecdsas` to the server and sshd running on the server will send the public key to the opkssh command to verify.
 
 ### Installing on a Server
 
@@ -95,7 +95,7 @@ To configure a linux server to use opkssh simply run (with root level privileges
 wget -qO- "https://raw.githubusercontent.com/openpubkey/opkssh/main/scripts/install-linux.sh" | sudo bash
 ```
 
- This will download the opkssh binary, install it as `/usr/local/bin/opkssh`, and then configure ssh to use opkssh as an additional authentication mechanism.
+This downloads the opkssh binary, installs it as `/usr/local/bin/opkssh`, and then configures ssh to use opkssh as an additional authentication mechanism.
 
 To allow a user, `alice@gmail.com`, to ssh to your server as `root`, run:
 
