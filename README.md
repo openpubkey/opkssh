@@ -39,9 +39,10 @@ To install manually, download the opkssh binary and run it:
 
 |           | Download URL |
 |-----------|--------------|
-|🐧 Linux   | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64) |
-|🍎 OSX   | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64) |
-| ⊞ Win   | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-windows-amd64.exe](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-windows-amd64.exe) |
+|🐧 Linux (x86_64)   | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64) |
+|🐧 Linux (ARM64/aarch64)    | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-aarch64](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-aarch64) |
+|🍎 OSX              | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64) |
+| ⊞ Win              | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-windows-amd64.exe](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-windows-amd64.exe) |
 
 To install on Windows run:
 
@@ -58,7 +59,7 @@ curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx
 To install on linux run:
 
 ```bash
-curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64 -o opkssh; chmod +x opkssh
+curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-$(uname -p) -o opkssh; chmod +x opkssh
 ```
 
 ### SSHing with opkssh
@@ -153,7 +154,7 @@ By default we use `24h` as it requires that the user authenticate to their OP on
 The default values for `/etc/opk/providers` are:
 
 ```bash
-# Issuer Client-ID expiration-policy 
+# Issuer Client-ID expiration-policy
 https://accounts.google.com 206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com 24h
 https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0 096ce0a3-5e72-4da8-9c86-12924b294a01 24h
 ```
@@ -178,10 +179,10 @@ Linux user accounts are typically referred to in SSH as *principals* and we cont
 - Column 3: Issuer URI
 
 ```bash
-# email/sub principal issuer 
+# email/sub principal issuer
 alice alice@example.com https://accounts.google.com
-guest alice@example.com https://accounts.google.com 
-root alice@example.com https://accounts.google.com 
+guest alice@example.com https://accounts.google.com
+root alice@example.com https://accounts.google.com
 dev bob@microsoft.com https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
 ```
 
@@ -211,7 +212,7 @@ It can only be used for user/principal whose home directory it lives in.
 That is, if it is in `/home/alice/.opk/auth_id` it can only specify who can assume the principal `alice` on the server.
 
 ```bash
-# email/sub principal issuer 
+# email/sub principal issuer
 alice alice@example.com https://accounts.google.com
 ```
 
