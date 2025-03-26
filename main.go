@@ -56,7 +56,10 @@ func main() {
 
 func run() int {
 	if len(os.Args) < 2 {
-		fmt.Println("OPKSSH (OpenPubkey SSH) CLI: command choices are: login, verify, and add")
+		fmt.Fprintf(os.Stderr, `
+Error: Missing command
+Try '%s --help' for more information.
+`, os.Args[0])
 		return 1
 	}
 	command := os.Args[1]
@@ -310,13 +313,30 @@ func run() int {
 		} else {
 			fmt.Println("Successfully added new policy to", policyFilePath)
 		}
+	case "--help", "help":
+		fmt.Fprintf(os.Stderr, `
+Usage: %s <command> [options]
+SSH with OpenPubkey.
+
+Commands:
+  login 	  Log in to an OpenID Connect provider and generate a ssh key.
+  ...
+
+
+  Examples:
+	opkssh login
+	opkssh add <Principal> <Email> <Issuer>
+	opkssh verify <User (TOKEN u)> <Base64 encoded Cert (TOKEN k)> <Key type (TOKEN t)>
+
+opkssh online help: <https://github.com/openpubkey/opkssh/blob/main/README.md>
+`, os.Args[0])
+		return 1
 	case "--version", "-v":
 		fmt.Println(Version)
 	case "readhome":
 		// This command called as part of AuthorizedKeysCommand. It is used to
 		// read the user's home policy file (`~/.opk/auth_id`) with sudoer permissions.
 		// This allows us to use an unprivileged user as the AuthorizedKeysCommand user.
-
 		if len(os.Args) != 3 {
 			fmt.Println("Invalid number of arguments for readhome, expected: `<username>`")
 			return 1
@@ -329,7 +349,10 @@ func run() int {
 			fmt.Println(string(fileBytes))
 		}
 	default:
-		fmt.Println("ERROR! Unrecognized command:", command)
+		fmt.Fprintf(os.Stderr, `
+%s: invalid option -- '%s'
+Try '%s --help' for more information.
+`, os.Args[0], command, os.Args[0])
 		return 1
 	}
 

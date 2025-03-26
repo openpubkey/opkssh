@@ -158,7 +158,13 @@ func TestRun(t *testing.T) {
 		{
 			name:       "No arguments",
 			args:       []string{"opkssh"},
-			wantOutput: "OPKSSH (OpenPubkey SSH) CLI: command choices are: login, verify, and add",
+			wantOutput: "Missing command",
+			wantExit:   1,
+		},
+		{
+			name:       "Help flag",
+			args:       []string{"opkssh", "--help"},
+			wantOutput: "Usage: opkssh <command> [options]",
 			wantExit:   1,
 		},
 		{
@@ -170,7 +176,7 @@ func TestRun(t *testing.T) {
 		{
 			name:       "Unrecognized command",
 			args:       []string{"opkssh", "unknown"},
-			wantOutput: "ERROR! Unrecognized command: unknown",
+			wantOutput: "opkssh: invalid option -- 'unknown'",
 			wantExit:   1,
 		},
 		{
