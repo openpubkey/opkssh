@@ -414,7 +414,7 @@ opkssh online help: <https://github.com/openpubkey/opkssh/blob/main/README.md>
 			fmt.Fprintf(os.Stderr, "Failed to read user's home policy file: %v\n", err)
 			return 1
 		} else {
-			fmt.Fprintf(os.Stdout, string(fileBytes))
+			fmt.Fprint(os.Stdout, string(fileBytes))
 			return 0
 		}
 	default:
