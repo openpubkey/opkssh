@@ -162,10 +162,28 @@ func TestRun(t *testing.T) {
 			wantExit:   1,
 		},
 		{
-			name:       "Help flag",
+			name:       "Root Help flag",
 			args:       []string{"opkssh", "--help"},
-			wantOutput: "Usage: opkssh <command> [options]",
-			wantExit:   1,
+			wantOutput: "Usage: opkssh <command> [OPTIONS]",
+			wantExit:   0,
+		},
+		{
+			name:       "Add Help flag",
+			args:       []string{"opkssh", "add", "--help"},
+			wantOutput: "Usage: opkssh add <PRINCIPAL> <EMAIL|SUB> <ISSUER>",
+			wantExit:   0,
+		},
+		{
+			name:       "Login Help flag",
+			args:       []string{"opkssh", "login", "--help"},
+			wantOutput: "Usage: opkssh login [OPTIONS]",
+			wantExit:   0,
+		},
+		{
+			name:       "Verify Help flag",
+			args:       []string{"opkssh", "verify", "--help"},
+			wantOutput: "Usage: opkssh verify <PRINCIPAL (TOKEN %u)> <CERT (TOKEN %k)> <KEY_TYPE (TOKEN %t)>",
+			wantExit:   0,
 		},
 		{
 			name:       "Version flag",
@@ -186,6 +204,18 @@ func TestRun(t *testing.T) {
 			wantExit:   1,
 		},
 		{
+			name:       "Login command with bad arguments",
+			args:       []string{"opkssh", "login", "-badarg"},
+			wantOutput: "flag provided but not defined: -badarg",
+			wantExit:   1,
+		},
+		{
+			name:       "Login command with missing providers arguments",
+			args:       []string{"opkssh", "login", "-provider"},
+			wantOutput: "flag needs an argument: -provider",
+			wantExit:   1,
+		},
+		{
 			name:       "Login command with provider bad provider value",
 			args:       []string{"opkssh", "login", "-provider=badvalue"},
 			wantOutput: "ERROR Invalid provider argument format. Expected format <issuer>,<client_id> or <issuer>,<client_id>,<client_secret>",
@@ -203,7 +233,6 @@ func TestRun(t *testing.T) {
 			wantOutput: "ERROR Unknown issuer supplied: https://badissuer.com",
 			wantExit:   1,
 		},
-
 		{
 			name:       "Login command with provider bad provider good azure issuer but no client id value",
 			args:       []string{"opkssh", "login", "-provider=https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0,"},

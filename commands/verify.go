@@ -54,8 +54,8 @@ type VerifyCmd struct {
 // We prepend "Arg" to specify which ones are arguments sent by sshd. They are:
 //
 //	%u The username (requested principal) - userArg
-//	%t The public key type - typArg - in this case a certificate being used as a public key
 //	%k The base64-encoded public key for authentication - certB64Arg - the public key is also a certificate
+//	%t The public key type - typArg - in this case a certificate being used as a public key
 //
 // AuthorizedKeysCommand verifies the OPK PK token contained in the base64-encoded SSH pubkey;
 // the pubkey is expected to be an SSH certificate. pubkeyType is used to

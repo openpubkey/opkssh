@@ -56,8 +56,7 @@ func main() {
 
 func run() int {
 	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stderr, `
-Error: Missing command
+		fmt.Fprintf(os.Stderr, `Error: Missing command
 Try '%s --help' for more information.
 `, os.Args[0])
 		return 1
@@ -87,6 +86,30 @@ Try '%s --help' for more information.
 
 	switch commandStr {
 	case "login":
+		if len(os.Args) == 3 && (os.Args[2] == "-h" || os.Args[2] == "--help") {
+			fmt.Fprintf(os.Stderr, `Usage: %s %s [OPTIONS]
+
+Authenticate with an OpenID Connect provider to generate an SSH key for opkssh.
+
+Login generates a key pair, then opens a browser to authenticate the user with the OpenID provider, which issues a PK token committing to the generated public key. Upon successful authentication, opkssh creates an SSH public key (~/.ssh/id_ecdsas) containing the user's PK token. By default, this SSH key expires after 24 hours, after which the user must run "opkssh login" again to generate a new key.
+
+Users can then SSH into servers configured to use opkssh as the AuthorizedKeysCommand. The server verifies the PK token and grants access if the token is valid and the user is authorized per the auth_id policy.
+
+Options:
+	--auto-refresh           Automatically refresh PK token after login
+	--log-dir=DIR            Directory to place output logs
+	--provider=PROVIDER      OpenID Connect provider specification in the format:
+							<issuer>,<client_id> or <issuer>,<client_id>,<client_secret>
+
+Examples:
+	opkssh login
+	opkssh login --auto-refresh
+	opkssh login --provider=<issuer>,<client_id>,<client_secret>
+`, programStr, commandStr)
+
+			return 0
+		}
+
 		loginCmd := flag.NewFlagSet(programStr+" "+commandStr, flag.ContinueOnError)
 		autoRefresh := loginCmd.Bool("auto-refresh", false, "Used to specify whether login will begin a process that auto-refreshes PK token")
 		logFilePath := loginCmd.String("log-dir", "", "Specify which directory the output log is placed")
@@ -212,6 +235,37 @@ Try '%s --help' for more information.
 			}
 		}
 	case "verify":
+		if len(os.Args) == 3 && (os.Args[2] == "-h" || os.Args[2] == "--help") {
+			fmt.Fprintf(os.Stderr, `Usage: %s %s <PRINCIPAL (TOKEN %%u)> <CERT (TOKEN %%k)> <KEY_TYPE (TOKEN %%t)>
+
+Verify extracts a PK token from a base64-encoded SSH certificate and verifies it against policy.
+Verify expects an allowed provider file at /etc/opk/providers and a user policy file at either /etc/opk/auth_id or ~/.opk/auth_id.
+
+This command is intended to be called by sshd as an AuthorizedKeysCommand:
+	https://man.openbsd.org/sshd_config#AuthorizedKeysCommand
+
+During installation, opkssh typically adds these lines to /etc/ssh/sshd_config:
+	AuthorizedKeysCommand /usr/local/bin/opkssh verify %%u %%k %%t
+	AuthorizedKeysCommandUser opksshuser
+
+Argument descriptions:
+	%%u   Target username (requested principal)
+	%%k   Base64-encoded SSH public key (SSH certificate) provided for authentication
+	%%t   Public key type (SSH certificate format, e.g., ecdsa-sha2-nistp256-cert-v01@openssh.com)
+
+Verification checks performed:
+	1. Ensures the PK token is properly formed, signed, and issued by the specified OpenID Provider (OP).
+	2. Confirms the PK token's issue (iss) and client ID (audience) are listed in the allowed provider file (/etc/opk/providers) and the token is not expired.
+	3. Validates the identity (email or sub) in the PK token against user policies (/etc/opk/auth_id or ~/.opk/auth_id) to ensure it can assume the requested username (principal).
+
+If all checks pass, Verify authorizes the SSH connection.
+
+Example usage:
+	opkssh verify root <base64-encoded-cert> ecdsa-sha2-nistp256-cert-v01@openssh.com
+`, programStr, commandStr)
+
+			return 0
+		}
 
 		// Setup logger
 		logFile, err := os.OpenFile(logFilePathServer, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0660) // Owner and group can read/write
@@ -231,13 +285,6 @@ Try '%s --help' for more information.
 		// ref: https://man.openbsd.org/sshd_config#AuthorizedKeysCommand
 		log.Println(strings.Join(os.Args, " "))
 
-		// These arguments are sent by sshd and dictated by the pattern as defined in the sshd config
-		// Example line in sshd config:
-		// 		AuthorizedKeysCommand /usr/local/bin/opkssh verify %u %k %t
-		//
-		//	%u The desired user being assumed on the target (aka requested principal).
-		//	%k The base64-encoded public key for authentication.
-		//	%t The public key type, in this case an ssh certificate being used as a public key.
 		if len(os.Args) != 5 {
 			log.Println("Invalid number of arguments for verify, expected: `<User (TOKEN u)> <Cert (TOKEN k)> <Key type (TOKEN t)>`")
 			return 1
@@ -277,14 +324,26 @@ Try '%s --help' for more information.
 			return 0
 		}
 	case "add":
-		// The "add" command is designed to be used by the client configuration
-		// script to inject user entries into the policy file
-		//
-		// Example line to add a user:
-		// 		./opkssh add <Principal> <Email> <Issuer>
-		//	<Principal> The desired principal being assumed on the target (aka requested principal).
-		//  <Email> The email of the user to be added to the policy file.
-		//	<Issuer> The desired OpenID Provider for email, e.g. https://accounts.google.com.
+		if len(os.Args) == 3 && (os.Args[2] == "-h" || os.Args[2] == "--help") {
+			fmt.Fprintf(os.Stderr, `Usage: %s %s <PRINCIPAL> <EMAIL|SUB> <ISSUER>
+
+Add creates a new policy entry in the auth_id policy file, granting SSH access to the specified email or subscriber ID (sub).
+
+Add first attempts to write the policy to the system-wide file at /etc/opk/auth_id.  
+If lacks permissions to updated this file, it falls back to the user-specific file at ~/.opk/auth_id.
+
+Arguments:
+  PRINCIPAL      The target user account (requested principal).
+  EMAIL|SUB      Email address or subscriber ID authorized to assume this principal.
+  ISSUER         OpenID Connect provider (issuer) URL associated with the email/sub.
+
+Example usage:
+  opkssh add root alice@example.com https://accounts.google.com
+  opkssh add alice 103030642802723203118 https://accounts.google.com
+`, programStr, commandStr)
+			return 0
+		}
+
 		if len(os.Args) != 5 {
 			fmt.Fprintf(os.Stderr, "Invalid number of arguments for add, expected: `<Principal> <Email> <Issuer>`\n")
 			return 1
@@ -317,39 +376,37 @@ Try '%s --help' for more information.
 			return 0
 		}
 	case "--help", "help":
-		fmt.Fprintf(os.Stderr, `
-Usage: %s <command> [options]
-SSH with OpenPubkey.
+		fmt.Fprintf(os.Stderr, `Usage: %s <command> [OPTIONS]
+
+SSH with OpenPubkey CLI.
+
+This program allows users to login and create SSH key pairs using their OpenID Connect identity, add policies to auth_id policy files, and verify OpenPubkey SSH certificates for use with sshd's AuthorizedKeysCommand.
 
 Commands:
-  add      Add a new rule to the policy file.
-  login    Authenticate to an OpenID Connect provider to generate a ssh key.
-  verify   Verify an ssh key, used by the sshd AuthorizedKeysCommand.
+	add PRINCIPAL EMAIL ISSUER       Add a new rule to the policy file
+	login                            Authenticate with an OpenID Connect provider to generate an SSH key
+	verify PRINCIPAL CERT KEY_TYPE   Verify an SSH key (used by sshd AuthorizedKeysCommand)
 
 Options:
-  --help, -h    Show this help message.
-  --version, -v Show version information.
+	-h, --help                       Show this help message
+	-v, --version                    Show version information
 
 Examples:
-  opkssh login
-  opkssh login --provider=<Issuer>,<ClientID>,<ClientSecret>
-  opkssh add <Principal> <Email> <Issuer>
-  opkssh verify <Principal (TOKEN u)> <Base64 encoded Cert (TOKEN k)> <Key type (TOKEN t)>
+	opkssh login
+	opkssh add root alice@example.com https://accounts.google.com
 
 opkssh online help: <https://github.com/openpubkey/opkssh/blob/main/README.md>
-`, os.Args[0])
-		return 1
+`, programStr)
+		return 0
 	case "--version", "-v":
-		fmt.Fprintf(os.Stderr, "opkssh version %s", Version)
-		fmt.Fprintf(os.Stderr, "Copyright (C) 2025 OpenPubkey")
-		fmt.Fprintf(os.Stderr, "License Apache-2.0: <https://www.apache.org/licenses/LICENSE-2.0>")
+		fmt.Fprintf(os.Stderr, `opkssh version %s`, Version)
 		return 0
 	case "readhome":
 		// This command called as part of AuthorizedKeysCommand. It is used to
 		// read the user's home policy file (`~/.opk/auth_id`) with sudoer permissions.
 		// This allows us to use an unprivileged user as the AuthorizedKeysCommand user.
 		if len(os.Args) != 3 {
-			fmt.Fprintf(os.Stderr, "Invalid number of arguments for readhome, expected: `opkssh readhome <username>`\n")
+			fmt.Fprintf(os.Stderr, "Invalid number of arguments for %s %s, expected: opkssh readhome <username>\n", programStr, commandStr)
 			return 1
 		}
 		userArg := os.Args[2]
@@ -361,8 +418,7 @@ opkssh online help: <https://github.com/openpubkey/opkssh/blob/main/README.md>
 			return 0
 		}
 	default:
-		fmt.Fprintf(os.Stderr, `
-%s: invalid option -- '%s'
+		fmt.Fprintf(os.Stderr, `%s: invalid option -- '%s'
 Try '%s --help' for more information.
 `, os.Args[0], commandStr, os.Args[0])
 		return 1
