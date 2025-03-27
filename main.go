@@ -91,7 +91,7 @@ Try '%s --help' for more information.
 
 Authenticate with an OpenID Connect provider to generate an SSH key for opkssh.
 
-Login generates a key pair, then opens a browser to authenticate the user with the OpenID provider, which issues a PK token committing to the generated public key. Upon successful authentication, opkssh creates an SSH public key (~/.ssh/id_ecdsas) containing the user's PK token. By default, this SSH key expires after 24 hours, after which the user must run "opkssh login" again to generate a new key.
+Login generates a key pair, then opens a browser to authenticate the user with the OpenID provider, which issues a PK token committing to the generated public key. Upon successful authentication, opkssh creates an SSH public key (~/.ssh/id_ecdsa) containing the user's PK token. By default, this SSH key expires after 24 hours, after which the user must run "opkssh login" again to generate a new key.
 
 Users can then SSH into servers configured to use opkssh as the AuthorizedKeysCommand. The server verifies the PK token and grants access if the token is valid and the user is authorized per the auth_id policy.
 
@@ -139,19 +139,19 @@ Examples:
 		if providerArg != nil && *providerArg != "" {
 			parts := strings.Split(*providerArg, ",")
 			if len(parts) != 2 && len(parts) != 3 {
-				log.Println("ERROR Invalid provider argument format. Expected format <issuer>,<client_id> or <issuer>,<client_id>,<client_secret>")
+				log.Println("Error: Invalid provider argument format. Expected format <issuer>,<client_id> or <issuer>,<client_id>,<client_secret>")
 				return 1
 			}
 			issuerArg := parts[0]
 			clientIDArg := parts[1]
 
 			if !strings.HasPrefix(issuerArg, "https://") {
-				log.Printf("ERROR Invalid provider issuer value. Expected issuer to start with 'https://' got (%s) \n", issuerArg)
+				log.Printf("Error: Invalid provider issuer value. Expected issuer to start with 'https://' got (%s) \n", issuerArg)
 				return 1
 			}
 
 			if clientIDArg == "" {
-				log.Printf("ERROR Invalid provider client-ID value got (%s) \n", clientIDArg)
+				log.Printf("Error: Invalid provider client-ID value got (%s) \n", clientIDArg)
 				return 1
 			}
 
@@ -159,12 +159,12 @@ Examples:
 				// The Google OP is strange in that it requires a client secret even if this is a public OIDC App.
 				// Despite its name the Google OP client secret is a public value.
 				if len(parts) != 3 {
-					log.Println("ERROR Invalid provider argument format. Expected format for google: <issuer>,<client_id>,<client_secret>")
+					log.Println("Error: Invalid provider argument format. Expected format for google: <issuer>,<client_id>,<client_secret>")
 					return 1
 				}
 				clientSecretArg := parts[2]
 				if clientSecretArg == "" {
-					log.Printf("ERROR Invalid provider client secret value got (%s) \n", clientSecretArg)
+					log.Printf("Error: Invalid provider client secret value got (%s) \n", clientSecretArg)
 					return 1
 				}
 
@@ -219,7 +219,7 @@ Examples:
 				[]providers.BrowserOpenIdProvider{googleOp, azureOp, gitlabOp},
 			).ChooseOp(ctx)
 			if err != nil {
-				log.Println("ERROR selecting op:", err)
+				log.Println("Error selecting op:", err)
 				return 1
 			}
 		}
@@ -229,17 +229,17 @@ Examples:
 			if providerRefreshable, ok := provider.(providers.RefreshableOpenIdProvider); ok {
 				err := commands.LoginWithRefresh(ctx, providerRefreshable)
 				if err != nil {
-					log.Println("ERROR logging in:", err)
+					log.Println("Error logging in:", err)
 				}
 			} else {
-				errString := fmt.Sprintf("ERROR OpenID Provider (%v) does not support auto-refresh and auto-refresh argument set to true", provider.Issuer())
+				errString := fmt.Sprintf("Error: OpenID Provider (%v) does not support auto-refresh and auto-refresh argument set to true", provider.Issuer())
 				log.Println(errString)
 				return 1
 			}
 		} else {
 			err := commands.Login(ctx, provider)
 			if err != nil {
-				log.Println("ERROR logging in:", err)
+				log.Println("Error logging in:", err)
 				return 1
 			}
 		}
@@ -279,7 +279,7 @@ Example usage:
 		// Setup logger
 		logFile, err := os.OpenFile(logFilePathServer, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0660) // Owner and group can read/write
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "ERROR opening log file: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error opening log file: %v\n", err)
 			// It could be very difficult to figure out what is going on if the log file was deleted. Hopefully this message saves someone an hour of debugging.
 			fmt.Fprintf(os.Stderr, "Check if log exists at %v, if it does not create it with permissions: chown root:opksshuser %v; chmod 660 %v\n", logFilePathServer, logFilePathServer, logFilePathServer)
 		} else {

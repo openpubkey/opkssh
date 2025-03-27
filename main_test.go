@@ -218,31 +218,31 @@ func TestRun(t *testing.T) {
 		{
 			name:       "Login command with provider bad provider value",
 			args:       []string{"opkssh", "login", "-provider=badvalue"},
-			wantOutput: "ERROR Invalid provider argument format. Expected format <issuer>,<client_id> or <issuer>,<client_id>,<client_secret>",
+			wantOutput: "Error: Invalid provider argument format. Expected format <issuer>,<client_id> or <issuer>,<client_id>,<client_secret>",
 			wantExit:   1,
 		},
 		{
 			name:       "Login command with provider bad provider issuer value",
 			args:       []string{"opkssh", "login", "-provider=badissuer.com,client_id"},
-			wantOutput: "ERROR Invalid provider issuer value. Expected issuer to start with 'https://' got (badissuer.com)",
+			wantOutput: "Error: Invalid provider issuer value. Expected issuer to start with 'https://' got (badissuer.com)",
 			wantExit:   1,
 		},
 		{
 			name:       "Login command with provider bad provider good azure issuer but no client id value",
 			args:       []string{"opkssh", "login", "-provider=https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0,"},
-			wantOutput: "ERROR Invalid provider client-ID value got ()",
+			wantOutput: "Error: Invalid provider client-ID value got ()",
 			wantExit:   1,
 		},
 		{
 			name:       "Login command with provider bad provider good google issuer but no client id value",
 			args:       []string{"opkssh", "login", "-provider=https://accounts.google.com,client_id"},
-			wantOutput: "ERROR Invalid provider argument format. Expected format for google: <issuer>,<client_id>,<client_secret>",
+			wantOutput: "Error: Invalid provider argument format. Expected format for google: <issuer>,<client_id>,<client_secret>",
 			wantExit:   1,
 		},
 		{
 			name:       "Login command with provider bad provider good google issuer but no client secret value",
 			args:       []string{"opkssh", "login", "-provider=https://accounts.google.com,client_id,"},
-			wantOutput: "ERROR Invalid provider client secret value got ()",
+			wantOutput: "Error: Invalid provider client secret value got ()",
 			wantExit:   1,
 		},
 	}
