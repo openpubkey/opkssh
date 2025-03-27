@@ -258,7 +258,7 @@ func writeKeys(seckeyPath string, pubkeyPath string, seckeySshPem []byte, certBy
 
 	certBytes = append(certBytes, []byte(" openpubkey")...)
 	// Write ssh public key (certificate) to filesystem
-	return os.WriteFile(pubkeyPath, certBytes, 0777)
+	return os.WriteFile(pubkeyPath, certBytes, 0644)
 }
 
 func fileExists(fPath string) bool {
