@@ -30,7 +30,6 @@ type ProvidersRow struct {
 	Issuer           string
 	ClientID         string
 	ExpirationPolicy string
-	ClientSecret	 string
 }
 
 func (p ProvidersRow) GetExpirationPolicy() (verifier.ExpirationPolicy, error) {
@@ -94,7 +93,6 @@ func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
 			opts := providers.GetDefaultGoogleOpOptions()
 			opts.Issuer = row.Issuer
 			opts.ClientID = row.ClientID
-			opts.ClientSecret = row.ClientSecret
 			provider = providers.NewGoogleOpWithOptions(opts)
 		}
 
@@ -183,17 +181,10 @@ func (o *ProvidersFileLoader) FromTable(input []byte, path string) *ProviderPoli
 			continue
 		}
 
-		secret := ""
-		// Secret is optional
-		if len(row) == 3 {
-			secret = row[3]
-		}
-
 		policyRow := ProvidersRow{
 			Issuer:           row[0],
 			ClientID:         row[1],
 			ExpirationPolicy: row[2], //TODO: Validate this so that we can determine the line number that has the error
-			ClientSecret:     secret,
 		}
 		policy.AddRow(policyRow)
 	}
