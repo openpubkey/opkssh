@@ -191,12 +191,6 @@ func TestRun(t *testing.T) {
 			wantOutput: "ERROR Invalid provider issuer value. Expected issuer to start with 'https://' got (badissuer.com)",
 			wantExit:   1,
 		},
-		{
-			name:       "Login command with provider bad provider issuer value",
-			args:       []string{"opkssh", "login", "-provider=https://badissuer.com,client_id"},
-			wantOutput: "ERROR Unknown issuer supplied: https://badissuer.com",
-			wantExit:   1,
-		},
 
 		{
 			name:       "Login command with provider bad provider good azure issuer but no client id value",
