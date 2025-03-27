@@ -191,6 +191,7 @@ Examples:
 				opts := providers.GetDefaultGoogleOpOptions()
 				opts.Issuer = issuerArg
 				opts.ClientID = clientIDArg
+				opts.ClientSecret = "" // No client secret for generic providers unless specified
 				opts.GQSign = false
 
 				if len(parts) == 3 {
