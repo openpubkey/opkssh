@@ -239,38 +239,51 @@ AuthorizedKeysCommand /usr/local/bin/opkssh verify %u %k %t
 AuthorizedKeysCommandUser opksshuser
 ```
 
+## Custom OpenID Providers (Authentik, Authelia, Keycloak, Zitadel...)
 
-## Custom OIDC (Authentik, Authelia, Keycloak, Zitadel...)
-
-### Client:
-
-To log in using a custom OIDC provider, run:
+To log in using a custom OpenID Provider, run:
 
 ```bash
-opkssh login -provider https://authentik.local/application/o/opkssh/ -client-id SuperClientID
+opkssh login --provider={ISSUER},{CLIENT_ID}
 ```
 
-### Server:
+or in the rare case that a client secret is required by the OpenID Provider:
 
-In the `/etc/opk/providers` file, add the following line to recognize the custom provider:
-
-```
-https://authentik.local/application/o/opkssh/,SuperClientID 24h
+```bash
+opkssh login --provider={ISSUER},{CLIENT_ID},{CLIENT_SECRET}
 ```
 
-Then, add a user with:
+where ISSUER, CLIENT_ID and CLIENT_SECRET correspond to the issuer client ID and client secret of the custom OpenID Provider. 
+
+For example if the issuer is `https://authentik.local/application/o/opkssh/` and the client ID was `ClientID123`:
+
+```bash
+opkssh login --provider=https://authentik.local/application/o/opkssh/,ClientID123
+```
+
+### Server Configuration
+
+In the `/etc/opk/providers` file, add the OpenID Provider as you would any OpenID Provider. For example:
+
+```bash
+https://authentik.local/application/o/opkssh/ ClientID123 24h
+```
+
+Then add identities to the policy to allow those identities SSH to the server:
 
 ```bash
 opkssh add root alice@example.com https://authentik.local/application/o/opkssh/
 ```
 
-### Tested :
-| **OIDC**  | **Tested** | **Specific notes**                                                 |
+### Tested
+
+| OpenID Provider  | Tested | Notes                                                |
 |-----------|------------|--------------------------------------------------------------------|
 | Authentik |      ✅     | Do not add a certificate in the encryption section of the provider |
 | Zitadel   |      ✅     | Check the UserInfo box on the Token Settings                       |
 
-#### Do not use Confidential/Secret mode **only** ClientId is needed
+Do not use Confidential/Secret mode **only** client ID is needed.
+
 ## More information
 
 We document how to manually install opkssh on a server [here](scripts/installing.md).
