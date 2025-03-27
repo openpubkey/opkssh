@@ -180,7 +180,6 @@ func (o *ProvidersFileLoader) FromTable(input []byte, path string) *ProviderPoli
 			files.ConfigProblems().RecordProblem(configProblem)
 			continue
 		}
-
 		policyRow := ProvidersRow{
 			Issuer:           row[0],
 			ClientID:         row[1],
