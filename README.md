@@ -239,6 +239,31 @@ AuthorizedKeysCommand /usr/local/bin/opkssh verify %u %k %t
 AuthorizedKeysCommandUser opksshuser
 ```
 
+
+## Custom OIDC (Authentik, Authelia, Keycloak, Zitadel...)
+
+### Client:
+
+To log in using a custom OIDC provider, run:
+
+```bash
+opkssh login -provider https://authentik.local/application/o/opkssh/ -client-id SuperClientID
+```
+
+### Server:
+
+In the `/etc/opk/providers` file, add the following line to recognize the custom provider:
+
+```
+https://authentik.local/application/o/opkssh/,SuperClientID 24h
+```
+
+Then, add a user with:
+
+```bash
+opkssh add user user@yourfqdn.tld https://authentik.local/application/o/opkssh/
+```
+
 ## More information
 
 We document how to manually install opkssh on a server [here](scripts/installing.md).
