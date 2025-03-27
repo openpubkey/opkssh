@@ -264,6 +264,12 @@ Then, add a user with:
 opkssh add user user@yourfqdn.tld https://authentik.local/application/o/opkssh/
 ```
 
+### Tested :
+| **OIDC**  | **Public (ClientId only)** | **Confidential (ClientId + Secret)** | **Specific notes**                                                 |
+|-----------|----------------------------|--------------------------------------|--------------------------------------------------------------------|
+| Authentik |              ✅             |                   ✅                  | Do not add a certificate in the encryption section of the provider |
+| Zitadel   |              ✅             |                   ✅                  | Check the UserInfo box on the Token Settings                       |
+
 ## More information
 
 We document how to manually install opkssh on a server [here](scripts/installing.md).
