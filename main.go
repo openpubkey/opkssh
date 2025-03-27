@@ -160,8 +160,17 @@ func run() int {
 				opts.GQSign = false
 				provider = providers.NewGitlabOpWithOptions(opts)
 			} else {
-				log.Printf("ERROR Unknown issuer supplied: %v \n", issuerArg)
-				return 1
+				// Generic provider - Need signing, no encryption
+				opts := providers.GetDefaultGoogleOpOptions()
+				opts.Issuer = issuerArg
+				opts.ClientID = clientIDArg
+				opts.GQSign = false
+
+				if len(parts) == 3 {
+					opts.ClientSecret = parts[2]
+				}
+
+				provider = providers.NewGoogleOpWithOptions(opts)
 			}
 		} else if providerFromLdFlags != nil {
 			provider = providerFromLdFlags
