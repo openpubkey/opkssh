@@ -261,7 +261,7 @@ https://authentik.local/application/o/opkssh/,SuperClientID 24h
 Then, add a user with:
 
 ```bash
-opkssh add user user@yourfqdn.tld https://authentik.local/application/o/opkssh/
+opkssh add root alice@example.com https://authentik.local/application/o/opkssh/
 ```
 
 ### Tested :
