@@ -62,7 +62,8 @@ Try '%s --help' for more information.
 `, os.Args[0])
 		return 1
 	}
-	command := os.Args[1]
+	programStr := os.Args[0]
+	commandStr := os.Args[1]
 
 	ctx, cancel := context.WithCancel(context.Background())
 	sigs := make(chan os.Signal, 1)
@@ -84,15 +85,15 @@ Try '%s --help' for more information.
 		providerFromLdFlags = providers.NewGoogleOpWithOptions(opts)
 	}
 
-	switch command {
+	switch commandStr {
 	case "login":
-		loginCmd := flag.NewFlagSet("login", flag.ExitOnError)
+		loginCmd := flag.NewFlagSet(programStr+" "+commandStr, flag.ContinueOnError)
 		autoRefresh := loginCmd.Bool("auto-refresh", false, "Used to specify whether login will begin a process that auto-refreshes PK token")
 		logFilePath := loginCmd.String("log-dir", "", "Specify which directory the output log is placed")
 		providerArg := loginCmd.String("provider", "", "Specify the issuer and client ID to use for OpenID Connect provider. Format is: <issuer>,<client_id> or <issuer>,<client_id>,<client_secret>")
 
 		if err := loginCmd.Parse(os.Args[2:]); err != nil {
-			fmt.Println("ERROR parsing args:", err)
+			// Parse writes to Stderr so we don't need to
 			return 1
 		}
 
@@ -211,12 +212,13 @@ Try '%s --help' for more information.
 			}
 		}
 	case "verify":
+
 		// Setup logger
 		logFile, err := os.OpenFile(logFilePathServer, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0660) // Owner and group can read/write
 		if err != nil {
-			fmt.Println("ERROR opening log file:", err)
+			fmt.Fprintf(os.Stderr, "ERROR opening log file: %v\n", err)
 			// It could be very difficult to figure out what is going on if the log file was deleted. Hopefully this message saves someone an hour of debugging.
-			fmt.Printf("Check if log exists at %v, if it does not create it with permissions: chown root:opksshuser %v; chmod 660 %v\n", logFilePathServer, logFilePathServer, logFilePathServer)
+			fmt.Fprintf(os.Stderr, "Check if log exists at %v, if it does not create it with permissions: chown root:opksshuser %v; chmod 660 %v\n", logFilePathServer, logFilePathServer, logFilePathServer)
 		} else {
 			defer logFile.Close()
 			log.SetOutput(logFile)
@@ -284,7 +286,7 @@ Try '%s --help' for more information.
 		//  <Email> The email of the user to be added to the policy file.
 		//	<Issuer> The desired OpenID Provider for email, e.g. https://accounts.google.com.
 		if len(os.Args) != 5 {
-			fmt.Println("Invalid number of arguments for add, expected: `<Principal> <Email> <Issuer>`")
+			fmt.Fprintf(os.Stderr, "Invalid number of arguments for add, expected: `<Principal> <Email> <Issuer>`\n")
 			return 1
 		}
 		inputPrincipal := os.Args[2]
@@ -308,10 +310,11 @@ Try '%s --help' for more information.
 			Username:           inputPrincipal,
 		}
 		if policyFilePath, err := a.Add(inputPrincipal, inputEmail, inputIssuer); err != nil {
-			fmt.Println("failed to add to policy:", err)
+			fmt.Fprintf(os.Stderr, "failed to add to policy: %v\n", err)
 			return 1
 		} else {
-			fmt.Println("Successfully added new policy to", policyFilePath)
+			fmt.Fprintf(os.Stdout, "Successfully added new policy to %s\n", policyFilePath)
+			return 0
 		}
 	case "--help", "help":
 		fmt.Fprintf(os.Stderr, `
@@ -319,40 +322,49 @@ Usage: %s <command> [options]
 SSH with OpenPubkey.
 
 Commands:
-  login 	  Log in to an OpenID Connect provider and generate a ssh key.
-  ...
+  add      Add a new rule to the policy file.
+  login    Authenticate to an OpenID Connect provider to generate a ssh key.
+  verify   Verify an ssh key, used by the sshd AuthorizedKeysCommand.
 
+Options:
+  --help, -h    Show this help message.
+  --version, -v Show version information.
 
-  Examples:
-	opkssh login
-	opkssh add <Principal> <Email> <Issuer>
-	opkssh verify <User (TOKEN u)> <Base64 encoded Cert (TOKEN k)> <Key type (TOKEN t)>
+Examples:
+  opkssh login
+  opkssh login --provider=<Issuer>,<ClientID>,<ClientSecret>
+  opkssh add <Principal> <Email> <Issuer>
+  opkssh verify <Principal (TOKEN u)> <Base64 encoded Cert (TOKEN k)> <Key type (TOKEN t)>
 
 opkssh online help: <https://github.com/openpubkey/opkssh/blob/main/README.md>
 `, os.Args[0])
 		return 1
 	case "--version", "-v":
-		fmt.Println(Version)
+		fmt.Fprintf(os.Stderr, "opkssh version %s", Version)
+		fmt.Fprintf(os.Stderr, "Copyright (C) 2025 OpenPubkey")
+		fmt.Fprintf(os.Stderr, "License Apache-2.0: <https://www.apache.org/licenses/LICENSE-2.0>")
+		return 0
 	case "readhome":
 		// This command called as part of AuthorizedKeysCommand. It is used to
 		// read the user's home policy file (`~/.opk/auth_id`) with sudoer permissions.
 		// This allows us to use an unprivileged user as the AuthorizedKeysCommand user.
 		if len(os.Args) != 3 {
-			fmt.Println("Invalid number of arguments for readhome, expected: `<username>`")
+			fmt.Fprintf(os.Stderr, "Invalid number of arguments for readhome, expected: `opkssh readhome <username>`\n")
 			return 1
 		}
 		userArg := os.Args[2]
 		if fileBytes, err := commands.ReadHome(userArg); err != nil {
-			fmt.Printf("Failed to read user's home policy file: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Failed to read user's home policy file: %v\n", err)
 			return 1
 		} else {
-			fmt.Println(string(fileBytes))
+			fmt.Fprintf(os.Stdout, string(fileBytes))
+			return 0
 		}
 	default:
 		fmt.Fprintf(os.Stderr, `
 %s: invalid option -- '%s'
 Try '%s --help' for more information.
-`, os.Args[0], command, os.Args[0])
+`, os.Args[0], commandStr, os.Args[0])
 		return 1
 	}
 
