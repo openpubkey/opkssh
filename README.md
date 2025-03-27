@@ -265,11 +265,12 @@ opkssh add root alice@example.com https://authentik.local/application/o/opkssh/
 ```
 
 ### Tested :
-| **OIDC**  | **Public (ClientId only)** | **Confidential (ClientId + Secret)** | **Specific notes**                                                 |
-|-----------|----------------------------|--------------------------------------|--------------------------------------------------------------------|
-| Authentik |              ✅             |                   ✅                  | Do not add a certificate in the encryption section of the provider |
-| Zitadel   |              ✅             |                   ✅                  | Check the UserInfo box on the Token Settings                       |
+| **OIDC**  | **Tested** | **Specific notes**                                                 |
+|-----------|------------|--------------------------------------------------------------------|
+| Authentik |      ✅     | Do not add a certificate in the encryption section of the provider |
+| Zitadel   |      ✅     | Check the UserInfo box on the Token Settings                       |
 
+#### Do not use Confidential/Secret mode **only** ClientId is needed
 ## More information
 
 We document how to manually install opkssh on a server [here](scripts/installing.md).
