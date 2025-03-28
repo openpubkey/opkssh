@@ -137,69 +137,18 @@ Examples:
 		// If the user has supplied commandline arguments for the provider, use those instead of the web chooser
 		var provider providers.OpenIdProvider
 		if providerArg != nil && *providerArg != "" {
-			parts := strings.Split(*providerArg, ",")
-			if len(parts) != 2 && len(parts) != 3 {
-				log.Println("Error: Invalid provider argument format. Expected format <issuer>,<client_id> or <issuer>,<client_id>,<client_secret>")
-				return 1
-			}
-			issuerArg := parts[0]
-			clientIDArg := parts[1]
-
-			if !strings.HasPrefix(issuerArg, "https://") {
-				log.Printf("Error: Invalid provider issuer value. Expected issuer to start with 'https://' got (%s) \n", issuerArg)
+			config, err := commands.NewProviderConfigFromString(*providerArg, false)
+			if err != nil {
+				log.Println("Error parsing provider argument:", err)
 				return 1
 			}
 
-			if clientIDArg == "" {
-				log.Printf("Error: Invalid provider client-ID value got (%s) \n", clientIDArg)
+			provider, err = commands.NewProviderFromConfig(config)
+			if err != nil {
+				log.Println("Error creating provider from config:", err)
 				return 1
 			}
 
-			if strings.HasPrefix(issuerArg, "https://accounts.google.com") {
-				// The Google OP is strange in that it requires a client secret even if this is a public OIDC App.
-				// Despite its name the Google OP client secret is a public value.
-				if len(parts) != 3 {
-					log.Println("Error: Invalid provider argument format. Expected format for google: <issuer>,<client_id>,<client_secret>")
-					return 1
-				}
-				clientSecretArg := parts[2]
-				if clientSecretArg == "" {
-					log.Printf("Error: Invalid provider client secret value got (%s) \n", clientSecretArg)
-					return 1
-				}
-
-				opts := providers.GetDefaultGoogleOpOptions()
-				opts.Issuer = issuerArg
-				opts.ClientID = clientIDArg
-				opts.ClientSecret = clientSecretArg
-				opts.GQSign = false
-				provider = providers.NewGoogleOpWithOptions(opts)
-			} else if strings.HasPrefix(issuerArg, "https://login.microsoftonline.com") {
-				opts := providers.GetDefaultAzureOpOptions()
-				opts.Issuer = issuerArg
-				opts.ClientID = clientIDArg
-				opts.GQSign = false
-				provider = providers.NewAzureOpWithOptions(opts)
-			} else if strings.HasPrefix(issuerArg, "https://gitlab.com") {
-				opts := providers.GetDefaultGitlabOpOptions()
-				opts.Issuer = issuerArg
-				opts.ClientID = clientIDArg
-				opts.GQSign = false
-				provider = providers.NewGitlabOpWithOptions(opts)
-			} else {
-				// Generic provider - Need signing, no encryption
-				opts := providers.GetDefaultGoogleOpOptions()
-				opts.Issuer = issuerArg
-				opts.ClientID = clientIDArg
-				opts.ClientSecret = "" // No client secret for generic providers unless specified
-				opts.GQSign = false
-
-				if len(parts) == 3 {
-					opts.ClientSecret = parts[2]
-				}
-
-				provider = providers.NewGoogleOpWithOptions(opts)
-			}
 		} else if providerFromLdFlags != nil {
 			provider = providerFromLdFlags
 		} else {

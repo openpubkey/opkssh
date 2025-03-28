@@ -218,13 +218,13 @@ func TestRun(t *testing.T) {
 		{
 			name:       "Login command with provider bad provider value",
 			args:       []string{"opkssh", "login", "-provider=badvalue"},
-			wantOutput: "Error: Invalid provider argument format. Expected format <issuer>,<client_id> or <issuer>,<client_id>,<client_secret>",
+			wantOutput: "Error parsing provider argument: invalid provider config string. Expected format <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes>",
 			wantExit:   1,
 		},
 		{
 			name:       "Login command with provider bad provider issuer value",
 			args:       []string{"opkssh", "login", "-provider=badissuer.com,client_id"},
-			wantOutput: "Error: Invalid provider issuer value. Expected issuer to start with 'https://' got (badissuer.com)",
+			wantOutput: "Error creating provider from config: Error: Invalid provider issuer value. Expected issuer to start with 'https://' got (badissuer.com)",
 			wantExit:   1,
 		},
 		{
@@ -242,7 +242,7 @@ func TestRun(t *testing.T) {
 		{
 			name:       "Login command with provider bad provider good google issuer but no client secret value",
 			args:       []string{"opkssh", "login", "-provider=https://accounts.google.com,client_id,"},
-			wantOutput: "Error: Invalid provider client secret value got ()",
+			wantOutput: "Error parsing provider argument: Error: Invalid provider argument format. Expected format for google: <issuer>,<client_id>,<client_secret>",
 			wantExit:   1,
 		},
 	}

@@ -27,6 +27,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/lestrrat-go/jwx/v2/jwa"
@@ -277,4 +278,123 @@ func IdentityString(pkt pktoken.PKToken) (string, error) {
 	} else {
 		return "Email, sub, issuer, audience: \n" + claims.Email + " " + claims.Subject + " " + claims.Issuer + " " + claims.Audience, nil
 	}
+}
+
+// Structure for that format :
+// {alias},{provider_url},{client_id},{client_secret},{scopes}
+// client secret is optional, as well as scopes, if not provided, the default for secret is an empty string, for scopes is "openid profile email"
+
+type ProviderConfig struct {
+	Alias        string
+	Issuer       string
+	ClientID     string
+	ClientSecret string
+	Scopes       []string
+}
+
+// Function to create the provider config from a string of the format
+// {alias},{provider_url},{client_id},{client_secret},{scopes}
+func NewProviderConfigFromString(configStr string, hasAlias bool) (ProviderConfig, error) {
+	parts := strings.Split(configStr, ",")
+	alias := ""
+	if hasAlias {
+		// If the config string has an alias, we need to remove it from the parts
+		alias = parts[0]
+		parts = parts[1:]
+	}
+	if len(parts) < 2 {
+		if hasAlias {
+			return ProviderConfig{}, fmt.Errorf("invalid provider config string. Expected format <alias>,<issuer>,<client_id> or <alias>,<issuer>,<client_id>,<client_secret> or <alias>,<issuer>,<client_id>,<client_secret>,<scopes>")
+		}
+		return ProviderConfig{}, fmt.Errorf("invalid provider config string. Expected format <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes>")
+	}
+
+	providerConfig := ProviderConfig{
+		Alias:    alias,
+		Issuer:   parts[0],
+		ClientID: parts[1],
+	}
+
+	if providerConfig.ClientID == "" {
+		return ProviderConfig{}, fmt.Errorf("Error: Invalid provider client-ID value got (%s) \n", providerConfig.ClientID)
+	}
+
+	if len(parts) > 2 {
+		providerConfig.ClientSecret = parts[2]
+	} else {
+		providerConfig.ClientSecret = ""
+	}
+
+	if len(parts) > 3 {
+		providerConfig.Scopes = strings.Split(parts[3], " ")
+	} else {
+		providerConfig.Scopes = []string{"openid", "profile", "email"}
+	}
+
+	if strings.HasPrefix(providerConfig.Issuer, "https://accounts.google.com") {
+		// The Google OP is strange in that it requires a client secret even if this is a public OIDC App.
+		// Despite its name the Google OP client secret is a public value.
+		if providerConfig.ClientSecret == "" {
+			if hasAlias {
+				return ProviderConfig{}, fmt.Errorf("Error: Invalid provider argument format. Expected format for google: <alias>,<issuer>,<client_id>,<client_secret> \n")
+			} else {
+				return ProviderConfig{}, fmt.Errorf("Error: Invalid provider argument format. Expected format for google: <issuer>,<client_id>,<client_secret> \n")
+			}
+
+		}
+	}
+	return providerConfig, nil
+}
+
+// Function to create the provider from the config
+func NewProviderFromConfig(config ProviderConfig) (client.OpenIdProvider, error) {
+
+	fmt.Printf("%+v\n", config)
+	if config.Issuer == "" {
+		return nil, fmt.Errorf("Error: Invalid provider issuer value got (%s) \n", config.Issuer)
+	}
+
+	if !strings.HasPrefix(config.Issuer, "https://") {
+		return nil, fmt.Errorf("Error: Invalid provider issuer value. Expected issuer to start with 'https://' got (%s) \n", config.Issuer)
+	}
+
+	if config.ClientID == "" {
+		return nil, fmt.Errorf("Error: Invalid provider client-ID value got (%s) \n", config.ClientID)
+	}
+	var provider client.OpenIdProvider
+
+	if strings.HasPrefix(config.Issuer, "https://accounts.google.com") {
+		opts := providers.GetDefaultGoogleOpOptions()
+		opts.Issuer = config.Issuer
+		opts.ClientID = config.ClientID
+		opts.ClientSecret = config.ClientSecret
+		opts.GQSign = false
+		provider = providers.NewGoogleOpWithOptions(opts)
+	} else if strings.HasPrefix(config.Issuer, "https://login.microsoftonline.com") {
+		opts := providers.GetDefaultAzureOpOptions()
+		opts.Issuer = config.Issuer
+		opts.ClientID = config.ClientSecret
+		opts.GQSign = false
+		provider = providers.NewAzureOpWithOptions(opts)
+	} else if strings.HasPrefix(config.Issuer, "https://gitlab.com") {
+		opts := providers.GetDefaultGitlabOpOptions()
+		opts.Issuer = config.Issuer
+		opts.ClientID = config.ClientSecret
+		opts.GQSign = false
+		provider = providers.NewGitlabOpWithOptions(opts)
+	} else {
+		// Generic provider - Need signing, no encryption
+		opts := providers.GetDefaultGoogleOpOptions()
+		opts.Issuer = config.Issuer
+		opts.ClientID = config.ClientID
+		opts.GQSign = false
+		opts.ClientSecret = config.ClientSecret
+		opts.Scopes = config.Scopes
+
+		provider = providers.NewGoogleOpWithOptions(opts)
+	}
+
+	fmt.Printf("%+v\n", provider)
+
+	return provider, nil
 }
