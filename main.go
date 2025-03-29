@@ -63,8 +63,8 @@ This program allows users to:
   - Verify OpenPubkey SSH certificates for use with sshd's AuthorizedKeysCommand`,
 		Example: `  opkssh login
   opkssh add root alice@example.com https://accounts.google.com`,
-		Run: func(cmd *cobra.Command, args []string) {
-			cmd.Help()
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Help()
 		},
 	}
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
