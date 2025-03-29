@@ -166,6 +166,28 @@ Users can then SSH into servers configured to use opkssh as the AuthorizedKeysCo
 	loginCmd.Flags().StringVar(&providerArg, "provider", "", "OpenID Provider specification in the format: <issuer>,<client_id> or <issuer>,<client_id>,<client_secret>")
 	rootCmd.AddCommand(loginCmd)
 
+	readhomeCmd := &cobra.Command{
+		Use:   "readhome <PRINCIPAL>",
+		Short: "Read the principal's home policy file",
+		Long: `Read the principal's policy file (/home/<PRINCIPAL>/.opk/auth_id).
+
+You should not call this command directly. It is called by the opkssh verify command as part of the AuthorizedKeysCommand process to read the user's policy  (principals) home file (~/.opk/auth_id) with sudoer permissions. This allows us to use an unprivileged user as the AuthorizedKeysCommand user.
+`,
+		Args:    cobra.ExactArgs(1),
+		Example: `  opkssh readhome alice`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			userArg := os.Args[2]
+			if fileBytes, err := commands.ReadHome(userArg); err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to read user's home policy file: %v\n", err)
+				return err
+			} else {
+				fmt.Fprint(os.Stdout, string(fileBytes))
+				return nil
+			}
+		},
+	}
+	rootCmd.AddCommand(readhomeCmd)
+
 	verifyCmd := &cobra.Command{
 		Use:   "verify <PRINCIPAL> <CERT> <KEY_TYPE>",
 		Short: "Verify an SSH key (used by sshd AuthorizedKeysCommand)",
