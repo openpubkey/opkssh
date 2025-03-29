@@ -175,6 +175,8 @@ Linux user accounts are typically referred to in SSH as *principals* and we cont
 - Column 2: Email address or subject ID of the user (choose one)
   - Email - the email of the identity
   - Subject ID - an unique ID for the user set by the OP. This is the `sub` claim in the ID Token.
+  - Group Identifier - the name of the group that the user is part of. This uses the `groups` claim which is presumed to 
+    be an array.
 - Column 3: Issuer URI
 
 ```bash
@@ -183,6 +185,9 @@ alice alice@example.com https://accounts.google.com
 guest alice@example.com https://accounts.google.com 
 root alice@example.com https://accounts.google.com 
 dev bob@microsoft.com https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
+
+# Group identifier 
+dev oidc:groups:developer https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
 ```
 
 To add new rule run:
@@ -213,6 +218,9 @@ That is, if it is in `/home/alice/.opk/auth_id` it can only specify who can assu
 ```bash
 # email/sub principal issuer 
 alice alice@example.com https://accounts.google.com
+
+# Group identifier
+dev oidc:groups:developer https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
 ```
 
 It requires the following permissions:
