@@ -88,58 +88,58 @@ func TestAdd(t *testing.T) {
 	issuer := fmt.Sprintf("http://oidc.local:%s/", issuerPort)
 
 	tests := []struct {
-		name                  string
-		binaryPath            string
-		useSudo               bool
-		cmdUser               string
-		desiredPrincipal      string
-		preexistingAuthIdFile bool
-		shouldCmdFail         bool
+		name                      string
+		binaryPath                string
+		useSudo                   bool
+		cmdUser                   string
+		desiredPrincipal          string
+		preexistingHomeAuthIdFile bool
+		shouldCmdFail             bool
 	}{
 		{
-			name:                  "sudoer user can update root policy",
-			binaryPath:            "/usr/local/bin/opkssh",
-			useSudo:               true,
-			cmdUser:               SudoerUser,
-			desiredPrincipal:      SudoerUser,
-			preexistingAuthIdFile: true,
-			shouldCmdFail:         false,
+			name:                      "sudoer user can update root policy",
+			binaryPath:                "/usr/local/bin/opkssh",
+			useSudo:                   true,
+			cmdUser:                   SudoerUser,
+			desiredPrincipal:          SudoerUser,
+			preexistingHomeAuthIdFile: true,
+			shouldCmdFail:             false,
 		},
 		{
-			name:                  "sudoer user can update root policy with principal != self",
-			binaryPath:            "/usr/local/bin/opkssh",
-			useSudo:               true,
-			cmdUser:               SudoerUser,
-			desiredPrincipal:      UnprivUser,
-			preexistingAuthIdFile: true,
-			shouldCmdFail:         false,
+			name:                      "sudoer user can update root policy with principal != self",
+			binaryPath:                "/usr/local/bin/opkssh",
+			useSudo:                   true,
+			cmdUser:                   SudoerUser,
+			desiredPrincipal:          UnprivUser,
+			preexistingHomeAuthIdFile: true,
+			shouldCmdFail:             false,
 		},
 		{
-			name:                  "unprivileged user creates an auth_id file (no preexisting auth_id file)",
-			binaryPath:            "/usr/local/bin/opkssh",
-			useSudo:               false,
-			cmdUser:               UnprivUser,
-			desiredPrincipal:      UnprivUser,
-			preexistingAuthIdFile: false,
-			shouldCmdFail:         false,
+			name:                      "unprivileged user creates an auth_id file (no preexisting ~/.opk/auth_id file)",
+			binaryPath:                "/usr/local/bin/opkssh",
+			useSudo:                   false,
+			cmdUser:                   UnprivUser,
+			desiredPrincipal:          UnprivUser,
+			preexistingHomeAuthIdFile: false,
+			shouldCmdFail:             false,
 		},
 		{
-			name:                  "unprivileged user can update their user policy",
-			binaryPath:            "/usr/local/bin/opkssh",
-			useSudo:               false,
-			cmdUser:               UnprivUser,
-			desiredPrincipal:      UnprivUser,
-			preexistingAuthIdFile: true,
-			shouldCmdFail:         false,
+			name:                      "unprivileged user can update their user policy",
+			binaryPath:                "/usr/local/bin/opkssh",
+			useSudo:                   false,
+			cmdUser:                   UnprivUser,
+			desiredPrincipal:          UnprivUser,
+			preexistingHomeAuthIdFile: true,
+			shouldCmdFail:             false,
 		},
 		{
-			name:                  "unprivileged user cannot add principal != self",
-			binaryPath:            "/usr/local/bin/opkssh",
-			useSudo:               false,
-			cmdUser:               UnprivUser,
-			desiredPrincipal:      SudoerUser,
-			preexistingAuthIdFile: true,
-			shouldCmdFail:         true,
+			name:                      "unprivileged user cannot add principal != self",
+			binaryPath:                "/usr/local/bin/opkssh",
+			useSudo:                   false,
+			cmdUser:                   UnprivUser,
+			desiredPrincipal:          SudoerUser,
+			preexistingHomeAuthIdFile: true,
+			shouldCmdFail:             true,
 		},
 	}
 	for _, tt := range tests {
@@ -176,14 +176,17 @@ func TestAdd(t *testing.T) {
 				userPolicyFile = true
 			}
 
-			policyFileExists := FileExists(t, container.Container, expectedPolicyFilepath)
-			require.False(t, policyFileExists, "policy file should not exist yet in a fresh test container")
-
-			// If test needs a preexisting auth_id file, create it
-			if tt.preexistingAuthIdFile {
-				CreateAuthIdFile(t, container.Container, expectedPolicyFilepath, tt.cmdUser, userPolicyFile)
+			// Install automatically creates the system auth_id file, so can assume it exists
+			if userPolicyFile {
 				policyFileExists := FileExists(t, container.Container, expectedPolicyFilepath)
-				require.True(t, policyFileExists, "policy file should have been created in test container")
+				require.False(t, policyFileExists, "home policy file should not exist yet in a fresh test container")
+
+				// If test needs a preexisting auth_id file, create it
+				if tt.preexistingHomeAuthIdFile {
+					CreateAuthIdFile(t, container.Container, expectedPolicyFilepath, tt.cmdUser, userPolicyFile)
+					policyFileExists := FileExists(t, container.Container, expectedPolicyFilepath)
+					require.True(t, policyFileExists, "policy file should have been created in test container")
+				}
 			}
 
 			// Build add command based on sub-test options
@@ -198,7 +201,7 @@ func TestAdd(t *testing.T) {
 
 			if tt.shouldCmdFail {
 				assert.Equal(t, 1, code, "add command should fail")
-				if tt.preexistingAuthIdFile {
+				if tt.preexistingHomeAuthIdFile && userPolicyFile {
 					code, policyContents := executeCommandAsUser(t, container.Container, []string{"cat", expectedPolicyFilepath}, RootUser)
 					require.Equal(t, 0, code, "failed to read policy file")
 					assert.Empty(t, policyContents, "policy file should not be updated")
