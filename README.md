@@ -77,12 +77,6 @@ After downloading opkssh run:
 opkssh login
 ```
 
-on manual Windows install (using curl) run:
-
-```powershell
-.\opkssh.exe login
-```
-
 This opens a browser window to select which  OpenID Provider you want to authenticate against.
 After successfully authenticating opkssh generates an SSH public key in `~/.ssh/id_ecdsas` which contains your PK Token.
 By default this ssh key expires after 24 hours and you must run `opkssh login` to generate a new ssh key.
