@@ -28,6 +28,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"testing"
@@ -377,7 +378,7 @@ func TestEndToEndSSH(t *testing.T) {
 	testContent := "IF YOU CAN READ THIS SFTP WORKS!"
 	sftpCommand := fmt.Sprintf("echo '%s' | sftp -o StrictHostKeyChecking=no -i %s %s@%s:%s",
 		testContent, secKeyFilePath, serverContainer.User, serverContainer.Host, remoteTestFilePath)
-	out, err = opkSshClient.Run(sftpCommand)
+	out, err = exec.Command("bash", "-c", sftpCommand).CombinedOutput()
 	t.Logf("SFTP command output: %s", string(out))
 	require.NoError(t, err, "failed to execute SFTP command")
 
