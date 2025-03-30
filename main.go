@@ -260,7 +260,6 @@ Arguments:
 				return err
 			}
 
-			// Execute verify command
 			v := commands.VerifyCmd{
 				PktVerifier: *pktVerifier,
 				CheckPolicy: commands.OpkPolicyEnforcerFunc(userArg),
