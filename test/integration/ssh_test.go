@@ -386,6 +386,20 @@ func TestEndToEndSSH(t *testing.T) {
 	out, err = exec.Command("cat", secKeyFilePath).CombinedOutput()
 	t.Logf("SFTP sec key output: %s", string(out))
 
+	certFilePath := secKeyFilePath + "-cert.pub"
+	out, err = exec.Command("cp", pubKeyFilePath, certFilePath).CombinedOutput()
+	t.Logf("SFTP public key copy: %s", string(out))
+	out, err = exec.Command("cat", certFilePath).CombinedOutput()
+	t.Logf("SFTP cert key output: %s", string(out))
+
+	// Test ssh
+	sshCommand := fmt.Sprintf("ssh -vvv -o StrictHostKeyChecking=no -i %s %s@%s",
+		secKeyFilePath, serverContainer.User, serverContainer.Host)
+	t.Logf("SSH command: %s", string(sshCommand))
+	out, err = exec.Command("bash", "-c", sshCommand).CombinedOutput()
+	t.Logf("SSH command output: %s", string(out))
+	require.NoError(t, err, "failed to execute SSH command")
+
 	// Execute the SFTP command to copy the test file to the server
 	sftpCommand := fmt.Sprintf("echo 'put %s' | sftp -vvv -o StrictHostKeyChecking=no -i %s %s@%s:%s",
 		localTestFilePath, secKeyFilePath, serverContainer.User, serverContainer.Host, remoteTestFilePath)
