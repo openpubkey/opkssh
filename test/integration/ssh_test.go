@@ -376,7 +376,7 @@ func TestEndToEndSSH(t *testing.T) {
 
 	// Execute the SFTP command to copy the test file to the server
 	testContent := "IF YOU CAN READ THIS SFTP WORKS!"
-	pubKeyFilePath := strings.TrimSuffix(secKeyFilePath, ".pub")
+	pubKeyFilePath := secKeyFilePath + ".pub"
 	sftpCommand := fmt.Sprintf("echo '%s' | sftp -o StrictHostKeyChecking=no -i %s %s@%s:%s",
 		testContent, pubKeyFilePath, serverContainer.User, serverContainer.Host, remoteTestFilePath)
 	out, err = exec.Command("bash", "-c", sftpCommand).CombinedOutput()
