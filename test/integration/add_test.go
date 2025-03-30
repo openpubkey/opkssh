@@ -71,7 +71,8 @@ func CreateAuthIdFile(t *testing.T, container testcontainers.Container, filePath
 		// Set the permissions for the user policy file to 600
 		code, _ = executeCommandAsUser(t, container, []string{"chmod", "600", filePath}, RootUser)
 		require.Equal(t, 0, code, "failed to set permissions for user policy file")
-		code, _ = executeCommandAsUser(t, container, []string{"chown", cmdUser, filePath}, RootUser)
+		userAndGroup := fmt.Sprintf("%s:%s", cmdUser, cmdUser)
+		code, _ = executeCommandAsUser(t, container, []string{"chown", userAndGroup, filePath}, RootUser)
 		require.Equal(t, 0, code, "failed to set ownership for user policy file")
 	} else {
 		// Set the permissions for the system policy file to 640
