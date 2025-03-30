@@ -161,31 +161,31 @@ func TestAdd(t *testing.T) {
 
 			// Determine expected values based on sub-test options
 			var expectedPolicyFilepath, expectedUser, expectedGroup, expectedPerms string
-			var userPolicyFile bool
+			var isUserPolicyFile bool
 			if tt.useSudo {
 				expectedPolicyFilepath = policy.SystemDefaultPolicyPath
 				expectedUser = RootUser
 				expectedGroup = UserGroup
 				expectedPerms = "640"
-				userPolicyFile = false
+				isUserPolicyFile = false
 			} else {
 				expectedPolicyFilepath = path.Join("/home/", tt.cmdUser, ".opk", "auth_id")
 				expectedUser = tt.cmdUser
 				expectedGroup = tt.cmdUser
 				expectedPerms = "600"
-				userPolicyFile = true
+				isUserPolicyFile = true
 			}
 
 			// Install automatically creates the system auth_id file, so can assume it exists
-			if userPolicyFile {
+			if isUserPolicyFile {
 				policyFileExists := FileExists(t, container.Container, expectedPolicyFilepath)
 				require.False(t, policyFileExists, "home policy file should not exist yet in a fresh test container")
 
 				// If test needs a preexisting auth_id file, create it
 				if tt.preexistingHomeAuthIdFile {
-					CreateAuthIdFile(t, container.Container, expectedPolicyFilepath, tt.cmdUser, userPolicyFile)
+					CreateAuthIdFile(t, container.Container, expectedPolicyFilepath, tt.cmdUser, isUserPolicyFile)
 					policyFileExists := FileExists(t, container.Container, expectedPolicyFilepath)
-					require.True(t, policyFileExists, "policy file should have been created in test container")
+					require.True(t, policyFileExists, "policy file should have been created in test container (test is broken)")
 				}
 			}
 
@@ -201,7 +201,7 @@ func TestAdd(t *testing.T) {
 
 			if tt.shouldCmdFail {
 				assert.Equal(t, 1, code, "add command should fail")
-				if tt.preexistingHomeAuthIdFile && userPolicyFile {
+				if tt.preexistingHomeAuthIdFile && isUserPolicyFile {
 					code, policyContents := executeCommandAsUser(t, container.Container, []string{"cat", expectedPolicyFilepath}, RootUser)
 					require.Equal(t, 0, code, "failed to read policy file")
 					assert.Empty(t, policyContents, "policy file should not be updated")
