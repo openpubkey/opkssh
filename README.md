@@ -85,7 +85,11 @@ Since your PK Token has been saved as an SSH key you can SSH as normal:
 ssh root@example.com
 ```
 
-This works because SSH sends the SSH public key opkssh wrote in `~/.ssh/id_ecdsas` to the server and sshd running on the server will send the public key to the opkssh command to verify.
+This works because SSH sends the SSH public key opkssh wrote in `~/.ssh/id_ecdsas` to the server and sshd running on the server will send the public key to the opkssh command to verify. This also works for other protocols that build on ssh like [sftp](https://en.wikipedia.org/wiki/SSH_File_Transfer_Protocol) or ssh tunnels.
+
+```bash
+sftp e0@192.168.1.170
+```
 
 ### Installing on a Server
 
