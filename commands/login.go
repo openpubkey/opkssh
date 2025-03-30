@@ -389,7 +389,7 @@ func writeKeys(seckeyPath string, pubkeyPath string, seckeySshPem []byte, certBy
 		return err
 	}
 
-	fmt.Printf("Writing opk ssh public key to %s and corresponding secret key to %s", pubkeyPath, seckeyPath)
+	fmt.Printf("Writing opk ssh public key to %s and corresponding secret key to %s\n", pubkeyPath, seckeyPath)
 
 	certBytes = append(certBytes, []byte(" openpubkey")...)
 	// Write ssh public key (certificate) to filesystem
