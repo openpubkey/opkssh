@@ -367,19 +367,21 @@ func TestEndToEndSSH(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, serverContainer.User, strings.TrimSpace(string(out)))
 
-	out, err = opkSshClient.Run("test -f /tmp/testfile.txt")
-	require.NoError(t, err)
+	t.Log("Testing SFTP")
+	// More the testFile doesn't exist
+	remoteTestFilePath := "/tmp/testfile.txt"
+	_, err = opkSshClient.Run("test -f " + remoteTestFilePath)
+	require.Error(t, err, "expected test file to not exist")
 
-	// Execute the SFTP command to create a test file on the remote server
-	remoteFilePath := "/tmp/testfile.txt"
-	testContent := "Hello, SFTP!"
+	// Execute the SFTP command to copy the test file to the server
+	testContent := "IF YOU CAN READ THIS SFTP WORKS!"
 	sftpCommand := fmt.Sprintf("echo '%s' | sftp -o StrictHostKeyChecking=no -i %s %s@%s:%s",
-		testContent, secKeyFilePath, serverContainer.User, serverContainer.Host, remoteFilePath)
+		testContent, secKeyFilePath, serverContainer.User, serverContainer.Host, remoteTestFilePath)
 	out, err = opkSshClient.Run(sftpCommand)
-	require.NoError(t, err, "failed to execute SFTP command")
 	t.Logf("SFTP command output: %s", string(out))
+	require.NoError(t, err, "failed to execute SFTP command")
 
-	out, err = opkSshClient.Run("cat /tmp/testfile.txt")
+	out, err = opkSshClient.Run("cat " + remoteTestFilePath)
 	require.NoError(t, err)
 	require.Equal(t, testContent, strings.TrimSpace(string(out)), "SFTP file content mismatch")
 }
