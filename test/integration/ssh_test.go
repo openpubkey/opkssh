@@ -393,7 +393,7 @@ func TestEndToEndSSH(t *testing.T) {
 	t.Logf("SFTP cert key output: %s", string(out))
 
 	// Test ssh
-	sshCommand := fmt.Sprintf("ssh -vvv -o StrictHostKeyChecking=no -P %d -i %s %s@%s",
+	sshCommand := fmt.Sprintf("ssh -vvv -o StrictHostKeyChecking=no -p %d -i %s %s@%s",
 		uint(serverContainer.Port), secKeyFilePath, serverContainer.User, serverContainer.Host)
 	t.Logf("SSH command: %s", string(sshCommand))
 	out, err = exec.Command("bash", "-c", sshCommand).CombinedOutput()
