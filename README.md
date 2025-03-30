@@ -33,7 +33,7 @@ brew tap openpubkey/opkssh
 brew install opkssh
 ```
 
-### Homebrew Install (OSX)
+### Winget Install (Windows)
 
 To install with winget run:
 
