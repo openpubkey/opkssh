@@ -46,18 +46,6 @@ RUN chmod +x ./scripts/install-linux.sh
 RUN bash ./scripts/install-linux.sh --install-from=opksshbuild --no-sshd-restart
 # RUN chmod 700 /usr/local/bin/opkssh
 
-# Setup OPK directories/files (unprivileged "test2" user)
-RUN mkdir -p /home/test2/.opk 
-RUN chown test2:test2 /home/test2/.opk
-RUN chmod 750 /home/test2/.opk
-# Create personal policy file in user's home directory
-RUN touch /home/test2/.opk/auth_id
-RUN chown test2:test2 /home/test2/.opk/auth_id
-RUN chmod 600 /home/test2/.opk/auth_id
-
-
-
-
 RUN echo "http://oidc.local:${ISSUER_PORT}/ web oidc_refreshed" >> /etc/opk/providers
 
 # Add integration test user as allowed email in policy (this directly tests
