@@ -158,16 +158,6 @@ func TestAdd(t *testing.T) {
 				require.NoError(t, container.Terminate(TestCtx), "failed to terminate add_test container")
 			})
 
-			// Build add command based on sub-test options
-			addCmd := fmt.Sprintf("add %s foo@example.com %s", tt.desiredPrincipal, issuer)
-			cmd := []string{tt.binaryPath, addCmd}
-			if tt.useSudo {
-				cmd = append([]string{"sudo"}, cmd...)
-			}
-
-			// Execute add command
-			code, _ := executeCommandAsUser(t, container.Container, []string{"/bin/bash", "-c", strings.Join(cmd, " ")}, tt.cmdUser)
-
 			// Determine expected values based on sub-test options
 			var expectedPolicyFilepath, expectedUser, expectedGroup, expectedPerms string
 			var userPolicyFile bool
@@ -194,6 +184,16 @@ func TestAdd(t *testing.T) {
 				policyFileExists := FileExists(t, container.Container, expectedPolicyFilepath)
 				require.True(t, policyFileExists, "policy file should have been created in test container")
 			}
+
+			// Build add command based on sub-test options
+			addCmd := fmt.Sprintf("add %s foo@example.com %s", tt.desiredPrincipal, issuer)
+			cmd := []string{tt.binaryPath, addCmd}
+			if tt.useSudo {
+				cmd = append([]string{"sudo"}, cmd...)
+			}
+
+			// Execute add command
+			code, _ := executeCommandAsUser(t, container.Container, []string{"/bin/bash", "-c", strings.Join(cmd, " ")}, tt.cmdUser)
 
 			if tt.shouldCmdFail {
 				assert.Equal(t, 1, code, "add command should fail")
