@@ -133,6 +133,9 @@ func GetOPKSshKey() (ssh.PublicKey, string, error) {
 			continue
 		}
 
+		certCopy := parsedPubKey.(*ssh.Certificate)
+		fmt.Println("SFTP certCopy.ValidPrincipals ", certCopy.ValidPrincipals)
+
 		// Check if it's an OPK ssh key
 		if comment == "openpubkey" {
 			pubKey = parsedPubKey
