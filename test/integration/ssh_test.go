@@ -371,18 +371,24 @@ func TestEndToEndSSH(t *testing.T) {
 	t.Log("Testing SFTP")
 	// Ensure the test file does not exist
 	remoteTestFilePath := "/home/test/testfile.txt"
+	localTestFilePath := "testfile.txt"
+
+	testContent := "IF YOU CAN READ THIS SFTP WORKS!"
+	out, err = exec.Command("bash", "-c", fmt.Sprintf("echo %q > %s", testContent, localTestFilePath)).CombinedOutput()
+	t.Logf("SFTP created local file: %s", string(out))
+	require.NoError(t, err, "failed to create test file")
+
 	_, err = opkSshClient.Run("test -f " + remoteTestFilePath)
 	require.Error(t, err, "expected test file to not exist")
-
-	// Execute the SFTP command to copy the test file to the server
-	testContent := "IF YOU CAN READ THIS SFTP WORKS!"
 	pubKeyFilePath := secKeyFilePath + ".pub"
 	out, err = exec.Command("cat", pubKeyFilePath).CombinedOutput()
 	t.Logf("SFTP public key output: %s", string(out))
 	out, err = exec.Command("cat", secKeyFilePath).CombinedOutput()
 	t.Logf("SFTP sec key output: %s", string(out))
-	sftpCommand := fmt.Sprintf("echo '%s' | sftp -o StrictHostKeyChecking=no -i %s %s@%s:%s",
-		testContent, pubKeyFilePath, serverContainer.User, serverContainer.Host, remoteTestFilePath)
+
+	// Execute the SFTP command to copy the test file to the server
+	sftpCommand := fmt.Sprintf("echo 'put %s' | sftp -vvv -o StrictHostKeyChecking=no -i %s %s@%s:%s",
+		localTestFilePath, secKeyFilePath, serverContainer.User, serverContainer.Host, remoteTestFilePath)
 	t.Logf("SFTP command: %s", string(sftpCommand))
 	out, err = exec.Command("bash", "-c", sftpCommand).CombinedOutput()
 	t.Logf("SFTP command output: %s", string(out))
