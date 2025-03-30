@@ -69,12 +69,12 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 	if l.logDir != "" {
 		logFilePath := filepath.Join(l.logDir, "opkssh.log")
 		logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0660)
-		if err == nil {
-			defer logFile.Close()
-			multiWriter := io.MultiWriter(os.Stdout, logFile)
-			log.SetOutput(multiWriter)
+		if err != nil {
 			log.Printf("Failed to open log for writing: %v \n", err)
 		}
+		defer logFile.Close()
+		multiWriter := io.MultiWriter(os.Stdout, logFile)
+		log.SetOutput(multiWriter)
 	} else {
 		log.SetOutput(os.Stdout)
 	}
