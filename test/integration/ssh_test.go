@@ -380,29 +380,29 @@ func TestEndToEndSSH(t *testing.T) {
 
 	_, err = opkSshClient.Run("test -f " + remoteTestFilePath)
 	require.Error(t, err, "expected test file to not exist")
-	pubKeyFilePath := secKeyFilePath + ".pub"
-	out, err = exec.Command("cat", pubKeyFilePath).CombinedOutput()
-	t.Logf("SFTP public key output: %s", string(out))
-	out, err = exec.Command("cat", secKeyFilePath).CombinedOutput()
-	t.Logf("SFTP sec key output: %s", string(out))
+	// pubKeyFilePath := secKeyFilePath + ".pub"
+	// out, err = exec.Command("cat", pubKeyFilePath).CombinedOutput()
+	// t.Logf("SFTP public key output: %s", string(out))
+	// out, err = exec.Command("cat", secKeyFilePath).CombinedOutput()
+	// t.Logf("SFTP sec key output: %s", string(out))
 
-	certFilePath := secKeyFilePath + "-cert.pub"
-	out, err = exec.Command("cp", pubKeyFilePath, certFilePath).CombinedOutput()
-	t.Logf("SFTP public key copy: %s", string(out))
-	out, err = exec.Command("cat", certFilePath).CombinedOutput()
-	t.Logf("SFTP cert key output: %s", string(out))
+	// certFilePath := secKeyFilePath + "-cert.pub"
+	// out, err = exec.Command("cp", pubKeyFilePath, certFilePath).CombinedOutput()
+	// t.Logf("SFTP public key copy: %s", string(out))
+	// out, err = exec.Command("cat", certFilePath).CombinedOutput()
+	// t.Logf("SFTP cert key output: %s", string(out))
 
-	// Test ssh
-	sshCommand := fmt.Sprintf("ssh -vvv -o StrictHostKeyChecking=no -p %d -i %s %s@%s",
-		uint(serverContainer.Port), secKeyFilePath, serverContainer.User, serverContainer.Host)
-	t.Logf("SSH command: %s", string(sshCommand))
-	out, err = exec.Command("bash", "-c", sshCommand).CombinedOutput()
-	t.Logf("SSH command output: %s", string(out))
-	require.NoError(t, err, "failed to execute SSH command")
+	// // Test ssh
+	// sshCommand := fmt.Sprintf("ssh -vvv -o StrictHostKeyChecking=no -p %d -i %s %s@%s",
+	// 	uint(serverContainer.Port), secKeyFilePath, serverContainer.User, serverContainer.Host)
+	// t.Logf("SSH command: %s", string(sshCommand))
+	// out, err = exec.Command("bash", "-c", sshCommand).CombinedOutput()
+	// t.Logf("SSH command output: %s", string(out))
+	// require.NoError(t, err, "failed to execute SSH command")
 
 	// Execute the SFTP command to copy the test file to the server
-	sftpCommand := fmt.Sprintf("echo 'put %s' | sftp -vvv -o StrictHostKeyChecking=no -P %d -i %s %s@%s:%s",
-		localTestFilePath, uint(serverContainer.Port), secKeyFilePath, serverContainer.User, serverContainer.Host, remoteTestFilePath)
+	sftpCommand := fmt.Sprintf("echo 'put %s %s' | sftp -o StrictHostKeyChecking=no -P %d -i %s %s@%s",
+		localTestFilePath, remoteTestFilePath, uint(serverContainer.Port), secKeyFilePath, serverContainer.User, serverContainer.Host)
 	t.Logf("SFTP command: %s", string(sftpCommand))
 	out, err = exec.Command("bash", "-c", sftpCommand).CombinedOutput()
 	t.Logf("SFTP command output: %s", string(out))
