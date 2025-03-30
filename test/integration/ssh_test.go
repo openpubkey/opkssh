@@ -370,7 +370,7 @@ func TestEndToEndSSH(t *testing.T) {
 
 	t.Log("Testing SFTP")
 	// Ensure the test file does not exist
-	remoteTestFilePath := "/tmp/testfile.txt"
+	remoteTestFilePath := "/home/test/testfile.txt"
 	_, err = opkSshClient.Run("test -f " + remoteTestFilePath)
 	require.Error(t, err, "expected test file to not exist")
 
