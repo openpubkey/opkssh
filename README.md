@@ -244,7 +244,7 @@ OPKSSH_PROVIDERS=$OPKSSH_PROVIDERS;authentik,https://authentik.io/application/o/
 ```
 
 The OPKSSH_PROVIDERS variable follow this format ;
-`{alias},{issuer},{client_id},{client_secret},{scope}`
+`{alias},{issuer},{client_id},{client_secret},{scope};{alias},{issuer},{client_id},{client_secret},{scope}...`
 
 The OPKSSH_DEFAULT can be set to one of the provider's alias to set the default provider to use when running `opkssh login`. WEBCHOOSER will open a browser window to select the provider.
 ### AuthorizedKeysCommandUser
