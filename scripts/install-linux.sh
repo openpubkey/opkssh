@@ -72,7 +72,7 @@ if ! command -v wget &> /dev/null; then
     if [ "$OS_TYPE" == "debian" ]; then
         echo "sudo apt install wget"
     elif [ "$OS_TYPE" == "redhat" ]; then
-        echo "sudo yum install wget"
+        echo "sudo dnf install wget"
     elif [ "$OS_TYPE" == "arch" ]; then
         echo "sudo pacman -S wget"
     else
