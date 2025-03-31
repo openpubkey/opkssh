@@ -43,7 +43,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-var DEFAULT_PROVIDER_LIST = "google,https://accounts.google.com,206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com,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;" +
+var DefaultProviderList = "google,https://accounts.google.com,206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com,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;" +
 	"microsoft,https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0,096ce0a3-5e72-4da8-9c86-12924b294a01;" +
 	"gitlab,https://gitlab.com,8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923"
 
@@ -125,7 +125,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		if l.providerAlias != "" && l.providerAlias != "WEBCHOOSER" {
 			config, ok := providerConfigs[l.providerAlias]
 			if !ok {
-				return fmt.Errorf("error getting provider config for alias %s: %w", l.providerAlias, err)
+				return fmt.Errorf("error getting provider config for alias %s", l.providerAlias)
 			}
 			provider, err = NewProviderFromConfig(config)
 			if err != nil {
@@ -135,7 +135,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 			if defaultProvider != "WEBCHOOSER" {
 				config, ok := providerConfigs[defaultProvider]
 				if !ok {
-					return fmt.Errorf("error getting provider config for alias %s: %w", defaultProvider, err)
+					return fmt.Errorf("error getting provider config for alias %s", defaultProvider)
 				}
 				provider, err = NewProviderFromConfig(config)
 				if err != nil {
@@ -448,7 +448,7 @@ func NewProviderConfigFromString(configStr string, hasAlias bool) (ProviderConfi
 	}
 
 	if providerConfig.ClientID == "" {
-		return ProviderConfig{}, fmt.Errorf("Error: Invalid provider client-ID value got (%s) \n", providerConfig.ClientID)
+		return ProviderConfig{}, fmt.Errorf("invalid provider client-ID value got (%s) \n", providerConfig.ClientID)
 	}
 
 	if len(parts) > 2 {
@@ -468,9 +468,9 @@ func NewProviderConfigFromString(configStr string, hasAlias bool) (ProviderConfi
 		// Despite its name the Google OP client secret is a public value.
 		if providerConfig.ClientSecret == "" {
 			if hasAlias {
-				return ProviderConfig{}, fmt.Errorf("Error: Invalid provider argument format. Expected format for google: <alias>,<issuer>,<client_id>,<client_secret> \n")
+				return ProviderConfig{}, fmt.Errorf("invalid provider argument format. Expected format for google: <alias>,<issuer>,<client_id>,<client_secret> \n")
 			} else {
-				return ProviderConfig{}, fmt.Errorf("Error: Invalid provider argument format. Expected format for google: <issuer>,<client_id>,<client_secret> \n")
+				return ProviderConfig{}, fmt.Errorf("invalid provider argument format. Expected format for google: <issuer>,<client_id>,<client_secret> \n")
 			}
 
 		}
@@ -482,7 +482,7 @@ func NewProviderConfigFromString(configStr string, hasAlias bool) (ProviderConfi
 func NewProviderFromConfig(config ProviderConfig) (client.OpenIdProvider, error) {
 
 	if config.Issuer == "" {
-		return nil, fmt.Errorf("Error: Invalid provider issuer value got (%s) \n", config.Issuer)
+		return nil, fmt.Errorf("invalid provider issuer value got (%s) \n", config.Issuer)
 	}
 
 	if !strings.HasPrefix(config.Issuer, "https://") {
@@ -537,13 +537,17 @@ func GetProvidersConfigFromEnv() (map[string]ProviderConfig, error) {
 	// Get the providers from the env variable
 	providerList, ok := os.LookupEnv("OPKSSH_PROVIDERS")
 	if !ok {
-		providerList = DEFAULT_PROVIDER_LIST
+		providerList = DefaultProviderList
 	}
 
 	for _, providerStr := range strings.Split(providerList, ";") {
 		config, err := NewProviderConfigFromString(providerStr, true)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing provider config string: %w", err)
+		}
+		// If alias already exists, return an error
+		if _, ok := providersConfig[config.Alias]; ok {
+			return nil, fmt.Errorf("duplicate provider alias found: %s", config.Alias)
 		}
 		providersConfig[config.Alias] = config
 	}
@@ -563,7 +567,7 @@ func GetEnvFromConfigFile() (map[string]string, error) {
 
 		envs := map[string]string{
 			"OPKSSH_DEFAULT":   "WEBCHOOSER",
-			"OPKSSH_PROVIDERS": DEFAULT_PROVIDER_LIST,
+			"OPKSSH_PROVIDERS": DefaultProviderList,
 		}
 		fileContent := ""
 		for k, v := range envs {
