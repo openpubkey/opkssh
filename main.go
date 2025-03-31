@@ -99,7 +99,6 @@ Arguments:
 				inputIssuer = "https://gitlab.com"
 			}
 
-
 			add := commands.AddCmd{
 				HomePolicyLoader:   policy.NewHomePolicyLoader(),
 				SystemPolicyLoader: policy.NewSystemPolicyLoader(),
@@ -116,7 +115,6 @@ Arguments:
 		},
 	}
 	rootCmd.AddCommand(addCmd)
-
 
 	var autoRefresh bool
 	var logDir string
@@ -153,14 +151,19 @@ Users can then SSH into servers configured to use opkssh as the AuthorizedKeysCo
 				opts.RedirectURIs = strings.Split(redirectURIs, ",")
 				providerFromLdFlags = providers.NewGoogleOpWithOptions(opts)
 			}
+			var providerAlias string
+			if len(args) > 0 {
+				providerAlias = args[0]
+			}
 
-			login := commands.NewLogin(autoRefresh, logDir, providerArg, providerFromLdFlags)
+			login := commands.NewLogin(autoRefresh, logDir, providerArg, providerFromLdFlags, providerAlias)
 			if err := login.Run(ctx); err != nil {
 				log.Println("Error executing login command:", err)
 				return err
 			}
 			return nil
 		},
+		Args: cobra.MaximumNArgs(1),
 	}
 
 	// Define flags for login.
