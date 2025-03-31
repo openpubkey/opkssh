@@ -119,6 +119,7 @@ Arguments:
 	var autoRefresh bool
 	var logDir string
 	var providerArg string
+	var disableBrowserOpenArg bool
 	loginCmd := &cobra.Command{
 		Use:   "login",
 		Short: "Authenticate with an OpenID Provider to generate an SSH key for opkssh",
@@ -152,7 +153,7 @@ Users can then SSH into servers configured to use opkssh as the AuthorizedKeysCo
 				providerFromLdFlags = providers.NewGoogleOpWithOptions(opts)
 			}
 
-			login := commands.NewLogin(autoRefresh, logDir, providerArg, providerFromLdFlags)
+			login := commands.NewLogin(autoRefresh, logDir, disableBrowserOpenArg, providerArg, providerFromLdFlags)
 			if err := login.Run(ctx); err != nil {
 				log.Println("Error executing login command:", err)
 				return err
@@ -164,6 +165,7 @@ Users can then SSH into servers configured to use opkssh as the AuthorizedKeysCo
 	// Define flags for login.
 	loginCmd.Flags().BoolVar(&autoRefresh, "auto-refresh", false, "Automatically refresh PK token after login")
 	loginCmd.Flags().StringVar(&logDir, "log-dir", "", "Directory to write output logs")
+	loginCmd.Flags().BoolVar(&disableBrowserOpenArg, "disable-browser-open", false, "Set this flag to disable opening the browser. Useful for choosing the browser you want to use.")
 	loginCmd.Flags().StringVar(&providerArg, "provider", "", "OpenID Provider specification in the format: <issuer>,<client_id> or <issuer>,<client_id>,<client_secret>")
 	rootCmd.AddCommand(loginCmd)
 
