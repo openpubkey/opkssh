@@ -167,6 +167,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		var err error
 		provider, err = choosers.NewWebChooser(
 			[]providers.BrowserOpenIdProvider{googleOp, azureOp, gitlabOp},
+			!l.disableOpenBrowserArg,
 		).ChooseOp(ctx)
 		if err != nil {
 			return fmt.Errorf("error selecting OpenID provider: %w", err)
