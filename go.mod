@@ -3,10 +3,6 @@ module github.com/openpubkey/opkssh
 go 1.23.7
 
 
-
-replace (
-	github.com/openpubkey/openpubkey => ../openpubkey
-)
 require (
 	github.com/docker/go-connections v0.5.0
 	github.com/jeremija/gosubmit v0.2.7
