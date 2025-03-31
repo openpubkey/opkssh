@@ -43,6 +43,10 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+var DEFAULT_PROVIDER_LIST = "google,https://accounts.google.com,206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com,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;" +
+	"microsoft,https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0,096ce0a3-5e72-4da8-9c86-12924b294a01;" +
+	"gitlab,https://gitlab.com,8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923"
+
 type LoginCmd struct {
 	autoRefresh         bool
 	logDir              string
@@ -98,6 +102,14 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		provider = l.providerFromLdFlags
 	} else {
 		var err error
+
+		_, ok := os.LookupEnv("OPKSSH_PROVIDERS")
+		if !ok {
+			err = SetEnvFromConfigFile()
+			if err != nil {
+				return fmt.Errorf("error setting env from config file: %w", err)
+			}
+		}
 
 		// Get the default provider from the env variable
 		defaultProvider, ok := os.LookupEnv("OPKSSH_DEFAULT")
@@ -469,7 +481,6 @@ func NewProviderConfigFromString(configStr string, hasAlias bool) (ProviderConfi
 // Function to create the provider from the config
 func NewProviderFromConfig(config ProviderConfig) (client.OpenIdProvider, error) {
 
-	fmt.Printf("%+v\n", config)
 	if config.Issuer == "" {
 		return nil, fmt.Errorf("Error: Invalid provider issuer value got (%s) \n", config.Issuer)
 	}
@@ -514,8 +525,6 @@ func NewProviderFromConfig(config ProviderConfig) (client.OpenIdProvider, error)
 		provider = providers.NewGoogleOpWithOptions(opts)
 	}
 
-	fmt.Printf("%+v\n", provider)
-
 	return provider, nil
 }
 
@@ -528,12 +537,8 @@ func GetProvidersConfigFromEnv() (map[string]ProviderConfig, error) {
 	// Get the providers from the env variable
 	providerList, ok := os.LookupEnv("OPKSSH_PROVIDERS")
 	if !ok {
-		providerList = "google,https://accounts.google.com,206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com,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;" +
-			"microsoft,https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0,096ce0a3-5e72-4da8-9c86-12924b294a01;" +
-			"gitlab,https://gitlab.com,8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923"
+		providerList = DEFAULT_PROVIDER_LIST
 	}
-
-	fmt.Printf("Providers from env: %s\n", providerList)
 
 	for _, providerStr := range strings.Split(providerList, ";") {
 		config, err := NewProviderConfigFromString(providerStr, true)
@@ -544,4 +549,78 @@ func GetProvidersConfigFromEnv() (map[string]ProviderConfig, error) {
 	}
 
 	return providersConfig, nil
+}
+
+// Function to retrieve the env variables from the ~/.opksshrc file
+func GetEnvFromConfigFile() (map[string]string, error) {
+	homePath, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	rcPath := filepath.Join(homePath, ".opksshrc")
+
+	if _, err := os.Stat(rcPath); errors.Is(err, os.ErrNotExist) {
+
+		envs := map[string]string{
+			"OPKSSH_DEFAULT":   "WEBCHOOSER",
+			"OPKSSH_PROVIDERS": DEFAULT_PROVIDER_LIST,
+		}
+		fileContent := ""
+		for k, v := range envs {
+			fileContent += fmt.Sprintf("%s=%s\n", k, v)
+		}
+		if err := os.WriteFile(rcPath, []byte(fileContent), 0600); err != nil {
+			return nil, err
+		}
+		return envs, nil
+	}
+
+	fileContent, err := os.ReadFile(rcPath)
+	if err != nil {
+		return nil, err
+	}
+
+	envs := make(map[string]string)
+	lines := strings.Split(string(fileContent), "\n")
+	// For each line we need to parse the env variable, if it references itself, we need to handle it, if it reference another env variable, we need to handle it too
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		envs[parts[0]] = os.Expand(parts[1], func(key string) string {
+			// If in envs variable, return the value
+			if val, ok := envs[key]; ok {
+				return val
+			}
+			// If in os env, return the value
+			if val, ok := os.LookupEnv(key); ok {
+				return val
+			}
+			return ""
+		})
+	}
+
+	return envs, nil
+}
+
+// Function to set the env variables from the ~/.opksshrc file
+func SetEnvFromConfigFile() error {
+	envs, err := GetEnvFromConfigFile()
+
+	if err != nil {
+		return err
+	}
+	for k, v := range envs {
+		if err := os.Setenv(k, v); err != nil {
+			return err
+		}
+	}
+	return nil
 }
