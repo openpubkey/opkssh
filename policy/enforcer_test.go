@@ -35,6 +35,14 @@ func NewMockOpenIdProvider() (providers.OpenIdProvider, error) {
 	return op, err
 }
 
+func NewMockOpenIdProviderGroups(groups []string) (providers.OpenIdProvider, error) {
+	providerOpts := providers.DefaultMockProviderOpts()
+	op, _, idTokenTemplate, err := providers.NewMockProvider(providerOpts)
+	idTokenTemplate.ExtraClaims = map[string]any{"email": "arthur.aardvark@example.com", "groups": groups}
+
+	return op, err
+}
+
 func NewMockOpenIdProvider2(gqSign bool, issuer string, clientID string, extraClaims map[string]any) (providers.OpenIdProvider, *mocks.MockProviderBackend, error) {
 	providerOpts := providers.MockProviderOpts{
 		Issuer:     issuer,
@@ -74,19 +82,19 @@ func NewMockOpenIdProvider2(gqSign bool, issuer string, clientID string, extraCl
 var policyTest = &policy.Policy{
 	Users: []policy.User{
 		{
-			EmailOrSub: "alice@bastionzero.com",
-			Principals: []string{"test"},
-			Issuer:     "https://accounts.example.com",
+			IdentityAttribute: "alice@bastionzero.com",
+			Principals:        []string{"test"},
+			Issuer:            "https://accounts.example.com",
 		},
 		{
-			EmailOrSub: "arthur.aardvark@example.com",
-			Principals: []string{"test"},
-			Issuer:     "https://accounts.example.com",
+			IdentityAttribute: "arthur.aardvark@example.com",
+			Principals:        []string{"test"},
+			Issuer:            "https://accounts.example.com",
 		},
 		{
-			EmailOrSub: "bob@example.com",
-			Principals: []string{"test"},
-			Issuer:     "https://accounts.example.com",
+			IdentityAttribute: "bob@example.com",
+			Principals:        []string{"test"},
+			Issuer:            "https://accounts.example.com",
 		},
 	},
 }
@@ -94,12 +102,22 @@ var policyTest = &policy.Policy{
 var policyTestNoEntry = &policy.Policy{
 	Users: []policy.User{
 		{
-			EmailOrSub: "alice@bastionzero.com",
-			Principals: []string{"test"},
+			IdentityAttribute: "alice@bastionzero.com",
+			Principals:        []string{"test"},
 		},
 		{
-			EmailOrSub: "bob@example.com",
-			Principals: []string{"test"},
+			IdentityAttribute: "bob@example.com",
+			Principals:        []string{"test"},
+		},
+	},
+}
+
+var policyWithOidcGroup = &policy.Policy{
+	Users: []policy.User{
+		{
+			IdentityAttribute: "oidc:groups:a",
+			Principals:        []string{"test"},
+			Issuer:            "https://accounts.example.com",
 		},
 	},
 }
@@ -156,9 +174,9 @@ func TestPolicyEmailDifferentCase(t *testing.T) {
 	var policyWithDiffCapitalizationThanEmail = &policy.Policy{
 		Users: []policy.User{
 			{
-				EmailOrSub: "ArThuR.AArdVARK@Example.COM",
-				Principals: []string{"test"},
-				Issuer:     "https://accounts.example.com",
+				IdentityAttribute: "ArThuR.AArdVARK@Example.COM",
+				Principals:        []string{"test"},
+				Issuer:            "https://accounts.example.com",
 			},
 		},
 	}
@@ -223,9 +241,9 @@ func TestPolicyDeniedWrongIssuer(t *testing.T) {
 	var policyWithDiffCapitalizationThanEmail = &policy.Policy{
 		Users: []policy.User{
 			{
-				EmailOrSub: "arthur.aardvark@example.com",
-				Principals: []string{"test"},
-				Issuer:     "https://differentIssuer.example.com",
+				IdentityAttribute: "arthur.aardvark@example.com",
+				Principals:        []string{"test"},
+				Issuer:            "https://differentIssuer.example.com",
 			},
 		},
 	}
@@ -236,4 +254,64 @@ func TestPolicyDeniedWrongIssuer(t *testing.T) {
 
 	err = policyEnforcer.CheckPolicy("test", pkt)
 	require.Error(t, err, "user should not have access due to wrong issuer")
+}
+
+func TestPolicyApprovedOidcGroups(t *testing.T) {
+	t.Parallel()
+
+	op, err := NewMockOpenIdProviderGroups([]string{"a", "b", "c"})
+
+	require.NoError(t, err)
+
+	opkClient, err := client.New(op)
+	require.NoError(t, err)
+	pkt, err := opkClient.Auth(context.Background())
+	require.NoError(t, err)
+
+	policyEnforcer := &policy.Enforcer{
+		PolicyLoader: &MockPolicyLoader{Policy: policyWithOidcGroup},
+	}
+
+	err = policyEnforcer.CheckPolicy("test", pkt)
+	require.NoError(t, err)
+}
+
+func TestPolicyDeniedOidcGroups(t *testing.T) {
+	t.Parallel()
+
+	op, err := NewMockOpenIdProviderGroups([]string{"z"})
+
+	require.NoError(t, err)
+
+	opkClient, err := client.New(op)
+	require.NoError(t, err)
+	pkt, err := opkClient.Auth(context.Background())
+	require.NoError(t, err)
+
+	policyEnforcer := &policy.Enforcer{
+		PolicyLoader: &MockPolicyLoader{Policy: policyWithOidcGroup},
+	}
+
+	err = policyEnforcer.CheckPolicy("test", pkt)
+	require.Error(t, err, "user should not as they don't have group 'c'")
+}
+
+func TestPolicyDeniedMissingOidcGroupsClaim(t *testing.T) {
+	t.Parallel()
+
+	op, err := NewMockOpenIdProvider()
+
+	require.NoError(t, err)
+
+	opkClient, err := client.New(op)
+	require.NoError(t, err)
+	pkt, err := opkClient.Auth(context.Background())
+	require.NoError(t, err)
+
+	policyEnforcer := &policy.Enforcer{
+		PolicyLoader: &MockPolicyLoader{Policy: policyWithOidcGroup},
+	}
+
+	err = policyEnforcer.CheckPolicy("test", pkt)
+	require.Error(t, err, "user should not as the token is missing the groups claim")
 }

@@ -30,11 +30,11 @@ import (
 func policyToMapUsers(p *policy.Policy) map[string]policy.User {
 	m := make(map[string]*policy.User)
 	for e, user := range p.Users {
-		if seenUserEntry, ok := m[user.EmailOrSub]; ok {
+		if seenUserEntry, ok := m[user.IdentityAttribute]; ok {
 			seenUserEntry.Principals = append(seenUserEntry.Principals, user.Principals...)
 		} else {
 			entry := p.Users[e]
-			m[user.EmailOrSub] = &entry
+			m[user.IdentityAttribute] = &entry
 		}
 	}
 
@@ -71,14 +71,14 @@ func TestLoad(t *testing.T) {
 			rootPolicy: &policy.Policy{
 				Users: []policy.User{
 					{
-						EmailOrSub: "alice@example.com",
-						Principals: []string{"test"},
-						Issuer:     "https://example.com",
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{"test"},
+						Issuer:            "https://example.com",
 					},
 				},
 			},
 			expectedUsers: map[string]policy.User{
-				"alice@example.com": {EmailOrSub: "alice@example.com", Principals: []string{"test"}, Issuer: "https://example.com"},
+				"alice@example.com": {IdentityAttribute: "alice@example.com", Principals: []string{"test"}, Issuer: "https://example.com"},
 			},
 		},
 		{
@@ -86,14 +86,14 @@ func TestLoad(t *testing.T) {
 			userPolicy: &policy.Policy{
 				Users: []policy.User{
 					{
-						EmailOrSub: "alice@example.com",
-						Principals: []string{ValidUser.Username, "bob"},
-						Issuer:     "https://example.com",
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{ValidUser.Username, "bob"},
+						Issuer:            "https://example.com",
 					},
 				},
 			},
 			expectedUsers: map[string]policy.User{
-				"alice@example.com": {EmailOrSub: "alice@example.com", Principals: []string{ValidUser.Username}, Issuer: "https://example.com"},
+				"alice@example.com": {IdentityAttribute: "alice@example.com", Principals: []string{ValidUser.Username}, Issuer: "https://example.com"},
 			},
 		},
 		{
@@ -101,35 +101,35 @@ func TestLoad(t *testing.T) {
 			rootPolicy: &policy.Policy{
 				Users: []policy.User{
 					{
-						EmailOrSub: "alice@example.com",
-						Principals: []string{"test"},
-						Issuer:     "https://example.com",
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{"test"},
+						Issuer:            "https://example.com",
 					},
 					{
-						EmailOrSub: "charlie@example.com",
-						Principals: []string{"test"},
-						Issuer:     "https://example.com",
+						IdentityAttribute: "charlie@example.com",
+						Principals:        []string{"test"},
+						Issuer:            "https://example.com",
 					},
 				},
 			},
 			userPolicy: &policy.Policy{
 				Users: []policy.User{
 					{
-						EmailOrSub: "alice@example.com",
-						Principals: []string{ValidUser.Username},
-						Issuer:     "https://example.com",
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{ValidUser.Username},
+						Issuer:            "https://example.com",
 					},
 					{
-						EmailOrSub: "bob@example.com",
-						Principals: []string{ValidUser.Username},
-						Issuer:     "https://example.com",
+						IdentityAttribute: "bob@example.com",
+						Principals:        []string{ValidUser.Username},
+						Issuer:            "https://example.com",
 					},
 				},
 			},
 			expectedUsers: map[string]policy.User{
-				"alice@example.com":   {EmailOrSub: "alice@example.com", Principals: []string{"test", ValidUser.Username}, Issuer: "https://example.com"},
-				"bob@example.com":     {EmailOrSub: "bob@example.com", Principals: []string{ValidUser.Username}, Issuer: "https://example.com"},
-				"charlie@example.com": {EmailOrSub: "charlie@example.com", Principals: []string{"test"}, Issuer: "https://example.com"},
+				"alice@example.com":   {IdentityAttribute: "alice@example.com", Principals: []string{"test", ValidUser.Username}, Issuer: "https://example.com"},
+				"bob@example.com":     {IdentityAttribute: "bob@example.com", Principals: []string{ValidUser.Username}, Issuer: "https://example.com"},
+				"charlie@example.com": {IdentityAttribute: "charlie@example.com", Principals: []string{"test"}, Issuer: "https://example.com"},
 			},
 		},
 		{
@@ -137,39 +137,39 @@ func TestLoad(t *testing.T) {
 			rootPolicy: &policy.Policy{
 				Users: []policy.User{
 					{
-						EmailOrSub: "alice@example.com",
-						Principals: []string{"test"},
-						Issuer:     "https://example.com",
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{"test"},
+						Issuer:            "https://example.com",
 					},
 					{
-						EmailOrSub: "charlie@example.com",
-						Principals: []string{"test"},
-						Issuer:     "https://example.com",
+						IdentityAttribute: "charlie@example.com",
+						Principals:        []string{"test"},
+						Issuer:            "https://example.com",
 					},
 				},
 			},
 			userPolicy: &policy.Policy{
 				Users: []policy.User{
 					{
-						EmailOrSub: "alice@example.com",
-						Principals: []string{"test"},
-						Issuer:     "https://example.com",
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{"test"},
+						Issuer:            "https://example.com",
 					},
 					{
-						EmailOrSub: "bob@example.com",
-						Principals: []string{"test", "test2"},
-						Issuer:     "https://example.com",
+						IdentityAttribute: "bob@example.com",
+						Principals:        []string{"test", "test2"},
+						Issuer:            "https://example.com",
 					},
 					{
-						EmailOrSub: "charlie@example.com",
-						Principals: []string{"test", "test2", "test3"},
-						Issuer:     "https://example.com",
+						IdentityAttribute: "charlie@example.com",
+						Principals:        []string{"test", "test2", "test3"},
+						Issuer:            "https://example.com",
 					},
 				},
 			},
 			expectedUsers: map[string]policy.User{
-				"alice@example.com":   {EmailOrSub: "alice@example.com", Principals: []string{"test"}, Issuer: "https://example.com"},
-				"charlie@example.com": {EmailOrSub: "charlie@example.com", Principals: []string{"test"}, Issuer: "https://example.com"},
+				"alice@example.com":   {IdentityAttribute: "alice@example.com", Principals: []string{"test"}, Issuer: "https://example.com"},
+				"charlie@example.com": {IdentityAttribute: "charlie@example.com", Principals: []string{"test"}, Issuer: "https://example.com"},
 			},
 		},
 	}
@@ -228,7 +228,7 @@ func TestLoad(t *testing.T) {
 				for email, expectedEntry := range tt.expectedUsers {
 					gotEntry, ok := gotUsers[email]
 					if assert.True(t, ok, "policy should have entry for email %s", email) {
-						assert.Equal(t, expectedEntry.EmailOrSub, gotEntry.EmailOrSub)
+						assert.Equal(t, expectedEntry.IdentityAttribute, gotEntry.IdentityAttribute)
 						assert.ElementsMatch(t, expectedEntry.Principals, gotEntry.Principals)
 					}
 				}
