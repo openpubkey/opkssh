@@ -355,7 +355,7 @@ func NewProviderFromConfig(config ProviderConfig) (client.OpenIdProvider, error)
 	}
 
 	if !strings.HasPrefix(config.Issuer, "https://") {
-		return nil, fmt.Errorf("Error: Invalid provider issuer value. Expected issuer to start with 'https://' got (%s) \n", config.Issuer)
+		return nil, fmt.Errorf("invalid provider issuer value. Expected issuer to start with 'https://' got (%s) \n", config.Issuer)
 	}
 
 	if config.ClientID == "" {
