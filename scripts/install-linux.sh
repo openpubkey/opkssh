@@ -250,6 +250,14 @@ if command -v $INSTALL_DIR/$BINARY_NAME &> /dev/null; then
     echo "AuthorizedKeysCommand /usr/local/bin/opkssh verify %u %k %t" >> /etc/ssh/sshd_config
     echo "AuthorizedKeysCommandUser ${AUTH_CMD_USER}" >> /etc/ssh/sshd_config
 
+    if [ -f /etc/ssh/sshd_config.d/20-systemd-userdb.conf ]; then
+        # We're disabling the default from systemd-userdbd as it overwrites the config in /etc/ssh/sshd_config defined above,
+        # see https://github.com/systemd/systemd/issues/33648
+        echo "  Disabling systemd-userdbd default configuration for AuthorizedKeysCommand and AuthorizedKeysCommandUser"
+        sed -i '/^AuthorizedKeysCommand /s/^/#/' /etc/ssh/sshd_config.d/20-systemd-userdb.conf
+        sed -i '/^AuthorizedKeysCommandUser /s/^/#/' /etc/ssh/sshd_config.d/20-systemd-userdb.conf
+    fi
+
     if [ "$RESTART_SSH" = true ]; then
         if [ "$OS_TYPE" == "debian" ]; then
             systemctl restart ssh
