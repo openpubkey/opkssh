@@ -53,49 +53,93 @@ func executeCommandAsUser(t *testing.T, container testcontainers.Container, cmd 
 	return code, string(b)
 }
 
+func FileExists(t *testing.T, container testcontainers.Container, filePath string) bool {
+	code, _ := executeCommandAsUser(t, container, []string{"test", "-f", filePath}, RootUser)
+	if code != 0 {
+		return false
+	}
+	return true
+}
+
+func CreateAuthIdFile(t *testing.T, container testcontainers.Container, filePath string, cmdUser string, userPolicyFile bool) {
+	// Create the auth_id file if it doesn't exist
+	code, _ := executeCommandAsUser(t, container, []string{"mkdir", "-p", path.Dir(filePath)}, RootUser)
+	require.Equal(t, 0, code, "failed to create user auth_id directory")
+	code, _ = executeCommandAsUser(t, container, []string{"touch", filePath}, RootUser)
+	require.Equal(t, 0, code, "failed to create user auth_id file")
+	if userPolicyFile {
+		// Set the permissions for the user policy file to 600
+		code, _ = executeCommandAsUser(t, container, []string{"chmod", "600", filePath}, RootUser)
+		require.Equal(t, 0, code, "failed to set permissions for user policy file")
+		userAndGroup := fmt.Sprintf("%s:%s", cmdUser, cmdUser)
+		code, _ = executeCommandAsUser(t, container, []string{"chown", userAndGroup, filePath}, RootUser)
+		require.Equal(t, 0, code, "failed to set ownership for user policy file")
+	} else {
+		// Set the permissions for the system policy file to 640
+		code, _ = executeCommandAsUser(t, container, []string{"chmod", "640", filePath}, RootUser)
+		require.Equal(t, 0, code, "failed to set permissions for system policy file")
+		code, _ = executeCommandAsUser(t, container, []string{"chown", "root:opksshuser", filePath}, RootUser)
+		require.Equal(t, 0, code, "failed to set ownership for system policy file")
+	}
+}
+
 func TestAdd(t *testing.T) {
 	// Test adding an allowed principal to an opkssh policy
 	issuer := fmt.Sprintf("http://oidc.local:%s/", issuerPort)
 
 	tests := []struct {
-		name             string
-		binaryPath       string
-		useSudo          bool
-		cmdUser          string
-		desiredPrincipal string
-		shouldCmdFail    bool
+		name                      string
+		binaryPath                string
+		useSudo                   bool
+		cmdUser                   string
+		desiredPrincipal          string
+		preexistingHomeAuthIdFile bool
+		shouldCmdFail             bool
 	}{
 		{
-			name:             "sudoer user can update root policy",
-			binaryPath:       "/usr/local/bin/opkssh",
-			useSudo:          true,
-			cmdUser:          SudoerUser,
-			desiredPrincipal: SudoerUser,
-			shouldCmdFail:    false,
+			name:                      "sudoer user can update root policy",
+			binaryPath:                "/usr/local/bin/opkssh",
+			useSudo:                   true,
+			cmdUser:                   SudoerUser,
+			desiredPrincipal:          SudoerUser,
+			preexistingHomeAuthIdFile: true,
+			shouldCmdFail:             false,
 		},
 		{
-			name:             "sudoer user can update root policy with principal != self",
-			binaryPath:       "/usr/local/bin/opkssh",
-			useSudo:          true,
-			cmdUser:          SudoerUser,
-			desiredPrincipal: UnprivUser,
-			shouldCmdFail:    false,
+			name:                      "sudoer user can update root policy with principal != self",
+			binaryPath:                "/usr/local/bin/opkssh",
+			useSudo:                   true,
+			cmdUser:                   SudoerUser,
+			desiredPrincipal:          UnprivUser,
+			preexistingHomeAuthIdFile: true,
+			shouldCmdFail:             false,
 		},
 		{
-			name:             "unprivileged user can update their user policy",
-			binaryPath:       "/usr/local/bin/opkssh",
-			useSudo:          false,
-			cmdUser:          UnprivUser,
-			desiredPrincipal: UnprivUser,
-			shouldCmdFail:    false,
+			name:                      "unprivileged user creates an auth_id file (no preexisting ~/.opk/auth_id file)",
+			binaryPath:                "/usr/local/bin/opkssh",
+			useSudo:                   false,
+			cmdUser:                   UnprivUser,
+			desiredPrincipal:          UnprivUser,
+			preexistingHomeAuthIdFile: false,
+			shouldCmdFail:             false,
 		},
 		{
-			name:             "unprivileged user cannot add principal != self",
-			binaryPath:       "/usr/local/bin/opkssh",
-			useSudo:          false,
-			cmdUser:          UnprivUser,
-			desiredPrincipal: SudoerUser,
-			shouldCmdFail:    true,
+			name:                      "unprivileged user can update their user policy",
+			binaryPath:                "/usr/local/bin/opkssh",
+			useSudo:                   false,
+			cmdUser:                   UnprivUser,
+			desiredPrincipal:          UnprivUser,
+			preexistingHomeAuthIdFile: true,
+			shouldCmdFail:             false,
+		},
+		{
+			name:                      "unprivileged user cannot add principal != self",
+			binaryPath:                "/usr/local/bin/opkssh",
+			useSudo:                   false,
+			cmdUser:                   UnprivUser,
+			desiredPrincipal:          SudoerUser,
+			preexistingHomeAuthIdFile: true,
+			shouldCmdFail:             true,
 		},
 	}
 	for _, tt := range tests {
@@ -115,6 +159,36 @@ func TestAdd(t *testing.T) {
 				require.NoError(t, container.Terminate(TestCtx), "failed to terminate add_test container")
 			})
 
+			// Determine expected values based on sub-test options
+			var expectedPolicyFilepath, expectedUser, expectedGroup, expectedPerms string
+			var isUserPolicyFile bool
+			if tt.useSudo {
+				expectedPolicyFilepath = policy.SystemDefaultPolicyPath
+				expectedUser = RootUser
+				expectedGroup = UserGroup
+				expectedPerms = "640"
+				isUserPolicyFile = false
+			} else {
+				expectedPolicyFilepath = path.Join("/home/", tt.cmdUser, ".opk", "auth_id")
+				expectedUser = tt.cmdUser
+				expectedGroup = tt.cmdUser
+				expectedPerms = "600"
+				isUserPolicyFile = true
+			}
+
+			// Install automatically creates the system auth_id file, so can assume it exists
+			if isUserPolicyFile {
+				policyFileExists := FileExists(t, container.Container, expectedPolicyFilepath)
+				require.False(t, policyFileExists, "home policy file should not exist yet in a fresh test container")
+
+				// If test needs a preexisting auth_id file, create it
+				if tt.preexistingHomeAuthIdFile {
+					CreateAuthIdFile(t, container.Container, expectedPolicyFilepath, tt.cmdUser, isUserPolicyFile)
+					policyFileExists := FileExists(t, container.Container, expectedPolicyFilepath)
+					require.True(t, policyFileExists, "policy file should have been created in test container (test is broken)")
+				}
+			}
+
 			// Build add command based on sub-test options
 			addCmd := fmt.Sprintf("add %s foo@example.com %s", tt.desiredPrincipal, issuer)
 			cmd := []string{tt.binaryPath, addCmd}
@@ -125,25 +199,16 @@ func TestAdd(t *testing.T) {
 			// Execute add command
 			code, _ := executeCommandAsUser(t, container.Container, []string{"/bin/bash", "-c", strings.Join(cmd, " ")}, tt.cmdUser)
 
-			// Determine expected values based on sub-test options
-			var expectedPolicyFilepath, expectedUser, expectedGroup, expectedPerms string
-			if tt.useSudo {
-				expectedPolicyFilepath = policy.SystemDefaultPolicyPath
-				expectedUser = RootUser
-				expectedGroup = UserGroup
-				expectedPerms = "640"
-			} else {
-				expectedPolicyFilepath = path.Join("/home/", tt.cmdUser, ".opk", "auth_id")
-				expectedUser = tt.cmdUser
-				expectedGroup = tt.cmdUser
-				expectedPerms = "600"
-			}
-
 			if tt.shouldCmdFail {
 				assert.Equal(t, 1, code, "add command should fail")
-				code, policyContents := executeCommandAsUser(t, container.Container, []string{"cat", expectedPolicyFilepath}, RootUser)
-				require.Equal(t, 0, code, "failed to read policy file")
-				assert.Empty(t, policyContents, "policy file should not be updated")
+				if tt.preexistingHomeAuthIdFile && isUserPolicyFile {
+					code, policyContents := executeCommandAsUser(t, container.Container, []string{"cat", expectedPolicyFilepath}, RootUser)
+					require.Equal(t, 0, code, "failed to read policy file")
+					assert.Empty(t, policyContents, "policy file should not be updated")
+				} else {
+					code, _ = executeCommandAsUser(t, container.Container, []string{"test", "-f", expectedPolicyFilepath}, RootUser)
+					assert.NotEqual(t, 0, code, "policy file should not exist")
+				}
 			} else {
 				require.Equal(t, 0, code, "failed to run add command")
 

@@ -19,27 +19,23 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"syscall"
 
-	"github.com/openpubkey/openpubkey/client/choosers"
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/opkssh/commands"
 	"github.com/openpubkey/opkssh/policy"
 	"github.com/openpubkey/opkssh/policy/files"
+	"github.com/spf13/cobra"
 )
 
 var (
-
 	// These can be overridden at build time using ldflags. For example:
 	// go build -v -o /usr/local/bin/opkssh -ldflags "-X main.issuer=http://oidc.local:${ISSUER_PORT}/ -X main.clientID=web -X main.clientSecret=secret"
 	Version           = "unversioned"
@@ -55,334 +51,239 @@ func main() {
 }
 
 func run() int {
-	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stderr, `Error: Missing command
-Try '%s --help' for more information.
-`, os.Args[0])
-		return 1
+	rootCmd := &cobra.Command{
+		Use:     "opkssh",
+		Short:   "SSH with OpenPubkey",
+		Version: Version,
+		Long: `SSH with OpenPubkey
+
+This program allows users to:
+  - Login and create SSH key pairs using their OpenID Connect identity
+  - Add policies to auth_id policy files
+  - Verify OpenPubkey SSH certificates for use with sshd's AuthorizedKeysCommand`,
+		Example: `  opkssh login
+  opkssh add root alice@example.com https://accounts.google.com`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Help()
+		},
 	}
-	programStr := os.Args[0]
-	commandStr := os.Args[1]
+	rootCmd.CompletionOptions.DisableDefaultCmd = true
 
-	ctx, cancel := context.WithCancel(context.Background())
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigs
-		cancel()
-	}()
+	addCmd := &cobra.Command{
+		Use:   "add <PRINCIPAL> <EMAIL|SUB> <ISSUER>",
+		Short: "Appends new rule to the policy file",
+		Long: `Add appends a new policy entry in the auth_id policy file granting SSH access to the specified email or subscriber ID (sub).
 
-	var providerFromLdFlags providers.OpenIdProvider
-
-	// If LDFlags issuer is set, use it to create a provider
-	if issuer != "" {
-		opts := providers.GetDefaultGoogleOpOptions() // TODO: Create default google like provider
-		opts.Issuer = issuer
-		opts.ClientID = clientID
-		opts.ClientSecret = clientSecret
-		opts.RedirectURIs = strings.Split(redirectURIs, ",")
-		providerFromLdFlags = providers.NewGoogleOpWithOptions(opts)
-	}
-
-	switch commandStr {
-	case "login":
-		if len(os.Args) == 3 && (os.Args[2] == "-h" || os.Args[2] == "--help") {
-			fmt.Fprintf(os.Stderr, `Usage: %s %s [OPTIONS]
-
-Authenticate with an OpenID Connect provider to generate an SSH key for opkssh.
-
-Login generates a key pair, then opens a browser to authenticate the user with the OpenID provider, which issues a PK token committing to the generated public key. Upon successful authentication, opkssh creates an SSH public key (~/.ssh/id_ecdsa) containing the user's PK token. By default, this SSH key expires after 24 hours, after which the user must run "opkssh login" again to generate a new key.
-
-Users can then SSH into servers configured to use opkssh as the AuthorizedKeysCommand. The server verifies the PK token and grants access if the token is valid and the user is authorized per the auth_id policy.
-
-Options:
-	--auto-refresh           Automatically refresh PK token after login
-	--log-dir=DIR            Directory to place output logs
-	--provider=PROVIDER      OpenID Connect provider specification in the format:
-							<issuer>,<client_id> or <issuer>,<client_id>,<client_secret>
-
-Examples:
-	opkssh login
-	opkssh login --auto-refresh
-	opkssh login --provider=<issuer>,<client_id>,<client_secret>
-`, programStr, commandStr)
-
-			return 0
-		}
-
-		loginCmd := flag.NewFlagSet(programStr+" "+commandStr, flag.ContinueOnError)
-		autoRefresh := loginCmd.Bool("auto-refresh", false, "Used to specify whether login will begin a process that auto-refreshes PK token")
-		logFilePath := loginCmd.String("log-dir", "", "Specify which directory the output log is placed")
-		providerArg := loginCmd.String("provider", "", "Specify the issuer and client ID to use for OpenID Connect provider. Format is: <issuer>,<client_id> or <issuer>,<client_id>,<client_secret>")
-
-		if err := loginCmd.Parse(os.Args[2:]); err != nil {
-			// Parse writes to Stderr so we don't need to
-			return 1
-		}
-
-		// If a log directory was provided, write any logs to a file in that directory AND stdout
-		if *logFilePath != "" {
-			logFilePath := filepath.Join(*logFilePath, "opkssh.log")
-			logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0660)
-			if err == nil {
-				defer logFile.Close()
-				multiWriter := io.MultiWriter(os.Stdout, logFile)
-				log.SetOutput(multiWriter)
-				log.Printf("Failed to open log for writing: %v \n", err)
-			}
-		} else {
-			log.SetOutput(os.Stdout)
-		}
-
-		// If the user has supplied commandline arguments for the provider, use those instead of the web chooser
-		var provider providers.OpenIdProvider
-		if providerArg != nil && *providerArg != "" {
-			config, err := commands.NewProviderConfigFromString(*providerArg, false)
-			if err != nil {
-				log.Println("Error parsing provider argument:", err)
-				return 1
-			}
-
-			provider, err = commands.NewProviderFromConfig(config)
-			if err != nil {
-				log.Println("Error creating provider from config:", err)
-				return 1
-			}
-
-		} else if providerFromLdFlags != nil {
-			provider = providerFromLdFlags
-		} else {
-			googleOpOptions := providers.GetDefaultGoogleOpOptions()
-			googleOpOptions.GQSign = false
-			googleOp := providers.NewGoogleOpWithOptions(googleOpOptions)
-
-			azureOpOptions := providers.GetDefaultAzureOpOptions()
-			azureOpOptions.GQSign = false
-			azureOp := providers.NewAzureOpWithOptions(azureOpOptions)
-
-			gitlabOpOptions := providers.GetDefaultGitlabOpOptions()
-			gitlabOpOptions.GQSign = false
-			gitlabOp := providers.NewGitlabOpWithOptions(gitlabOpOptions)
-
-			var err error
-			provider, err = choosers.NewWebChooser(
-				[]providers.BrowserOpenIdProvider{googleOp, azureOp, gitlabOp},
-			).ChooseOp(ctx)
-			if err != nil {
-				log.Println("Error selecting op:", err)
-				return 1
-			}
-		}
-
-		// Execute login command
-		if *autoRefresh {
-			if providerRefreshable, ok := provider.(providers.RefreshableOpenIdProvider); ok {
-				err := commands.LoginWithRefresh(ctx, providerRefreshable)
-				if err != nil {
-					log.Println("Error logging in:", err)
-				}
-			} else {
-				errString := fmt.Sprintf("Error: OpenID Provider (%v) does not support auto-refresh and auto-refresh argument set to true", provider.Issuer())
-				log.Println(errString)
-				return 1
-			}
-		} else {
-			err := commands.Login(ctx, provider)
-			if err != nil {
-				log.Println("Error logging in:", err)
-				return 1
-			}
-		}
-	case "verify":
-		if len(os.Args) == 3 && (os.Args[2] == "-h" || os.Args[2] == "--help") {
-			fmt.Fprintf(os.Stderr, `Usage: %s %s <PRINCIPAL (TOKEN %%u)> <CERT (TOKEN %%k)> <KEY_TYPE (TOKEN %%t)>
-
-Verify extracts a PK token from a base64-encoded SSH certificate and verifies it against policy.
-Verify expects an allowed provider file at /etc/opk/providers and a user policy file at either /etc/opk/auth_id or ~/.opk/auth_id.
-
-This command is intended to be called by sshd as an AuthorizedKeysCommand:
-	https://man.openbsd.org/sshd_config#AuthorizedKeysCommand
-
-During installation, opkssh typically adds these lines to /etc/ssh/sshd_config:
-	AuthorizedKeysCommand /usr/local/bin/opkssh verify %%u %%k %%t
-	AuthorizedKeysCommandUser opksshuser
-
-Argument descriptions:
-	%%u   Target username (requested principal)
-	%%k   Base64-encoded SSH public key (SSH certificate) provided for authentication
-	%%t   Public key type (SSH certificate format, e.g., ecdsa-sha2-nistp256-cert-v01@openssh.com)
-
-Verification checks performed:
-	1. Ensures the PK token is properly formed, signed, and issued by the specified OpenID Provider (OP).
-	2. Confirms the PK token's issue (iss) and client ID (audience) are listed in the allowed provider file (/etc/opk/providers) and the token is not expired.
-	3. Validates the identity (email or sub) in the PK token against user policies (/etc/opk/auth_id or ~/.opk/auth_id) to ensure it can assume the requested username (principal).
-
-If all checks pass, Verify authorizes the SSH connection.
-
-Example usage:
-	opkssh verify root <base64-encoded-cert> ecdsa-sha2-nistp256-cert-v01@openssh.com
-`, programStr, commandStr)
-
-			return 0
-		}
-
-		// Setup logger
-		logFile, err := os.OpenFile(logFilePathServer, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0660) // Owner and group can read/write
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error opening log file: %v\n", err)
-			// It could be very difficult to figure out what is going on if the log file was deleted. Hopefully this message saves someone an hour of debugging.
-			fmt.Fprintf(os.Stderr, "Check if log exists at %v, if it does not create it with permissions: chown root:opksshuser %v; chmod 660 %v\n", logFilePathServer, logFilePathServer, logFilePathServer)
-		} else {
-			defer logFile.Close()
-			log.SetOutput(logFile)
-		}
-
-		// Logs if using an unsupported OpenSSH version
-		checkOpenSSHVersion()
-
-		// The "AuthorizedKeysCommand" func is designed to be used by sshd and specified as an AuthorizedKeysCommand
-		// ref: https://man.openbsd.org/sshd_config#AuthorizedKeysCommand
-		log.Println(strings.Join(os.Args, " "))
-
-		if len(os.Args) != 5 {
-			log.Println("Invalid number of arguments for verify, expected: `<User (TOKEN u)> <Cert (TOKEN k)> <Key type (TOKEN t)>`")
-			return 1
-		}
-		userArg := os.Args[2]
-		certB64Arg := os.Args[3]
-		typArg := os.Args[4]
-
-		providerPolicyPath := "/etc/opk/providers"
-		providerPolicy, err := policy.NewProviderFileLoader().LoadProviderPolicy(providerPolicyPath)
-
-		if err != nil {
-			log.Println("Failed to open /etc/opk/providers:", err)
-			return 1
-		}
-		printConfigProblems()
-		log.Println("Providers loaded: ", providerPolicy.ToString())
-
-		pktVerifier, err := providerPolicy.CreateVerifier()
-		if err != nil {
-			log.Println("Failed to create pk token verifier (likely bad configuration):", err)
-			return 1
-		}
-
-		// Execute verify command
-		v := commands.VerifyCmd{
-			PktVerifier: *pktVerifier,
-			CheckPolicy: commands.OpkPolicyEnforcerFunc(userArg),
-		}
-		if authKey, err := v.AuthorizedKeysCommand(ctx, userArg, typArg, certB64Arg); err != nil {
-			log.Println("failed to verify:", err)
-			return 1
-		} else {
-			log.Println("successfully verified")
-			// sshd is awaiting a specific line, which we print here. Printing anything else before or after will break our solution
-			fmt.Println(authKey)
-			return 0
-		}
-	case "add":
-		if len(os.Args) == 3 && (os.Args[2] == "-h" || os.Args[2] == "--help") {
-			fmt.Fprintf(os.Stderr, `Usage: %s %s <PRINCIPAL> <EMAIL|SUB> <ISSUER>
-
-Add creates a new policy entry in the auth_id policy file, granting SSH access to the specified email or subscriber ID (sub).
-
-Add first attempts to write the policy to the system-wide file at /etc/opk/auth_id.  
-If lacks permissions to updated this file, it falls back to the user-specific file at ~/.opk/auth_id.
+		It first attempts to write to the system-wide file (/etc/opk/auth_id). If it lacks permissions to update this file it falls back to writing to the user-specific file (~/.opk/auth_id).
 
 Arguments:
   PRINCIPAL      The target user account (requested principal).
   EMAIL|SUB      Email address or subscriber ID authorized to assume this principal.
   ISSUER         OpenID Connect provider (issuer) URL associated with the email/sub.
+`,
+		Args: cobra.ExactArgs(3),
+		Example: `  opkssh add root alice@example.com https://accounts.google.com
+  opkssh add alice 103030642802723203118 https://accounts.google.com`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			inputPrincipal := args[0]
+			inputEmail := args[1]
+			inputIssuer := args[2]
 
-Example usage:
-  opkssh add root alice@example.com https://accounts.google.com
-  opkssh add alice 103030642802723203118 https://accounts.google.com
-`, programStr, commandStr)
-			return 0
-		}
+			// Convenience aliases to save user time (who is going to remember the hideous Azure issuer string)
+			switch inputIssuer {
+			case "google":
+				inputIssuer = "https://accounts.google.com"
+			case "azure", "microsoft":
+				inputIssuer = "https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0"
+			case "gitlab":
+				inputIssuer = "https://gitlab.com"
+			}
 
-		if len(os.Args) != 5 {
-			fmt.Fprintf(os.Stderr, "Invalid number of arguments for add, expected: `<Principal> <Email> <Issuer>`\n")
-			return 1
-		}
-		inputPrincipal := os.Args[2]
-		inputEmail := os.Args[3]
-		inputIssuer := os.Args[4]
 
-		// Convenience aliases to save user time (who is going to remember the hideous Azure issuer string)
-		switch inputIssuer {
-		case "google":
-			inputIssuer = "https://accounts.google.com"
-		case "azure", "microsoft":
-			inputIssuer = "https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0"
-		case "gitlab":
-			inputIssuer = "https://gitlab.com"
-		}
+			add := commands.AddCmd{
+				HomePolicyLoader:   policy.NewHomePolicyLoader(),
+				SystemPolicyLoader: policy.NewSystemPolicyLoader(),
+				Username:           inputPrincipal,
+			}
+			policyFilePath, err := add.Run(inputPrincipal, inputEmail, inputIssuer)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to add to policy: %v\n", err)
+				return err
 
-		// Execute add command
-		a := commands.AddCmd{
-			HomePolicyLoader:   policy.NewHomePolicyLoader(),
-			SystemPolicyLoader: policy.NewSystemPolicyLoader(),
-			Username:           inputPrincipal,
-		}
-		if policyFilePath, err := a.Add(inputPrincipal, inputEmail, inputIssuer); err != nil {
-			fmt.Fprintf(os.Stderr, "failed to add to policy: %v\n", err)
-			return 1
-		} else {
+			}
 			fmt.Fprintf(os.Stdout, "Successfully added new policy to %s\n", policyFilePath)
-			return 0
-		}
-	case "--help", "help":
-		fmt.Fprintf(os.Stderr, `Usage: %s <command> [OPTIONS]
+			return nil
+		},
+	}
+	rootCmd.AddCommand(addCmd)
 
-SSH with OpenPubkey CLI.
 
-This program allows users to login and create SSH key pairs using their OpenID Connect identity, add policies to auth_id policy files, and verify OpenPubkey SSH certificates for use with sshd's AuthorizedKeysCommand.
+	var autoRefresh bool
+	var logDir string
+	var providerArg string
+	loginCmd := &cobra.Command{
+		Use:   "login",
+		Short: "Authenticate with an OpenID Provider to generate an SSH key for opkssh",
+		Long: `Login creates opkssh SSH keys
 
-Commands:
-	add PRINCIPAL EMAIL ISSUER       Add a new rule to the policy file
-	login                            Authenticate with an OpenID Connect provider to generate an SSH key
-	verify PRINCIPAL CERT KEY_TYPE   Verify an SSH key (used by sshd AuthorizedKeysCommand)
+Login generates a key pair, then opens a browser to authenticate the user with the OpenID Provider. Upon successful authentication, opkssh creates an SSH public key (~/.ssh/id_ecdsa) containing the user's PK token. By default, this SSH key expires after 24 hours, after which the user must run "opkssh login" again to generate a new key.
 
-Options:
-	-h, --help                       Show this help message
-	-v, --version                    Show version information
+Users can then SSH into servers configured to use opkssh as the AuthorizedKeysCommand. The server verifies the PK token and grants access if the token is valid and the user is authorized per the auth_id policy.
+`,
+		Example: `  opkssh login
+  opkssh login --provider=<issuer>,<client_id>`,
+		RunE: func(cmd *cobra.Command, args []string) error {
 
-Examples:
-	opkssh login
-	opkssh add root alice@example.com https://accounts.google.com
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			sigs := make(chan os.Signal, 1)
+			signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+			go func() {
+				<-sigs
+				cancel()
+			}()
 
-opkssh online help: <https://github.com/openpubkey/opkssh/blob/main/README.md>
-`, programStr)
-		return 0
-	case "--version", "-v":
-		fmt.Fprintf(os.Stderr, `opkssh version %s`, Version)
-		return 0
-	case "readhome":
-		// This command called as part of AuthorizedKeysCommand. It is used to
-		// read the user's home policy file (`~/.opk/auth_id`) with sudoer permissions.
-		// This allows us to use an unprivileged user as the AuthorizedKeysCommand user.
-		if len(os.Args) != 3 {
-			fmt.Fprintf(os.Stderr, "Invalid number of arguments for %s %s, expected: opkssh readhome <username>\n", programStr, commandStr)
-			return 1
-		}
-		userArg := os.Args[2]
-		if fileBytes, err := commands.ReadHome(userArg); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to read user's home policy file: %v\n", err)
-			return 1
-		} else {
-			fmt.Fprint(os.Stdout, string(fileBytes))
-			return 0
-		}
-	default:
-		fmt.Fprintf(os.Stderr, `%s: invalid option -- '%s'
-Try '%s --help' for more information.
-`, os.Args[0], commandStr, os.Args[0])
-		return 1
+			// If LDFlags issuer is set, build providerFromLdFlags
+			var providerFromLdFlags providers.OpenIdProvider
+			if issuer != "" {
+				opts := providers.GetDefaultGoogleOpOptions()
+				opts.Issuer = issuer
+				opts.ClientID = clientID
+				opts.ClientSecret = clientSecret
+				opts.RedirectURIs = strings.Split(redirectURIs, ",")
+				providerFromLdFlags = providers.NewGoogleOpWithOptions(opts)
+			}
+
+			login := commands.NewLogin(autoRefresh, logDir, providerArg, providerFromLdFlags)
+			if err := login.Run(ctx); err != nil {
+				log.Println("Error executing login command:", err)
+				return err
+			}
+			return nil
+		},
 	}
 
+	// Define flags for login.
+	loginCmd.Flags().BoolVar(&autoRefresh, "auto-refresh", false, "Automatically refresh PK token after login")
+	loginCmd.Flags().StringVar(&logDir, "log-dir", "", "Directory to write output logs")
+	loginCmd.Flags().StringVar(&providerArg, "provider", "", "OpenID Provider specification in the format: <issuer>,<client_id> or <issuer>,<client_id>,<client_secret>")
+	rootCmd.AddCommand(loginCmd)
+
+	readhomeCmd := &cobra.Command{
+		Use:   "readhome <PRINCIPAL>",
+		Short: "Read the principal's home policy file",
+		Long: `Read the principal's policy file (/home/<PRINCIPAL>/.opk/auth_id).
+
+You should not call this command directly. It is called by the opkssh verify command as part of the AuthorizedKeysCommand process to read the user's policy  (principals) home file (~/.opk/auth_id) with sudoer permissions. This allows us to use an unprivileged user as the AuthorizedKeysCommand user.
+`,
+		Args:    cobra.ExactArgs(1),
+		Example: `  opkssh readhome alice`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			userArg := os.Args[2]
+			if fileBytes, err := commands.ReadHome(userArg); err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to read user's home policy file: %v\n", err)
+				return err
+			} else {
+				fmt.Fprint(os.Stdout, string(fileBytes))
+				return nil
+			}
+		},
+	}
+	rootCmd.AddCommand(readhomeCmd)
+
+	verifyCmd := &cobra.Command{
+		Use:   "verify <PRINCIPAL> <CERT> <KEY_TYPE>",
+		Short: "Verify an SSH key (used by sshd AuthorizedKeysCommand)",
+		Long: `Verify extracts a PK token from a base64-encoded SSH certificate and verifies it against policy. It expects an allowed provider file at /etc/opk/providers and a user policy file at either /etc/opk/auth_id or ~/.opk/auth_id.
+
+This command is intended to be called by sshd as an AuthorizedKeysCommand:
+  https://man.openbsd.org/sshd_config#AuthorizedKeysCommand
+
+During installation, opkssh typically adds these lines to /etc/ssh/sshd_config:
+  AuthorizedKeysCommand /usr/local/bin/opkssh verify %%u %%k %%t
+  AuthorizedKeysCommandUser opksshuser
+
+Where the tokens in /etc/ssh/sshd_config are defined as:
+  %%u   Target username (requested principal)
+  %%k   Base64-encoded SSH public key (SSH certificate) provided for authentication
+  %%t   Public key type (SSH certificate format, e.g., ecdsa-sha2-nistp256-cert-v01@openssh.com)
+
+Verification checks performed:
+  1. Ensures the PK token is properly formed, signed, and issued by the specified OpenID Provider (OP).
+  2. Confirms the PK token's issue (iss) and client ID (audience) are listed in the allowed provider file (/etc/opk/providers) and the token is not expired.
+  3. Validates the identity (email or sub) in the PK token against user policies (/etc/opk/auth_id or ~/.opk/auth_id) to ensure it can assume the requested username (principal).
+
+If all checks pass, Verify authorizes the SSH connection.
+
+Arguments:
+  PRINCIPAL    Target username.
+  CERT         Base64-encoded SSH certificate.
+  KEY_TYPE     SSH certificate key type (e.g., ecdsa-sha2-nistp256-cert-v01@openssh.com)`,
+		Args:    cobra.ExactArgs(3),
+		Example: `  opkssh verify root <base64-encoded-cert> ecdsa-sha2-nistp256-cert-v01@openssh.com`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+
+			// Setup logger
+			logFile, err := os.OpenFile(logFilePathServer, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0660) // Owner and group can read/write
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error opening log file: %v\n", err)
+				// It could be very difficult to figure out what is going on if the log file was deleted. Hopefully this message saves someone an hour of debugging.
+				fmt.Fprintf(os.Stderr, "Check if log exists at %v, if it does not create it with permissions: chown root:opksshuser %v; chmod 660 %v\n", logFilePathServer, logFilePathServer, logFilePathServer)
+			} else {
+				defer logFile.Close()
+				log.SetOutput(logFile)
+			}
+
+			// Logs if using an unsupported OpenSSH version
+			checkOpenSSHVersion()
+
+			// The "AuthorizedKeysCommand" func is designed to be used by sshd and specified as an AuthorizedKeysCommand
+			// ref: https://man.openbsd.org/sshd_config#AuthorizedKeysCommand
+			log.Println(strings.Join(os.Args, " "))
+
+			userArg := args[0]
+			certB64Arg := args[1]
+			typArg := args[2]
+
+			providerPolicyPath := "/etc/opk/providers"
+			providerPolicy, err := policy.NewProviderFileLoader().LoadProviderPolicy(providerPolicyPath)
+
+			if err != nil {
+				log.Println("Failed to open /etc/opk/providers:", err)
+				return err
+			}
+
+			printConfigProblems()
+			log.Println("Providers loaded: ", providerPolicy.ToString())
+
+			pktVerifier, err := providerPolicy.CreateVerifier()
+			if err != nil {
+				log.Println("Failed to create pk token verifier (likely bad configuration):", err)
+				return err
+			}
+
+			v := commands.VerifyCmd{
+				PktVerifier: *pktVerifier,
+				CheckPolicy: commands.OpkPolicyEnforcerFunc(userArg),
+			}
+			if authKey, err := v.AuthorizedKeysCommand(ctx, userArg, typArg, certB64Arg); err != nil {
+				log.Println("failed to verify:", err)
+				return err
+			} else {
+				log.Println("successfully verified")
+				// sshd is awaiting a specific line, which we print here. Printing anything else before or after will break our solution
+				fmt.Println(authKey)
+				return nil
+			}
+		},
+	}
+	rootCmd.AddCommand(verifyCmd)
+
+	err := rootCmd.Execute()
+	if err != nil {
+		return 1
+	}
 	return 0
 }
 

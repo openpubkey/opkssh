@@ -28,6 +28,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"testing"
@@ -366,6 +367,28 @@ func TestEndToEndSSH(t *testing.T) {
 	out, err := opkSshClient.Run("whoami")
 	require.NoError(t, err)
 	require.Equal(t, serverContainer.User, strings.TrimSpace(string(out)))
+
+	t.Log("Testing SFTP")
+	// Ensure the test file does not exist
+	remoteTestFilePath := "/home/test/testfile.txt"
+	localTestFilePath := "testfile.txt"
+
+	_, err = opkSshClient.Run("test -f " + remoteTestFilePath)
+	require.Error(t, err, "expected test file to not exist")
+
+	testContent := "IF YOU CAN READ THIS SFTP WORKS!"
+	_, err = exec.Command("bash", "-c", fmt.Sprintf("echo %q > %s", testContent, localTestFilePath)).CombinedOutput()
+	require.NoError(t, err, "failed to create test file")
+
+	// Execute the SFTP command to copy the test file to the server
+	sftpCommand := fmt.Sprintf("echo 'put %s %s' | sftp -o StrictHostKeyChecking=no -P %d %s@%s",
+		localTestFilePath, remoteTestFilePath, uint(serverContainer.Port), serverContainer.User, serverContainer.Host)
+	out, err = exec.Command("bash", "-c", sftpCommand).CombinedOutput()
+	require.NoError(t, err, "failed to execute SFTP command")
+
+	out, err = opkSshClient.Run("cat " + remoteTestFilePath)
+	require.NoError(t, err)
+	require.Equal(t, testContent, strings.TrimSpace(string(out)), "SFTP file content mismatch")
 }
 
 func TestEndToEndSSHAsUnprivilegedUser(t *testing.T) {
