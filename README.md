@@ -240,7 +240,7 @@ You can edit this file to add or remove OpenID Providers. For example :
 
 ```bash
 OPKSSH_PROVIDERS=google,https:[...]
-OPKSSH_PROVIDERS=authentik,https://authentik.io/application/o/opkssh/,client_id,,openid profile email;$OPKSSH_PROVIDERS
+OPKSSH_PROVIDERS=authentik,$OPKSSH_PROVIDERS;https://authentik.io/application/o/opkssh/,client_id,,openid profile email
 ```
 
 The OPKSSH_PROVIDERS variable follow this format ;
