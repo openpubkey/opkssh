@@ -46,7 +46,7 @@ import (
 type LoginCmd struct {
 	autoRefresh           bool
 	logDir                string
-	disableOpenBrowserArg bool
+	disableBrowserOpenArg bool
 	providerArg           string
 	providerFromLdFlags   providers.OpenIdProvider
 	pkt                   *pktoken.PKToken
@@ -56,11 +56,11 @@ type LoginCmd struct {
 	principals            []string
 }
 
-func NewLogin(autoRefresh bool, logDir string, disableOpenBrowserArg bool, providerArg string, providerFromLdFlags providers.OpenIdProvider) *LoginCmd {
+func NewLogin(autoRefresh bool, logDir string, disableBrowserOpenArg bool, providerArg string, providerFromLdFlags providers.OpenIdProvider) *LoginCmd {
 	return &LoginCmd{
 		autoRefresh:           autoRefresh,
 		logDir:                logDir,
-		disableOpenBrowserArg: disableOpenBrowserArg,
+		disableBrowserOpenArg: disableBrowserOpenArg,
 		providerArg:           providerArg,
 		providerFromLdFlags:   providerFromLdFlags,
 	}
@@ -80,6 +80,8 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 	} else {
 		log.SetOutput(os.Stdout)
 	}
+
+	openBrowser := !l.disableBrowserOpenArg
 
 	// If the user has supplied commandline arguments for the provider, use those instead of the web chooser
 	var provider providers.OpenIdProvider
@@ -115,21 +117,21 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 			opts.ClientID = clientIDArg
 			opts.ClientSecret = clientSecretArg
 			opts.GQSign = false
-			opts.OpenBrowser = !l.disableOpenBrowserArg
+			opts.OpenBrowser = openBrowser
 			provider = providers.NewGoogleOpWithOptions(opts)
 		} else if strings.HasPrefix(issuerArg, "https://login.microsoftonline.com") {
 			opts := providers.GetDefaultAzureOpOptions()
 			opts.Issuer = issuerArg
 			opts.ClientID = clientIDArg
 			opts.GQSign = false
-			opts.OpenBrowser = l.disableOpenBrowserArg
+			opts.OpenBrowser = openBrowser
 			provider = providers.NewAzureOpWithOptions(opts)
 		} else if strings.HasPrefix(issuerArg, "https://gitlab.com") {
 			opts := providers.GetDefaultGitlabOpOptions()
 			opts.Issuer = issuerArg
 			opts.ClientID = clientIDArg
 			opts.GQSign = false
-			opts.OpenBrowser = !l.disableOpenBrowserArg
+			opts.OpenBrowser = openBrowser
 			provider = providers.NewGitlabOpWithOptions(opts)
 		} else {
 			// Generic provider - Need signing, no encryption
@@ -138,7 +140,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 			opts.ClientID = clientIDArg
 			opts.ClientSecret = "" // No client secret for generic providers unless specified
 			opts.GQSign = false
-			opts.OpenBrowser = !l.disableOpenBrowserArg
+			opts.OpenBrowser = openBrowser
 
 			if len(parts) == 3 {
 				opts.ClientSecret = parts[2]
@@ -150,24 +152,24 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		provider = l.providerFromLdFlags
 	} else {
 		googleOpOptions := providers.GetDefaultGoogleOpOptions()
-		googleOpOptions.OpenBrowser = !l.disableOpenBrowserArg
+		googleOpOptions.OpenBrowser = openBrowser
 		googleOpOptions.GQSign = false
 		googleOp := providers.NewGoogleOpWithOptions(googleOpOptions)
 
 		azureOpOptions := providers.GetDefaultAzureOpOptions()
-		azureOpOptions.OpenBrowser = !l.disableOpenBrowserArg
+		azureOpOptions.OpenBrowser = openBrowser
 		azureOpOptions.GQSign = false
 		azureOp := providers.NewAzureOpWithOptions(azureOpOptions)
 
 		gitlabOpOptions := providers.GetDefaultGitlabOpOptions()
-		gitlabOpOptions.OpenBrowser = !l.disableOpenBrowserArg
+		gitlabOpOptions.OpenBrowser = openBrowser
 		gitlabOpOptions.GQSign = false
 		gitlabOp := providers.NewGitlabOpWithOptions(gitlabOpOptions)
 
 		var err error
 		provider, err = choosers.NewWebChooser(
 			[]providers.BrowserOpenIdProvider{googleOp, azureOp, gitlabOp},
-			!l.disableOpenBrowserArg,
+			!l.disableBrowserOpenArg,
 		).ChooseOp(ctx)
 		if err != nil {
 			return fmt.Errorf("error selecting OpenID provider: %w", err)
