@@ -82,19 +82,19 @@ func NewMockOpenIdProvider2(gqSign bool, issuer string, clientID string, extraCl
 var policyTest = &policy.Policy{
 	Users: []policy.User{
 		{
-			EmailOrSub: "alice@bastionzero.com",
-			Principals: []string{"test"},
-			Issuer:     "https://accounts.example.com",
+			IdentityAttribute: "alice@bastionzero.com",
+			Principals:        []string{"test"},
+			Issuer:            "https://accounts.example.com",
 		},
 		{
-			EmailOrSub: "arthur.aardvark@example.com",
-			Principals: []string{"test"},
-			Issuer:     "https://accounts.example.com",
+			IdentityAttribute: "arthur.aardvark@example.com",
+			Principals:        []string{"test"},
+			Issuer:            "https://accounts.example.com",
 		},
 		{
-			EmailOrSub: "bob@example.com",
-			Principals: []string{"test"},
-			Issuer:     "https://accounts.example.com",
+			IdentityAttribute: "bob@example.com",
+			Principals:        []string{"test"},
+			Issuer:            "https://accounts.example.com",
 		},
 	},
 }
@@ -102,12 +102,12 @@ var policyTest = &policy.Policy{
 var policyTestNoEntry = &policy.Policy{
 	Users: []policy.User{
 		{
-			EmailOrSub: "alice@bastionzero.com",
-			Principals: []string{"test"},
+			IdentityAttribute: "alice@bastionzero.com",
+			Principals:        []string{"test"},
 		},
 		{
-			EmailOrSub: "bob@example.com",
-			Principals: []string{"test"},
+			IdentityAttribute: "bob@example.com",
+			Principals:        []string{"test"},
 		},
 	},
 }
@@ -115,9 +115,9 @@ var policyTestNoEntry = &policy.Policy{
 var policyWithOidcGroup = &policy.Policy{
 	Users: []policy.User{
 		{
-			EmailOrSub: "oidc:groups:a",
-			Principals: []string{"test"},
-			Issuer:     "https://accounts.example.com",
+			IdentityAttribute: "oidc:groups:a",
+			Principals:        []string{"test"},
+			Issuer:            "https://accounts.example.com",
 		},
 	},
 }
@@ -174,9 +174,9 @@ func TestPolicyEmailDifferentCase(t *testing.T) {
 	var policyWithDiffCapitalizationThanEmail = &policy.Policy{
 		Users: []policy.User{
 			{
-				EmailOrSub: "ArThuR.AArdVARK@Example.COM",
-				Principals: []string{"test"},
-				Issuer:     "https://accounts.example.com",
+				IdentityAttribute: "ArThuR.AArdVARK@Example.COM",
+				Principals:        []string{"test"},
+				Issuer:            "https://accounts.example.com",
 			},
 		},
 	}
@@ -241,9 +241,9 @@ func TestPolicyDeniedWrongIssuer(t *testing.T) {
 	var policyWithDiffCapitalizationThanEmail = &policy.Policy{
 		Users: []policy.User{
 			{
-				EmailOrSub: "arthur.aardvark@example.com",
-				Principals: []string{"test"},
-				Issuer:     "https://differentIssuer.example.com",
+				IdentityAttribute: "arthur.aardvark@example.com",
+				Principals:        []string{"test"},
+				Issuer:            "https://differentIssuer.example.com",
 			},
 		},
 	}

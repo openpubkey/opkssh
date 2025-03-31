@@ -31,8 +31,8 @@ type Enforcer struct {
 	PolicyLoader Loader
 }
 
-// type for Identity Token claims
-type claims struct {
+// type for Identity Token checkedClaims
+type checkedClaims struct {
 	Email  string   `json:"email"`
 	Sub    string   `json:"sub"`
 	Groups []string `json:"groups"`
@@ -40,16 +40,16 @@ type claims struct {
 
 // Validates that the server defined identity attribute matches the
 // respective claim from the identity token
-func validateClaim(claims *claims, user *User) bool {
-	if strings.HasPrefix(user.EmailOrSub, "oidc:groups") {
-		oidcGroupSections := strings.Split(user.EmailOrSub, ":")
+func validateClaim(claims *checkedClaims, user *User) bool {
+	if strings.HasPrefix(user.IdentityAttribute, "oidc:groups") {
+		oidcGroupSections := strings.Split(user.IdentityAttribute, ":")
 
 		return slices.Contains(claims.Groups, oidcGroupSections[len(oidcGroupSections)-1])
 	}
 
 	// email should be a case-insensitive check
 	// sub should be a case-sensitive check
-	return strings.EqualFold(claims.Email, user.EmailOrSub) || string(claims.Sub) == user.EmailOrSub
+	return strings.EqualFold(claims.Email, user.IdentityAttribute) || string(claims.Sub) == user.IdentityAttribute
 }
 
 // CheckPolicy loads the opkssh policy and checks to see if there is a policy
@@ -71,7 +71,7 @@ func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken) er
 		sourceStr = "<policy source unknown>"
 	}
 
-	var claims claims
+	var claims checkedClaims
 
 	if err := json.Unmarshal(pkt.Payload, &claims); err != nil {
 		return fmt.Errorf("error unmarshalling pk token payload: %w", err)
@@ -81,7 +81,7 @@ func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken) er
 		return fmt.Errorf("error getting issuer from pk token: %w", err)
 	}
 	for _, user := range policy.Users {
-		// check each entry to see if the user in the claims is included
+		// check each entry to see if the user in the checkedClaims is included
 		if validateClaim(&claims, &user) {
 			if issuer != user.Issuer {
 				continue
