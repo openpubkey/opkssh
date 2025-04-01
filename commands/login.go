@@ -453,7 +453,7 @@ func NewProviderConfigFromString(configStr string, hasAlias bool) (ProviderConfi
 	}
 
 	if providerConfig.ClientID == "" {
-		return ProviderConfig{}, fmt.Errorf("invalid provider client-ID value got (%s) \n", providerConfig.ClientID)
+		return ProviderConfig{}, fmt.Errorf("invalid provider client-ID value got (%s)", providerConfig.ClientID)
 	}
 
 	if len(parts) > 2 {
@@ -473,9 +473,9 @@ func NewProviderConfigFromString(configStr string, hasAlias bool) (ProviderConfi
 		// Despite its name the Google OP client secret is a public value.
 		if providerConfig.ClientSecret == "" {
 			if hasAlias {
-				return ProviderConfig{}, fmt.Errorf("invalid provider argument format. Expected format for google: <alias>,<issuer>,<client_id>,<client_secret> \n")
+				return ProviderConfig{}, fmt.Errorf("invalid provider argument format. Expected format for google: <alias>,<issuer>,<client_id>,<client_secret>")
 			} else {
-				return ProviderConfig{}, fmt.Errorf("invalid provider argument format. Expected format for google: <issuer>,<client_id>,<client_secret> \n")
+				return ProviderConfig{}, fmt.Errorf("invalid provider argument format. Expected format for google: <issuer>,<client_id>,<client_secret>")
 			}
 
 		}
@@ -487,15 +487,15 @@ func NewProviderConfigFromString(configStr string, hasAlias bool) (ProviderConfi
 func NewProviderFromConfig(config ProviderConfig, openBrowser bool) (client.OpenIdProvider, error) {
 
 	if config.Issuer == "" {
-		return nil, fmt.Errorf("invalid provider issuer value got (%s) \n", config.Issuer)
+		return nil, fmt.Errorf("invalid provider issuer value got (%s)", config.Issuer)
 	}
 
 	if !strings.HasPrefix(config.Issuer, "https://") {
-		return nil, fmt.Errorf("invalid provider issuer value. Expected issuer to start with 'https://' got (%s) \n", config.Issuer)
+		return nil, fmt.Errorf("invalid provider issuer value. Expected issuer to start with 'https://' got (%s)", config.Issuer)
 	}
 
 	if config.ClientID == "" {
-		return nil, fmt.Errorf("invalid provider client-ID value got (%s) \n", config.ClientID)
+		return nil, fmt.Errorf("invalid provider client-ID value got (%s)", config.ClientID)
 	}
 	var provider client.OpenIdProvider
 
