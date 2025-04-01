@@ -161,10 +161,7 @@ Arguments:
 				providerAlias = args[0]
 			}
 
-      
 			login := commands.NewLogin(autoRefresh, logDir, disableBrowserOpenArg, providerArg, providerFromLdFlags, providerAlias)
-
-			login := commands.NewLogin(autoRefresh, logDir, disableBrowserOpenArg, providerArg, providerFromLdFlags)
 
 			if err := login.Run(ctx); err != nil {
 				log.Println("Error executing login command:", err)

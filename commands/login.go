@@ -48,24 +48,24 @@ var DefaultProviderList = "google,https://accounts.google.com,206584157355-7cbe4
 	"gitlab,https://gitlab.com,8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923"
 
 type LoginCmd struct {
-	autoRefresh         bool
-	logDir              string
+	autoRefresh           bool
+	logDir                string
 	disableBrowserOpenArg bool
-	providerArg         string
-	providerFromLdFlags providers.OpenIdProvider
-	providerAlias       string
-	pkt                 *pktoken.PKToken
-	signer              crypto.Signer
-	alg                 jwa.SignatureAlgorithm
-	client              *client.OpkClient
-	principals          []string
+	providerArg           string
+	providerFromLdFlags   providers.OpenIdProvider
+	providerAlias         string
+	pkt                   *pktoken.PKToken
+	signer                crypto.Signer
+	alg                   jwa.SignatureAlgorithm
+	client                *client.OpkClient
+	principals            []string
 }
 
 func NewLogin(autoRefresh bool, logDir string, disableBrowserOpenArg bool, providerArg string, providerFromLdFlags providers.OpenIdProvider, providerAlias string) *LoginCmd {
 	return &LoginCmd{
 		autoRefresh:           autoRefresh,
 		logDir:                logDir,
-    disableBrowserOpenArg: disableBrowserOpenArg,
+		disableBrowserOpenArg: disableBrowserOpenArg,
 		providerArg:           providerArg,
 		providerFromLdFlags:   providerFromLdFlags,
 		providerAlias:         providerAlias,
@@ -97,7 +97,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 			return fmt.Errorf("error parsing provider argument: %w", err)
 		}
 
-		provider, err = NewProviderFromConfig(config)
+		provider, err = NewProviderFromConfig(config, openBrowser)
 
 		if err != nil {
 			return fmt.Errorf("error creating provider from config: %w", err)
@@ -122,7 +122,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		}
 
 		providerConfigs, err := GetProvidersConfigFromEnv()
-    
+
 		if err != nil {
 			return fmt.Errorf("error getting provider config from env: %w", err)
 		}
@@ -132,7 +132,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 			if !ok {
 				return fmt.Errorf("error getting provider config for alias %s", l.providerAlias)
 			}
-			provider, err = NewProviderFromConfig(config)
+			provider, err = NewProviderFromConfig(config, openBrowser)
 			if err != nil {
 				return fmt.Errorf("error creating provider from config: %w", err)
 			}
@@ -142,14 +142,14 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 				if !ok {
 					return fmt.Errorf("error getting provider config for alias %s", defaultProvider)
 				}
-				provider, err = NewProviderFromConfig(config)
+				provider, err = NewProviderFromConfig(config, openBrowser)
 				if err != nil {
 					return fmt.Errorf("error creating provider from config: %w", err)
 				}
 			} else {
 				var idpList []providers.BrowserOpenIdProvider
 				for _, config := range providerConfigs {
-					provider, err := NewProviderFromConfig(config)
+					provider, err := NewProviderFromConfig(config, openBrowser)
 					if err != nil {
 						return fmt.Errorf("error creating provider from config: %w", err)
 					}
@@ -157,7 +157,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 				}
 
 				provider, err = choosers.NewWebChooser(
-					idpList,
+					idpList, openBrowser,
 				).ChooseOp(ctx)
 				if err != nil {
 					return fmt.Errorf("error selecting OpenID provider: %w", err)
@@ -484,7 +484,7 @@ func NewProviderConfigFromString(configStr string, hasAlias bool) (ProviderConfi
 }
 
 // Function to create the provider from the config
-func NewProviderFromConfig(config ProviderConfig) (client.OpenIdProvider, error) {
+func NewProviderFromConfig(config ProviderConfig, openBrowser bool) (client.OpenIdProvider, error) {
 
 	if config.Issuer == "" {
 		return nil, fmt.Errorf("invalid provider issuer value got (%s) \n", config.Issuer)
@@ -505,18 +505,21 @@ func NewProviderFromConfig(config ProviderConfig) (client.OpenIdProvider, error)
 		opts.ClientID = config.ClientID
 		opts.ClientSecret = config.ClientSecret
 		opts.GQSign = false
+		opts.OpenBrowser = openBrowser
 		provider = providers.NewGoogleOpWithOptions(opts)
 	} else if strings.HasPrefix(config.Issuer, "https://login.microsoftonline.com") {
 		opts := providers.GetDefaultAzureOpOptions()
 		opts.Issuer = config.Issuer
 		opts.ClientID = config.ClientSecret
 		opts.GQSign = false
+		opts.OpenBrowser = openBrowser
 		provider = providers.NewAzureOpWithOptions(opts)
 	} else if strings.HasPrefix(config.Issuer, "https://gitlab.com") {
 		opts := providers.GetDefaultGitlabOpOptions()
 		opts.Issuer = config.Issuer
 		opts.ClientID = config.ClientSecret
 		opts.GQSign = false
+		opts.OpenBrowser = openBrowser
 		provider = providers.NewGitlabOpWithOptions(opts)
 	} else {
 		// Generic provider - Need signing, no encryption
@@ -526,6 +529,7 @@ func NewProviderFromConfig(config ProviderConfig) (client.OpenIdProvider, error)
 		opts.GQSign = false
 		opts.ClientSecret = config.ClientSecret
 		opts.Scopes = config.Scopes
+		opts.OpenBrowser = openBrowser
 
 		provider = providers.NewGoogleOpWithOptions(opts)
 	}
