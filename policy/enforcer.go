@@ -31,6 +31,27 @@ type Enforcer struct {
 	PolicyLoader Loader
 }
 
+// type for Identity Token checkedClaims
+type checkedClaims struct {
+	Email  string   `json:"email"`
+	Sub    string   `json:"sub"`
+	Groups []string `json:"groups"`
+}
+
+// Validates that the server defined identity attribute matches the
+// respective claim from the identity token
+func validateClaim(claims *checkedClaims, user *User) bool {
+	if strings.HasPrefix(user.IdentityAttribute, "oidc:groups") {
+		oidcGroupSections := strings.Split(user.IdentityAttribute, ":")
+
+		return slices.Contains(claims.Groups, oidcGroupSections[len(oidcGroupSections)-1])
+	}
+
+	// email should be a case-insensitive check
+	// sub should be a case-sensitive check
+	return strings.EqualFold(claims.Email, user.IdentityAttribute) || string(claims.Sub) == user.IdentityAttribute
+}
+
 // CheckPolicy loads the opkssh policy and checks to see if there is a policy
 // permitting access to principalDesired for the user identified by the PKT's
 // email claim. Returns nil if access is granted. Otherwise, an error is
@@ -50,10 +71,8 @@ func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken) er
 		sourceStr = "<policy source unknown>"
 	}
 
-	var claims struct {
-		Email string `json:"email"`
-		Sub   string `json:"sub"`
-	}
+	var claims checkedClaims
+
 	if err := json.Unmarshal(pkt.Payload, &claims); err != nil {
 		return fmt.Errorf("error unmarshalling pk token payload: %w", err)
 	}
@@ -62,10 +81,8 @@ func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken) er
 		return fmt.Errorf("error getting issuer from pk token: %w", err)
 	}
 	for _, user := range policy.Users {
-		// check each entry to see if the user in the claims is included
-		// email should be a case insensitive check
-		// sub should be a case sensitive check
-		if strings.EqualFold(claims.Email, user.EmailOrSub) || string(claims.Sub) == user.EmailOrSub {
+		// check each entry to see if the user in the checkedClaims is included
+		if validateClaim(&claims, &user) {
 			if issuer != user.Issuer {
 				continue
 			}

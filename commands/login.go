@@ -50,6 +50,7 @@ var DefaultProviderList = "google,https://accounts.google.com,206584157355-7cbe4
 type LoginCmd struct {
 	autoRefresh         bool
 	logDir              string
+	disableBrowserOpenArg bool
 	providerArg         string
 	providerFromLdFlags providers.OpenIdProvider
 	providerAlias       string
@@ -60,13 +61,14 @@ type LoginCmd struct {
 	principals          []string
 }
 
-func NewLogin(autoRefresh bool, logDir string, providerArg string, providerFromLdFlags providers.OpenIdProvider, providerAlias string) *LoginCmd {
+func NewLogin(autoRefresh bool, logDir string, disableBrowserOpenArg bool, providerArg string, providerFromLdFlags providers.OpenIdProvider, providerAlias string) *LoginCmd {
 	return &LoginCmd{
-		autoRefresh:         autoRefresh,
-		logDir:              logDir,
-		providerArg:         providerArg,
-		providerFromLdFlags: providerFromLdFlags,
-		providerAlias:       providerAlias,
+		autoRefresh:           autoRefresh,
+		logDir:                logDir,
+    disableBrowserOpenArg: disableBrowserOpenArg,
+		providerArg:           providerArg,
+		providerFromLdFlags:   providerFromLdFlags,
+		providerAlias:         providerAlias,
 	}
 }
 
@@ -84,6 +86,8 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 	} else {
 		log.SetOutput(os.Stdout)
 	}
+
+	openBrowser := !l.disableBrowserOpenArg
 
 	// If the user has supplied commandline arguments for the provider, use those instead of the web chooser
 	var provider providers.OpenIdProvider
@@ -118,6 +122,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		}
 
 		providerConfigs, err := GetProvidersConfigFromEnv()
+    
 		if err != nil {
 			return fmt.Errorf("error getting provider config from env: %w", err)
 		}
