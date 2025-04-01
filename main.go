@@ -52,9 +52,10 @@ func main() {
 
 func run() int {
 	rootCmd := &cobra.Command{
-		Use:     "opkssh",
-		Short:   "SSH with OpenPubkey",
-		Version: Version,
+		SilenceUsage: true,
+		Use:          "opkssh",
+		Short:        "SSH with OpenPubkey",
+		Version:      Version,
 		Long: `SSH with OpenPubkey
 
 This program allows users to:
@@ -70,8 +71,9 @@ This program allows users to:
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 
 	addCmd := &cobra.Command{
-		Use:   "add <PRINCIPAL> <EMAIL|SUB|GROUP> <ISSUER>",
-		Short: "Appends new rule to the policy file",
+		SilenceUsage: true,
+		Use:          "add <PRINCIPAL> <EMAIL|SUB|GROUP> <ISSUER>",
+		Short:        "Appends new rule to the policy file",
 		Long: `Add appends a new policy entry in the auth_id policy file granting SSH access to the specified email or subscriber ID (sub) or group.
 
 It first attempts to write to the system-wide file (/etc/opk/auth_id). If it lacks permissions to update this file it falls back to writing to the user-specific file (~/.opk/auth_id).
@@ -121,8 +123,9 @@ Arguments:
 	var providerArg string
 	var disableBrowserOpenArg bool
 	loginCmd := &cobra.Command{
-		Use:   "login",
-		Short: "Authenticate with an OpenID Provider to generate an SSH key for opkssh",
+		SilenceUsage: true,
+		Use:          "login",
+		Short:        "Authenticate with an OpenID Provider to generate an SSH key for opkssh",
 		Long: `Login creates opkssh SSH keys
 
 Login generates a key pair, then opens a browser to authenticate the user with the OpenID Provider. Upon successful authentication, opkssh creates an SSH public key (~/.ssh/id_ecdsa) containing the user's PK token. By default, this SSH key expires after 24 hours, after which the user must run "opkssh login" again to generate a new key.
@@ -170,8 +173,9 @@ Users can then SSH into servers configured to use opkssh as the AuthorizedKeysCo
 	rootCmd.AddCommand(loginCmd)
 
 	readhomeCmd := &cobra.Command{
-		Use:   "readhome <PRINCIPAL>",
-		Short: "Read the principal's home policy file",
+		SilenceUsage: true,
+		Use:          "readhome <PRINCIPAL>",
+		Short:        "Read the principal's home policy file",
 		Long: `Read the principal's policy file (/home/<PRINCIPAL>/.opk/auth_id).
 
 You should not call this command directly. It is called by the opkssh verify command as part of the AuthorizedKeysCommand process to read the user's policy  (principals) home file (~/.opk/auth_id) with sudoer permissions. This allows us to use an unprivileged user as the AuthorizedKeysCommand user.
@@ -192,8 +196,9 @@ You should not call this command directly. It is called by the opkssh verify com
 	rootCmd.AddCommand(readhomeCmd)
 
 	verifyCmd := &cobra.Command{
-		Use:   "verify <PRINCIPAL> <CERT> <KEY_TYPE>",
-		Short: "Verify an SSH key (used by sshd AuthorizedKeysCommand)",
+		SilenceUsage: true,
+		Use:          "verify <PRINCIPAL> <CERT> <KEY_TYPE>",
+		Short:        "Verify an SSH key (used by sshd AuthorizedKeysCommand)",
 		Long: `Verify extracts a PK token from a base64-encoded SSH certificate and verifies it against policy. It expects an allowed provider file at /etc/opk/providers and a user policy file at either /etc/opk/auth_id or ~/.opk/auth_id.
 
 This command is intended to be called by sshd as an AuthorizedKeysCommand:
