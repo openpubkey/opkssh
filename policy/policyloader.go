@@ -185,9 +185,9 @@ func (h *HomePolicyLoader) LoadHomePolicy(username string, skipInvalidEntries bo
 			if slices.Contains(user.Principals, username) {
 				// Build clean entry that only gives access to username
 				validUserPolicy.Users = append(validUserPolicy.Users, User{
-					EmailOrSub: user.EmailOrSub,
-					Principals: []string{username},
-					Issuer:     user.Issuer,
+					IdentityAttribute: user.IdentityAttribute,
+					Principals:        []string{username},
+					Issuer:            user.Issuer,
 				})
 			}
 		}
