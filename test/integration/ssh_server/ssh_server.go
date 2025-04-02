@@ -49,6 +49,8 @@ func RunOpkSshContainer(ctx context.Context, issuerHostIp string, issuerPort str
 		dockerFile = filepath.Join("test", "integration", "ssh_server", "debian_opkssh.Dockerfile")
 	} else if osType == "centos" {
 		dockerFile = filepath.Join("test", "integration", "ssh_server", "centos_opkssh.Dockerfile")
+	} else if osType == "arch" {
+    	dockerFile = filepath.Join("test", "integration", "ssh_server", "arch_opkssh.Dockerfile")
 	} else {
 		return nil, fmt.Errorf("unsupported OS type: %s", osType)
 	}

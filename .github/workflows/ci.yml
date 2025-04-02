@@ -37,7 +37,7 @@ jobs:
     timeout-minutes: 8
     strategy:
       matrix:
-        os: [ubuntu, centos]
+        os: [ubuntu, centos, arch]
     env:
       OS_TYPE: ${{ matrix.os }}
     steps:
