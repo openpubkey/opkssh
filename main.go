@@ -125,8 +125,8 @@ Arguments:
 	var disableBrowserOpenArg bool
 	loginCmd := &cobra.Command{
 		SilenceUsage: true,
-		Use:   "login [alias]",
-		Short: "Authenticate with an OpenID Provider to generate an SSH key for opkssh",
+		Use:          "login [alias]",
+		Short:        "Authenticate with an OpenID Provider to generate an SSH key for opkssh",
 		Long: `Login creates opkssh SSH keys
 
 Login generates a key pair, then opens a browser to authenticate the user with the OpenID Provider. Upon successful authentication, opkssh creates an SSH public key (~/.ssh/id_ecdsa) containing the user's PK token. By default, this SSH key expires after 24 hours, after which the user must run "opkssh login" again to generate a new key.
