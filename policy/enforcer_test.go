@@ -276,6 +276,36 @@ func TestPolicyApprovedOidcGroups(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestPolicyApprovedOidcGroupWithAtSign(t *testing.T) {
+	t.Parallel()
+
+	op, err := NewMockOpenIdProviderGroups([]string{"it.infra@my_domain.com"})
+
+	policyLine := &policy.Policy{
+		Users: []policy.User{
+			{
+				IdentityAttribute: "oidc:groups:it.infra@my_domain.com",
+				Principals:        []string{"test"},
+				Issuer:            "https://accounts.example.com",
+			},
+		},
+	}
+
+	require.NoError(t, err)
+
+	opkClient, err := client.New(op)
+	require.NoError(t, err)
+	pkt, err := opkClient.Auth(context.Background())
+	require.NoError(t, err)
+
+	policyEnforcer := &policy.Enforcer{
+		PolicyLoader: &MockPolicyLoader{Policy: policyLine},
+	}
+
+	err = policyEnforcer.CheckPolicy("test", pkt)
+	require.NoError(t, err)
+}
+
 func TestPolicyDeniedOidcGroups(t *testing.T) {
 	t.Parallel()
 
