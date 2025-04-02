@@ -91,7 +91,7 @@ sudo groupadd --system opksshuser
 sudo useradd -r -M -s /sbin/nologin -g opksshuser opksshuser
 ```
 
-**5: Disable the default sshd systemd-userdb configuration.** Comment out the following lines in `/etc/ssh/sshd_config.d/20-systemd-userdb.conf` if this file exists.
+**5: Optional: Disable the default sshd systemd-userdb configuration.** Comment out the following lines in `/etc/ssh/sshd_config.d/20-systemd-userdb.conf` if this file exists.
 
 This configuration otherwise overwrites the configuration from the previous step. See https://github.com/systemd/systemd/issues/33648 for more details.
 ```bash

@@ -39,6 +39,7 @@ fi
 
 HOME_POLICY=true
 RESTART_SSH=true
+DISABLE_SYSTEMD_USERDB_KEYS=false
 LOCAL_INSTALL_FILE=""
 INSTALL_VERSION="latest"
 for arg in "$@"; do
@@ -46,6 +47,8 @@ for arg in "$@"; do
         HOME_POLICY=false
     elif [ "$arg" == "--no-sshd-restart" ]; then
         RESTART_SSH=false
+    elif [ "$arg" == "--no-systemd-userdb-keys" ]; then
+        DISABLE_SYSTEMD_USERDB_KEYS=true
     elif [[ "$arg" == --install-from=* ]]; then
         LOCAL_INSTALL_FILE="${arg#*=}"
     elif [[ "$arg" == --install-version=* ]]; then
@@ -58,11 +61,12 @@ if [[ "$1" == "--help" ]]; then
     echo "Usage: $0 [OPTIONS]"
     echo ""
     echo "Options:"
-    echo "  --no-home-policy        Disables configuration that allows opkssh see policy files in user's home directory (/home/<username>/auth_id). Greatly simplifies install, try this if you are having install failures."
-    echo "  --no-sshd-restart       Do not restart SSH after installation"
-    echo "  --install-from=FILEPATH Install using a local file"
-    echo "  --install-version=VER   Install a specific version from GitHub"
-    echo "  --help                  Display this help message"
+    echo "  --no-home-policy         Disables configuration that allows opkssh see policy files in user's home directory (/home/<username>/auth_id). Greatly simplifies install, try this if you are having install failures."
+    echo "  --no-sshd-restart        Do not restart SSH after installation"
+    echo "  --no-systemd-userdb-keys Disable using authorized-keys from systemd-userdb if configuration exists"
+    echo "  --install-from=FILEPATH  Install using a local file"
+    echo "  --install-version=VER    Install a specific version from GitHub"
+    echo "  --help                   Display this help message"
     exit 0
 fi
 
@@ -72,7 +76,7 @@ if ! command -v wget &> /dev/null; then
     if [ "$OS_TYPE" == "debian" ]; then
         echo "sudo apt install wget"
     elif [ "$OS_TYPE" == "redhat" ]; then
-        echo "sudo dnf install wget"
+        echo "sudo yum install wget"
     elif [ "$OS_TYPE" == "arch" ]; then
         echo "sudo pacman -S wget"
     else
@@ -250,12 +254,21 @@ if command -v $INSTALL_DIR/$BINARY_NAME &> /dev/null; then
     echo "AuthorizedKeysCommand /usr/local/bin/opkssh verify %u %k %t" >> /etc/ssh/sshd_config
     echo "AuthorizedKeysCommandUser ${AUTH_CMD_USER}" >> /etc/ssh/sshd_config
 
-    if [ -f /etc/ssh/sshd_config.d/20-systemd-userdb.conf ]; then
-        # We're disabling the default from systemd-userdbd as it overwrites the config in /etc/ssh/sshd_config defined above,
-        # see https://github.com/systemd/systemd/issues/33648
-        echo "  Disabling systemd-userdbd default configuration for AuthorizedKeysCommand and AuthorizedKeysCommandUser"
-        sed -i '/^AuthorizedKeysCommand /s/^/#/' /etc/ssh/sshd_config.d/20-systemd-userdb.conf
-        sed -i '/^AuthorizedKeysCommandUser /s/^/#/' /etc/ssh/sshd_config.d/20-systemd-userdb.conf
+    # Check if a drop-in configuration from systemd-userdbd exists as it overwrites the config in /etc/ssh/sshd_config defined above,
+    # see https://github.com/systemd/systemd/issues/33648
+    DROP_IN_CONFIG=/etc/ssh/sshd_config.d/20-systemd-userdb.conf
+    if [ -f $DROP_IN_CONFIG ]; then
+        if [ "$DISABLE_SYSTEMD_USERDB_KEYS" = true ]; then
+            echo "  --no-systemd-userdb-keys option supplied, disabling AuthorizedKeysCommand in $DROP_IN_CONFIG"
+            sed -i '/^AuthorizedKeysCommand /s/^/#/' $DROP_IN_CONFIG
+            sed -i '/^AuthorizedKeysCommandUser /s/^/#/' $DROP_IN_CONFIG
+        # Check if drop-in configuration is active
+        elif grep -q '^AuthorizedKeysCommand' $DROP_IN_CONFIG && \
+           grep -q '^Include /etc/ssh/sshd_config\.d/\*\.conf' /etc/ssh/sshd_config; then
+            echo "  An active AuthorizedKeysCommand directive was found in $DROP_IN_CONFIG."
+            echo "  Please rerun the installation with '--no-systemd-userdb-keys' to disable it."
+            exit 1
+        fi
     fi
 
     if [ "$RESTART_SSH" = true ]; then
