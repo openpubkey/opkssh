@@ -430,7 +430,6 @@ func IdentityString(pkt pktoken.PKToken) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
 	claims := idt.GetClaims()
 	if claims.Email == "" {
 		return "Sub, issuer, audience: \n" + claims.Subject + " " + claims.Issuer + " " + claims.Audience, nil
