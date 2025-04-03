@@ -62,7 +62,6 @@ type LoginCmd struct {
 	principals            []string
 }
 
-
 func NewLogin(autoRefresh bool, logDir string, disableBrowserOpenArg bool, printIdTokenArg bool, providerArg string, providerFromLdFlags providers.OpenIdProvider, providerAlias string) *LoginCmd {
 	return &LoginCmd{
 		autoRefresh:           autoRefresh,
@@ -430,10 +429,9 @@ func IdentityString(pkt pktoken.PKToken) (string, error) {
 	}
 }
 
-// Structure for that format :
+// ProviderConfig is the representation of the provider config:
 // {alias},{provider_url},{client_id},{client_secret},{scopes}
 // client secret is optional, as well as scopes, if not provided, the default for secret is an empty string, for scopes is "openid profile email"
-
 type ProviderConfig struct {
 	Alias        string
 	Issuer       string
@@ -442,7 +440,7 @@ type ProviderConfig struct {
 	Scopes       []string
 }
 
-// Function to create the provider config from a string of the format
+// NewProviderConfigFromString is a function to create the provider config from a string of the format
 // {alias},{provider_url},{client_id},{client_secret},{scopes}
 func NewProviderConfigFromString(configStr string, hasAlias bool) (ProviderConfig, error) {
 	parts := strings.Split(configStr, ",")
@@ -496,7 +494,7 @@ func NewProviderConfigFromString(configStr string, hasAlias bool) (ProviderConfi
 	return providerConfig, nil
 }
 
-// Function to create the provider from the config
+// NewProviderFromConfig is a function to create the provider from the config
 func NewProviderFromConfig(config ProviderConfig, openBrowser bool) (client.OpenIdProvider, error) {
 
 	if config.Issuer == "" {
@@ -550,7 +548,7 @@ func NewProviderFromConfig(config ProviderConfig, openBrowser bool) (client.Open
 	return provider, nil
 }
 
-// Function to retrieve the config from the env variables
+// GetProvidersConfigFromEnv is a function to retrieve the config from the env variables
 // OPKSSH_DEFAULT can be set to an alias
 // OPKSSH_PROVIDERS is a ; separated list of providers of the format <alias>,<issuer>,<client_id>,<client_secret>,<scopes>;<alias>,<issuer>,<client_id>,<client_secret>,<scopes>
 func GetProvidersConfigFromEnv() (map[string]ProviderConfig, error) {
@@ -577,7 +575,7 @@ func GetProvidersConfigFromEnv() (map[string]ProviderConfig, error) {
 	return providersConfig, nil
 }
 
-// Function to retrieve the env variables from the ~/.opksshrc file
+// GetEnvFromConfigFile is a function to retrieve the env variables from the ~/.opksshrc file
 func GetEnvFromConfigFile() (map[string]string, error) {
 	homePath, err := os.UserHomeDir()
 	if err != nil {
@@ -636,7 +634,7 @@ func GetEnvFromConfigFile() (map[string]string, error) {
 	return envs, nil
 }
 
-// Function to set the env variables from the ~/.opksshrc file
+// SetEnvFromConfigFile is a function to set the env variables from the ~/.opksshrc file
 func SetEnvFromConfigFile() error {
 	envs, err := GetEnvFromConfigFile()
 
@@ -649,6 +647,7 @@ func SetEnvFromConfigFile() error {
 		}
 	}
 	return nil
+}
 
 func PrettyIdToken(pkt pktoken.PKToken) (string, error) {
 
