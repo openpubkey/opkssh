@@ -76,7 +76,12 @@ if ! command -v wget &> /dev/null; then
     if [ "$OS_TYPE" == "debian" ]; then
         echo "sudo apt install wget"
     elif [ "$OS_TYPE" == "redhat" ]; then
-        echo "sudo yum install wget"
+        # dnf might not be available on older versions
+        if command -v dnf >/dev/null 2>&1; then
+            echo "sudo dnf install wget"
+        else
+            echo "sudo yum install wget"
+        fi
     elif [ "$OS_TYPE" == "arch" ]; then
         echo "sudo pacman -S wget"
     else
