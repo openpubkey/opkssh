@@ -15,12 +15,23 @@ echo "Detected OS is $OS_TYPE"
 
 
 # Check CPU architecture
-CPU_ARCH=$(uname -p)
+CPU_ARCH=$(uname -m)
 
-if [[ "$CPU_ARCH" != "amd64" && "$CPU_ARCH" != "aarch64" ]]; then
-    echo "Error: Unsupported CPU architecture: $CPU_ARCH."
-    exit 1
-fi
+case "$CPU_ARCH" in
+    x86_64)
+        CPU_ARCH="amd64"
+        ;;
+    aarch64)
+        CPU_ARCH="arm64"
+        ;;
+    amd64 | arm64)
+        # Supported architectures, no changes needed
+        ;;
+    *)
+        echo "Error: Unsupported CPU architecture: $CPU_ARCH."
+        exit 1
+        ;;
+esac
 
 # Define variables
 INSTALL_DIR="/usr/local/bin"
