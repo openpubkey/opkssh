@@ -111,7 +111,6 @@ Arguments:
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to add to policy: %v\n", err)
 				return err
-
 			}
 			fmt.Fprintf(os.Stdout, "Successfully added new policy to %s\n", policyFilePath)
 			return nil
