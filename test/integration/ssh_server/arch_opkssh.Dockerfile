@@ -19,7 +19,7 @@ RUN go build -v -o opksshbuild
 FROM quay.io/archlinux/archlinux
 # Install dependencies required for runtime (e.g., SSH server)
 RUN pacman -Syu && \
-    pacman -Sy openssh inetutils wget jq --noconfirm && \
+    pacman -Sy openssh inetutils wget jq sudo --noconfirm && \
     pacman -Scc --noconfirm
 
 
