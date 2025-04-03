@@ -49,7 +49,7 @@ func TestLogin(t *testing.T) {
 	opkProvider, loginURL, err := opServer.OpkProvider()
 	require.NoError(t, err, "failed to create OPK provider")
 	go func() {
-		err := commands.Login(TestCtx, opkProvider)
+		err := commands.Login(TestCtx, opkProvider, false)
 		errCh <- err
 	}()
 

@@ -33,6 +33,14 @@ brew tap openpubkey/opkssh
 brew install opkssh
 ```
 
+### Winget Install (Windows)
+
+To install with winget run:
+
+```powershell
+winget install openpubkey.opkssh
+```
+
 ### Manual Install (Windows, Linux, OSX)
 
 To install manually, download the opkssh binary and run it:
@@ -63,16 +71,10 @@ curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-lin
 
 ### SSHing with opkssh
 
-After downloading opkssh, on OSX or Linux run:
+After downloading opkssh run:
 
 ```cmd
 opkssh login
-```
-
-on Windows run:
-
-```powershell
-.\opkssh.exe login
 ```
 
 This opens a browser window to select which  OpenID Provider you want to authenticate against.
