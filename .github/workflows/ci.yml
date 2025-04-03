@@ -38,7 +38,7 @@ jobs:
     strategy:
       matrix:
         runs_on: [ubuntu-latest, ubuntu-24.04-arm]
-        os: [ubuntu, centos]
+        os: [ubuntu, centos, arch]
     env:
       OS_TYPE: ${{ matrix.os }}
     steps:

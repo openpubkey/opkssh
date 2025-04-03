@@ -44,9 +44,9 @@ func TestAddAllowedPrincipal(t *testing.T) {
 			expectedPolicy: &policy.Policy{
 				Users: []policy.User{
 					{
-						EmailOrSub: "alice@example.com",
-						Principals: []string{"test"},
-						Issuer:     "https://example.com",
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{"test"},
+						Issuer:            "https://example.com",
 					},
 				},
 			},
@@ -58,22 +58,22 @@ func TestAddAllowedPrincipal(t *testing.T) {
 			initialPolicy: &policy.Policy{
 				Users: []policy.User{
 					{
-						EmailOrSub: "alice@example.com",
-						Principals: []string{"test", "test2"},
-						Issuer:     "https://example.com",
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{"test", "test2"},
+						Issuer:            "https://example.com",
 					},
 				}},
 			expectedPolicy: &policy.Policy{
 				Users: []policy.User{
 					{
-						EmailOrSub: "bob@example.com",
-						Principals: []string{"test"},
-						Issuer:     "https://example.com",
+						IdentityAttribute: "bob@example.com",
+						Principals:        []string{"test"},
+						Issuer:            "https://example.com",
 					},
 					{
-						EmailOrSub: "alice@example.com",
-						Principals: []string{"test", "test2"},
-						Issuer:     "https://example.com",
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{"test", "test2"},
+						Issuer:            "https://example.com",
 					},
 				},
 			},
@@ -85,17 +85,17 @@ func TestAddAllowedPrincipal(t *testing.T) {
 			initialPolicy: &policy.Policy{
 				Users: []policy.User{
 					{
-						EmailOrSub: "alice@example.com",
-						Principals: []string{"test", "test2"},
-						Issuer:     "https://example.com",
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{"test", "test2"},
+						Issuer:            "https://example.com",
 					},
 				}},
 			expectedPolicy: &policy.Policy{
 				Users: []policy.User{
 					{
-						EmailOrSub: "alice@example.com",
-						Principals: []string{"test", "test2", "test3"},
-						Issuer:     "https://example.com",
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{"test", "test2", "test3"},
+						Issuer:            "https://example.com",
 					},
 				},
 			},
@@ -107,17 +107,17 @@ func TestAddAllowedPrincipal(t *testing.T) {
 			initialPolicy: &policy.Policy{
 				Users: []policy.User{
 					{
-						EmailOrSub: "alice@example.com",
-						Principals: []string{"test"},
-						Issuer:     "https://example.com",
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{"test"},
+						Issuer:            "https://example.com",
 					},
 				}},
 			expectedPolicy: &policy.Policy{
 				Users: []policy.User{
 					{
-						EmailOrSub: "alice@example.com",
-						Principals: []string{"test"},
-						Issuer:     "https://example.com",
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{"test"},
+						Issuer:            "https://example.com",
 					},
 				},
 			},

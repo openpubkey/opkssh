@@ -15,24 +15,29 @@ COPY . ./
 ARG ISSUER_PORT="9998"
 RUN go build -v -o opksshbuild
 
-# Stage 2: Create a minimal CentOS-based image
-FROM quay.io/centos/centos:stream9
+# Stage 2: Create a minimal ArchLinux-based image
+FROM quay.io/archlinux/archlinux
 # Install dependencies required for runtime (e.g., SSH server)
-RUN dnf update -y && \
-    dnf install -y sudo openssh-server openssh-clients telnet wget jq && \
-    dnf clean all
+RUN pacman -Syu --noconfirm && \
+    pacman -Sy openssh inetutils wget jq sudo --noconfirm && \
+    pacman -Scc --noconfirm
 
 
 # Source:
 # https://medium.com/@ratnesh4209211786/simplified-ssh-server-setup-within-a-docker-container-77eedd87a320
 #
 # Create an SSH user named "test". Make it a sudoer
-RUN useradd -rm -d /home/test -s /bin/bash -g root -G wheel -u 1000 test
-# Set password to "test"
-RUN  echo "test:test" | chpasswd
+
+# Create the sudoers.d directory if it doesn't exist
+RUN mkdir -p /etc/sudoers.d
+
+# Create an SSH user named "test" and make it a sudoer
+RUN useradd -m -d /home/test -s /bin/bash -g root -G wheel -u 1000 test
+
+# Set password for "test" user to "test"
+RUN echo "test:test" | chpasswd
 
 # Make it so "test" user does not need to present password when using sudo
-# Source: https://askubuntu.com/a/878705
 RUN echo "test ALL=(ALL:ALL) NOPASSWD: ALL" | tee /etc/sudoers.d/test
 
 # Create unprivileged user named "test2" 
@@ -54,7 +59,7 @@ COPY --from=builder /app/scripts/install-linux.sh install-linux.sh
 
 # Run install script to install/configure opkssh
 RUN chmod +x install-linux.sh
-RUN bash ./install-linux.sh --install-from=opksshbuild --no-sshd-restart
+RUN bash ./install-linux.sh --install-from=opksshbuild --no-sshd-restart --no-systemd-userdb-keys
 
 RUN opkssh --version
 RUN ls -l /usr/local/bin

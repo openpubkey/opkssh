@@ -90,7 +90,10 @@ func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
 			opts.ClientID = row.ClientID
 			provider = providers.NewGitlabOpWithOptions(opts)
 		} else {
-			return nil, fmt.Errorf("unsupported issuer: %s", row.Issuer)
+			opts := providers.GetDefaultGoogleOpOptions()
+			opts.Issuer = row.Issuer
+			opts.ClientID = row.ClientID
+			provider = providers.NewGoogleOpWithOptions(opts)
 		}
 
 		expirationPolicy, err = row.GetExpirationPolicy()

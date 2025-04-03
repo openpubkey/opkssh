@@ -84,7 +84,7 @@ func TestAddErrors(t *testing.T) {
 	// Test when the system policy file does not exist
 	mockEmptyFs := afero.NewMemMapFs()
 	addCmd := MockAddCmd(mockEmptyFs)
-	policyPath, err := addCmd.Add(principal, userEmail, issuer)
+	policyPath, err := addCmd.Run(principal, userEmail, issuer)
 	require.ErrorContains(t, err, "file does not exist")
 	require.Empty(t, policyPath)
 
@@ -95,7 +95,7 @@ func TestAddErrors(t *testing.T) {
 	require.NoError(t, err)
 	addCmd = MockAddCmd(mockFs)
 
-	policyPath, err = addCmd.Add(principal, userEmail, issuer)
+	policyPath, err = addCmd.Run(principal, userEmail, issuer)
 	require.ErrorContains(t, err, "file has insecure permissions: expected permissions (640), got (0)")
 	require.Empty(t, policyPath)
 
@@ -103,7 +103,7 @@ func TestAddErrors(t *testing.T) {
 	require.NoError(t, err)
 
 	addCmd = MockAddCmd(mockFs)
-	policyPath, err = addCmd.Add(principal, userEmail, issuer)
+	policyPath, err = addCmd.Run(principal, userEmail, issuer)
 	require.NoError(t, err)
 	require.Equal(t, policy.SystemDefaultPolicyPath, policyPath)
 

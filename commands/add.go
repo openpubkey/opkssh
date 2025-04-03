@@ -89,12 +89,12 @@ func (a *AddCmd) GetPolicyPath(principal string, userEmail string, issuer string
 	return policy.SystemDefaultPolicyPath, true, nil
 }
 
-// Add adds a new allowed principal to the user whose email is equal to
+// Run adds a new allowed principal to the user whose email is equal to
 // userEmail. The policy file is read and modified.
 //
 // If successful, returns the policy filepath updated. Otherwise, returns a
 // non-nil error
-func (a *AddCmd) Add(principal string, userEmail string, issuer string) (string, error) {
+func (a *AddCmd) Run(principal string, userEmail string, issuer string) (string, error) {
 	policyPath, useSystemPolicy, err := a.GetPolicyPath(principal, userEmail, issuer)
 	if err != nil {
 		return "", fmt.Errorf("failed to load policy: %w", err)

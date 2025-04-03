@@ -107,19 +107,6 @@ func TestProviderPolicy_CreateVerifier_Gitlab(t *testing.T) {
 	require.NotNil(t, ver)
 }
 
-// Test ProviderPolicy.CreateVerifier with an unsupported issuer.
-func TestProviderPolicy_CreateVerifier_UnsupportedIssuer(t *testing.T) {
-	policy := &ProviderPolicy{}
-	policy.AddRow(ProvidersRow{
-		Issuer:           "https://unsupported.com",
-		ClientID:         "test-unsupported",
-		ExpirationPolicy: "24h",
-	})
-	ver, err := policy.CreateVerifier()
-	require.ErrorContains(t, err, "unsupported issuer")
-	require.Nil(t, ver)
-}
-
 // Test ProviderPolicy.CreateVerifier with an invalid expiration policy.
 func TestProviderPolicy_CreateVerifier_InvalidExpiration(t *testing.T) {
 	policy := &ProviderPolicy{}

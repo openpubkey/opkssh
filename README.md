@@ -33,6 +33,14 @@ brew tap openpubkey/opkssh
 brew install opkssh
 ```
 
+### Winget Install (Windows)
+
+To install with winget run:
+
+```powershell
+winget install openpubkey.opkssh
+```
+
 ### Manual Install (Windows, Linux, OSX)
 
 To install manually, download the opkssh binary and run it:
@@ -65,16 +73,10 @@ curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-lin
 
 ### SSHing with opkssh
 
-After downloading opkssh, on OSX or Linux run:
+After downloading opkssh run:
 
 ```cmd
 opkssh login
-```
-
-on Windows run:
-
-```powershell
-.\opkssh.exe login
 ```
 
 This opens a browser window to select which  OpenID Provider you want to authenticate against.
@@ -87,7 +89,11 @@ Since your PK Token has been saved as an SSH key you can SSH as normal:
 ssh root@example.com
 ```
 
-This works because SSH sends the SSH public key opkssh wrote in `~/.ssh/id_ecdsas` to the server and sshd running on the server will send the public key to the opkssh command to verify.
+This works because SSH sends the SSH public key opkssh wrote in `~/.ssh/id_ecdsas` to the server and sshd running on the server will send the public key to the opkssh command to verify. This also works for other protocols that build on ssh like [sftp](https://en.wikipedia.org/wiki/SSH_File_Transfer_Protocol) or ssh tunnels.
+
+```bash
+sftp root@example.com
+```
 
 ### Installing on a Server
 
@@ -103,6 +109,11 @@ To allow a user, `alice@gmail.com`, to ssh to your server as `root`, run:
 
 ```bash
 sudo opkssh add root alice@gmail.com google
+```
+
+To allow a group, `ssh-users`, to ssh to your server as `root`, run:
+```bash
+sudo opkssh add root oidc:groups:ssh-users google
 ```
 
 ## How it works
@@ -128,6 +139,7 @@ Second, we use the `AuthorizedKeysCommand` configuration option in `sshd_config`
 | --------        | --------      | ------- | ---------------------- |----------- |
 | Linux       | ✅             |  ✅     |  Ubuntu 24.04.1 LTS  | -  |
 | Linux       | ✅             |  ✅     |  Centos 9  | -  |
+| Linux       | ✅             |  ✅     |  Arch Linux  | -  |
 | OSX       | ❌             |  ❌     |  -  | Likely  |
 | Windows11 | ❌            |   ❌     |  -                              | Likely |
 
@@ -177,6 +189,9 @@ Linux user accounts are typically referred to in SSH as *principals* and we cont
 - Column 2: Email address or subject ID of the user (choose one)
   - Email - the email of the identity
   - Subject ID - an unique ID for the user set by the OP. This is the `sub` claim in the ID Token.
+  - Group - the name of the group that the user is part of. This uses the `groups` claim which is presumed to 
+    be an array. The group identifier uses a structured identifier. I.e. `oidc:groups:{groupId}`. Replace the `groupId`
+    with the id of your group. 
 - Column 3: Issuer URI
 
 ```bash
@@ -185,11 +200,14 @@ alice alice@example.com https://accounts.google.com
 guest alice@example.com https://accounts.google.com
 root alice@example.com https://accounts.google.com
 dev bob@microsoft.com https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
+
+# Group identifier 
+dev oidc:groups:developer https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
 ```
 
 To add new rule run:
 
-`sudo opkssh add {USER} {EMAIL} {ISSUER}`
+`sudo opkssh add {USER} {EMAIL/SUB/GROUP} {ISSUER}`
 
 These `auth_id` files can be edited by hand or you can use the add command to add new policies.
 For convenience you can use the shorthand `google` or `azure` rather than specifying the entire issuer.
@@ -215,6 +233,9 @@ That is, if it is in `/home/alice/.opk/auth_id` it can only specify who can assu
 ```bash
 # email/sub principal issuer
 alice alice@example.com https://accounts.google.com
+
+# Group identifier
+dev oidc:groups:developer https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
 ```
 
 It requires the following permissions:
@@ -240,6 +261,51 @@ We then add the following lines to `/etc/ssh/sshd_config`
 AuthorizedKeysCommand /usr/local/bin/opkssh verify %u %k %t
 AuthorizedKeysCommandUser opksshuser
 ```
+
+## Custom OpenID Providers (Authentik, Authelia, Keycloak, Zitadel...)
+
+To log in using a custom OpenID Provider, run:
+
+```bash
+opkssh login --provider={ISSUER},{CLIENT_ID}
+```
+
+or in the rare case that a client secret is required by the OpenID Provider:
+
+```bash
+opkssh login --provider={ISSUER},{CLIENT_ID},{CLIENT_SECRET}
+```
+
+where ISSUER, CLIENT_ID and CLIENT_SECRET correspond to the issuer client ID and client secret of the custom OpenID Provider. 
+
+For example if the issuer is `https://authentik.local/application/o/opkssh/` and the client ID was `ClientID123`:
+
+```bash
+opkssh login --provider=https://authentik.local/application/o/opkssh/,ClientID123
+```
+
+### Server Configuration
+
+In the `/etc/opk/providers` file, add the OpenID Provider as you would any OpenID Provider. For example:
+
+```bash
+https://authentik.local/application/o/opkssh/ ClientID123 24h
+```
+
+Then add identities to the policy to allow those identities SSH to the server:
+
+```bash
+opkssh add root alice@example.com https://authentik.local/application/o/opkssh/
+```
+
+### Tested
+
+| OpenID Provider  | Tested | Notes                                                |
+|-----------|------------|--------------------------------------------------------------------|
+| Authentik |      ✅     | Do not add a certificate in the encryption section of the provider |
+| Zitadel   |      ✅     | Check the UserInfo box on the Token Settings                       |
+
+Do not use Confidential/Secret mode **only** client ID is needed.
 
 ## More information
 
