@@ -258,16 +258,18 @@ if command -v $INSTALL_DIR/$BINARY_NAME &> /dev/null; then
     # see https://github.com/systemd/systemd/issues/33648
     DROP_IN_CONFIG=/etc/ssh/sshd_config.d/20-systemd-userdb.conf
     if [ -f $DROP_IN_CONFIG ]; then
-        if [ "$DISABLE_SYSTEMD_USERDB_KEYS" = true ]; then
-            echo "  --no-systemd-userdb-keys option supplied, disabling AuthorizedKeysCommand in $DROP_IN_CONFIG"
-            sed -i '/^AuthorizedKeysCommand /s/^/#/' $DROP_IN_CONFIG
-            sed -i '/^AuthorizedKeysCommandUser /s/^/#/' $DROP_IN_CONFIG
         # Check if drop-in configuration is active
-        elif grep -q '^AuthorizedKeysCommand' $DROP_IN_CONFIG && \
-           grep -q '^Include /etc/ssh/sshd_config\.d/\*\.conf' /etc/ssh/sshd_config; then
-            echo "  An active AuthorizedKeysCommand directive was found in $DROP_IN_CONFIG."
-            echo "  Please rerun the installation with '--no-systemd-userdb-keys' to disable it."
-            exit 1
+        if grep -q '^AuthorizedKeysCommand' $DROP_IN_CONFIG && \
+            grep -q '^Include /etc/ssh/sshd_config\.d/\*\.conf' /etc/ssh/sshd_config; then
+            if [ "$DISABLE_SYSTEMD_USERDB_KEYS" = true ]; then
+                echo "  --no-systemd-userdb-keys option supplied, disabling AuthorizedKeysCommand in $DROP_IN_CONFIG"
+                sed -i '/^AuthorizedKeysCommand /s/^/#/' $DROP_IN_CONFIG
+                sed -i '/^AuthorizedKeysCommandUser /s/^/#/' $DROP_IN_CONFIG
+            else
+                echo "  An active AuthorizedKeysCommand directive was found in $DROP_IN_CONFIG."
+                echo "  Please rerun the installation with '--no-systemd-userdb-keys' to disable it."
+                exit 1
+            fi
         fi
     fi
 
