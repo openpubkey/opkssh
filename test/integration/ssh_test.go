@@ -319,7 +319,7 @@ func TestEndToEndSSH(t *testing.T) {
 	errCh := make(chan error)
 	t.Log("------- call login cmd ------")
 	go func() {
-		err := commands.Login(TestCtx, zitadelOp)
+		err := commands.Login(TestCtx, zitadelOp, false)
 		errCh <- err
 	}()
 
@@ -414,7 +414,7 @@ func TestEndToEndSSHAsUnprivilegedUser(t *testing.T) {
 	errCh := make(chan error)
 	t.Log("------- call login cmd ------")
 	go func() {
-		err := commands.Login(TestCtx, zitadelOp)
+		err := commands.Login(TestCtx, zitadelOp, false)
 		errCh <- err
 	}()
 
@@ -527,7 +527,7 @@ func TestEndToEndSSHWithRefresh(t *testing.T) {
 	defer cancelRefresh()
 	t.Log("------- call login cmd ------")
 	go func() {
-		err := commands.LoginWithRefresh(refreshCtx, pulseZitadelOp)
+		err := commands.LoginWithRefresh(refreshCtx, pulseZitadelOp, false)
 		errCh <- err
 	}()
 

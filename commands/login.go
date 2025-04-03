@@ -51,6 +51,7 @@ type LoginCmd struct {
 	autoRefresh           bool
 	logDir                string
 	disableBrowserOpenArg bool
+	printIdTokenArg       bool
 	providerArg           string
 	providerFromLdFlags   providers.OpenIdProvider
 	providerAlias         string
@@ -61,11 +62,13 @@ type LoginCmd struct {
 	principals            []string
 }
 
-func NewLogin(autoRefresh bool, logDir string, disableBrowserOpenArg bool, providerArg string, providerFromLdFlags providers.OpenIdProvider, providerAlias string) *LoginCmd {
+
+func NewLogin(autoRefresh bool, logDir string, disableBrowserOpenArg bool, printIdTokenArg bool, providerArg string, providerFromLdFlags providers.OpenIdProvider, providerAlias string) *LoginCmd {
 	return &LoginCmd{
 		autoRefresh:           autoRefresh,
 		logDir:                logDir,
 		disableBrowserOpenArg: disableBrowserOpenArg,
+		printIdTokenArg:       printIdTokenArg,
 		providerArg:           providerArg,
 		providerFromLdFlags:   providerFromLdFlags,
 		providerAlias:         providerAlias,
@@ -170,7 +173,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 	// Execute login command
 	if l.autoRefresh {
 		if providerRefreshable, ok := provider.(providers.RefreshableOpenIdProvider); ok {
-			err := LoginWithRefresh(ctx, providerRefreshable)
+			err := LoginWithRefresh(ctx, providerRefreshable, l.printIdTokenArg)
 			if err != nil {
 				return fmt.Errorf("error logging in: %w", err)
 			}
@@ -178,7 +181,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 			return fmt.Errorf("supplied OpenID Provider (%v) does not support auto-refresh and auto-refresh argument set to true", provider.Issuer())
 		}
 	} else {
-		err := Login(ctx, provider)
+		err := Login(ctx, provider, l.printIdTokenArg)
 		if err != nil {
 			return fmt.Errorf("error logging in: %w", err)
 		}
@@ -186,7 +189,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 	return nil
 }
 
-func login(ctx context.Context, provider client.OpenIdProvider) (*LoginCmd, error) {
+func login(ctx context.Context, provider client.OpenIdProvider, printIdToken bool) (*LoginCmd, error) {
 	var err error
 	alg := jwa.ES256
 	signer, err := util.GenKeyPair(alg)
@@ -217,6 +220,16 @@ func login(ctx context.Context, provider client.OpenIdProvider) (*LoginCmd, erro
 		return nil, fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
 	}
 
+	if printIdToken {
+		idTokenStr, err := PrettyIdToken(*pkt)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to format ID Token: %w", err)
+		}
+
+		fmt.Printf("id_token:\n%s\n", idTokenStr)
+	}
+
 	idStr, err := IdentityString(*pkt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse ID Token: %w", err)
@@ -234,8 +247,8 @@ func login(ctx context.Context, provider client.OpenIdProvider) (*LoginCmd, erro
 
 // Login performs the OIDC login procedure and creates the SSH certs/keys in the
 // default SSH key location.
-func Login(ctx context.Context, provider client.OpenIdProvider) error {
-	_, err := login(ctx, provider)
+func Login(ctx context.Context, provider client.OpenIdProvider, printIdToken bool) error {
+	_, err := login(ctx, provider, printIdToken)
 	return err
 }
 
@@ -244,8 +257,8 @@ func Login(ctx context.Context, provider client.OpenIdProvider) error {
 // the PKT (and create new SSH certs) indefinitely as its token expires. This
 // function only returns if it encounters an error or if the supplied context is
 // cancelled.
-func LoginWithRefresh(ctx context.Context, provider providers.RefreshableOpenIdProvider) error {
-	if loginResult, err := login(ctx, provider); err != nil {
+func LoginWithRefresh(ctx context.Context, provider providers.RefreshableOpenIdProvider, printIdToken bool) error {
+	if loginResult, err := login(ctx, provider, printIdToken); err != nil {
 		return err
 	} else {
 		var claims struct {
@@ -636,4 +649,20 @@ func SetEnvFromConfigFile() error {
 		}
 	}
 	return nil
+
+func PrettyIdToken(pkt pktoken.PKToken) (string, error) {
+
+	idt, err := oidc.NewJwt(pkt.OpToken)
+	if err != nil {
+		return "", err
+	}
+
+	idt_json, err := json.MarshalIndent(idt.GetClaims(), "", "    ")
+
+	if err != nil {
+		return "", err
+	}
+
+	return string(idt_json[:]), nil
+
 }

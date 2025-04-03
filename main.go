@@ -123,6 +123,7 @@ Arguments:
 	var logDir string
 	var providerArg string
 	var disableBrowserOpenArg bool
+	var printIdTokenArg bool
 	loginCmd := &cobra.Command{
 		SilenceUsage: true,
 		Use:          "login [alias]",
@@ -164,8 +165,7 @@ Arguments:
 				providerAlias = args[0]
 			}
 
-			login := commands.NewLogin(autoRefresh, logDir, disableBrowserOpenArg, providerArg, providerFromLdFlags, providerAlias)
-
+			login := commands.NewLogin(autoRefresh, logDir, disableBrowserOpenArg, printIdTokenArg, providerArg, providerFromLdFlags, providerAlias)
 			if err := login.Run(ctx); err != nil {
 				log.Println("Error executing login command:", err)
 				return err
@@ -179,6 +179,7 @@ Arguments:
 	loginCmd.Flags().BoolVar(&autoRefresh, "auto-refresh", false, "Automatically refresh PK token after login")
 	loginCmd.Flags().StringVar(&logDir, "log-dir", "", "Directory to write output logs")
 	loginCmd.Flags().BoolVar(&disableBrowserOpenArg, "disable-browser-open", false, "Set this flag to disable opening the browser. Useful for choosing the browser you want to use.")
+	loginCmd.Flags().BoolVar(&printIdTokenArg, "print-id-token", false, "Set this flag to print out the contents of the id_token. Useful for inspecting claims.")
 	loginCmd.Flags().StringVar(&providerArg, "provider", "", "OpenID Provider specification in the format: <issuer>,<client_id> or <issuer>,<client_id>,<client_secret>")
 	rootCmd.AddCommand(loginCmd)
 
