@@ -18,7 +18,7 @@ RUN go build -v -o opksshbuild
 # Stage 2: Create a minimal ArchLinux-based image
 FROM quay.io/archlinux/archlinux
 # Install dependencies required for runtime (e.g., SSH server)
-RUN pacman -Syu && \
+RUN pacman -Syu --noconfirm && \
     pacman -Sy openssh inetutils wget jq sudo --noconfirm && \
     pacman -Scc --noconfirm
 
