@@ -1,0 +1,79 @@
+# The documentation of Goreleaser is available here at https://goreleaser.com
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# vim: set ts=2 sw=2 tw=0 fo=cnqoj
+
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X main.Version={{.Version}}
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    # Ignore some builds until they are not tested
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+# Make binaries available with the same naming format as before
+archives:
+  - format: binary
+    name_template: >-
+      {{ .ProjectName }}-
+      {{- if eq .Os "darwin" }}osx
+      {{- else }}{{ .Os }}{{ end }}-
+      {{- .Arch }}
+
+# Create distribution packages
+nfpms:
+  - package_name: opkssh
+    description: |-
+      Enable ssh to be used with OpenID Connect allowing SSH access management
+      via identities like alice@example.com instead of long-lived SSH keys.
+    vendor: OpenPubKey
+    maintainer: Ethan Heilman <ethan.r.heilman@gmail.com>
+    license: Apache 2.0
+    homepage: https://github.com/openpubkey/opkssh
+    formats:
+      - apk        # Alpine
+      - deb        # Debian
+      - rpm        # RHEL based
+      - archlinux  # Archlinux
+    # TODO: Add debian overrides and match with https://salsa.debian.org/go-team/packages/opkssh
+
+# Create checksums file
+checksum:
+  name_template: 'checksums.txt'
+
+# Define how the changelog is generated
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+  groups:
+    # TOFIX: update regex to match `release-drafter-config.yml`
+    - title: 🚀 Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: "🐛 Bug Fixes"
+      regexp: '^.*?bug(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: 🧰 Maintenance
+      order: 999
+
+# Define how to make GitHub releases
+release:
+  draft: true
+  make_latest: true

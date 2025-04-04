@@ -1,0 +1,32 @@
+name: CD
+
+on:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: write
+  # id-token: write  # Enable for cosign: https://github.com/sigstore/cosign
+
+jobs:
+  goreleaser-release:
+    name: Build and release opkssh with GoReleaser
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
