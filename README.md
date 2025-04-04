@@ -298,10 +298,11 @@ opkssh add root alice@example.com https://authentik.local/application/o/opkssh/
 
 ### Tested
 
-| OpenID Provider  | Tested | Notes                                                |
-|-----------|------------|--------------------------------------------------------------------|
-| Authentik |      ✅     | Do not add a certificate in the encryption section of the provider |
-| Zitadel   |      ✅     | Check the UserInfo box on the Token Settings                       |
+| OpenID Provider | Tested | Notes                                                                                     |
+|-----------------|--------|-------------------------------------------------------------------------------------------|
+| Authelia        | ✅      | [Authelia Integration Guide](https://www.authelia.com/integration/openid-connect/opkssh/) |
+| Authentik       | ✅      | Do not add a certificate in the encryption section of the provider                        |
+| Zitadel         | ✅      | Check the UserInfo box on the Token Settings                                              |
 
 Do not use Confidential/Secret mode **only** client ID is needed.
 
