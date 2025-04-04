@@ -68,7 +68,10 @@ curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx
 To install on linux run:
 
 ```bash
-curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-$(uname -p) -o opkssh; chmod +x opkssh
+curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64 -o opkssh; chmod +x opkssh
+
+or for ARM
+curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-arm64 -o opkssh; chmod +x opkssh
 ```
 
 ### SSHing with opkssh
