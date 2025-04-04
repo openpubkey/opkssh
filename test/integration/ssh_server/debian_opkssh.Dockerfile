@@ -46,7 +46,12 @@ RUN chmod +x ./scripts/install-linux.sh
 RUN bash ./scripts/install-linux.sh --install-from=opksshbuild --no-sshd-restart
 # RUN chmod 700 /usr/local/bin/opkssh
 
-RUN echo "http://oidc.local:${ISSUER_PORT}/ web oidc_refreshed" >> /etc/opk/providers
+RUN mkdir -p /etc/opk/providers.d && \
+    chown root:opksshuser /etc/opk/providers.d
+
+RUN echo "http://oidc.local:${ISSUER_PORT}/ web oidc_refreshed" > /etc/opk/providers.d/oidc-local && \
+    chown root:opksshuser /etc/opk/providers.d/oidc-local && \
+    chmod 640 /etc/opk/providers.d/oidc-local
 
 # Add integration test user as allowed email in policy (this directly tests
 # policy "add" command)
