@@ -63,6 +63,10 @@ func (p *ProviderPolicy) AddRow(row ProvidersRow) {
 	p.rows = append(p.rows, row)
 }
 
+func (p *ProviderPolicy) Append(n ProviderPolicy) {
+	p.rows = append(p.rows, n.rows...)
+}
+
 func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
 	pvs := []verifier.ProviderVerifier{}
 	var expirationPolicy verifier.ExpirationPolicy

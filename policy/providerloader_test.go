@@ -175,3 +175,35 @@ func TestProvidersFileLoader_ToTable(t *testing.T) {
 		t.Error("second row in table does not match expected values")
 	}
 }
+
+// Test ProvidersFileLoader.Append.
+func TestProvidersFileLoader_Append(t *testing.T) {
+	policy1 := ProviderPolicy{}
+	policy1.AddRow(ProvidersRow{
+		Issuer:           "issuer1",
+		ClientID:         "client1",
+		ExpirationPolicy: "24h",
+	})
+	policy1.AddRow(ProvidersRow{
+		Issuer:           "issuer2",
+		ClientID:         "client2",
+		ExpirationPolicy: "48h",
+	})
+
+	policy2 := ProviderPolicy{}
+	policy1.AddRow(ProvidersRow{
+		Issuer:           "issuer3",
+		ClientID:         "client3",
+		ExpirationPolicy: "24h",
+	})
+	policy1.AddRow(ProvidersRow{
+		Issuer:           "issuer4",
+		ClientID:         "client4",
+		ExpirationPolicy: "48h",
+	})
+
+	policy1.Append(policy2)
+
+	expected := "issuer1 client1 24h\nissuer2 client2 48h\nissuer3 client3 24h\nissuer4 client4 48h\n"
+	require.Equal(t, expected, policy1.ToString())
+}
