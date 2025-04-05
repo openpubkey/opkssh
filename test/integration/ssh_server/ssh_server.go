@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -64,7 +65,7 @@ func RunOpkSshContainer(ctx context.Context, issuerHostIp string, issuerPort str
 			BuildArgs:     make(map[string]*string),
 		},
 		ExposedPorts:  []string{"22/tcp"},
-		ImagePlatform: "linux/amd64",
+		ImagePlatform: "linux/" + runtime.GOARCH,
 		// Wait for SSH server to be running by attempting to connect
 		//
 		// https://stackoverflow.com/a/54364978
@@ -120,7 +121,7 @@ func RunUbuntuContainer(ctx context.Context) (*SshServerContainer, error) {
 			KeepImage:  true,
 		},
 		ExposedPorts:  []string{"22/tcp"},
-		ImagePlatform: "linux/amd64",
+		ImagePlatform: "linux/" + runtime.GOARCH,
 		WaitingFor:    wait.ForExposedPort(),
 	}
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{

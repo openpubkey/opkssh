@@ -15,6 +15,26 @@ else
 fi
 echo "Detected OS is $OS_TYPE"
 
+
+# Check CPU architecture
+CPU_ARCH=$(uname -m)
+
+case "$CPU_ARCH" in
+    x86_64)
+        CPU_ARCH="amd64"
+        ;;
+    aarch64)
+        CPU_ARCH="arm64"
+        ;;
+    amd64 | arm64)
+        # Supported architectures, no changes needed
+        ;;
+    *)
+        echo "Error: Unsupported CPU architecture: $CPU_ARCH."
+        exit 1
+        ;;
+esac
+
 # Define variables
 INSTALL_DIR="/usr/local/bin"
 BINARY_NAME="opkssh"
@@ -117,9 +137,9 @@ if [ -n "$LOCAL_INSTALL_FILE" ]; then
     echo "Using binary from specified path: $BINARY_PATH"
 else
     if [ "$INSTALL_VERSION" == "latest" ]; then
-        BINARY_URL="https://github.com/$GITHUB_REPO/releases/latest/download/opkssh-linux-amd64"
+        BINARY_URL="https://github.com/$GITHUB_REPO/releases/latest/download/opkssh-linux-$CPU_ARCH"
     else
-        BINARY_URL="https://github.com/$GITHUB_REPO/releases/download/$INSTALL_VERSION/opkssh-linux-amd64"
+        BINARY_URL="https://github.com/$GITHUB_REPO/releases/download/$INSTALL_VERSION/opkssh-linux-$CPU_ARCH"
     fi
 
     # Download the binary
@@ -143,7 +163,7 @@ if command -v getenforce >/dev/null 2>&1; then
         echo "SELinux detected. Configuring SELinux for opkssh"
         echo "  Restoring context for $INSTALL_DIR/$BINARY_NAME..."
         restorecon "$INSTALL_DIR/$BINARY_NAME"
-        
+
         # Create temporary files for the compiled module and package
         TE_TMP="/tmp/opkssh.te"
         MOD_TMP="/tmp/opkssh.mod" # SELinux requires that modules have the same file name as the module name

@@ -105,16 +105,26 @@ func WaitForServer(ctx context.Context, url string, timeout time.Duration) error
 // locations. If found, the parsed public SSH key and path to its secret key is
 // returned. Otherwise, an error is returned if no valid OPK SSH key could be
 // found.
-func GetOPKSshKey() (ssh.PublicKey, string, error) {
-	// Get user's SSH path
-	homePath, err := os.UserHomeDir()
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to get user's home directory: %w", err)
-	}
-	sshPath := filepath.Join(homePath, ".ssh")
+func GetOPKSshKey(seckeyPath string) (ssh.PublicKey, string, error) {
+	var expectedSSHSecKeyFilePaths []string
+	var sshPath string
 
-	// Find a valid OPK SSH key at one of the expected locations
-	expectedSSHSecKeyFilePaths := []string{"id_ecdsa", "id_dsa"}
+	if seckeyPath != "" {
+		sshPath = filepath.Dir(seckeyPath)
+		expectedSSHSecKeyFilePaths = []string{filepath.Base(seckeyPath)}
+
+	} else {
+		// Get user's SSH path
+		homePath, err := os.UserHomeDir()
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to get user's home directory: %w", err)
+		}
+		sshPath = filepath.Join(homePath, ".ssh")
+
+		// Find a valid OPK SSH key at one of the expected locations
+		expectedSSHSecKeyFilePaths = []string{"id_ecdsa", "id_dsa"}
+	}
+
 	var pubKey ssh.PublicKey
 	var secKeyFilePath string
 	for _, secKeyFilePath = range expectedSSHSecKeyFilePaths {

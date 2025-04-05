@@ -28,7 +28,9 @@ jobs:
         run: |
 
           GOOS=linux GOARCH=amd64 go build -ldflags="-X main.Version=${VERSION}" -o opkssh-linux-amd64
+          GOOS=linux GOARCH=arm64 go build -ldflags="-X main.Version=${VERSION}" -o opkssh-linux-arm64
           GOOS=darwin GOARCH=amd64 go build -ldflags="-X main.Version=${VERSION}" -o opkssh-osx-amd64
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-X main.Version=${VERSION}" -o opkssh-osx-arm64
           GOOS=windows GOARCH=amd64 go build -ldflags="-X main.Version=${VERSION}" -o opkssh-windows-amd64.exe
 
       - name: Upload Release Assets
@@ -36,7 +38,9 @@ jobs:
         with:
           files: |
             opkssh-linux-amd64
+            opkssh-linux-arm64
             opkssh-osx-amd64
+            opkssh-osx-arm64
             opkssh-windows-amd64.exe
           tag_name: ${{ github.event.release.tag_name }}
           name: Release ${{ github.event.release.tag_name }}
