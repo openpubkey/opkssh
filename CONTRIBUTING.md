@@ -79,11 +79,11 @@ Our automated PR checks verify that:
 
 To build OpenPubkey, ensure you have Go version `>= 1.20` installed. To verify which version you have installed, try `go version`.
 
-To run the [Google example](https://github.com/openpubkey/openpubkey/tree/main/examples/google):
- 1. Navigate to the `examples/google/` directory. 
+To run the [Simple example](https://github.com/openpubkey/openpubkey/tree/main/examples/simple):
+ 1. Navigate to the `examples/simple/` directory. 
  2. Execute `go build`
- 3. Execute `./google login` to generate a valid PK token using Google as your OIDC provider.
- 4. Execute `./google sign` to use the PK token generated in (3) to sign a verifiable message.
+ 3. Execute `./simple login` to generate a valid PK token using Google as your OIDC provider.
+ 4. Execute `./simple sign` to use the PK token generated in (3) to sign a verifiable message.
 
 # Contributing Roles
 

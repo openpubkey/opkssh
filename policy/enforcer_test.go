@@ -96,6 +96,21 @@ var policyTest = &policy.Policy{
 			Principals:        []string{"test"},
 			Issuer:            "https://accounts.example.com",
 		},
+		{
+			IdentityAttribute: "oidc-match-end:email:@wildcard.com",
+			Principals:        []string{"test"},
+			Issuer:            "https://accounts.example.com",
+		},
+		{
+			IdentityAttribute: "email@corp.com",
+			Principals:        []string{"test"},
+			Issuer:            "http://127.0.0.1:8090/accounts",
+		},
+		{
+			IdentityAttribute: "oidc-match-end:email:@[127.0.0.1]",
+			Principals:        []string{"test"},
+			Issuer:            "http://127.0.0.1:8090/accounts",
+		},
 	},
 }
 
@@ -118,6 +133,18 @@ var policyWithOidcGroup = &policy.Policy{
 			IdentityAttribute: "oidc:groups:a",
 			Principals:        []string{"test"},
 			Issuer:            "https://accounts.example.com",
+		},
+		{
+			IdentityAttribute: "oidc-match-end:email:@example2.com",
+			Principals:        []string{"test"},
+		},
+		{
+			IdentityAttribute: "oidc-match-end:email:oidc-match-end:email:@example.com",
+			Principals:        []string{"test"},
+		},
+		{
+			IdentityAttribute: "”oidc-match-end:email:@”@example.com",
+			Principals:        []string{"test"},
 		},
 	},
 }
@@ -344,4 +371,62 @@ func TestPolicyDeniedMissingOidcGroupsClaim(t *testing.T) {
 
 	err = policyEnforcer.CheckPolicy("test", pkt)
 	require.Error(t, err, "user should not as the token is missing the groups claim")
+}
+
+func TestWildcardMatchEntry(t *testing.T) {
+	t.Parallel()
+
+	op, _, err := NewMockOpenIdProvider2(false, "https://accounts.example.com", "test_client_wildcard", map[string]any{"email": "some.guy@wildcard.com"})
+	require.NoError(t, err)
+
+	opkClient, err := client.New(op)
+	require.NoError(t, err)
+
+	pkt, err := opkClient.Auth(context.Background())
+	require.NoError(t, err)
+	policyEnforcer := &policy.Enforcer{
+		PolicyLoader: &MockPolicyLoader{Policy: policyTest},
+	}
+
+	// Check that policy file is properly parsed and checked
+	err = policyEnforcer.CheckPolicy("test", pkt)
+	require.NoError(t, err)
+}
+
+func TestLocalProvider(t *testing.T) {
+	t.Parallel()
+
+	op, _, err := NewMockOpenIdProvider2(false, "http://127.0.0.1:8090/accounts", "test_client_local_op", map[string]any{"email": "email@corp.com"})
+	require.NoError(t, err)
+
+	opkClient, err := client.New(op)
+	require.NoError(t, err)
+	pkt, err := opkClient.Auth(context.Background())
+	require.NoError(t, err)
+
+	policyEnforcer := &policy.Enforcer{
+		PolicyLoader: &MockPolicyLoader{Policy: policyWithOidcGroup},
+	}
+
+	err = policyEnforcer.CheckPolicy("test", pkt)
+	require.NoError(t, err)
+}
+
+func TestLocalEmail(t *testing.T) {
+	t.Parallel()
+
+	op, _, err := NewMockOpenIdProvider2(false, "http://127.0.0.1:8090/accounts", "test_client_local_op", map[string]any{"email": "oidc-match-end:email:@[127.0.0.1]"})
+	require.NoError(t, err)
+
+	opkClient, err := client.New(op)
+	require.NoError(t, err)
+
+	pkt, err := opkClient.Auth(context.Background())
+	require.NoError(t, err)
+	policyEnforcer := &policy.Enforcer{
+		PolicyLoader: &MockPolicyLoader{Policy: policyTest},
+	}
+	// Check that policy file is properly parsed and checked
+	err = policyEnforcer.CheckPolicy("test", pkt)
+	require.NoError(t, err)
 }
