@@ -227,21 +227,16 @@ func TestProvidersFileLoader_FromYaml(t *testing.T) {
 }
 
 // Test ProvidersFileLoader.FromYaml with valid provider.
-// func TestProvidersFileLoader_FromYaml_MissingField(t *testing.T) {
-// 	input := []byte("---\n" +
-// 		"google:\n" +
-// 		"  issuer: https://accounts.google.com\n" +
-// 		"  expiration_policy: 24h\n")
+func TestProvidersFileLoader_FromYaml_MissingField(t *testing.T) {
+	input := []byte("---\n" +
+		"google:\n" +
+		"  issuer: https://accounts.google.com\n" +
+		"  expiration_policy: 24h\n")
 
-// 	loader := ProvidersFileLoader{}
-// 	policy := loader.FromYaml(input, "dummy-path")
-// 	require.Equal(t, 1, len(policy.rows))
-// 	// Check the first row.
-// 	row1 := policy.rows[0]
-// 	if row1.Issuer != "https://accounts.google.com" || row1.ClientID != "test-google" || row1.ExpirationPolicy != "24h" {
-// 		t.Error("first row does not match expected values")
-// 	}
-// }
+	loader := ProvidersFileLoader{}
+	policy := loader.FromYaml(input, "dummy-path")
+	require.Equal(t, 0, len(policy.rows))
+}
 
 // Test ProvidersFileLoader.FromYaml with valid provider but with extra fields.
 func TestProvidersFileLoader_FromYaml_ExtraFields(t *testing.T) {

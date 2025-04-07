@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/goccy/go-yaml"
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/openpubkey/verifier"
@@ -29,9 +30,9 @@ import (
 )
 
 type ProvidersRow struct {
-	Issuer           string `yaml:"issuer"`
-	ClientID         string `yaml:"client_id"`
-	ExpirationPolicy string `yaml:"expiration_policy"`
+	Issuer           string `yaml:"issuer" validate:"required"`
+	ClientID         string `yaml:"client_id" validate:"required"`
+	ExpirationPolicy string `yaml:"expiration_policy" validate:"required"`
 }
 
 func (p ProvidersRow) GetExpirationPolicy() (verifier.ExpirationPolicy, error) {
@@ -216,9 +217,17 @@ func (o *ProvidersFileLoader) FromYaml(yml []byte, path string) *ProviderPolicy 
 	if err := yaml.Unmarshal([]byte(yml), &yml_policies); err != nil {
 		fmt.Printf("Failed to load provider from %v.\n", path)
 	} else {
+
+		validate := validator.New(validator.WithRequiredStructEnabled())
+
 		for alias, p := range yml_policies {
 			fmt.Printf("Loaded provider %v: %v\n", alias, p.ToString())
-			policy.AddRow(p)
+
+			if err := validate.Struct(p); err != nil {
+				fmt.Println(err)
+			} else {
+				policy.AddRow(p)
+			}
 		}
 	}
 
