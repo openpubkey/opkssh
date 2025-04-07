@@ -316,6 +316,7 @@ opkssh add root alice@example.com https://authentik.local/application/o/opkssh/
 | Authelia        | ✅      | [Authelia Integration Guide](https://www.authelia.com/integration/openid-connect/opkssh/) |
 | Authentik       | ✅      | Do not add a certificate in the encryption section of the provider                        |
 | Zitadel         | ✅      | Check the UserInfo box on the Token Settings                                              |
+| PocketID        | ✅      | Check "Public client" on OIDC Client Settings                                             |
 
 Do not use Confidential/Secret mode **only** client ID is needed.
 
