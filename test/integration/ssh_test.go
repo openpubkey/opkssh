@@ -319,7 +319,7 @@ func TestEndToEndSSH(t *testing.T) {
 	errCh := make(chan error)
 	t.Log("------- call login cmd ------")
 	go func() {
-		err := commands.Login(TestCtx, zitadelOp, false)
+		err := commands.Login(TestCtx, zitadelOp, false, "")
 		errCh <- err
 	}()
 
@@ -344,7 +344,7 @@ func TestEndToEndSSH(t *testing.T) {
 	}
 
 	// Expect to find OPK SSH key is written to disk
-	pubKey, secKeyFilePath, err := GetOPKSshKey()
+	pubKey, secKeyFilePath, err := GetOPKSshKey("")
 	require.NoError(t, err, "expected to find OPK ssh key written to disk")
 
 	// Create OPK SSH signer using the found OPK SSH key on disk
@@ -414,7 +414,7 @@ func TestEndToEndSSHAsUnprivilegedUser(t *testing.T) {
 	errCh := make(chan error)
 	t.Log("------- call login cmd ------")
 	go func() {
-		err := commands.Login(TestCtx, zitadelOp, false)
+		err := commands.Login(TestCtx, zitadelOp, false, "")
 		errCh <- err
 	}()
 
@@ -439,7 +439,7 @@ func TestEndToEndSSHAsUnprivilegedUser(t *testing.T) {
 	}
 
 	// Expect to find OPK SSH key is written to disk
-	pubKey, secKeyFilePath, err := GetOPKSshKey()
+	pubKey, secKeyFilePath, err := GetOPKSshKey("")
 	require.NoError(t, err, "expected to find OPK ssh key written to disk")
 
 	// Create OPK SSH signer using the found OPK SSH key on disk
@@ -527,7 +527,7 @@ func TestEndToEndSSHWithRefresh(t *testing.T) {
 	defer cancelRefresh()
 	t.Log("------- call login cmd ------")
 	go func() {
-		err := commands.LoginWithRefresh(refreshCtx, pulseZitadelOp, false)
+		err := commands.LoginWithRefresh(refreshCtx, pulseZitadelOp, false, "")
 		errCh <- err
 	}()
 
@@ -562,7 +562,7 @@ func TestEndToEndSSHWithRefresh(t *testing.T) {
 	defer findKeyCancel()
 	t.Logf("Waiting for login process to write an OPK ssh key to disk...")
 	err = TryFunc(findKeyCtx, func() error {
-		pubKey, secKeyFilePath, err = GetOPKSshKey()
+		pubKey, secKeyFilePath, err = GetOPKSshKey("")
 		return err
 	})
 	require.NoError(t, err, "expected to find OPK ssh key written to disk")
@@ -625,7 +625,7 @@ func TestEndToEndSSHWithRefresh(t *testing.T) {
 	defer findRefreshedKeyCancel()
 	t.Logf("Waiting for refresh process to write an OPK ssh key to disk...")
 	err = TryFunc(findRefreshedKeyCtx, func() error {
-		pubKey, secKeyFilePath, err = GetOPKSshKey()
+		pubKey, secKeyFilePath, err = GetOPKSshKey("")
 		return err
 	})
 	require.NoError(t, err, "expected to find OPK ssh key written to disk after refresh")

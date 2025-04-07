@@ -7,11 +7,33 @@ if [ -f /etc/redhat-release ]; then
     OS_TYPE="redhat"
 elif [ -f /etc/debian_version ]; then
     OS_TYPE="debian"
+elif [ -f /etc/arch-release ]; then
+    OS_TYPE="arch"
 else
     echo "Unsupported OS type."
     exit 1
 fi
 echo "Detected OS is $OS_TYPE"
+
+
+# Check CPU architecture
+CPU_ARCH=$(uname -m)
+
+case "$CPU_ARCH" in
+    x86_64)
+        CPU_ARCH="amd64"
+        ;;
+    aarch64)
+        CPU_ARCH="arm64"
+        ;;
+    amd64 | arm64)
+        # Supported architectures, no changes needed
+        ;;
+    *)
+        echo "Error: Unsupported CPU architecture: $CPU_ARCH."
+        exit 1
+        ;;
+esac
 
 # Define variables
 INSTALL_DIR="/usr/local/bin"
@@ -37,6 +59,7 @@ fi
 
 HOME_POLICY=true
 RESTART_SSH=true
+DISABLE_SYSTEMD_USERDB_KEYS=false
 LOCAL_INSTALL_FILE=""
 INSTALL_VERSION="latest"
 for arg in "$@"; do
@@ -44,6 +67,8 @@ for arg in "$@"; do
         HOME_POLICY=false
     elif [ "$arg" == "--no-sshd-restart" ]; then
         RESTART_SSH=false
+    elif [ "$arg" == "--no-systemd-userdb-keys" ]; then
+        DISABLE_SYSTEMD_USERDB_KEYS=true
     elif [[ "$arg" == --install-from=* ]]; then
         LOCAL_INSTALL_FILE="${arg#*=}"
     elif [[ "$arg" == --install-version=* ]]; then
@@ -56,11 +81,12 @@ if [[ "$1" == "--help" ]]; then
     echo "Usage: $0 [OPTIONS]"
     echo ""
     echo "Options:"
-    echo "  --no-home-policy        Disables configuration that allows opkssh see policy files in user's home directory (/home/<username>/auth_id). Greatly simplifies install, try this if you are having install failures."
-    echo "  --no-sshd-restart       Do not restart SSH after installation"
-    echo "  --install-from=FILEPATH Install using a local file"
-    echo "  --install-version=VER   Install a specific version from GitHub"
-    echo "  --help                  Display this help message"
+    echo "  --no-home-policy         Disables configuration that allows opkssh see policy files in user's home directory (/home/<username>/auth_id). Greatly simplifies install, try this if you are having install failures."
+    echo "  --no-sshd-restart        Do not restart SSH after installation"
+    echo "  --no-systemd-userdb-keys Disable using authorized-keys from systemd-userdb if configuration exists"
+    echo "  --install-from=FILEPATH  Install using a local file"
+    echo "  --install-version=VER    Install a specific version from GitHub"
+    echo "  --help                   Display this help message"
     exit 0
 fi
 
@@ -70,7 +96,14 @@ if ! command -v wget &> /dev/null; then
     if [ "$OS_TYPE" == "debian" ]; then
         echo "sudo apt install wget"
     elif [ "$OS_TYPE" == "redhat" ]; then
+        # dnf might not be available on older versions
+        if command -v dnf >/dev/null 2>&1; then
+            echo "sudo dnf install wget"
+        else
             echo "sudo yum install wget"
+        fi
+    elif [ "$OS_TYPE" == "arch" ]; then
+        echo "sudo pacman -S wget"
     else
         echo "Unsupported OS type."
     fi
@@ -104,9 +137,9 @@ if [ -n "$LOCAL_INSTALL_FILE" ]; then
     echo "Using binary from specified path: $BINARY_PATH"
 else
     if [ "$INSTALL_VERSION" == "latest" ]; then
-        BINARY_URL="https://github.com/$GITHUB_REPO/releases/latest/download/opkssh-linux-amd64"
+        BINARY_URL="https://github.com/$GITHUB_REPO/releases/latest/download/opkssh-linux-$CPU_ARCH"
     else
-        BINARY_URL="https://github.com/$GITHUB_REPO/releases/download/$INSTALL_VERSION/opkssh-linux-amd64"
+        BINARY_URL="https://github.com/$GITHUB_REPO/releases/download/$INSTALL_VERSION/opkssh-linux-$CPU_ARCH"
     fi
 
     # Download the binary
@@ -130,7 +163,7 @@ if command -v getenforce >/dev/null 2>&1; then
         echo "SELinux detected. Configuring SELinux for opkssh"
         echo "  Restoring context for $INSTALL_DIR/$BINARY_NAME..."
         restorecon "$INSTALL_DIR/$BINARY_NAME"
-        
+
         # Create temporary files for the compiled module and package
         TE_TMP="/tmp/opkssh.te"
         MOD_TMP="/tmp/opkssh.mod" # SELinux requires that modules have the same file name as the module name
@@ -246,10 +279,29 @@ if command -v $INSTALL_DIR/$BINARY_NAME &> /dev/null; then
     echo "AuthorizedKeysCommand /usr/local/bin/opkssh verify %u %k %t" >> /etc/ssh/sshd_config
     echo "AuthorizedKeysCommandUser ${AUTH_CMD_USER}" >> /etc/ssh/sshd_config
 
+    # Check if a drop-in configuration from systemd-userdbd exists as it overwrites the config in /etc/ssh/sshd_config defined above,
+    # see https://github.com/systemd/systemd/issues/33648
+    DROP_IN_CONFIG=/etc/ssh/sshd_config.d/20-systemd-userdb.conf
+    if [ -f $DROP_IN_CONFIG ]; then
+        # Check if drop-in configuration is active
+        if grep -q '^AuthorizedKeysCommand' $DROP_IN_CONFIG && \
+            grep -q '^Include /etc/ssh/sshd_config\.d/\*\.conf' /etc/ssh/sshd_config; then
+            if [ "$DISABLE_SYSTEMD_USERDB_KEYS" = true ]; then
+                echo "  --no-systemd-userdb-keys option supplied, disabling AuthorizedKeysCommand in $DROP_IN_CONFIG"
+                sed -i '/^AuthorizedKeysCommand /s/^/#/' $DROP_IN_CONFIG
+                sed -i '/^AuthorizedKeysCommandUser /s/^/#/' $DROP_IN_CONFIG
+            else
+                echo "  An active AuthorizedKeysCommand directive was found in $DROP_IN_CONFIG."
+                echo "  Please rerun the installation with '--no-systemd-userdb-keys' to disable it."
+                exit 1
+            fi
+        fi
+    fi
+
     if [ "$RESTART_SSH" = true ]; then
         if [ "$OS_TYPE" == "debian" ]; then
             systemctl restart ssh
-        elif [ "$OS_TYPE" == "redhat" ]; then
+        elif [ "$OS_TYPE" == "redhat" ] || [ "$OS_TYPE" == "arch" ]; then
             systemctl restart sshd
         else
             echo "  Unsupported OS type."
@@ -284,7 +336,7 @@ if command -v $INSTALL_DIR/$BINARY_NAME &> /dev/null; then
     INSTALLED_ON=$(date)
     # Log the installation details to /var/log/opkssh.log to help with debugging
     echo "Successfully installed opkssh (INSTALLED_ON: $INSTALLED_ON, VERSION_INSTALLED: $VERSION_INSTALLED, INSTALL_VERSION: $INSTALL_VERSION, LOCAL_INSTALL_FILE: $LOCAL_INSTALL_FILE, HOME_POLICY: $HOME_POLICY, RESTART_SSH: $RESTART_SSH)" >> /var/log/opkssh.log
-    
+
     echo "Installation successful! Run '$BINARY_NAME' to use it."
 else
     echo "Installation failed."

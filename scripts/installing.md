@@ -91,7 +91,15 @@ sudo groupadd --system opksshuser
 sudo useradd -r -M -s /sbin/nologin -g opksshuser opksshuser
 ```
 
-**5: Configure sudoer and SELINUX.** Configures a sudoer command so that the opkssh AuthorizedKeysCommand process can call out to the shell to run `opkssh readhome {USER}` and thereby read the policy file for the user in `/home/{USER}/.opk/auth_id`.
+**5: Optional: Disable the default sshd systemd-userdb configuration.** Comment out the following lines in `/etc/ssh/sshd_config.d/20-systemd-userdb.conf` if this file exists.
+
+This configuration otherwise overwrites the configuration from the previous step. See https://github.com/systemd/systemd/issues/33648 for more details.
+```bash
+#AuthorizedKeysCommand /usr/bin/userdbctl ssh-authorized-keys %u
+#AuthorizedKeysCommandUser root
+```
+
+**6: Configure sudoer and SELINUX.** Configures a sudoer command so that the opkssh AuthorizedKeysCommand process can call out to the shell to run `opkssh readhome {USER}` and thereby read the policy file for the user in `/home/{USER}/.opk/auth_id`.
 
 ```bash
 "opksshuser ALL=(ALL) NOPASSWD: /usr/local/bin/opkssh readhome *"
@@ -101,7 +109,7 @@ This config lives in `/etc/sudoers.d/opkssh` and must have the permissions `440`
 
 If SELinux is configured we need to install an SELinux module to allow opkssh to read the policy in the user's home directory. See our install script [install-linux.sh](install-linux.sh) for details.
 
-**6: Restart sshd.**
+**7: Restart sshd.**
 
 On Ubuntu and Debian Linux:
 
@@ -109,7 +117,7 @@ On Ubuntu and Debian Linux:
 systemctl restart ssh
 ```
 
-On Redhat and centos Linux:
+On Redhat, centos Linux and Arch Linux:
 
 ```bash
 sudo systemctl restart sshd

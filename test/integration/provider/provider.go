@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/openpubkey/opkssh/internal/projectpath"
@@ -52,7 +53,7 @@ func RunExampleOpContainer(ctx context.Context, networkName string, env map[stri
 		Networks: []string{
 			networkName,
 		},
-		ImagePlatform: "linux/amd64",
+		ImagePlatform: "linux/" + runtime.GOARCH,
 		WaitingFor: wait.ForHTTP("/.well-known/openid-configuration").
 			WithPort(nat.Port(issuerServerPort)).
 			WithStartupTimeout(10 * time.Second).

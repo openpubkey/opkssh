@@ -47,9 +47,11 @@ To install manually, download the opkssh binary and run it:
 
 |           | Download URL |
 |-----------|--------------|
-|🐧 Linux   | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64) |
-|🍎 OSX   | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64) |
-| ⊞ Win   | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-windows-amd64.exe](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-windows-amd64.exe) |
+|🐧 Linux (x86_64)   | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64) |
+|🐧 Linux (ARM64/aarch64)    | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-arm64](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-arm64) |
+|🍎 OSX (x86_64)             | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64) |
+|🍎 OSX (ARM64/aarch64)             | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-arm64](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-arm64) |
+| ⊞ Win              | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-windows-amd64.exe](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-windows-amd64.exe) |
 
 To install on Windows run:
 
@@ -67,6 +69,9 @@ To install on linux run:
 
 ```bash
 curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64 -o opkssh; chmod +x opkssh
+
+or for ARM
+curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-arm64 -o opkssh; chmod +x opkssh
 ```
 
 ### SSHing with opkssh
@@ -137,6 +142,7 @@ Second, we use the `AuthorizedKeysCommand` configuration option in `sshd_config`
 | --------        | --------      | ------- | ---------------------- |----------- |
 | Linux       | ✅             |  ✅     |  Ubuntu 24.04.1 LTS  | -  |
 | Linux       | ✅             |  ✅     |  Centos 9  | -  |
+| Linux       | ✅             |  ✅     |  Arch Linux  | -  |
 | OSX       | ❌             |  ❌     |  -  | Likely  |
 | Windows11 | ❌            |   ❌     |  -                              | Likely |
 
@@ -163,7 +169,7 @@ By default we use `24h` as it requires that the user authenticate to their OP on
 The default values for `/etc/opk/providers` are:
 
 ```bash
-# Issuer Client-ID expiration-policy 
+# Issuer Client-ID expiration-policy
 https://accounts.google.com 206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com 24h
 https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0 096ce0a3-5e72-4da8-9c86-12924b294a01 24h
 ```
@@ -191,10 +197,10 @@ Linux user accounts are typically referred to in SSH as *principals* and we cont
 - Column 3: Issuer URI
 
 ```bash
-# email/sub principal issuer 
+# email/sub principal issuer
 alice alice@example.com https://accounts.google.com
-guest alice@example.com https://accounts.google.com 
-root alice@example.com https://accounts.google.com 
+guest alice@example.com https://accounts.google.com
+root alice@example.com https://accounts.google.com
 dev bob@microsoft.com https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
 
 # Group identifier 
@@ -227,7 +233,7 @@ It can only be used for user/principal whose home directory it lives in.
 That is, if it is in `/home/alice/.opk/auth_id` it can only specify who can assume the principal `alice` on the server.
 
 ```bash
-# email/sub principal issuer 
+# email/sub principal issuer
 alice alice@example.com https://accounts.google.com
 
 # Group identifier
@@ -310,6 +316,16 @@ If the provider is configured using the `~/.opksshrc` file or the enviroments va
 opkssh login authentik
 ```
 
+### Redirect URIs
+
+Currently opkssh supports the following redirect URIs. Make sure that the correct redirectURIs have been added at your OpenID Provider:
+
+```
+http://localhost:3000/login-callback
+http://localhost:10001/login-callback
+http://localhost:11110/login-callback
+```
+
 ### Server Configuration
 
 In the `/etc/opk/providers` file, add the OpenID Provider as you would any OpenID Provider. For example:
@@ -326,10 +342,11 @@ opkssh add root alice@example.com https://authentik.local/application/o/opkssh/
 
 ### Tested
 
-| OpenID Provider  | Tested | Notes                                                |
-|-----------|------------|--------------------------------------------------------------------|
-| Authentik |      ✅     | Do not add a certificate in the encryption section of the provider |
-| Zitadel   |      ✅     | Check the UserInfo box on the Token Settings                       |
+| OpenID Provider | Tested | Notes                                                                                     |
+|-----------------|--------|-------------------------------------------------------------------------------------------|
+| Authelia        | ✅      | [Authelia Integration Guide](https://www.authelia.com/integration/openid-connect/opkssh/) |
+| Authentik       | ✅      | Do not add a certificate in the encryption section of the provider                        |
+| Zitadel         | ✅      | Check the UserInfo box on the Token Settings                                              |
 
 Do not use Confidential/Secret mode **only** client ID is needed.
 
