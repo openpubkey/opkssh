@@ -207,3 +207,87 @@ func TestProvidersFileLoader_Append(t *testing.T) {
 	expected := "issuer1 client1 24h\nissuer2 client2 48h\nissuer3 client3 24h\nissuer4 client4 48h\n"
 	require.Equal(t, expected, policy1.ToString())
 }
+
+// Test ProvidersFileLoader.FromYaml with valid provider.
+func TestProvidersFileLoader_FromYaml(t *testing.T) {
+	input := []byte("---\n" +
+		"google:\n" +
+		"  issuer: https://accounts.google.com\n" +
+		"  client_id: test-google\n" +
+		"  expiration_policy: 24h\n")
+
+	loader := ProvidersFileLoader{}
+	policy := loader.FromYaml(input, "dummy-path")
+	require.Equal(t, 1, len(policy.rows))
+	// Check the first row.
+	row1 := policy.rows[0]
+	if row1.Issuer != "https://accounts.google.com" || row1.ClientID != "test-google" || row1.ExpirationPolicy != "24h" {
+		t.Error("first row does not match expected values")
+	}
+}
+
+// Test ProvidersFileLoader.FromYaml with valid provider.
+// func TestProvidersFileLoader_FromYaml_MissingField(t *testing.T) {
+// 	input := []byte("---\n" +
+// 		"google:\n" +
+// 		"  issuer: https://accounts.google.com\n" +
+// 		"  expiration_policy: 24h\n")
+
+// 	loader := ProvidersFileLoader{}
+// 	policy := loader.FromYaml(input, "dummy-path")
+// 	require.Equal(t, 1, len(policy.rows))
+// 	// Check the first row.
+// 	row1 := policy.rows[0]
+// 	if row1.Issuer != "https://accounts.google.com" || row1.ClientID != "test-google" || row1.ExpirationPolicy != "24h" {
+// 		t.Error("first row does not match expected values")
+// 	}
+// }
+
+// Test ProvidersFileLoader.FromYaml with valid provider but with extra fields.
+func TestProvidersFileLoader_FromYaml_ExtraFields(t *testing.T) {
+	input := []byte("---\n" +
+		"google:\n" +
+		"  issuer: https://accounts.google.com\n" +
+		"  client_id: test-google\n" +
+		"  client_secret: test-google-client-secret\n" +
+		"  expiration_policy: 24h\n")
+
+	loader := ProvidersFileLoader{}
+	policy := loader.FromYaml(input, "dummy-path")
+	require.Equal(t, 1, len(policy.rows))
+	// Check the first row.
+	row1 := policy.rows[0]
+	if row1.Issuer != "https://accounts.google.com" || row1.ClientID != "test-google" || row1.ExpirationPolicy != "24h" {
+		t.Error("first row does not match expected values")
+	}
+}
+
+// Test ProvidersFileLoader.FromYaml with multiple providers.
+func TestProvidersFileLoader_FromYaml_MultipleProviders(t *testing.T) {
+	input := []byte("---\n" +
+		"google:\n" +
+		"  issuer: https://accounts.google.com\n" +
+		"  client_id: test-google\n" +
+		"  expiration_policy: 24h\n" +
+		"azure:\n" +
+		"  issuer: https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0\n" +
+		"  client_id: test-azure \n" +
+		"  expiration_policy: 48h\n")
+
+	loader := ProvidersFileLoader{}
+	policy := loader.FromYaml(input, "dummy-path")
+	require.Equal(t, 2, len(policy.rows))
+
+	// Check the first row.
+	row1 := policy.rows[0]
+	if row1.Issuer != "https://accounts.google.com" || row1.ClientID != "test-google" || row1.ExpirationPolicy != "24h" {
+		t.Error("first row does not match expected values")
+	}
+	// Check the second row.
+	row2 := policy.rows[1]
+	if !strings.HasPrefix(row2.Issuer, "https://login.microsoftonline.com") ||
+		row2.ClientID != "test-azure" ||
+		row2.ExpirationPolicy != "48h" {
+		t.Error("second row does not match expected values")
+	}
+}
