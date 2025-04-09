@@ -91,8 +91,8 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 	var provider providers.OpenIdProvider
 	if l.providerArg != "" {
 		parts := strings.Split(l.providerArg, ",")
-		if len(parts) != 2 && len(parts) != 3 {
-			return fmt.Errorf("invalid provider argument format. Expected format <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> got (%s)", l.providerArg)
+		if len(parts) < 2 {
+			return fmt.Errorf("invalid provider argument format. Expected format <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<additional_scopes> got (%s)\n", l.providerArg)
 		}
 		issuerArg := parts[0]
 		clientIDArg := parts[1]
@@ -146,8 +146,16 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 			opts.GQSign = false
 			opts.OpenBrowser = openBrowser
 
-			if len(parts) == 3 {
+			if len(parts) >= 3 {
 				opts.ClientSecret = parts[2]
+			}
+
+			if len(parts) >= 4 {
+				// Add all additional scopes from parts[3:] to opts.Scopes
+				additionalScopes := parts[3:]
+				if len(additionalScopes) > 0 {
+					opts.Scopes = append(opts.Scopes, additionalScopes...)
+				}
 			}
 
 			provider = providers.NewGoogleOpWithOptions(opts)

@@ -218,7 +218,7 @@ func TestRun(t *testing.T) {
 		{
 			name:       "Login command with provider bad provider value",
 			args:       []string{"opkssh", "login", "--provider=badvalue"},
-			wantOutput: "Error: invalid provider argument format. Expected format <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> got (badvalue)",
+			wantOutput: "invalid provider argument format. Expected format <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<additional_scopes> got (badvalue)",
 			wantExit:   1,
 		},
 		{
