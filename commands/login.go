@@ -196,10 +196,20 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		}
 	}
 
+	var sshagent agent.Agent
+	if s, ok := HasSSHAgent(); ok {
+		conn, err := net.Dial("unix", s)
+		if err != nil {
+			return fmt.Errorf("failed to connect to ssh-agent socket: %w", err)
+		}
+		defer conn.Close()
+		sshagent = agent.NewClient(conn)
+	}
+
 	// Execute login command
 	if l.autoRefresh {
 		if providerRefreshable, ok := provider.(providers.RefreshableOpenIdProvider); ok {
-			err := LoginWithRefresh(ctx, providerRefreshable, l.printIdTokenArg, l.keyPathArg)
+			err := LoginWithRefresh(ctx, providerRefreshable, l.printIdTokenArg, l.keyPathArg, sshagent)
 			if err != nil {
 				return fmt.Errorf("error logging in: %w", err)
 			}
@@ -207,7 +217,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 			return fmt.Errorf("supplied OpenID Provider (%v) does not support auto-refresh and auto-refresh argument set to true", provider.Issuer())
 		}
 	} else {
-		err := Login(ctx, provider, l.printIdTokenArg, l.keyPathArg)
+		err := Login(ctx, provider, l.printIdTokenArg, l.keyPathArg, sshagent)
 		if err != nil {
 			return fmt.Errorf("error logging in: %w", err)
 		}
@@ -215,18 +225,8 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 	return nil
 }
 
-func login(ctx context.Context, provider client.OpenIdProvider, printIdToken bool, seckeyPath string) (*LoginCmd, error) {
+func login(ctx context.Context, provider client.OpenIdProvider, printIdToken bool, seckeyPath string, sshagent agent.Agent) (*LoginCmd, error) {
 	var err error
-
-	var sshagent agent.Agent
-	if s, ok := HasSSHAgent(); ok {
-		conn, err := net.Dial("unix", s)
-		if err != nil {
-			return nil, fmt.Errorf("failed to connect to ssh-agent socket: %w", err)
-		}
-		defer conn.Close()
-		sshagent = agent.NewClient(conn)
-	}
 
 	alg := jwa.ES256
 	signer, err := util.GenKeyPair(alg)
@@ -321,8 +321,8 @@ func login(ctx context.Context, provider client.OpenIdProvider, printIdToken boo
 
 // Login performs the OIDC login procedure and creates the SSH certs/keys in the
 // default SSH key location.
-func Login(ctx context.Context, provider client.OpenIdProvider, printIdToken bool, seckeyPath string) error {
-	_, err := login(ctx, provider, printIdToken, seckeyPath)
+func Login(ctx context.Context, provider client.OpenIdProvider, printIdToken bool, seckeyPath string, agent agent.Agent) error {
+	_, err := login(ctx, provider, printIdToken, seckeyPath, agent)
 	return err
 }
 
@@ -331,12 +331,10 @@ func Login(ctx context.Context, provider client.OpenIdProvider, printIdToken boo
 // the PKT (and create new SSH certs) indefinitely as its token expires. This
 // function only returns if it encounters an error or if the supplied context is
 // cancelled.
-func LoginWithRefresh(ctx context.Context, provider providers.RefreshableOpenIdProvider, printIdToken bool, seckeyPath string) error {
-	if loginResult, err := login(ctx, provider, printIdToken, seckeyPath); err != nil {
+func LoginWithRefresh(ctx context.Context, provider providers.RefreshableOpenIdProvider, printIdToken bool, seckeyPath string, sshagent agent.Agent) error {
+	if loginResult, err := login(ctx, provider, printIdToken, seckeyPath, sshagent); err != nil {
 		return err
 	} else {
-		var sshagent agent.Agent
-
 		untilExpired, err := getExpiration(loginResult.pkt.Payload)
 		if err != nil {
 			return err
@@ -358,15 +356,6 @@ func LoginWithRefresh(ctx context.Context, provider providers.RefreshableOpenIdP
 				return err
 			}
 			loginResult.pkt = refreshedPkt
-
-			if s, ok := HasSSHAgent(); ok {
-				conn, err := net.Dial("unix", s)
-				if err != nil {
-					return fmt.Errorf("failed to connect to ssh-agent socket: %w", err)
-				}
-				defer conn.Close()
-				sshagent = agent.NewClient(conn)
-			}
 
 			certBytes, seckeySshPem, err := createSSHCert(loginResult.pkt, loginResult.signer, loginResult.principals)
 			if err != nil {

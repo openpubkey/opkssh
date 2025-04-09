@@ -42,6 +42,7 @@ import (
 	"github.com/openpubkey/opkssh/commands"
 	testprovider "github.com/openpubkey/opkssh/test/integration/provider"
 	"github.com/openpubkey/opkssh/test/integration/ssh_server"
+	"golang.org/x/crypto/ssh/agent"
 
 	"github.com/melbahja/goph"
 	"github.com/stretchr/testify/assert"
@@ -319,7 +320,7 @@ func TestEndToEndSSH(t *testing.T) {
 	errCh := make(chan error)
 	t.Log("------- call login cmd ------")
 	go func() {
-		err := commands.Login(TestCtx, zitadelOp, false, "")
+		err := commands.Login(TestCtx, zitadelOp, false, "", nil)
 		errCh <- err
 	}()
 
@@ -414,7 +415,7 @@ func TestEndToEndSSHAsUnprivilegedUser(t *testing.T) {
 	errCh := make(chan error)
 	t.Log("------- call login cmd ------")
 	go func() {
-		err := commands.Login(TestCtx, zitadelOp, false, "")
+		err := commands.Login(TestCtx, zitadelOp, false, "", nil)
 		errCh <- err
 	}()
 
@@ -527,7 +528,7 @@ func TestEndToEndSSHWithRefresh(t *testing.T) {
 	defer cancelRefresh()
 	t.Log("------- call login cmd ------")
 	go func() {
-		err := commands.LoginWithRefresh(refreshCtx, pulseZitadelOp, false, "")
+		err := commands.LoginWithRefresh(refreshCtx, pulseZitadelOp, false, "", nil)
 		errCh <- err
 	}()
 
@@ -647,6 +648,56 @@ func TestEndToEndSSHWithRefresh(t *testing.T) {
 	defer opkSshClient.Close()
 
 	// Run simple command to test the connection
+	out, err := opkSshClient.Run("whoami")
+	require.NoError(t, err)
+	require.Equal(t, serverContainer.User, strings.TrimSpace(string(out)))
+}
+
+func TestEndToEndSSHWithAgent(t *testing.T) {
+	var err error
+
+	// Initializes an in-memory ssh-agent from x/crypto/ssh/agent
+	keyring := agent.NewKeyring()
+
+	// Ensure we enable ssh-agent in our code
+	os.Setenv("SSH_AUTH_SOCK", "1")
+
+	oidcContainer, authCallbackRedirectPort, serverContainer := spawnTestContainers(t)
+	zitadelOp, customTransport := createZitadelOPKSshProvider(oidcContainer.Port, authCallbackRedirectPort)
+
+	errCh := make(chan error)
+	t.Log("------- call login cmd ------")
+	go func() {
+		err := commands.Login(TestCtx, zitadelOp, false, "", keyring)
+		errCh <- err
+	}()
+
+	timeoutErr := WaitForServer(TestCtx, fmt.Sprintf("http://localhost:%d", authCallbackRedirectPort), LoginCallbackServerTimeout)
+	require.NoError(t, timeoutErr, "login callback server took too long to startup")
+
+	DoOidcInteractiveLogin(t, customTransport, fmt.Sprintf("http://localhost:%d/login", authCallbackRedirectPort), "test-user@oidc.local", "verysecure")
+
+	timeoutCtx, cancel := context.WithTimeout(TestCtx, 3*time.Second)
+	defer cancel()
+	select {
+	case loginErr := <-errCh:
+		require.NoError(t, loginErr, "failed login")
+	case <-timeoutCtx.Done():
+		t.Fatal(timeoutCtx.Err())
+	}
+
+	authKey := goph.Auth{ssh.PublicKeysCallback(keyring.Signers)}
+	opkSshClient, err := goph.NewConn(&goph.Config{
+		User:     serverContainer.User,
+		Addr:     serverContainer.Host,
+		Port:     uint(serverContainer.Port),
+		Auth:     authKey,
+		Timeout:  goph.DefaultTimeout,
+		Callback: ssh.InsecureIgnoreHostKey(),
+	})
+	require.NoError(t, err)
+	defer opkSshClient.Close()
+
 	out, err := opkSshClient.Run("whoami")
 	require.NoError(t, err)
 	require.Equal(t, serverContainer.User, strings.TrimSpace(string(out)))
