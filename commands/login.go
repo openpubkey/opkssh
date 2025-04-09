@@ -64,6 +64,16 @@ func HasSSHAgent() (string, bool) {
 	return os.LookupEnv("SSH_AUTH_SOCK")
 }
 
+func getLifetime(b []byte) (uint32, error) {
+	var claims struct {
+		IssuedAt int64 `json:"iat"`
+	}
+	if err := json.Unmarshal(b, &claims); err != nil {
+		return 0, fmt.Errorf("malformed refreshed ID token payload: %w", err)
+	}
+	return uint32(time.Duration(time.Until(time.Unix(claims.IssuedAt, 0).Add(23 * time.Hour)).Seconds())), nil
+}
+
 func getExpiration(b []byte) (time.Duration, error) {
 	var claims struct {
 		Expiration int64 `json:"exp"`
@@ -276,7 +286,7 @@ func login(ctx context.Context, provider client.OpenIdProvider, printIdToken boo
 			return nil, fmt.Errorf("failed to cast to certificate")
 		}
 
-		lifetime, err := getExpiration(pkt.Payload)
+		lifetime, err := getLifetime(pkt.Payload)
 		if err != nil {
 			return nil, err
 		}
@@ -284,7 +294,7 @@ func login(ctx context.Context, provider client.OpenIdProvider, printIdToken boo
 		if err := sshagent.Add(agent.AddedKey{
 			PrivateKey:   signer,
 			Comment:      "openpubkey key",
-			LifetimeSecs: uint32(lifetime.Seconds()),
+			LifetimeSecs: lifetime,
 			Certificate:  cert,
 		}); err != nil {
 			fmt.Println("failed to ssh-add key to agent: %w", err)
@@ -372,11 +382,19 @@ func LoginWithRefresh(ctx context.Context, provider providers.RefreshableOpenIdP
 					return fmt.Errorf("failed to cast to certificate")
 				}
 
+				if err := sshagent.Remove(pub); err != nil {
+					return fmt.Errorf("failed to remove old certificate from ssh-agent: %w", err)
+				}
+
+				lifetime, err := getLifetime(loginResult.pkt.Payload)
+				if err != nil {
+					return fmt.Errorf("failed to parse lifetime from iap in oidc token: %w", err)
+				}
 				if err := sshagent.Add(agent.AddedKey{
 					PrivateKey: loginResult.signer,
 					Comment:    "openpubkey key",
 					// We don't remove the old certificate, we include a lifetime
-					LifetimeSecs: uint32(untilExpired.Seconds()),
+					LifetimeSecs: lifetime,
 					Certificate:  cert,
 				}); err != nil {
 					fmt.Println("failed to ssh-add key to agent: %w", err)
