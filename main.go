@@ -263,6 +263,31 @@ Arguments:
 				return err
 			}
 
+			// Load all files found in /etc/opk/prividers.d
+			providerPolicyDir := "/etc/opk/providers.d"
+			providerPolicyPaths, err := os.ReadDir(providerPolicyDir)
+
+			if err != nil {
+				log.Println("Failed to list files in /etc/opk/providers.d/:", err)
+				return err
+			}
+
+			for _, providerPolicyPath := range providerPolicyPaths {
+				if !providerPolicyPath.IsDir() {
+
+					thisProviderPolicy, err := policy.NewProviderFileLoader().
+						LoadProviderPolicy(providerPolicyDir + "/" + providerPolicyPath.Name())
+
+					if err != nil {
+						log.Printf("Failed to load providers from %s/%s:\n%s",
+							providerPolicyDir, providerPolicyPath.Name(), err)
+						return err
+					}
+
+					providerPolicy.Append(*thisProviderPolicy)
+				}
+			}
+
 			printConfigProblems()
 			log.Println("Providers loaded: ", providerPolicy.ToString())
 

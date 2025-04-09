@@ -61,7 +61,14 @@ RUN ls -l /usr/local/bin
 RUN printenv PATH
 
 ARG ISSUER_PORT="9998"
-RUN echo "http://oidc.local:${ISSUER_PORT}/ web oidc_refreshed" >> /etc/opk/providers
+
+RUN mkdir -p /etc/opk/providers.d && \
+    chown root:opksshuser /etc/opk/providers.d
+
+RUN echo "---\nlocal:\n  issuer: http://oidc.local:${ISSUER_PORT}/\n  client_id: web\n  expiration_policy: oidc_refreshed\n" > /etc/opk/providers.d/oidc-local.yml
+
+RUN chown root:opksshuser /etc/opk/providers.d/oidc-local.yml && \
+    chmod 640 /etc/opk/providers.d/oidc-local.yml
 
 # Add integration test user as allowed email in policy (this directly tests
 # policy "add" command)
