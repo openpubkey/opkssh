@@ -59,7 +59,7 @@ fi
 
 HOME_POLICY=true
 RESTART_SSH=true
-DISABLE_SYSTEMD_USERDB_KEYS=false
+OVERWRITE_ACTIVE_CONFIG=false
 LOCAL_INSTALL_FILE=""
 INSTALL_VERSION="latest"
 for arg in "$@"; do
@@ -67,8 +67,8 @@ for arg in "$@"; do
         HOME_POLICY=false
     elif [ "$arg" == "--no-sshd-restart" ]; then
         RESTART_SSH=false
-    elif [ "$arg" == "--no-systemd-userdb-keys" ]; then
-        DISABLE_SYSTEMD_USERDB_KEYS=true
+    elif [ "$arg" == "--overwrite-config" ]; then
+        OVERWRITE_ACTIVE_CONFIG=true
     elif [[ "$arg" == --install-from=* ]]; then
         LOCAL_INSTALL_FILE="${arg#*=}"
     elif [[ "$arg" == --install-version=* ]]; then
@@ -83,7 +83,7 @@ if [[ "$1" == "--help" ]]; then
     echo "Options:"
     echo "  --no-home-policy         Disables configuration that allows opkssh see policy files in user's home directory (/home/<username>/auth_id). Greatly simplifies install, try this if you are having install failures."
     echo "  --no-sshd-restart        Do not restart SSH after installation"
-    echo "  --no-systemd-userdb-keys Disable using authorized-keys from systemd-userdb if configuration exists"
+    echo "  --overwrite-config       Overwrite the currently active sshd configuration for AuthorizedKeysCommand and AuthorizedKeysCommandUser directives. This may be necessary if the script cannot create a configuration with higher priority in /etc/ssh/sshd_config.d/."
     echo "  --install-from=FILEPATH  Install using a local file"
     echo "  --install-version=VER    Install a specific version from GitHub"
     echo "  --help                   Display this help message"
@@ -274,27 +274,41 @@ if command -v $INSTALL_DIR/$BINARY_NAME &> /dev/null; then
         echo "$PROVIDER_GITLAB" >> /etc/opk/providers
     fi
 
-    sed -i '/^AuthorizedKeysCommand /s/^/#/' /etc/ssh/sshd_config
-    sed -i '/^AuthorizedKeysCommandUser /s/^/#/' /etc/ssh/sshd_config
-    echo "AuthorizedKeysCommand /usr/local/bin/opkssh verify %u %k %t" >> /etc/ssh/sshd_config
-    echo "AuthorizedKeysCommandUser ${AUTH_CMD_USER}" >> /etc/ssh/sshd_config
+    AUTH_KEY_CMD="AuthorizedKeysCommand /usr/local/bin/opkssh verify %u %k %t"
+    AUTH_KEY_USER="AuthorizedKeysCommandUser ${AUTH_CMD_USER}"
 
-    # Check if a drop-in configuration from systemd-userdbd exists as it overwrites the config in /etc/ssh/sshd_config defined above,
-    # see https://github.com/systemd/systemd/issues/33648
-    DROP_IN_CONFIG=/etc/ssh/sshd_config.d/20-systemd-userdb.conf
-    if [ -f $DROP_IN_CONFIG ]; then
-        # Check if drop-in configuration is active
-        if grep -q '^AuthorizedKeysCommand' $DROP_IN_CONFIG && \
-            grep -q '^Include /etc/ssh/sshd_config\.d/\*\.conf' /etc/ssh/sshd_config; then
-            if [ "$DISABLE_SYSTEMD_USERDB_KEYS" = true ]; then
-                echo "  --no-systemd-userdb-keys option supplied, disabling AuthorizedKeysCommand in $DROP_IN_CONFIG"
-                sed -i '/^AuthorizedKeysCommand /s/^/#/' $DROP_IN_CONFIG
-                sed -i '/^AuthorizedKeysCommandUser /s/^/#/' $DROP_IN_CONFIG
-            else
-                echo "  An active AuthorizedKeysCommand directive was found in $DROP_IN_CONFIG."
-                echo "  Please rerun the installation with '--no-systemd-userdb-keys' to disable it."
-                exit 1
-            fi
+    # Add the directives in the correct configuration, taking priorities into account
+    if ! grep -q '^Include /etc/ssh/sshd_config\.d/\*\.conf' /etc/ssh/sshd_config \
+    || ! grep -q '^AuthorizedKeysCommand\|^AuthorizedKeysCommandUser' /etc/ssh/sshd_config.d/*.conf ; then
+        # The directives in 'sshd_config' are active
+        sed -i '/^AuthorizedKeysCommand /s/^/#/' /etc/ssh/sshd_config
+        sed -i '/^AuthorizedKeysCommandUser /s/^/#/' /etc/ssh/sshd_config
+        echo "$AUTH_KEY_CMD" >> /etc/ssh/sshd_config
+        echo "$AUTH_KEY_USER" >> /etc/ssh/sshd_config
+    else
+        # Find active configuration file with the directives we're interested in (sorted numerically)
+        active_config=$(find /etc/ssh/sshd_config.d/*.conf -exec grep -l '^AuthorizedKeysCommand\|^AuthorizedKeysCommandUser' {} \; | sort -V | head -n 1)
+        opk_config_suffix="opk-ssh.conf"
+
+        if [[ "$active_config" == *"$opk_config_suffix" ]] || [ "$OVERWRITE_ACTIVE_CONFIG" = true ]; then
+            # Overwrite the configuration, either from a previous run of this script or because user request it for the currently active config
+            sed -i '/^AuthorizedKeysCommand /s/^/#/' "$active_config"
+            sed -i '/^AuthorizedKeysCommandUser /s/^/#/' "$active_config"
+            echo "$AUTH_KEY_CMD" >> "$active_config"
+            echo "$AUTH_KEY_USER" >> "$active_config"
+        elif [[ "$(basename "$active_config")" =~ ^0+[^0-9]+ ]]; then
+            # The active config starts with all zeros and is therefore the one with the
+            # highest priority. We cannot add a new file with even higher priority.
+            echo "  Cannot create configuration with higher priority. Remove $active_config or rerun the script with the --overwrite-config flag to overwrite"
+            exit 1
+        else
+            # Create a new config file with higher priority
+            prefix=$(basename "$active_config" | grep -o '^[0-9]*')
+            new_prefix=$((prefix - 1))
+            new_config="/etc/ssh/sshd_config.d/${new_prefix}-$opk_config_suffix"
+
+            echo "$AUTH_KEY_CMD" > "$new_config"
+            echo "$AUTH_KEY_USER" >> "$new_config"
         fi
     fi
 

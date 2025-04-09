@@ -77,11 +77,33 @@ sudo chmod 640 /etc/opk/auth_id
 sudo opkssh add {USER} {EMAIL} {ISSUER}
 ```
 
-**4: Configure sshd to use opkssh.** Add the following lines to the sshd configuration file `/etc/ssh/sshd_config`.
+**4: Configure sshd to use opkssh.** Check which configuration file is active.
+
+In most cases the active configuration file will be `/etc/ssh/sshd_config`.
+Add the following lines to the configuration file
 
 ```bash
 AuthorizedKeysCommand /usr/local/bin/opkssh verify %u %k %t
 AuthorizedKeysCommandUser opksshuser
+```
+
+If `/etc/ssh/sshd_config` contains the entry `Include /etc/ssh/sshd_config.d/*.conf`,
+add a new configuration file with a lower starting number than other configuration files in ` /etc/ssh/sshd_config.d/`.
+
+For example, if the file `/etc/ssh/sshd_config.d/20-systemd-userdb.conf` exists,
+create `/etc/ssh/sshd_config.d/19-opk-ssh.conf` with the lines above.
+
+Verify the setting is active with 
+
+```bash
+sudo sshd -T | grep authorizedkeyscommand
+```
+
+You should see
+
+```bash
+authorizedkeyscommand /usr/local/bin/opkssh verify %u %k %t
+authorizedkeyscommanduser opksshuser
 ```
 
 Then create the required AuthorizedKeysCommandUser and group
@@ -89,14 +111,6 @@ Then create the required AuthorizedKeysCommandUser and group
 ```bash
 sudo groupadd --system opksshuser
 sudo useradd -r -M -s /sbin/nologin -g opksshuser opksshuser
-```
-
-**5: Optional: Disable the default sshd systemd-userdb configuration.** Comment out the following lines in `/etc/ssh/sshd_config.d/20-systemd-userdb.conf` if this file exists.
-
-This configuration otherwise overwrites the configuration from the previous step. See https://github.com/systemd/systemd/issues/33648 for more details.
-```bash
-#AuthorizedKeysCommand /usr/bin/userdbctl ssh-authorized-keys %u
-#AuthorizedKeysCommandUser root
 ```
 
 **6: Configure sudoer and SELINUX.** Configures a sudoer command so that the opkssh AuthorizedKeysCommand process can call out to the shell to run `opkssh readhome {USER}` and thereby read the policy file for the user in `/home/{USER}/.opk/auth_id`.
