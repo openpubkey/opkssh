@@ -28,3 +28,6 @@ auth_id
 opk-ssh
 opk-ssh-login
 *DS_Store
+
+# Build folder
+dist/
