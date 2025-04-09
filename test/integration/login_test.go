@@ -50,7 +50,7 @@ func TestLogin(t *testing.T) {
 	opkProvider, loginURL, err := opServer.OpkProvider()
 	require.NoError(t, err, "failed to create OPK provider")
 	go func() {
-		err := commands.Login(TestCtx, opkProvider, false, "")
+		err := commands.Login(TestCtx, opkProvider, false, "", nil)
 		errCh <- err
 	}()
 
@@ -119,7 +119,7 @@ func TestLoginCustomKeyPath(t *testing.T) {
 	seckeyPath := filepath.Join(sshPath, "opkssh-key")
 
 	go func() {
-		err := commands.Login(TestCtx, opkProvider, false, seckeyPath)
+		err := commands.Login(TestCtx, opkProvider, false, seckeyPath, nil)
 		errCh <- err
 	}()
 
