@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"syscall"
@@ -130,7 +131,7 @@ Arguments:
 		Short:        "Authenticate with an OpenID Provider to generate an SSH key for opkssh",
 		Long: `Login creates opkssh SSH keys
 
-Login generates a key pair, then opens a browser to authenticate the user with the OpenID Provider. Upon successful authentication, opkssh creates an SSH public key (~/.ssh/id_ecdsa) containing the user's PK token. By default, this SSH key expires after 24 hours, after which the user must run "opkssh login" again to generate a new key.
+Login generates a key pair, then opens a browser to authenticate the user with the OpenID Provider. Upon successful authentication, opkssh creates an SSH public key (~/.ssh/opkssh/id_xxyyzz) containing the user's PK token. By default, this SSH key expires after 24 hours, after which the user must run "opkssh login" again to generate a new key.
 
 Users can then SSH into servers configured to use opkssh as the AuthorizedKeysCommand. The server verifies the PK token and grants access if the token is valid and the user is authorized per the auth_id policy.
 `,
@@ -288,6 +289,48 @@ Arguments:
 		},
 	}
 	rootCmd.AddCommand(verifyCmd)
+
+	configCmd := &cobra.Command{
+		SilenceUsage: true,
+		Use:          "config",
+		Short:        "Check users SSH client configuration",
+		Long: `Config verifies that the users SSH client configuration is set up to use opkssh keys for identification with SSH servers.
+
+Config parses ~/.ssh/config to make sure that the opkssh config ~/.ssh/opkssh/config is included during evaluation. If not it will display a warning to the user with instructions on how to add the required configuration.
+`,
+		Example: `  opkssh config`,
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
+
+			const (
+				OPKSSHConfigInclude = "Include ~/.ssh/opkssh/config"
+			)
+
+			var (
+				home      string
+				fileBytes []byte
+			)
+			home, err = os.UserHomeDir()
+			if err != nil {
+				return fmt.Errorf("could not determine home directory: %w", err)
+			}
+
+			fileBytes, err = os.ReadFile(filepath.Join(home, ".ssh", "config"))
+			if err != nil {
+				return fmt.Errorf("could not read ~/.ssh/config: %w", err)
+			}
+
+			if !strings.Contains(string(fileBytes), OPKSSHConfigInclude) {
+				log.Println("opkssh config file not included in ~/.ssh/config!")
+				log.Println("Add \"" + OPKSSHConfigInclude + "\" to ~/.ssh/config")
+				return
+			}
+
+			log.Println("Config is correct!")
+
+			return
+		},
+	}
+	rootCmd.AddCommand(configCmd)
 
 	err := rootCmd.Execute()
 	if err != nil {
