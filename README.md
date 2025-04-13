@@ -249,9 +249,11 @@ chmod 600 /home/{USER}/.opk/auth_id
 
 ### `~/.opksshrc`
 
-This file is the client configuration file. It stores the environment variables that are used by the opkssh login command.
+This file is used by `opkssh login` to automatically set the environment variables that are used by the opkssh login command.
 
-It is created automatically when you run `opkssh login` and contains the following variables:
+It is not created automatically.
+If you want to make use of it, you must create it.
+Here is sample `~/.opksshrc` file:
 
 ```bash
 OPKSSH_DEFAULT=WEBCHOOSER

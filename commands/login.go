@@ -56,6 +56,7 @@ type LoginCmd struct {
 	providerArg           string
 	providerFromLdFlags   providers.OpenIdProvider
 	providerAlias         string
+	rcFilePath            string // file path for the config file ~/.opksshrc
 	pkt                   *pktoken.PKToken
 	signer                crypto.Signer
 	alg                   jwa.SignatureAlgorithm
@@ -64,6 +65,13 @@ type LoginCmd struct {
 }
 
 func NewLogin(autoRefresh bool, logDir string, disableBrowserOpenArg bool, printIdTokenArg bool, providerArg string, keyPathArg string, providerFromLdFlags providers.OpenIdProvider, providerAlias string) *LoginCmd {
+	rcFilePath := ""
+	if homePath, err := os.UserHomeDir(); err != nil {
+		log.Printf("Failed to get home directory: %v \n", err)
+	} else {
+		rcFilePath = filepath.Join(homePath, ".opksshrc")
+	}
+
 	return &LoginCmd{
 		autoRefresh:           autoRefresh,
 		logDir:                logDir,
@@ -73,6 +81,7 @@ func NewLogin(autoRefresh bool, logDir string, disableBrowserOpenArg bool, print
 		providerArg:           providerArg,
 		providerFromLdFlags:   providerFromLdFlags,
 		providerAlias:         providerAlias,
+		rcFilePath:            rcFilePath,
 	}
 }
 
@@ -110,12 +119,18 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		provider = l.providerFromLdFlags
 	} else {
 		var err error
-
-		_, ok := os.LookupEnv("OPKSSH_PROVIDERS")
-		if !ok {
-			err = SetEnvFromConfigFile()
-			if err != nil {
-				return fmt.Errorf("error setting env from config file: %w", err)
+		if _, ok := os.LookupEnv("OPKSSH_PROVIDERS"); !ok {
+			if _, err := os.Stat(l.rcFilePath); err != nil {
+				if errors.Is(err, os.ErrNotExist) {
+					log.Println("No config file found at ", l.rcFilePath)
+				} else {
+					return fmt.Errorf("error checking for config file: %w", err)
+				}
+			} else {
+				err = SetEnvFromConfigFile(l.rcFilePath)
+				if err != nil {
+					return fmt.Errorf("error setting env from config file: %w", err)
+				}
 			}
 		}
 
@@ -124,7 +139,6 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		if !ok {
 			defaultProvider = "WEBCHOOSER"
 		}
-
 		providerConfigs, err := GetProvidersConfigFromEnv()
 
 		if err != nil {
@@ -168,7 +182,6 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 				}
 			}
 		}
-
 	}
 
 	// Execute login command
@@ -539,14 +552,14 @@ func NewProviderFromConfig(config ProviderConfig, openBrowser bool) (client.Open
 	} else if strings.HasPrefix(config.Issuer, "https://login.microsoftonline.com") {
 		opts := providers.GetDefaultAzureOpOptions()
 		opts.Issuer = config.Issuer
-		opts.ClientID = config.ClientSecret
+		opts.ClientID = config.ClientID
 		opts.GQSign = false
 		opts.OpenBrowser = openBrowser
 		provider = providers.NewAzureOpWithOptions(opts)
 	} else if strings.HasPrefix(config.Issuer, "https://gitlab.com") {
 		opts := providers.GetDefaultGitlabOpOptions()
 		opts.Issuer = config.Issuer
-		opts.ClientID = config.ClientSecret
+		opts.ClientID = config.ClientID
 		opts.GQSign = false
 		opts.OpenBrowser = openBrowser
 		provider = providers.NewGitlabOpWithOptions(opts)
@@ -594,15 +607,8 @@ func GetProvidersConfigFromEnv() (map[string]ProviderConfig, error) {
 }
 
 // GetEnvFromConfigFile is a function to retrieve the env variables from the ~/.opksshrc file
-func GetEnvFromConfigFile() (map[string]string, error) {
-	homePath, err := os.UserHomeDir()
-	if err != nil {
-		return nil, err
-	}
-	rcPath := filepath.Join(homePath, ".opksshrc")
-
+func GetEnvFromConfigFile(rcPath string) (map[string]string, error) {
 	if _, err := os.Stat(rcPath); errors.Is(err, os.ErrNotExist) {
-
 		envs := map[string]string{
 			"OPKSSH_DEFAULT":   "WEBCHOOSER",
 			"OPKSSH_PROVIDERS": DefaultProviderList,
@@ -652,15 +658,17 @@ func GetEnvFromConfigFile() (map[string]string, error) {
 	return envs, nil
 }
 
-// SetEnvFromConfigFile is a function to set the env variables from the ~/.opksshrc file
-func SetEnvFromConfigFile() error {
-	envs, err := GetEnvFromConfigFile()
+// SetEnvFromConfigFile is a function to set the env variables from the ~/.opksshrc file. This does not overwrite existing env variables.
+func SetEnvFromConfigFile(rcPath string) error {
+	envs, err := GetEnvFromConfigFile(rcPath)
 
 	if err != nil {
 		return err
 	}
 	for k, v := range envs {
-		if err := os.Setenv(k, v); err != nil {
+		if os.Getenv(k) != "" {
+			continue
+		} else if err := os.Setenv(k, v); err != nil {
 			return err
 		}
 	}
@@ -668,18 +676,14 @@ func SetEnvFromConfigFile() error {
 }
 
 func PrettyIdToken(pkt pktoken.PKToken) (string, error) {
-
 	idt, err := oidc.NewJwt(pkt.OpToken)
 	if err != nil {
 		return "", err
 	}
-
-	idt_json, err := json.MarshalIndent(idt.GetClaims(), "", "    ")
+	idtJson, err := json.MarshalIndent(idt.GetClaims(), "", "    ")
 
 	if err != nil {
 		return "", err
 	}
-
-	return string(idt_json[:]), nil
-
+	return string(idtJson[:]), nil
 }
