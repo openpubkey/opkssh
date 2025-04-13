@@ -126,15 +126,18 @@ Arguments:
 	var keyPathArg string
 	loginCmd := &cobra.Command{
 		SilenceUsage: true,
-		Use:          "login",
+		Use:          "login [alias]",
 		Short:        "Authenticate with an OpenID Provider to generate an SSH key for opkssh",
 		Long: `Login creates opkssh SSH keys
 
 Login generates a key pair, then opens a browser to authenticate the user with the OpenID Provider. Upon successful authentication, opkssh creates an SSH public key (~/.ssh/id_ecdsa) containing the user's PK token. By default, this SSH key expires after 24 hours, after which the user must run "opkssh login" again to generate a new key.
 
 Users can then SSH into servers configured to use opkssh as the AuthorizedKeysCommand. The server verifies the PK token and grants access if the token is valid and the user is authorized per the auth_id policy.
+Arguments:
+  alias      The provider alias to use. If not specified, the OPKSSH_DEFAULT provider will be used. The aliases are defined by the OPKSSH_PROVIDERS environment variable, which are sourced from ~/.opksshrc. The format is <alias>,<issuer>,<client_id>,<client_secret>,<scopes>
 `,
 		Example: `  opkssh login
+  opkssh login google
   opkssh login --provider=<issuer>,<client_id>`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 
@@ -157,14 +160,19 @@ Users can then SSH into servers configured to use opkssh as the AuthorizedKeysCo
 				opts.RedirectURIs = strings.Split(redirectURIs, ",")
 				providerFromLdFlags = providers.NewGoogleOpWithOptions(opts)
 			}
+			var providerAlias string
+			if len(args) > 0 {
+				providerAlias = args[0]
+			}
 
-			login := commands.NewLogin(autoRefresh, logDir, disableBrowserOpenArg, printIdTokenArg, providerArg, keyPathArg, providerFromLdFlags)
+			login := commands.NewLogin(autoRefresh, logDir, disableBrowserOpenArg, printIdTokenArg, providerArg, keyPathArg, providerFromLdFlags, providerAlias)
 			if err := login.Run(ctx); err != nil {
 				log.Println("Error executing login command:", err)
 				return err
 			}
 			return nil
 		},
+		Args: cobra.MaximumNArgs(1),
 	}
 
 	// Define flags for login.

@@ -218,31 +218,37 @@ func TestRun(t *testing.T) {
 		{
 			name:       "Login command with provider bad provider value",
 			args:       []string{"opkssh", "login", "--provider=badvalue"},
-			wantOutput: "Error: invalid provider argument format. Expected format <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> got (badvalue)",
+			wantOutput: "error parsing provider argument: invalid provider config string. Expected format <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes>",
 			wantExit:   1,
 		},
 		{
 			name:       "Login command with provider bad provider issuer value",
 			args:       []string{"opkssh", "login", "--provider=badissuer.com,client_id"},
-			wantOutput: "Error: invalid provider issuer value. Expected issuer to start with 'https://' got (badissuer.com)",
+			wantOutput: "error creating provider from config: invalid provider issuer value. Expected issuer to start with 'https://' got (badissuer.com)",
 			wantExit:   1,
 		},
 		{
 			name:       "Login command with provider bad provider good azure issuer but no client id value",
 			args:       []string{"opkssh", "login", "--provider=https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0,"},
-			wantOutput: "invalid provider client-ID value got ()",
+			wantOutput: "error parsing provider argument: invalid provider client-ID value got ()",
 			wantExit:   1,
 		},
 		{
 			name:       "Login command with provider bad provider good google issuer but no client id value",
 			args:       []string{"opkssh", "login", "--provider=https://accounts.google.com,client_id"},
-			wantOutput: "invalid provider argument format. Expected format for google: <issuer>,<client_id>,<client_secret> got (https://accounts.google.com,client_id)",
+			wantOutput: "error parsing provider argument: invalid provider argument format. Expected format for google: <issuer>,<client_id>,<client_secret>",
 			wantExit:   1,
 		},
 		{
 			name:       "Login command with provider bad provider good google issuer but no client secret value",
 			args:       []string{"opkssh", "login", "--provider=https://accounts.google.com,client_id,"},
-			wantOutput: "invalid provider client secret value got () ",
+			wantOutput: "error parsing provider argument: invalid provider argument format. Expected format for google: <issuer>,<client_id>,<client_secret>",
+			wantExit:   1,
+		},
+		{
+			name:       "Login command with alias bad alias",
+			args:       []string{"opkssh", "login", "badalias"},
+			wantOutput: "error getting provider config for alias badalias",
 			wantExit:   1,
 		},
 	}
@@ -252,6 +258,72 @@ func TestRun(t *testing.T) {
 			require.Contains(t, cmdOutput, tt.wantOutput, "Incorrect command output")
 			require.Equal(t, tt.wantExit, exitCode, "Incorrect Exit code")
 
+		})
+	}
+}
+
+func TestWithEnvVars(t *testing.T) {
+	tests := []struct {
+		name       string
+		envVar     string
+		envValue   string
+		args       []string
+		wantOutput string
+		wantExit   int
+	}{
+		{
+			name:       "Set OPKSSH_DEFAULT to bad value",
+			envVar:     "OPKSSH_DEFAULT",
+			envValue:   "badvalue",
+			args:       []string{"opkssh", "login"},
+			wantOutput: "error getting provider config for alias badvalue",
+			wantExit:   1,
+		},
+		{
+			name:       "Set OPKSSH_PROVIDERS to bad value",
+			envVar:     "OPKSSH_PROVIDERS",
+			envValue:   "badvalue",
+			args:       []string{"opkssh", "login"},
+			wantOutput: "Expected format <alias>,<issuer>,<client_id> or <alias>,<issuer>,<client_id>,<client_secret> or <alias>,<issuer>,<client_id>,<client_secret>,<scopes>",
+			wantExit:   1,
+		},
+		{
+			name:       "Set OPKSSH_PROVIDERS with duplicates aliases",
+			envVar:     "OPKSSH_PROVIDERS",
+			envValue:   "alias1,https://accounts.google.com,client_id,client_secret,scope1;alias1,https://accounts.google.com,client_id,client_secret,scope2",
+			args:       []string{"opkssh", "login"},
+			wantOutput: "error getting provider config from env: duplicate provider alias found: alias1",
+			wantExit:   1,
+		},
+		{
+			name:       "Set OPKSSH_PROVIDERS with bad provider",
+			envVar:     "OPKSSH_PROVIDERS",
+			envValue:   "google,http://insecure.badprovider.com,client_id,client_secret,openid profile",
+			args:       []string{"opkssh", "login"},
+			wantOutput: "error creating provider from config: invalid provider issuer value. Expected issuer to start with 'https://' got (http://insecure.badprovider.com)",
+			wantExit:   1,
+		},
+
+		{
+			name:       "Set OPKSSH_PROVIDERS with good provider but asking for wrong alias",
+			envVar:     "OPKSSH_PROVIDERS",
+			envValue:   "goodprovider,https://goodprovider.com,client_id,client_secret,openid profile",
+			args:       []string{"opkssh", "login", "badalias"},
+			wantOutput: "error getting provider config for alias badalias",
+			wantExit:   1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_ = os.Setenv(tt.envVar, tt.envValue)
+			defer func(key string) {
+				_ = os.Unsetenv(key)
+			}(tt.envVar)
+
+			cmdOutput, exitCode := RunCliAndCaptureResult(t, tt.args)
+			require.Contains(t, cmdOutput, tt.wantOutput, "Incorrect command output")
+			require.Equal(t, tt.wantExit, exitCode, "Incorrect Exit code")
 		})
 	}
 }
