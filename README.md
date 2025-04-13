@@ -326,6 +326,14 @@ http://localhost:10001/login-callback
 http://localhost:11110/login-callback
 ```
 
+### Security Note: Create a new Client ID for opkssh
+
+Do not reuse a client ID between opkssh and other OpenID Connect services.
+If the same client ID is used for opkssh as another OpenID Connect authentication service, then an SSH server could replay the ID Token sent in an opkssh SSH key to authenticate to that service.
+Such replay attacks can be ruled out by simply using a new client ID with opkssh.
+
+Note that this requirement of using different client IDs for different audiences and uses is not unique to opkssh and is a best practice in OpenID Connect.
+
 ### Server Configuration
 
 In the `/etc/opk/providers` file, add the OpenID Provider as you would any OpenID Provider. For example:
@@ -347,8 +355,10 @@ opkssh add root alice@example.com https://authentik.local/application/o/opkssh/
 | Authelia        | ✅      | [Authelia Integration Guide](https://www.authelia.com/integration/openid-connect/opkssh/) |
 | Authentik       | ✅      | Do not add a certificate in the encryption section of the provider                        |
 | Zitadel         | ✅      | Check the UserInfo box on the Token Settings                                              |
+| [PocketID](https://github.com/pocket-id/pocket-id) | ✅      | Create a new OIDC Client and inside the new client, check "Public client" on OIDC Client Settings                                             |
 
 Do not use Confidential/Secret mode **only** client ID is needed.
+
 
 ## More information
 
