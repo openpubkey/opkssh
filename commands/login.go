@@ -56,7 +56,6 @@ type LoginCmd struct {
 	providerArg           string
 	providerFromLdFlags   providers.OpenIdProvider
 	providerAlias         string
-	rcFilePath            string // file path for the config file ~/.opksshrc
 	pkt                   *pktoken.PKToken
 	signer                crypto.Signer
 	alg                   jwa.SignatureAlgorithm
@@ -64,13 +63,9 @@ type LoginCmd struct {
 	principals            []string
 }
 
-func NewLogin(autoRefresh bool, logDir string, disableBrowserOpenArg bool, printIdTokenArg bool, providerArg string, keyPathArg string, providerFromLdFlags providers.OpenIdProvider, providerAlias string) *LoginCmd {
-	rcFilePath := ""
-	if homePath, err := os.UserHomeDir(); err != nil {
-		log.Printf("Failed to get home directory: %v \n", err)
-	} else {
-		rcFilePath = filepath.Join(homePath, ".opksshrc")
-	}
+func NewLogin(autoRefresh bool, logDir string, disableBrowserOpenArg bool, printIdTokenArg bool,
+	providerArg string, keyPathArg string, providerFromLdFlags providers.OpenIdProvider,
+	providerAlias string) *LoginCmd {
 
 	return &LoginCmd{
 		autoRefresh:           autoRefresh,
@@ -81,7 +76,6 @@ func NewLogin(autoRefresh bool, logDir string, disableBrowserOpenArg bool, print
 		providerArg:           providerArg,
 		providerFromLdFlags:   providerFromLdFlags,
 		providerAlias:         providerAlias,
-		rcFilePath:            rcFilePath,
 	}
 }
 
@@ -100,88 +94,17 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		log.SetOutput(os.Stdout)
 	}
 
-	openBrowser := !l.disableBrowserOpenArg
-
-	// If the user has supplied commandline arguments for the provider, use those instead of the web chooser
-	var provider providers.OpenIdProvider
-	if l.providerArg != "" {
-		config, err := NewProviderConfigFromString(l.providerArg, false)
+	provider, chooser, err := l.setup(ctx)
+	if err != nil {
+		return err
+	}
+	if chooser != nil {
+		provider, err = chooser.ChooseOp(ctx)
 		if err != nil {
-			return fmt.Errorf("error parsing provider argument: %w", err)
+			return fmt.Errorf("error choosing provider: %w", err)
 		}
-
-		provider, err = NewProviderFromConfig(config, openBrowser)
-
-		if err != nil {
-			return fmt.Errorf("error creating provider from config: %w", err)
-		}
-	} else if l.providerFromLdFlags != nil {
-		provider = l.providerFromLdFlags
-	} else {
-		var err error
-		if _, ok := os.LookupEnv("OPKSSH_PROVIDERS"); !ok {
-			if _, err := os.Stat(l.rcFilePath); err != nil {
-				if errors.Is(err, os.ErrNotExist) {
-					log.Println("No config file found at ", l.rcFilePath)
-				} else {
-					return fmt.Errorf("error checking for config file: %w", err)
-				}
-			} else {
-				err = SetEnvFromConfigFile(l.rcFilePath)
-				if err != nil {
-					return fmt.Errorf("error setting env from config file: %w", err)
-				}
-			}
-		}
-
-		// Get the default provider from the env variable
-		defaultProvider, ok := os.LookupEnv("OPKSSH_DEFAULT")
-		if !ok {
-			defaultProvider = "WEBCHOOSER"
-		}
-		providerConfigs, err := GetProvidersConfigFromEnv()
-
-		if err != nil {
-			return fmt.Errorf("error getting provider config from env: %w", err)
-		}
-
-		if l.providerAlias != "" && l.providerAlias != "WEBCHOOSER" {
-			config, ok := providerConfigs[l.providerAlias]
-			if !ok {
-				return fmt.Errorf("error getting provider config for alias %s", l.providerAlias)
-			}
-			provider, err = NewProviderFromConfig(config, openBrowser)
-			if err != nil {
-				return fmt.Errorf("error creating provider from config: %w", err)
-			}
-		} else {
-			if defaultProvider != "WEBCHOOSER" {
-				config, ok := providerConfigs[defaultProvider]
-				if !ok {
-					return fmt.Errorf("error getting provider config for alias %s", defaultProvider)
-				}
-				provider, err = NewProviderFromConfig(config, openBrowser)
-				if err != nil {
-					return fmt.Errorf("error creating provider from config: %w", err)
-				}
-			} else {
-				var idpList []providers.BrowserOpenIdProvider
-				for _, config := range providerConfigs {
-					provider, err := NewProviderFromConfig(config, openBrowser)
-					if err != nil {
-						return fmt.Errorf("error creating provider from config: %w", err)
-					}
-					idpList = append(idpList, provider.(providers.BrowserOpenIdProvider))
-				}
-
-				provider, err = choosers.NewWebChooser(
-					idpList, openBrowser,
-				).ChooseOp(ctx)
-				if err != nil {
-					return fmt.Errorf("error selecting OpenID provider: %w", err)
-				}
-			}
-		}
+	} else if provider == nil {
+		return fmt.Errorf("no provider found") // Either the provider or the chooser must be set. If this occurs we have a bug in the code.
 	}
 
 	// Execute login command
@@ -201,6 +124,77 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func (l *LoginCmd) setup(ctx context.Context) (client.OpenIdProvider, *choosers.WebChooser, error) {
+	openBrowser := !l.disableBrowserOpenArg
+
+	// If the user has supplied commandline arguments for the provider, use those instead of the web chooser
+	var provider providers.OpenIdProvider
+	if l.providerArg != "" {
+		config, err := NewProviderConfigFromString(l.providerArg, false)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error parsing provider argument: %w", err)
+		}
+
+		provider, err = NewProviderFromConfig(config, openBrowser)
+
+		if err != nil {
+			return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
+		}
+	} else if l.providerFromLdFlags != nil {
+		provider = l.providerFromLdFlags
+	} else {
+		var err error
+
+		// Get the default provider from the env variable
+		defaultProvider, ok := os.LookupEnv("OPKSSH_DEFAULT")
+		if !ok || defaultProvider == "" {
+			defaultProvider = "WEBCHOOSER"
+		}
+		providerConfigs, err := GetProvidersConfigFromEnv()
+
+		if err != nil {
+			return nil, nil, fmt.Errorf("error getting provider config from env: %w", err)
+		}
+
+		if l.providerAlias != "" && l.providerAlias != "WEBCHOOSER" {
+			config, ok := providerConfigs[l.providerAlias]
+			if !ok {
+				return nil, nil, fmt.Errorf("error getting provider config for alias %s", l.providerAlias)
+			}
+			provider, err = NewProviderFromConfig(config, openBrowser)
+			if err != nil {
+				return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
+			}
+		} else {
+			if defaultProvider != "WEBCHOOSER" {
+				config, ok := providerConfigs[defaultProvider]
+				if !ok {
+					return nil, nil, fmt.Errorf("error getting provider config for alias %s", defaultProvider)
+				}
+				provider, err = NewProviderFromConfig(config, openBrowser)
+				if err != nil {
+					return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
+				}
+			} else {
+				var providerList []providers.BrowserOpenIdProvider
+				for _, config := range providerConfigs {
+					op, err := NewProviderFromConfig(config, openBrowser)
+					if err != nil {
+						return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
+					}
+					providerList = append(providerList, op.(providers.BrowserOpenIdProvider))
+				}
+
+				chooser := choosers.NewWebChooser(
+					providerList, openBrowser,
+				)
+				return nil, chooser, nil
+			}
+		}
+	}
+	return provider, nil, nil
 }
 
 func login(ctx context.Context, provider client.OpenIdProvider, printIdToken bool, seckeyPath string) (*LoginCmd, error) {
@@ -604,75 +598,6 @@ func GetProvidersConfigFromEnv() (map[string]ProviderConfig, error) {
 	}
 
 	return providersConfig, nil
-}
-
-// GetEnvFromConfigFile is a function to retrieve the env variables from the ~/.opksshrc file
-func GetEnvFromConfigFile(rcPath string) (map[string]string, error) {
-	if _, err := os.Stat(rcPath); errors.Is(err, os.ErrNotExist) {
-		envs := map[string]string{
-			"OPKSSH_DEFAULT":   "WEBCHOOSER",
-			"OPKSSH_PROVIDERS": DefaultProviderList,
-		}
-		fileContent := ""
-		for k, v := range envs {
-			fileContent += fmt.Sprintf("%s=%s\n", k, v)
-		}
-		if err := os.WriteFile(rcPath, []byte(fileContent), 0600); err != nil {
-			return nil, err
-		}
-		return envs, nil
-	}
-
-	fileContent, err := os.ReadFile(rcPath)
-	if err != nil {
-		return nil, err
-	}
-
-	envs := make(map[string]string)
-	lines := strings.Split(string(fileContent), "\n")
-	// For each line we need to parse the env variable, if it references itself, we need to handle it, if it reference another env variable, we need to handle it too
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-
-		envs[parts[0]] = os.Expand(parts[1], func(key string) string {
-			// If in envs variable, return the value
-			if val, ok := envs[key]; ok {
-				return val
-			}
-			// If in os env, return the value
-			if val, ok := os.LookupEnv(key); ok {
-				return val
-			}
-			return ""
-		})
-	}
-
-	return envs, nil
-}
-
-// SetEnvFromConfigFile is a function to set the env variables from the ~/.opksshrc file. This does not overwrite existing env variables.
-func SetEnvFromConfigFile(rcPath string) error {
-	envs, err := GetEnvFromConfigFile(rcPath)
-
-	if err != nil {
-		return err
-	}
-	for k, v := range envs {
-		if os.Getenv(k) != "" {
-			continue
-		} else if err := os.Setenv(k, v); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func PrettyIdToken(pkt pktoken.PKToken) (string, error) {

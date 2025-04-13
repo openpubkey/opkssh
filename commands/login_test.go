@@ -19,6 +19,8 @@ package commands
 import (
 	"context"
 	"crypto"
+	"encoding/json"
+	"os"
 	"testing"
 
 	"github.com/lestrrat-go/jwx/v2/jwa"
@@ -29,6 +31,21 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh"
 )
+
+const providerAlias1 = "op1"
+const providerIssuer1 = "https://example.com/tokens-1/"
+const providerArg1 = providerIssuer1 + ",client-id1234,,"
+const providerStr1 = providerAlias1 + "," + providerArg1
+
+const providerAlias2 = "op2"
+const providerIssuer2 = "https://auth.issuer/tokens-2/"
+const providerArg2 = providerIssuer2 + ",client-id5678,,"
+const providerStr2 = providerAlias2 + "," + providerArg2
+
+const providerAlias3 = "op3"
+const providerIssuer3 = "https://openidprovider.openidconnect/tokens-3/"
+const providerArg3 = providerIssuer3 + ",client-id91011,,"
+const providerStr3 = providerAlias3 + "," + providerArg3
 
 func MockPKToken(t *testing.T) (*pktoken.PKToken, crypto.Signer) {
 	alg := jwa.ES256
@@ -52,6 +69,178 @@ func MockPKToken(t *testing.T) (*pktoken.PKToken, crypto.Signer) {
 	return pkt, signer
 }
 
+func ProviderFromString(t *testing.T, providerString string) client.OpenIdProvider {
+	providerConfig3, err := NewProviderConfigFromString(providerStr3, true)
+	require.NoError(t, err)
+	provider3, err := NewProviderFromConfig(providerConfig3, false)
+	require.NoError(t, err)
+	return provider3
+}
+
+func TestLoginCmd(t *testing.T) {
+
+	providerConfig3, err := NewProviderConfigFromString(providerStr3, true)
+	require.NoError(t, err)
+	provider3, err := NewProviderFromConfig(providerConfig3, false)
+	require.NoError(t, err)
+
+	allProvidersStr := providerStr1 + ";" + providerStr2 + ";" + providerStr3
+
+	tests := []struct {
+		name                string
+		envVars             map[string]string
+		providerArg         string
+		providerFromLdFlags providers.OpenIdProvider
+		providerAlias       string
+		wantIssuer          string
+		wantChooser         string
+		wantError           bool
+		errorString         string
+	}{
+		{
+			name:                "Good path with env vars",
+			envVars:             map[string]string{"OPKSSH_DEFAULT": providerAlias1, "OPKSSH_PROVIDERS": providerStr1},
+			providerArg:         "",
+			providerFromLdFlags: nil,
+			providerAlias:       "",
+			wantIssuer:          providerIssuer1,
+			wantError:           false,
+		},
+		{
+			name:                "Good path with env vars and provider arg (provider arg takes precedence)",
+			envVars:             map[string]string{"OPKSSH_DEFAULT": providerAlias1, "OPKSSH_PROVIDERS": providerStr1},
+			providerArg:         providerArg2,
+			providerFromLdFlags: nil,
+			providerAlias:       "",
+			wantIssuer:          providerIssuer2,
+			wantError:           false,
+		},
+		{
+			name:                "Good path with env vars, provider arg and providerFromLdFlags (provider arg takes precedence)",
+			envVars:             map[string]string{"OPKSSH_DEFAULT": providerAlias1, "OPKSSH_PROVIDERS": providerStr1},
+			providerArg:         providerArg2,
+			providerFromLdFlags: provider3,
+			providerAlias:       "",
+			wantIssuer:          providerIssuer2,
+			wantError:           false,
+		},
+		{
+			name:                "Good path with env vars and providerFromLdFlags (providerFromLdFlags takes precedence)",
+			envVars:             map[string]string{"OPKSSH_DEFAULT": providerAlias1, "OPKSSH_PROVIDERS": providerStr1},
+			providerArg:         "",
+			providerFromLdFlags: provider3,
+			providerAlias:       "",
+			wantIssuer:          providerIssuer3,
+			wantError:           false,
+		},
+		{
+			name:          "Good path with env vars and no alias",
+			envVars:       map[string]string{"OPKSSH_DEFAULT": providerAlias1, "OPKSSH_PROVIDERS": providerStr1},
+			providerArg:   "",
+			providerAlias: "",
+			wantIssuer:    providerIssuer1,
+			wantError:     false,
+		},
+		{
+			name:          "Good path with env vars single provider and no default",
+			envVars:       map[string]string{"OPKSSH_DEFAULT": "", "OPKSSH_PROVIDERS": providerStr1},
+			providerArg:   "",
+			providerAlias: "",
+			wantIssuer:    "",
+			wantError:     false,
+			errorString:   "",
+			wantChooser:   `[{"Scopes":[""],"RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"GQSign":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000}]`,
+		},
+		{
+			name:          "Good path with env vars many providers and no default",
+			envVars:       map[string]string{"OPKSSH_DEFAULT": "", "OPKSSH_PROVIDERS": allProvidersStr},
+			providerArg:   "",
+			providerAlias: "",
+			wantIssuer:    "",
+			wantError:     false,
+			wantChooser:   `[{"Scopes":[""],"RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"GQSign":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000},{"Scopes":[""],"RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"GQSign":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000},{"Scopes":[""],"RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"GQSign":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000}]`,
+		},
+		{
+			name:          "Good path with env vars many providers and providerAlias",
+			envVars:       map[string]string{"OPKSSH_DEFAULT": "", "OPKSSH_PROVIDERS": allProvidersStr},
+			providerArg:   "",
+			providerAlias: providerAlias2,
+			wantIssuer:    providerIssuer2,
+			wantError:     false,
+		},
+		{
+			name:          "Good path with env vars many providers and providerAlias",
+			envVars:       map[string]string{"OPKSSH_DEFAULT": providerAlias3, "OPKSSH_PROVIDERS": allProvidersStr},
+			providerArg:   "",
+			providerAlias: "",
+			wantIssuer:    providerIssuer3,
+			wantError:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for k, v := range tt.envVars {
+				err := os.Setenv(k, v)
+				require.NoError(t, err, "Failed to set env var")
+				defer func(key string) {
+					_ = os.Unsetenv(key)
+				}(k)
+			}
+
+			loginCmd := LoginCmd{
+				disableBrowserOpenArg: true,
+				providerArg:           tt.providerArg,
+				providerFromLdFlags:   tt.providerFromLdFlags,
+				providerAlias:         tt.providerAlias,
+			}
+
+			provider, chooser, err := loginCmd.setup(context.Background())
+			if tt.wantError {
+				require.Error(t, err, "Expected error but got none")
+				if tt.errorString != "" {
+					require.ErrorContains(t, err, tt.errorString, "Expected error a different error message")
+				}
+			} else {
+				require.NoError(t, err, "Unexpected error")
+				require.True(t, provider != nil || chooser != nil, "Provider or chooser should never both be nil")
+				require.True(t, !(provider != nil && chooser != nil), "Provider or chooser should never both be non-nil")
+
+				if tt.wantIssuer != "" {
+					require.NotNil(t, provider)
+				}
+
+				if tt.wantChooser != "" {
+					require.NotNil(t, chooser)
+				}
+
+				if provider != nil {
+					require.Equal(t, provider.Issuer(), tt.wantIssuer)
+				} else {
+					require.NotNil(t, chooser.OpList, "Chooser OpList should not be nil")
+					jsonBytes, err := json.Marshal(chooser.OpList)
+					require.NoError(t, err)
+					require.Equal(t, tt.wantChooser, string(jsonBytes))
+				}
+			}
+		})
+	}
+}
+
+func TestNewLogin(t *testing.T) {
+	autoRefresh := false
+	logDir := "./testdata"
+	disableBrowserOpenArg := true
+	printIdTokenArg := false
+	providerArg := ""
+	keyPathArg := ""
+	providerFromLdFlags := ProviderFromString(t, providerStr3)
+	providerAlias := ""
+
+	loginCmd := NewLogin(autoRefresh, logDir, disableBrowserOpenArg, printIdTokenArg, providerArg, keyPathArg, providerFromLdFlags, providerAlias)
+	require.NotNil(t, loginCmd)
+}
+
 func TestCreateSSHCert(t *testing.T) {
 	pkt, signer := MockPKToken(t)
 	principals := []string{"guest", "dev"}
@@ -73,4 +262,15 @@ func TestIdentityString(t *testing.T) {
 	require.NoError(t, err)
 	expIdString := "Email, sub, issuer, audience: \narthur.aardvark@example.com me https://accounts.example.com test_client_id"
 	require.Equal(t, expIdString, idString)
+}
+
+func TestPrettyPrintIdToken(t *testing.T) {
+	pkt, _ := MockPKToken(t)
+	iss, err := pkt.Issuer()
+	require.NoError(t, err)
+
+	pktStr, err := PrettyIdToken(*pkt)
+	require.NoError(t, err)
+	require.NotNil(t, pktStr)
+	require.Contains(t, pktStr, iss)
 }

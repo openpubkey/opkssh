@@ -247,30 +247,22 @@ chown {USER}:{USER} /home/{USER}/.opk/auth_id
 chmod 600 /home/{USER}/.opk/auth_id
 ```
 
-### `~/.opksshrc`
+### Environment Variables
 
-This file is used by `opkssh login` to automatically set the environment variables that are used by the opkssh login command.
-
-It is not created automatically.
-If you want to make use of it, you must create it.
-Here is sample `~/.opksshrc` file:
-
-```bash
-OPKSSH_DEFAULT=WEBCHOOSER
-OPKSSH_PROVIDERS=google,https://accounts.google.com,206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com,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;microsoft,https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0,096ce0a3-5e72-4da8-9c86-12924b294a01;gitlab,https://gitlab.com,8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923
-```
-
-You can edit this file to add or remove OpenID Providers. For example :
-
-```bash
-OPKSSH_PROVIDERS=google,https:[...]
-OPKSSH_PROVIDERS=$OPKSSH_PROVIDERS;authentik,https://authentik.io/application/o/opkssh/,client_id,,openid profile email
-```
+`opkssh login` reads from environment variables to determine which which provider to use.
 
 The OPKSSH_PROVIDERS variable follow this format ;
 `{alias},{issuer},{client_id},{client_secret},{scope};{alias},{issuer},{client_id},{client_secret},{scope}...`
 
-The OPKSSH_DEFAULT can be set to one of the provider's alias to set the default provider to use when running `opkssh login`. WEBCHOOSER will open a browser window to select the provider.
+```bash
+export OPKSSH_DEFAULT=WEBCHOOSER
+export OPKSSH_PROVIDERS=google,https://accounts.google.com,206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com,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;microsoft,https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0,096ce0a3-5e72-4da8-9c86-12924b294a01;gitlab,https://gitlab.com,8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923
+export OPKSSH_PROVIDERS=$OPKSSH_PROVIDERS;authentik,https://authentik.io/application/o/opkssh/,client_id,,openid profile email
+```
+
+The OPKSSH_DEFAULT can be set to one of the provider's alias to set the default provider to use when running `opkssh login`.
+WEBCHOOSER will open a browser window to select the provider.
+
 ### AuthorizedKeysCommandUser
 
 We use a low privilege user for the SSH AuthorizedKeysCommandUser.
