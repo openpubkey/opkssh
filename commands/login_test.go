@@ -21,6 +21,7 @@ import (
 	"crypto"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/lestrrat-go/jwx/v2/jwa"
@@ -28,6 +29,7 @@ import (
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/openpubkey/util"
+	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh"
 )
@@ -49,7 +51,7 @@ const providerStr3 = providerAlias3 + "," + providerArg3
 
 const allProvidersStr = providerStr1 + ";" + providerStr2 + ";" + providerStr3
 
-func MockPKToken(t *testing.T) (*pktoken.PKToken, crypto.Signer) {
+func Mocks(t *testing.T) (*pktoken.PKToken, crypto.Signer, providers.OpenIdProvider) {
 	alg := jwa.ES256
 	signer, err := util.GenKeyPair(alg)
 	require.NoError(t, err)
@@ -68,10 +70,10 @@ func MockPKToken(t *testing.T) (*pktoken.PKToken, crypto.Signer) {
 
 	pkt, err := client.Auth(context.Background())
 	require.NoError(t, err)
-	return pkt, signer
+	return pkt, signer, op
 }
 
-func ProviderFromString(t *testing.T, providerString string) client.OpenIdProvider {
+func ProviderFromString(t *testing.T, providerString string) providers.OpenIdProvider {
 	providerConfig3, err := NewProviderConfigFromString(providerStr3, true)
 	require.NoError(t, err)
 	provider3, err := NewProviderFromConfig(providerConfig3, false)
@@ -80,6 +82,28 @@ func ProviderFromString(t *testing.T, providerString string) client.OpenIdProvid
 }
 
 func TestLoginCmd(t *testing.T) {
+	_, _, mockOp := Mocks(t)
+
+	mockFs := afero.NewMemMapFs()
+	loginCmd := LoginCmd{
+		Fs:                    mockFs,
+		disableBrowserOpenArg: true,
+		overrideProvider:      &mockOp,
+	}
+	require.NotNil(t, loginCmd)
+	err := loginCmd.Run(context.Background())
+	require.NoError(t, err)
+
+	homePath, err := os.UserHomeDir()
+	require.NoError(t, err)
+
+	sshPath := filepath.Join(homePath, ".ssh", "id_ecdsa")
+	secKeyBytes, err := afero.ReadFile(mockFs, sshPath)
+	require.NotNil(t, secKeyBytes)
+	require.Contains(t, string(secKeyBytes), "-----BEGIN OPENSSH PRIVATE KEY-----")
+}
+
+func TestDetermineProvider(t *testing.T) {
 	tests := []struct {
 		name          string
 		envVars       map[string]string
@@ -165,13 +189,14 @@ func TestLoginCmd(t *testing.T) {
 				disableBrowserOpenArg: true,
 				providerArg:           tt.providerArg,
 				providerAlias:         tt.providerAlias,
+				printIdTokenArg:       true,
 			}
 
-			provider, chooser, err := loginCmd.setup()
+			provider, chooser, err := loginCmd.determineProvider()
 			if tt.wantError {
 				require.Error(t, err, "Expected error but got none")
 				if tt.errorString != "" {
-					require.ErrorContains(t, err, tt.errorString, "Expected error a different error message")
+					require.ErrorContains(t, err, tt.errorString, "Got a wrong error message")
 				}
 			} else {
 				require.NoError(t, err, "Unexpected error")
@@ -223,7 +248,7 @@ func TestNewLogin(t *testing.T) {
 }
 
 func TestCreateSSHCert(t *testing.T) {
-	pkt, signer := MockPKToken(t)
+	pkt, signer, _ := Mocks(t)
 	principals := []string{"guest", "dev"}
 
 	sshCertBytes, signKeyBytes, err := createSSHCert(pkt, signer, principals)
@@ -238,7 +263,7 @@ func TestCreateSSHCert(t *testing.T) {
 }
 
 func TestIdentityString(t *testing.T) {
-	pkt, _ := MockPKToken(t)
+	pkt, _, _ := Mocks(t)
 	idString, err := IdentityString(*pkt)
 	require.NoError(t, err)
 	expIdString := "Email, sub, issuer, audience: \narthur.aardvark@example.com me https://accounts.example.com test_client_id"
@@ -246,7 +271,7 @@ func TestIdentityString(t *testing.T) {
 }
 
 func TestPrettyPrintIdToken(t *testing.T) {
-	pkt, _ := MockPKToken(t)
+	pkt, _, _ := Mocks(t)
 	iss, err := pkt.Issuer()
 	require.NoError(t, err)
 
