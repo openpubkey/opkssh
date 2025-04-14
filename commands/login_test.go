@@ -97,7 +97,9 @@ func TestLoginCmd(t *testing.T) {
 	homePath, err := os.UserHomeDir()
 	require.NoError(t, err)
 
-	sshPath := filepath.Join(homePath, ".ssh", "id_ecdsa")
+	name := getSSHKeyFilePath(mockOp.Issuer())
+
+	sshPath := filepath.Join(homePath, name)
 	secKeyBytes, err := afero.ReadFile(mockFs, sshPath)
 	require.NoError(t, err)
 	require.NotNil(t, secKeyBytes)

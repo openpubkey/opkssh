@@ -13,7 +13,7 @@ To ssh with opkssh you first need to download the opkssh binary and then run:
 opkssh login
 ```
 
-This opens a browser window where you can authenticate to your OpenID Provider. This will generate an SSH key in `~/.ssh/id_ecdsas` which contains your OpenID Connect identity.
+This opens a browser window where you can authenticate to your OpenID Provider. This will generate an SSH key in `~/.ssh/opkssh/id_xxyyzz` which contains your OpenID Connect identity.
 Then you can ssh under this identity to any ssh server which is configured to use opkssh to authenticate users using their OpenID Connect identities.
 
 ```bash
@@ -79,11 +79,19 @@ curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-lin
 After downloading opkssh run:
 
 ```cmd
+opkssh config
+```
+
+This will check your users ssh client config and report which changes have to be made before you can use opkssh login.
+
+After updating your config accordingly you can continue:
+
+```cmd
 opkssh login
 ```
 
 This opens a browser window to select which  OpenID Provider you want to authenticate against.
-After successfully authenticating opkssh generates an SSH public key in `~/.ssh/id_ecdsas` which contains your PK Token.
+After successfully authenticating opkssh generates an SSH public key in `~/.ssh/opkssh/id_xxyyzz` (xxyyzz is a combination of your provider and clientID) which contains your PK Token.
 By default this ssh key expires after 24 hours and you must run `opkssh login` to generate a new ssh key.
 
 Since your PK Token has been saved as an SSH key you can SSH as normal:
@@ -92,7 +100,7 @@ Since your PK Token has been saved as an SSH key you can SSH as normal:
 ssh root@example.com
 ```
 
-This works because SSH sends the SSH public key opkssh wrote in `~/.ssh/id_ecdsas` to the server and sshd running on the server will send the public key to the opkssh command to verify. This also works for other protocols that build on ssh like [sftp](https://en.wikipedia.org/wiki/SSH_File_Transfer_Protocol) or ssh tunnels.
+This works because SSH sends the SSH public key opkssh wrote in `~/.ssh/opkssh/id_xxyyzz` to the server and sshd running on the server will send the public key to the opkssh command to verify. This also works for other protocols that build on ssh like [sftp](https://en.wikipedia.org/wiki/SSH_File_Transfer_Protocol) or ssh tunnels.
 
 ```bash
 sftp root@example.com
