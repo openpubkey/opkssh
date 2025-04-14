@@ -99,6 +99,7 @@ func TestLoginCmd(t *testing.T) {
 
 	sshPath := filepath.Join(homePath, ".ssh", "id_ecdsa")
 	secKeyBytes, err := afero.ReadFile(mockFs, sshPath)
+	require.NoError(t, err)
 	require.NotNil(t, secKeyBytes)
 	require.Contains(t, string(secKeyBytes), "-----BEGIN OPENSSH PRIVATE KEY-----")
 }

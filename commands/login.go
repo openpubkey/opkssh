@@ -104,7 +104,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 	if l.overrideProvider != nil {
 		provider = *l.overrideProvider
 	} else {
-		provider, chooser, err := l.determineProvider()
+		op, chooser, err := l.determineProvider()
 		if err != nil {
 			return err
 		}
@@ -113,7 +113,9 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("error choosing provider: %w", err)
 			}
-		} else if provider == nil {
+		} else if op != nil {
+			provider = op
+		} else {
 			return fmt.Errorf("no provider found") // Either the provider or the chooser must be set. If this occurs we have a bug in the code.
 		}
 	}
