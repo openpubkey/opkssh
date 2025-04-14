@@ -47,6 +47,8 @@ const providerIssuer3 = "https://openidprovider.openidconnect/tokens-3/"
 const providerArg3 = providerIssuer3 + ",client-id91011,,"
 const providerStr3 = providerAlias3 + "," + providerArg3
 
+const allProvidersStr = providerStr1 + ";" + providerStr2 + ";" + providerStr3
+
 func MockPKToken(t *testing.T) (*pktoken.PKToken, crypto.Signer) {
 	alg := jwa.ES256
 	signer, err := util.GenKeyPair(alg)
@@ -78,60 +80,31 @@ func ProviderFromString(t *testing.T, providerString string) client.OpenIdProvid
 }
 
 func TestLoginCmd(t *testing.T) {
-
-	providerConfig3, err := NewProviderConfigFromString(providerStr3, true)
-	require.NoError(t, err)
-	provider3, err := NewProviderFromConfig(providerConfig3, false)
-	require.NoError(t, err)
-
-	allProvidersStr := providerStr1 + ";" + providerStr2 + ";" + providerStr3
-
 	tests := []struct {
-		name                string
-		envVars             map[string]string
-		providerArg         string
-		providerFromLdFlags providers.OpenIdProvider
-		providerAlias       string
-		wantIssuer          string
-		wantChooser         string
-		wantError           bool
-		errorString         string
+		name          string
+		envVars       map[string]string
+		providerArg   string
+		providerAlias string
+		wantIssuer    string
+		wantChooser   string
+		wantError     bool
+		errorString   string
 	}{
 		{
-			name:                "Good path with env vars",
-			envVars:             map[string]string{"OPKSSH_DEFAULT": providerAlias1, "OPKSSH_PROVIDERS": providerStr1},
-			providerArg:         "",
-			providerFromLdFlags: nil,
-			providerAlias:       "",
-			wantIssuer:          providerIssuer1,
-			wantError:           false,
+			name:          "Good path with env vars",
+			envVars:       map[string]string{"OPKSSH_DEFAULT": providerAlias1, "OPKSSH_PROVIDERS": providerStr1},
+			providerArg:   "",
+			providerAlias: "",
+			wantIssuer:    providerIssuer1,
+			wantError:     false,
 		},
 		{
-			name:                "Good path with env vars and provider arg (provider arg takes precedence)",
-			envVars:             map[string]string{"OPKSSH_DEFAULT": providerAlias1, "OPKSSH_PROVIDERS": providerStr1},
-			providerArg:         providerArg2,
-			providerFromLdFlags: nil,
-			providerAlias:       "",
-			wantIssuer:          providerIssuer2,
-			wantError:           false,
-		},
-		{
-			name:                "Good path with env vars, provider arg and providerFromLdFlags (provider arg takes precedence)",
-			envVars:             map[string]string{"OPKSSH_DEFAULT": providerAlias1, "OPKSSH_PROVIDERS": providerStr1},
-			providerArg:         providerArg2,
-			providerFromLdFlags: provider3,
-			providerAlias:       "",
-			wantIssuer:          providerIssuer2,
-			wantError:           false,
-		},
-		{
-			name:                "Good path with env vars and providerFromLdFlags (providerFromLdFlags takes precedence)",
-			envVars:             map[string]string{"OPKSSH_DEFAULT": providerAlias1, "OPKSSH_PROVIDERS": providerStr1},
-			providerArg:         "",
-			providerFromLdFlags: provider3,
-			providerAlias:       "",
-			wantIssuer:          providerIssuer3,
-			wantError:           false,
+			name:          "Good path with env vars and provider arg (provider arg takes precedence)",
+			envVars:       map[string]string{"OPKSSH_DEFAULT": providerAlias1, "OPKSSH_PROVIDERS": providerStr1},
+			providerArg:   providerArg2,
+			providerAlias: "",
+			wantIssuer:    providerIssuer2,
+			wantError:     false,
 		},
 		{
 			name:          "Good path with env vars and no alias",
@@ -191,7 +164,6 @@ func TestLoginCmd(t *testing.T) {
 			loginCmd := LoginCmd{
 				disableBrowserOpenArg: true,
 				providerArg:           tt.providerArg,
-				providerFromLdFlags:   tt.providerFromLdFlags,
 				providerAlias:         tt.providerAlias,
 			}
 
@@ -227,6 +199,16 @@ func TestLoginCmd(t *testing.T) {
 	}
 }
 
+func TestProviderConfigFromString(t *testing.T) {
+	providerConfig3, err := NewProviderConfigFromString(providerStr3, true)
+	require.NoError(t, err)
+	provider3, err := NewProviderFromConfig(providerConfig3, false)
+	require.NoError(t, err)
+
+	require.NotNil(t, provider3)
+	require.Equal(t, provider3.Issuer(), providerIssuer3)
+}
+
 func TestNewLogin(t *testing.T) {
 	autoRefresh := false
 	logDir := "./testdata"
@@ -234,10 +216,9 @@ func TestNewLogin(t *testing.T) {
 	printIdTokenArg := false
 	providerArg := ""
 	keyPathArg := ""
-	providerFromLdFlags := ProviderFromString(t, providerStr3)
 	providerAlias := ""
 
-	loginCmd := NewLogin(autoRefresh, logDir, disableBrowserOpenArg, printIdTokenArg, providerArg, keyPathArg, providerFromLdFlags, providerAlias)
+	loginCmd := NewLogin(autoRefresh, logDir, disableBrowserOpenArg, printIdTokenArg, providerArg, keyPathArg, providerAlias)
 	require.NotNil(t, loginCmd)
 }
 

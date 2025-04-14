@@ -54,7 +54,6 @@ type LoginCmd struct {
 	printIdTokenArg       bool
 	keyPathArg            string
 	providerArg           string
-	providerFromLdFlags   providers.OpenIdProvider
 	providerAlias         string
 	pkt                   *pktoken.PKToken
 	signer                crypto.Signer
@@ -64,8 +63,7 @@ type LoginCmd struct {
 }
 
 func NewLogin(autoRefresh bool, logDir string, disableBrowserOpenArg bool, printIdTokenArg bool,
-	providerArg string, keyPathArg string, providerFromLdFlags providers.OpenIdProvider,
-	providerAlias string) *LoginCmd {
+	providerArg string, keyPathArg string, providerAlias string) *LoginCmd {
 
 	return &LoginCmd{
 		autoRefresh:           autoRefresh,
@@ -74,7 +72,6 @@ func NewLogin(autoRefresh bool, logDir string, disableBrowserOpenArg bool, print
 		printIdTokenArg:       printIdTokenArg,
 		keyPathArg:            keyPathArg,
 		providerArg:           providerArg,
-		providerFromLdFlags:   providerFromLdFlags,
 		providerAlias:         providerAlias,
 	}
 }
@@ -142,8 +139,6 @@ func (l *LoginCmd) setup() (client.OpenIdProvider, *choosers.WebChooser, error) 
 		if err != nil {
 			return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
 		}
-	} else if l.providerFromLdFlags != nil {
-		provider = l.providerFromLdFlags
 	} else {
 		var err error
 

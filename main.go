@@ -28,7 +28,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/opkssh/commands"
 	"github.com/openpubkey/opkssh/policy"
 	"github.com/openpubkey/opkssh/policy/files"
@@ -37,12 +36,8 @@ import (
 
 var (
 	// These can be overridden at build time using ldflags. For example:
-	// go build -v -o /usr/local/bin/opkssh -ldflags "-X main.issuer=http://oidc.local:${ISSUER_PORT}/ -X main.clientID=web -X main.clientSecret=secret"
+	// go build -v -o /usr/local/bin/opkssh -ldflags "-X main.Version=version"
 	Version           = "unversioned"
-	issuer            = ""
-	clientID          = ""
-	clientSecret      = ""
-	redirectURIs      = ""
 	logFilePathServer = "/var/log/opkssh.log" // Remember if you change this, change it in the install script as well
 )
 
@@ -150,22 +145,12 @@ Arguments:
 				cancel()
 			}()
 
-			// If LDFlags issuer is set, build providerFromLdFlags
-			var providerFromLdFlags providers.OpenIdProvider
-			if issuer != "" {
-				opts := providers.GetDefaultGoogleOpOptions()
-				opts.Issuer = issuer
-				opts.ClientID = clientID
-				opts.ClientSecret = clientSecret
-				opts.RedirectURIs = strings.Split(redirectURIs, ",")
-				providerFromLdFlags = providers.NewGoogleOpWithOptions(opts)
-			}
 			var providerAlias string
 			if len(args) > 0 {
 				providerAlias = args[0]
 			}
 
-			login := commands.NewLogin(autoRefresh, logDir, disableBrowserOpenArg, printIdTokenArg, providerArg, keyPathArg, providerFromLdFlags, providerAlias)
+			login := commands.NewLogin(autoRefresh, logDir, disableBrowserOpenArg, printIdTokenArg, providerArg, keyPathArg, providerAlias)
 			if err := login.Run(ctx); err != nil {
 				log.Println("Error executing login command:", err)
 				return err
