@@ -94,7 +94,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		log.SetOutput(os.Stdout)
 	}
 
-	provider, chooser, err := l.setup(ctx)
+	provider, chooser, err := l.setup()
 	if err != nil {
 		return err
 	}
@@ -126,7 +126,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 	return nil
 }
 
-func (l *LoginCmd) setup(ctx context.Context) (client.OpenIdProvider, *choosers.WebChooser, error) {
+func (l *LoginCmd) setup() (client.OpenIdProvider, *choosers.WebChooser, error) {
 	openBrowser := !l.disableBrowserOpenArg
 
 	// If the user has supplied commandline arguments for the provider, use those instead of the web chooser

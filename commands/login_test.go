@@ -195,7 +195,7 @@ func TestLoginCmd(t *testing.T) {
 				providerAlias:         tt.providerAlias,
 			}
 
-			provider, chooser, err := loginCmd.setup(context.Background())
+			provider, chooser, err := loginCmd.setup()
 			if tt.wantError {
 				require.Error(t, err, "Expected error but got none")
 				if tt.errorString != "" {
