@@ -226,7 +226,7 @@ func addIdentityFileConfigEntry(keyPathArg, clientID, issuer string) (sshKeyFile
 		// used to sanitise path
 		regex := regexp.MustCompile(`[^a-zA-Z0-9_\-.]+`)
 
-		issuer = strings.TrimLeft(issuer, "https://")
+		issuer, _ = strings.CutPrefix(issuer, "https://")
 		issuer = regex.ReplaceAllString(issuer, "_")
 
 		clientID = regex.ReplaceAllString(clientID, "_")
@@ -451,11 +451,6 @@ func writeKeys(seckeyPath string, pubkeyPath string, seckeySshPem []byte, certBy
 	certBytes = append(certBytes, []byte(" openpubkey")...)
 	// Write ssh public key (certificate) to filesystem
 	return os.WriteFile(pubkeyPath, certBytes, 0644)
-}
-
-func fileExists(fPath string) bool {
-	_, err := os.Open(fPath)
-	return !errors.Is(err, os.ErrNotExist)
 }
 
 func IdentityString(pkt pktoken.PKToken) (string, error) {
