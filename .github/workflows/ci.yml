@@ -41,7 +41,7 @@ jobs:
         os: [ubuntu, centos, arch]
         exclude:
           - runs_on: ubuntu-24.04-arm
-             os: arch
+            os: arch
     env:
       OS_TYPE: ${{ matrix.os }}
     steps:

@@ -42,6 +42,7 @@ import (
 	"github.com/openpubkey/opkssh/commands"
 	testprovider "github.com/openpubkey/opkssh/test/integration/provider"
 	"github.com/openpubkey/opkssh/test/integration/ssh_server"
+	"github.com/spf13/afero"
 
 	"github.com/melbahja/goph"
 	"github.com/stretchr/testify/assert"
@@ -319,7 +320,8 @@ func TestEndToEndSSH(t *testing.T) {
 	errCh := make(chan error)
 	t.Log("------- call login cmd ------")
 	go func() {
-		err := commands.Login(TestCtx, zitadelOp, false, "")
+		loginCmd := commands.LoginCmd{Fs: afero.NewOsFs()}
+		err := loginCmd.Login(TestCtx, zitadelOp, false, "")
 		errCh <- err
 	}()
 
@@ -414,7 +416,8 @@ func TestEndToEndSSHAsUnprivilegedUser(t *testing.T) {
 	errCh := make(chan error)
 	t.Log("------- call login cmd ------")
 	go func() {
-		err := commands.Login(TestCtx, zitadelOp, false, "")
+		loginCmd := commands.LoginCmd{Fs: afero.NewOsFs()}
+		err := loginCmd.Login(TestCtx, zitadelOp, false, "")
 		errCh <- err
 	}()
 
@@ -527,7 +530,8 @@ func TestEndToEndSSHWithRefresh(t *testing.T) {
 	defer cancelRefresh()
 	t.Log("------- call login cmd ------")
 	go func() {
-		err := commands.LoginWithRefresh(refreshCtx, pulseZitadelOp, false, "")
+		loginCmd := commands.LoginCmd{Fs: afero.NewOsFs()}
+		err := loginCmd.LoginWithRefresh(refreshCtx, pulseZitadelOp, false, "")
 		errCh <- err
 	}()
 

@@ -33,7 +33,6 @@ import (
 	"log/slog"
 
 	"github.com/jeremija/gosubmit"
-	"github.com/openpubkey/openpubkey/client"
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/stretchr/testify/require"
 	"github.com/zitadel/oidc/v3/example/server/exampleop"
@@ -86,7 +85,7 @@ func NewFakeOpServer() (*FakeOpServer, error) {
 // The OPK provider uses this server's registered web client application's auth
 // details (clientID + clientSecret). scopes are the scopes to request when
 // performing OIDC login flow; if empty, then default scopes are used.
-func (s *FakeOpServer) OpkProvider() (client.OpenIdProvider, *url.URL, error) {
+func (s *FakeOpServer) OpkProvider() (providers.OpenIdProvider, *url.URL, error) {
 	// Find available port to run local auth callback server on when requesting
 	// tokens from the OP.
 	//

@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/openpubkey/opkssh/commands"
+	"github.com/spf13/afero"
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh"
@@ -50,7 +51,8 @@ func TestLogin(t *testing.T) {
 	opkProvider, loginURL, err := opServer.OpkProvider()
 	require.NoError(t, err, "failed to create OPK provider")
 	go func() {
-		err := commands.Login(TestCtx, opkProvider, false, "")
+		loginCmd := commands.LoginCmd{Fs: afero.NewOsFs()}
+		err := loginCmd.Login(TestCtx, opkProvider, false, "")
 		errCh <- err
 	}()
 
@@ -119,7 +121,8 @@ func TestLoginCustomKeyPath(t *testing.T) {
 	seckeyPath := filepath.Join(sshPath, "opkssh-key")
 
 	go func() {
-		err := commands.Login(TestCtx, opkProvider, false, seckeyPath)
+		loginCmd := commands.LoginCmd{Fs: afero.NewOsFs()}
+		err := loginCmd.Login(TestCtx, opkProvider, false, seckeyPath)
 		errCh <- err
 	}()
 
