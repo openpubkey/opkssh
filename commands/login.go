@@ -122,7 +122,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 	}
 
 	// Add identity file to ssh client config
-	sshKeyFile, err := addIdentityFileConfigEntry(l.keyPathArg, clientIDArg, issuerArg)
+	sshKeyFile, err := addIdentityFileConfigEntry(l.keyPathArg, provider.Issuer())
 	if err != nil {
 		return fmt.Errorf("could not add identity file config: %w", err)
 	}
@@ -130,7 +130,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 	// Execute login command
 	if l.autoRefresh {
 		if providerRefreshable, ok := provider.(providers.RefreshableOpenIdProvider); ok {
-			err := l.LoginWithRefresh(ctx, providerRefreshable, l.printIdTokenArg, l.keyPathArg) // TODO: sshKeyFile
+			err := l.LoginWithRefresh(ctx, providerRefreshable, l.printIdTokenArg, sshKeyFile)
 			if err != nil {
 				return fmt.Errorf("error logging in: %w", err)
 			}
@@ -138,7 +138,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 			return fmt.Errorf("supplied OpenID Provider (%v) does not support auto-refresh and auto-refresh argument set to true", provider.Issuer())
 		}
 	} else {
-		err := l.Login(ctx, provider, l.printIdTokenArg, l.keyPathArg) // TODO: sshKeyFile
+		err := l.Login(ctx, provider, l.printIdTokenArg, sshKeyFile)
 		if err != nil {
 			return fmt.Errorf("error logging in: %w", err)
 		}
@@ -215,26 +215,17 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 	return provider, nil, nil
 }
 
-func (l *LoginCmd) addIdentityFileConfigEntry(keyPathArg, clientID, issuer string) (sshKeyFilePath string, err error) {
+func addIdentityFileConfigEntry(keyPathArg, issuer string) (sshKeyFilePath string, err error) {
 
 	const (
-		BaseIdentityFile = ".ssh/opkssh/id"     // relative to ~
-		OPKConfigFile    = ".ssh/opkssh/config" // relative to ~
-		IdentityFile     = "IdentityFile"
+		OPKConfigFile = ".ssh/opkssh/config" // relative to ~
+		IdentityFile  = "IdentityFile"
 	)
 
 	if keyPathArg != "" {
 		sshKeyFilePath = keyPathArg
 	} else {
-		// used to sanitise path
-		regex := regexp.MustCompile(`[^a-zA-Z0-9_\-.]+`)
-
-		issuer, _ = strings.CutPrefix(issuer, "https://")
-		issuer = regex.ReplaceAllString(issuer, "_")
-
-		clientID = regex.ReplaceAllString(clientID, "_")
-
-		sshKeyFilePath = strings.Join([]string{BaseIdentityFile, issuer, clientID}, "_")
+		sshKeyFilePath = getSSHKeyFilePath(issuer)
 	}
 
 	configLine := IdentityFile + " ~/" + sshKeyFilePath
@@ -279,6 +270,20 @@ func (l *LoginCmd) addIdentityFileConfigEntry(keyPathArg, clientID, issuer strin
 			return
 		}
 	}
+
+	return
+}
+
+func getSSHKeyFilePath(issuer string) (fileName string) {
+
+	const BaseIdentityFile = ".ssh/opkssh/id" // relative to ~
+
+	regex := regexp.MustCompile(`[^a-zA-Z0-9_\-.]+`)
+
+	issuer, _ = strings.CutPrefix(issuer, "https://")
+	issuer = regex.ReplaceAllString(issuer, "_")
+
+	fileName = strings.Join([]string{BaseIdentityFile, issuer}, "_")
 
 	return
 }
