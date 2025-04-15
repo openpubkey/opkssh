@@ -67,3 +67,160 @@ https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0 096c
 		})
 	}
 }
+
+func TestFieldsEscaped(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected []string
+	}{
+		{
+			name:     "empty string",
+			input:    "",
+			expected: []string{},
+		},
+		{
+			name:     "simple space-separated words",
+			input:    "hello world test",
+			expected: []string{"hello", "world", "test"},
+		},
+		{
+			name:     "escaped spaces",
+			input:    `hello\ world test\ case`,
+			expected: []string{"hello world", "test case"},
+		},
+		{
+			name:     "escaped backslashes",
+			input:    `hello\\world test\\case`,
+			expected: []string{"hello\\world", "test\\case"},
+		},
+		{
+			name:     "mixed escapes",
+			input:    `hello\ world\\test case\\\ final`,
+			expected: []string{"hello world\\test", "case\\ final"},
+		},
+		{
+			name:     "multiple consecutive spaces",
+			input:    "hello   world     test",
+			expected: []string{"hello", "world", "test"},
+		},
+		{
+			name:     "trailing escape",
+			input:    `hello world\`,
+			expected: []string{"hello", "world"},
+		},
+		{
+			name:     "escaped special characters",
+			input:    `hello\#world test\$case`,
+			expected: []string{"hello#world", "test$case"},
+		},
+		{
+			name:     "multiple escaped spaces",
+			input:    `hello\ \ \ world`,
+			expected: []string{"hello   world"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := fieldsEscaped(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestWriteEscaped(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []string
+		expected string
+	}{
+		{
+			name:     "empty slice",
+			input:    []string{},
+			expected: "",
+		},
+		{
+			name:     "single word",
+			input:    []string{"hello"},
+			expected: "hello",
+		},
+		{
+			name:     "simple words",
+			input:    []string{"hello", "world", "test"},
+			expected: "hello world test",
+		},
+		{
+			name:     "words with spaces",
+			input:    []string{"hello world", "test case"},
+			expected: `hello\ world test\ case`,
+		},
+		{
+			name:     "words with backslashes",
+			input:    []string{"hello\\world", "test\\case"},
+			expected: `hello\\world test\\case`,
+		},
+		{
+			name:     "mixed special characters",
+			input:    []string{"hello world\\test", "case\\ final"},
+			expected: `hello\ world\\test case\\\ final`,
+		},
+		{
+			name:     "multiple spaces",
+			input:    []string{"hello   world", "test"},
+			expected: `hello\ \ \ world test`,
+		},
+		{
+			name:     "special characters",
+			input:    []string{"hello#world", "test$case"},
+			expected: "hello#world test$case",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := writeEscaped(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// TestRoundTrip tests that writeEscaped and fieldsEscaped work correctly together
+func TestRoundTrip(t *testing.T) {
+	tests := []struct {
+		name  string
+		input []string
+	}{
+		{
+			name:  "empty slice",
+			input: []string{},
+		},
+		{
+			name:  "simple words",
+			input: []string{"hello", "world", "test"},
+		},
+		{
+			name:  "words with spaces",
+			input: []string{"hello world", "test case", "final test"},
+		},
+		{
+			name:  "words with backslashes",
+			input: []string{"hello\\world", "test\\case", "final\\test"},
+		},
+		{
+			name:  "mixed content",
+			input: []string{"hello world\\test", "case\\ final", "test\\case space"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Convert to string and back to fields
+			escaped := writeEscaped(tt.input)
+			result := fieldsEscaped(escaped)
+
+			// Check if the round trip preserves the original input
+			assert.Equal(t, tt.input, result)
+		})
+	}
+}

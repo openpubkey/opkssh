@@ -25,9 +25,9 @@ import (
 // whitespace that is escaped with a backslash. This allows for values
 // containing spaces to be represented in the policy file.
 func fieldsEscaped(s string) []string {
-	var fields []string
 	var currentField strings.Builder
 	escaped := false
+	fields := []string{}
 
 	for _, r := range s {
 		if escaped { // This will write the next character (including if it's an escape character or space)
