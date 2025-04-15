@@ -2,8 +2,8 @@
 
 [![Go Coverage](https://github.com/openpubkey/opkssh/wiki/coverage.svg)](https://raw.githack.com/wiki/openpubkey/opkssh/coverage.html)
 
-**opkssh** is a tool which enables ssh to be used with OpenID Connect allowing SSH access management via identities like `alice@example.com` instead of long-lived SSH keys.
-It does not replace ssh, but rather generates ssh public keys that contain PK Tokens and configures sshd to verify the PK Token in the ssh public key. These PK Tokens contain standard OpenID Connect ID Tokens. This protocol builds on the [OpenPubkey](https://github.com/openpubkey/openpubkey/blob/main/README.md) which adds user public keys to OpenID Connect without breaking compatibility with existing OpenID Provider.
+**opkssh** is a tool which enables ssh to be used with OpenID Connect allowing SSH access to be managed via identities like `alice@example.com` instead of long-lived SSH keys.
+It does not replace SSH, but instead generates SSH public keys containing PK Tokens and configures sshd to verify them. These PK Tokens contain standard [OpenID Connect ID Tokens](https://openid.net/specs/openid-connect-core-1_0.html). This protocol builds on the [OpenPubkey](https://github.com/openpubkey/openpubkey/blob/main/README.md) which adds user public keys to OpenID Connect without breaking compatibility with existing OpenID Provider.
 
 Currently opkssh is compatible with Google, Microsoft/Azure and Gitlab OpenID Providers (OP). If you have a gmail, microsoft or a gitlab account you can ssh with that account.
 
@@ -13,7 +13,7 @@ To ssh with opkssh you first need to download the opkssh binary and then run:
 opkssh login
 ```
 
-This opens a browser window where you can authenticate to your OpenID Provider. This will generate an SSH key in `~/.ssh/id_ecdsas` which contains your OpenID Connect identity.
+This opens a browser window where you can authenticate to your OpenID Provider. This will generate an SSH key in `~/.ssh/id_ecdsa` which contains your OpenID Connect identity.
 Then you can ssh under this identity to any ssh server which is configured to use opkssh to authenticate users using their OpenID Connect identities.
 
 ```bash
@@ -65,7 +65,7 @@ To install on OSX run:
 curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64 -o opkssh; chmod +x opkssh
 ```
 
-To install on linux run:
+To install on linux, run:
 
 ```bash
 curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64 -o opkssh; chmod +x opkssh
@@ -82,8 +82,8 @@ After downloading opkssh run:
 opkssh login
 ```
 
-This opens a browser window to select which  OpenID Provider you want to authenticate against.
-After successfully authenticating opkssh generates an SSH public key in `~/.ssh/id_ecdsas` which contains your PK Token.
+This opens a browser window to select which OpenID Provider you want to authenticate against.
+After successfully authenticating opkssh generates an SSH public key in `~/.ssh/id_ecdsa` which contains your PK Token.
 By default this ssh key expires after 24 hours and you must run `opkssh login` to generate a new ssh key.
 
 Since your PK Token has been saved as an SSH key you can SSH as normal:
@@ -92,7 +92,7 @@ Since your PK Token has been saved as an SSH key you can SSH as normal:
 ssh root@example.com
 ```
 
-This works because SSH sends the SSH public key opkssh wrote in `~/.ssh/id_ecdsas` to the server and sshd running on the server will send the public key to the opkssh command to verify. This also works for other protocols that build on ssh like [sftp](https://en.wikipedia.org/wiki/SSH_File_Transfer_Protocol) or ssh tunnels.
+This works because SSH sends the public key written by opkssh in `~/.ssh/id_ecdsa` to the server and sshd running on the server will send the public key to the opkssh command to verify. This also works for other protocols that build on ssh like [sftp](https://en.wikipedia.org/wiki/SSH_File_Transfer_Protocol) or ssh tunnels.
 
 ```bash
 sftp root@example.com
@@ -146,10 +146,9 @@ Second, we use the `AuthorizedKeysCommand` configuration option in `sshd_config`
 | OSX       | ❌             |  ❌     |  -  | Likely  |
 | Windows11 | ❌            |   ❌     |  -                              | Likely |
 
-## Configuration
+## Server Configuration
 
 All opkssh configuration files are space delimited and live on the server.
-We currently have no configuration files on the client.
 
 ### `/etc/opk/providers`
 
@@ -287,6 +286,50 @@ For example if the issuer is `https://authentik.local/application/o/opkssh/` and
 opkssh login --provider=https://authentik.local/application/o/opkssh/,ClientID123
 ```
 
+You can use this shortcut which will use a provider alias to find the provider.
+
+```bash
+opkssh login authentik
+```
+
+This alias to provider mapping can configured using the OPKSSH_PROVIDERS environment variables.
+
+### Environment Variables
+
+Instead of using the `opkssh login --provider` flag you can also configure the providers to use with environment variables.
+
+The OPKSSH_PROVIDERS variable follow the standard format with `;` delimiting each provider and `,` delimiting fields with a provider for instance:
+`{alias},{issuer},{client_id},{client_secret},{scope};{alias},{issuer},{client_id},{client_secret},{scope}...`
+
+You can set them in your [`.bashrc` file](https://www.gnu.org/software/bash/manual/html_node/Bash-Startup-Files.html) so you don't have to type custom settings each time you run `opk login`.
+
+```bash
+export OPKSSH_DEFAULT=WEBCHOOSER
+export OPKSSH_PROVIDERS=google,https://accounts.google.com,206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com,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;microsoft,https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0,096ce0a3-5e72-4da8-9c86-12924b294a01;gitlab,https://gitlab.com,8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923
+export OPKSSH_PROVIDERS=$OPKSSH_PROVIDERS;authentik,https://authentik.io/application/o/opkssh/,client_id,,openid profile email
+```
+
+The OPKSSH_DEFAULT can be set to one of the provider's alias to set the default provider to use when running `opkssh login`.
+WEBCHOOSER will open a browser window to select the provider.
+
+### Redirect URIs
+
+Currently opkssh supports the following redirect URIs. Make sure that the correct redirectURIs have been added at your OpenID Provider:
+
+```
+http://localhost:3000/login-callback
+http://localhost:10001/login-callback
+http://localhost:11110/login-callback
+```
+
+### Security Note: Create a new Client ID for opkssh
+
+Do not reuse a client ID between opkssh and other OpenID Connect services.
+If the same client ID is used for opkssh as another OpenID Connect authentication service, then an SSH server could replay the ID Token sent in an opkssh SSH key to authenticate to that service.
+Such replay attacks can be ruled out by simply using a new client ID with opkssh.
+
+Note that this requirement of using different client IDs for different audiences and uses is not unique to opkssh and is a best practice in OpenID Connect.
+
 ### Server Configuration
 
 In the `/etc/opk/providers` file, add the OpenID Provider as you would any OpenID Provider. For example:
@@ -308,8 +351,10 @@ opkssh add root alice@example.com https://authentik.local/application/o/opkssh/
 | Authelia        | ✅      | [Authelia Integration Guide](https://www.authelia.com/integration/openid-connect/opkssh/) |
 | Authentik       | ✅      | Do not add a certificate in the encryption section of the provider                        |
 | Zitadel         | ✅      | Check the UserInfo box on the Token Settings                                              |
+| [PocketID](https://github.com/pocket-id/pocket-id) | ✅      | Create a new OIDC Client and inside the new client, check "Public client" on OIDC Client Settings                                             |
 
 Do not use Confidential/Secret mode **only** client ID is needed.
+
 
 ## More information
 

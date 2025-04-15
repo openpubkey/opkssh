@@ -44,7 +44,7 @@ By making a contribution to this project, I certify that:
     this project or the open source license(s) involved.
 ```
 
-Your sign off can be added manually to your commit, i.e., `Signed-off-by: Jane Doe <jane.doe@example.com>`. 
+Your sign off can be added manually to your commit, i.e., `Signed-off-by: Jane Doe <jane.doe@example.com>`.
 
 Then, you can create a signed off commit using the flag `-s` or `--signoff`:
 `$ git commit -s -m "This is my signed off commit."`.
@@ -77,13 +77,44 @@ Our automated PR checks verify that:
 
 ## Testing OpenPubkey Locally
 
-To build OpenPubkey, ensure you have Go version `>= 1.20` installed. To verify which version you have installed, try `go version`.
+To build OpenPubkey, ensure you have Go version `>= 1.23` installed. To verify which version you have installed, try `go version`.
 
 To run the [Google example](https://github.com/openpubkey/openpubkey/tree/main/examples/google):
- 1. Navigate to the `examples/google/` directory. 
+ 1. Navigate to the `examples/google/` directory.
  2. Execute `go build`
  3. Execute `./google login` to generate a valid PK token using Google as your OIDC provider.
  4. Execute `./google sign` to use the PK token generated in (3) to sign a verifiable message.
+
+## Building and Packaging `opkssh` Locally
+
+`opkssh` leverages on [GoReleaser](https://goreleaser.com/) to simplify the process of building binaries for all supported systems and architectures, as well as creating distribution packages.
+
+Before you begin, ensure you have [GoReleaser installed](https://goreleaser.com/install/) using one of the available installation methods.
+
+To build binaries only, run the following command:
+
+```bash
+goreleaser build --clean --snapshot
+```
+
+To test the release process, which includes building binaries and distribution packages, use the following command:
+
+```bash
+goreleaser release --clean --snapshot
+```
+
+All generated files will be located in the `dist/` directory.
+
+If you want to contribute by adding support for a new system, architecture, or improving distribution packaging, refer to the [GoReleaser documentation](https://goreleaser.com/customization/) for guidance to update the [.goreleaser.yaml](.goreleaser.yaml) file.
+
+## Releasing `opkssh`
+
+Releasing `opkssh` is a straightforward process. If you have the appropriate role to make a release, the process involves creating a new Git tag. Once the tag is pushed, the CI/CD pipeline will:
+
+1. Test the code to ensure all checks pass.
+2. Execute the `release` workflow, which runs `GoReleaser` to build binaries, create distribution packages, and generate a draft release available on the [GitHub release page](https://github.com/openpubkey/opkssh/releases).
+
+Once the draft release is created, review and update it if necessary. If everything looks good, publish the release to make it available to the community.
 
 # Contributing Roles
 
