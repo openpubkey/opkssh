@@ -286,19 +286,22 @@ For example if the issuer is `https://authentik.local/application/o/opkssh/` and
 opkssh login --provider=https://authentik.local/application/o/opkssh/,ClientID123
 ```
 
-If the provider is configured using the `~/.opksshrc` file or the enviroments variables, you can use this shortcut:
+You can use this shortcut which will use a provider alias to find the provider.
 
 ```bash
 opkssh login authentik
 ```
 
-#### Environment Variables
+This alias to provider mapping can configured using the OPKSSH_PROVIDERS environment variables.
 
-Instead of using the `--provider` flag you can also use environment variables as `opkssh login` will read from environment variables to determine which OpenID Provider to use.
-You can set them in your `.bashrc` file so you don't have to remember custom settings each time you run `opk login`.
+### Environment Variables
 
-The OPKSSH_PROVIDERS variable follow this format ;
+Instead of using the `opkssh login --provider` flag you can also configure the providers to use with environment variables.
+
+The OPKSSH_PROVIDERS variable follow the standard format with `;` delimiting each provider and `,` delimiting fields with a provider for instance:
 `{alias},{issuer},{client_id},{client_secret},{scope};{alias},{issuer},{client_id},{client_secret},{scope}...`
+
+You can set them in your [`.bashrc` file](https://www.gnu.org/software/bash/manual/html_node/Bash-Startup-Files.html) so you don't have to type custom settings each time you run `opk login`.
 
 ```bash
 export OPKSSH_DEFAULT=WEBCHOOSER
@@ -308,7 +311,6 @@ export OPKSSH_PROVIDERS=$OPKSSH_PROVIDERS;authentik,https://authentik.io/applica
 
 The OPKSSH_DEFAULT can be set to one of the provider's alias to set the default provider to use when running `opkssh login`.
 WEBCHOOSER will open a browser window to select the provider.
-
 
 ### Redirect URIs
 

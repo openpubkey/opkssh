@@ -129,7 +129,7 @@ Login generates a key pair, then opens a browser to authenticate the user with t
 
 Users can then SSH into servers configured to use opkssh as the AuthorizedKeysCommand. The server verifies the PK token and grants access if the token is valid and the user is authorized per the auth_id policy.
 Arguments:
-  alias      The provider alias to use. If not specified, the OPKSSH_DEFAULT provider will be used. The aliases are defined by the OPKSSH_PROVIDERS environment variable, which are sourced from ~/.opksshrc. The format is <alias>,<issuer>,<client_id>,<client_secret>,<scopes>
+  alias      The provider alias to use. If not specified, the OPKSSH_DEFAULT provider will be used. The aliases are defined by the OPKSSH_PROVIDERS environment variable. The format is <alias>,<issuer>,<client_id>,<client_secret>,<scopes>
 `,
 		Example: `  opkssh login
   opkssh login google
