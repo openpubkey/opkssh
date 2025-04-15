@@ -115,6 +115,7 @@ sudo opkssh add root alice@gmail.com google
 ```
 
 To allow a group, `ssh-users`, to ssh to your server as `root`, run:
+
 ```bash
 sudo opkssh add root oidc:groups:ssh-users google
 ```
@@ -191,9 +192,9 @@ Linux user accounts are typically referred to in SSH as *principals* and we cont
 - Column 2: Email address or subject ID of the user (choose one)
   - Email - the email of the identity
   - Subject ID - an unique ID for the user set by the OP. This is the `sub` claim in the ID Token.
-  - Group - the name of the group that the user is part of. This uses the `groups` claim which is presumed to 
+  - Group - the name of the group that the user is part of. This uses the `groups` claim which is presumed to
     be an array. The group identifier uses a structured identifier. I.e. `oidc:groups:{groupId}`. Replace the `groupId`
-    with the id of your group. 
+    with the id of your group.
 - Column 3: Issuer URI
 
 ```bash
@@ -278,7 +279,7 @@ or in the rare case that a client secret is required by the OpenID Provider:
 opkssh login --provider={ISSUER},{CLIENT_ID},{CLIENT_SECRET}
 ```
 
-where ISSUER, CLIENT_ID and CLIENT_SECRET correspond to the issuer client ID and client secret of the custom OpenID Provider. 
+where ISSUER, CLIENT_ID and CLIENT_SECRET correspond to the issuer client ID and client secret of the custom OpenID Provider.
 
 For example if the issuer is `https://authentik.local/application/o/opkssh/` and the client ID was `ClientID123`:
 
@@ -299,14 +300,14 @@ This alias to provider mapping can configured using the OPKSSH_PROVIDERS environ
 Instead of using the `opkssh login --provider` flag you can also configure the providers to use with environment variables.
 
 The OPKSSH_PROVIDERS variable follow the standard format with `;` delimiting each provider and `,` delimiting fields with a provider for instance:
-`{alias},{issuer},{client_id},{client_secret},{scope};{alias},{issuer},{client_id},{client_secret},{scope}...`
+`{alias},{issuer},{client_id},{client_secret},{scope}...;{alias},{issuer},{client_id},{client_secret},{scope}...`
 
 You can set them in your [`.bashrc` file](https://www.gnu.org/software/bash/manual/html_node/Bash-Startup-Files.html) so you don't have to type custom settings each time you run `opk login`.
 
 ```bash
 export OPKSSH_DEFAULT=WEBCHOOSER
 export OPKSSH_PROVIDERS=google,https://accounts.google.com,206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com,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;microsoft,https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0,096ce0a3-5e72-4da8-9c86-12924b294a01;gitlab,https://gitlab.com,8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923
-export OPKSSH_PROVIDERS=$OPKSSH_PROVIDERS;authentik,https://authentik.io/application/o/opkssh/,client_id,,openid profile email
+export OPKSSH_PROVIDERS=$OPKSSH_PROVIDERS;authentik,https://authentik.io/application/o/opkssh/,client_id,,openid,profile,email
 ```
 
 The OPKSSH_DEFAULT can be set to one of the provider's alias to set the default provider to use when running `opkssh login`.
@@ -354,7 +355,6 @@ opkssh add root alice@example.com https://authentik.local/application/o/opkssh/
 | [PocketID](https://github.com/pocket-id/pocket-id) | ✅      | Create a new OIDC Client and inside the new client, check "Public client" on OIDC Client Settings                                             |
 
 Do not use Confidential/Secret mode **only** client ID is needed.
-
 
 ## More information
 

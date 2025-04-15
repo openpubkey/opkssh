@@ -512,7 +512,7 @@ func NewProviderConfigFromString(configStr string, hasAlias bool) (ProviderConfi
 	}
 
 	if len(parts) > 3 {
-		providerConfig.Scopes = strings.Split(parts[3], " ")
+		providerConfig.Scopes = parts[3:]
 	} else {
 		providerConfig.Scopes = []string{"openid", "profile", "email"}
 	}
