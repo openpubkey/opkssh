@@ -27,6 +27,7 @@ import (
 	"io"
 	"log"
 	"os"
+
 	"path/filepath"
 	"strings"
 	"time"
@@ -40,17 +41,28 @@ import (
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/openpubkey/util"
 	"github.com/openpubkey/opkssh/sshcert"
+	"github.com/spf13/afero"
 	"golang.org/x/crypto/ssh"
 )
 
+const WEBCHOOSER_ALIAS = "WEBCHOOSER"
+const OPKSSH_DEFAULT_ENVVAR = "OPKSSH_DEFAULT"
+const OPKSSH_PROVIDERS_ENVVAR = "OPKSSH_PROVIDERS"
+
+var DefaultProviderList = "google,https://accounts.google.com,206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com,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;" +
+	"microsoft,https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0,096ce0a3-5e72-4da8-9c86-12924b294a01;" +
+	"gitlab,https://gitlab.com,8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923"
+
 type LoginCmd struct {
+	Fs                    afero.Fs
 	autoRefresh           bool
 	logDir                string
 	disableBrowserOpenArg bool
 	printIdTokenArg       bool
 	keyPathArg            string
 	providerArg           string
-	providerFromLdFlags   providers.OpenIdProvider
+	providerAlias         string
+	overrideProvider      *providers.OpenIdProvider // Used in tests to override the provider to inject a mock provider
 	pkt                   *pktoken.PKToken
 	signer                crypto.Signer
 	alg                   jwa.SignatureAlgorithm
@@ -58,15 +70,18 @@ type LoginCmd struct {
 	principals            []string
 }
 
-func NewLogin(autoRefresh bool, logDir string, disableBrowserOpenArg bool, printIdTokenArg bool, providerArg string, keyPathArg string, providerFromLdFlags providers.OpenIdProvider) *LoginCmd {
+func NewLogin(autoRefresh bool, logDir string, disableBrowserOpenArg bool, printIdTokenArg bool,
+	providerArg string, keyPathArg string, providerAlias string) *LoginCmd {
+
 	return &LoginCmd{
+		Fs:                    afero.NewOsFs(),
 		autoRefresh:           autoRefresh,
 		logDir:                logDir,
 		disableBrowserOpenArg: disableBrowserOpenArg,
 		printIdTokenArg:       printIdTokenArg,
 		keyPathArg:            keyPathArg,
 		providerArg:           providerArg,
-		providerFromLdFlags:   providerFromLdFlags,
+		providerAlias:         providerAlias,
 	}
 }
 
@@ -74,7 +89,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 	// If a log directory was provided, write any logs to a file in that directory AND stdout
 	if l.logDir != "" {
 		logFilePath := filepath.Join(l.logDir, "opkssh.log")
-		logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0660)
+		logFile, err := l.Fs.OpenFile(logFilePath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0660)
 		if err != nil {
 			log.Printf("Failed to open log for writing: %v \n", err)
 		}
@@ -85,113 +100,30 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		log.SetOutput(os.Stdout)
 	}
 
-	openBrowser := !l.disableBrowserOpenArg
-
-	// If the user has supplied commandline arguments for the provider, use those instead of the web chooser
 	var provider providers.OpenIdProvider
-	if l.providerArg != "" {
-		parts := strings.Split(l.providerArg, ",")
-		if len(parts) < 2 {
-			return fmt.Errorf("invalid provider argument format. Expected format <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<additional_scopes> got (%s)\n", l.providerArg)
-		}
-		issuerArg := parts[0]
-		clientIDArg := parts[1]
-
-		if !strings.HasPrefix(issuerArg, "https://") {
-			return fmt.Errorf("invalid provider issuer value. Expected issuer to start with 'https://' got (%s) \n", issuerArg)
-		}
-
-		if clientIDArg == "" {
-			return fmt.Errorf("invalid provider client-ID value got (%s) \n", clientIDArg)
-		}
-
-		if strings.HasPrefix(issuerArg, "https://accounts.google.com") {
-			// The Google OP is strange in that it requires a client secret even if this is a public OIDC App.
-			// Despite its name the Google OP client secret is a public value.
-			if len(parts) != 3 {
-				return fmt.Errorf("invalid provider argument format. Expected format for google: <issuer>,<client_id>,<client_secret> got (%s)", l.providerArg)
-			}
-			clientSecretArg := parts[2]
-			if clientSecretArg == "" {
-				return fmt.Errorf("invalid provider client secret value got (%s) \n", clientSecretArg)
-			}
-
-			opts := providers.GetDefaultGoogleOpOptions()
-			opts.Issuer = issuerArg
-			opts.ClientID = clientIDArg
-			opts.ClientSecret = clientSecretArg
-			opts.GQSign = false
-			opts.OpenBrowser = openBrowser
-			provider = providers.NewGoogleOpWithOptions(opts)
-		} else if strings.HasPrefix(issuerArg, "https://login.microsoftonline.com") {
-			opts := providers.GetDefaultAzureOpOptions()
-			opts.Issuer = issuerArg
-			opts.ClientID = clientIDArg
-			opts.GQSign = false
-			opts.OpenBrowser = openBrowser
-			provider = providers.NewAzureOpWithOptions(opts)
-		} else if strings.HasPrefix(issuerArg, "https://gitlab.com") {
-			opts := providers.GetDefaultGitlabOpOptions()
-			opts.Issuer = issuerArg
-			opts.ClientID = clientIDArg
-			opts.GQSign = false
-			opts.OpenBrowser = openBrowser
-			provider = providers.NewGitlabOpWithOptions(opts)
-		} else {
-			// Generic provider - Need signing, no encryption
-			opts := providers.GetDefaultGoogleOpOptions()
-			opts.Issuer = issuerArg
-			opts.ClientID = clientIDArg
-			opts.ClientSecret = "" // No client secret for generic providers unless specified
-			opts.GQSign = false
-			opts.OpenBrowser = openBrowser
-
-			if len(parts) >= 3 {
-				opts.ClientSecret = parts[2]
-			}
-
-			if len(parts) >= 4 {
-				// Add all additional scopes from parts[3:] to opts.Scopes
-				additionalScopes := parts[3:]
-				if len(additionalScopes) > 0 {
-					opts.Scopes = append(opts.Scopes, additionalScopes...)
-				}
-			}
-
-			provider = providers.NewGoogleOpWithOptions(opts)
-		}
-	} else if l.providerFromLdFlags != nil {
-		provider = l.providerFromLdFlags
+	if l.overrideProvider != nil {
+		provider = *l.overrideProvider
 	} else {
-		googleOpOptions := providers.GetDefaultGoogleOpOptions()
-		googleOpOptions.OpenBrowser = openBrowser
-		googleOpOptions.GQSign = false
-		googleOp := providers.NewGoogleOpWithOptions(googleOpOptions)
-
-		azureOpOptions := providers.GetDefaultAzureOpOptions()
-		azureOpOptions.OpenBrowser = openBrowser
-		azureOpOptions.GQSign = false
-		azureOp := providers.NewAzureOpWithOptions(azureOpOptions)
-
-		gitlabOpOptions := providers.GetDefaultGitlabOpOptions()
-		gitlabOpOptions.OpenBrowser = openBrowser
-		gitlabOpOptions.GQSign = false
-		gitlabOp := providers.NewGitlabOpWithOptions(gitlabOpOptions)
-
-		var err error
-		provider, err = choosers.NewWebChooser(
-			[]providers.BrowserOpenIdProvider{googleOp, azureOp, gitlabOp},
-			!l.disableBrowserOpenArg,
-		).ChooseOp(ctx)
+		op, chooser, err := l.determineProvider()
 		if err != nil {
-			return fmt.Errorf("error selecting OpenID provider: %w", err)
+			return err
+		}
+		if chooser != nil {
+			provider, err = chooser.ChooseOp(ctx)
+			if err != nil {
+				return fmt.Errorf("error choosing provider: %w", err)
+			}
+		} else if op != nil {
+			provider = op
+		} else {
+			return fmt.Errorf("no provider found") // Either the provider or the chooser must be set. If this occurs we have a bug in the code.
 		}
 	}
 
 	// Execute login command
 	if l.autoRefresh {
 		if providerRefreshable, ok := provider.(providers.RefreshableOpenIdProvider); ok {
-			err := LoginWithRefresh(ctx, providerRefreshable, l.printIdTokenArg, l.keyPathArg)
+			err := l.LoginWithRefresh(ctx, providerRefreshable, l.printIdTokenArg, l.keyPathArg)
 			if err != nil {
 				return fmt.Errorf("error logging in: %w", err)
 			}
@@ -199,7 +131,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 			return fmt.Errorf("supplied OpenID Provider (%v) does not support auto-refresh and auto-refresh argument set to true", provider.Issuer())
 		}
 	} else {
-		err := Login(ctx, provider, l.printIdTokenArg, l.keyPathArg)
+		err := l.Login(ctx, provider, l.printIdTokenArg, l.keyPathArg)
 		if err != nil {
 			return fmt.Errorf("error logging in: %w", err)
 		}
@@ -207,7 +139,76 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 	return nil
 }
 
-func login(ctx context.Context, provider client.OpenIdProvider, printIdToken bool, seckeyPath string) (*LoginCmd, error) {
+func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebChooser, error) {
+	openBrowser := !l.disableBrowserOpenArg
+
+	// If the user has supplied commandline arguments for the provider, use those instead of the web chooser
+	var provider providers.OpenIdProvider
+	if l.providerArg != "" {
+		config, err := NewProviderConfigFromString(l.providerArg, false)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error parsing provider argument: %w", err)
+		}
+
+		provider, err = NewProviderFromConfig(config, openBrowser)
+
+		if err != nil {
+			return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
+		}
+	} else {
+		var err error
+
+		// Get the default provider from the env variable
+		defaultProvider, ok := os.LookupEnv(OPKSSH_DEFAULT_ENVVAR)
+		if !ok || defaultProvider == "" {
+			defaultProvider = WEBCHOOSER_ALIAS
+		}
+		providerConfigs, err := GetProvidersConfigFromEnv()
+
+		if err != nil {
+			return nil, nil, fmt.Errorf("error getting provider config from env: %w", err)
+		}
+
+		if l.providerAlias != "" && l.providerAlias != WEBCHOOSER_ALIAS {
+			config, ok := providerConfigs[l.providerAlias]
+			if !ok {
+				return nil, nil, fmt.Errorf("error getting provider config for alias %s", l.providerAlias)
+			}
+			provider, err = NewProviderFromConfig(config, openBrowser)
+			if err != nil {
+				return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
+			}
+		} else {
+			if defaultProvider != WEBCHOOSER_ALIAS {
+				config, ok := providerConfigs[defaultProvider]
+				if !ok {
+					return nil, nil, fmt.Errorf("error getting provider config for alias %s", defaultProvider)
+				}
+				provider, err = NewProviderFromConfig(config, openBrowser)
+				if err != nil {
+					return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
+				}
+			} else {
+				var providerList []providers.BrowserOpenIdProvider
+				for _, config := range providerConfigs {
+					op, err := NewProviderFromConfig(config, openBrowser)
+					if err != nil {
+						return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
+					}
+					providerList = append(providerList, op.(providers.BrowserOpenIdProvider))
+				}
+
+				chooser := choosers.NewWebChooser(
+					providerList, openBrowser,
+				)
+				return nil, chooser, nil
+			}
+		}
+	}
+	return provider, nil, nil
+}
+
+func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider, printIdToken bool, seckeyPath string) (*LoginCmd, error) {
 	var err error
 	alg := jwa.ES256
 	signer, err := util.GenKeyPair(alg)
@@ -236,12 +237,12 @@ func login(ctx context.Context, provider client.OpenIdProvider, printIdToken boo
 	// Write ssh secret key and public key to filesystem
 	if seckeyPath != "" {
 		// If we have set seckeyPath then write it there
-		if err := writeKeys(seckeyPath, seckeyPath+".pub", seckeySshPem, certBytes); err != nil {
+		if err := l.writeKeys(seckeyPath, seckeyPath+".pub", seckeySshPem, certBytes); err != nil {
 			return nil, fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
 		}
 	} else {
 		// If keyPath isn't set then write it to the default location
-		if err := writeKeysToSSHDir(seckeySshPem, certBytes); err != nil {
+		if err := l.writeKeysToSSHDir(seckeySshPem, certBytes); err != nil {
 			return nil, fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
 		}
 	}
@@ -273,8 +274,8 @@ func login(ctx context.Context, provider client.OpenIdProvider, printIdToken boo
 
 // Login performs the OIDC login procedure and creates the SSH certs/keys in the
 // default SSH key location.
-func Login(ctx context.Context, provider client.OpenIdProvider, printIdToken bool, seckeyPath string) error {
-	_, err := login(ctx, provider, printIdToken, seckeyPath)
+func (l *LoginCmd) Login(ctx context.Context, provider providers.OpenIdProvider, printIdToken bool, seckeyPath string) error {
+	_, err := l.login(ctx, provider, printIdToken, seckeyPath)
 	return err
 }
 
@@ -283,8 +284,8 @@ func Login(ctx context.Context, provider client.OpenIdProvider, printIdToken boo
 // the PKT (and create new SSH certs) indefinitely as its token expires. This
 // function only returns if it encounters an error or if the supplied context is
 // cancelled.
-func LoginWithRefresh(ctx context.Context, provider providers.RefreshableOpenIdProvider, printIdToken bool, seckeyPath string) error {
-	if loginResult, err := login(ctx, provider, printIdToken, seckeyPath); err != nil {
+func (l *LoginCmd) LoginWithRefresh(ctx context.Context, provider providers.RefreshableOpenIdProvider, printIdToken bool, seckeyPath string) error {
+	if loginResult, err := l.login(ctx, provider, printIdToken, seckeyPath); err != nil {
 		return err
 	} else {
 		var claims struct {
@@ -320,12 +321,12 @@ func LoginWithRefresh(ctx context.Context, provider providers.RefreshableOpenIdP
 			// Write ssh secret key and public key to filesystem
 			if seckeyPath != "" {
 				// If we have set seckeyPath then write it there
-				if err := writeKeys(seckeyPath, seckeyPath+".pub", seckeySshPem, certBytes); err != nil {
+				if err := l.writeKeys(seckeyPath, seckeyPath+".pub", seckeySshPem, certBytes); err != nil {
 					return fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
 				}
 			} else {
 				// If keyPath isn't set then write it to the default location
-				if err := writeKeysToSSHDir(seckeySshPem, certBytes); err != nil {
+				if err := l.writeKeysToSSHDir(seckeySshPem, certBytes); err != nil {
 					return fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
 				}
 			}
@@ -383,7 +384,7 @@ func createSSHCert(pkt *pktoken.PKToken, signer crypto.Signer, principals []stri
 	return certBytes, seckeySshBytes, nil
 }
 
-func writeKeysToSSHDir(seckeySshPem []byte, certBytes []byte) error {
+func (l *LoginCmd) writeKeysToSSHDir(seckeySshPem []byte, certBytes []byte) error {
 	homePath, err := os.UserHomeDir()
 	if err != nil {
 		return err
@@ -391,7 +392,7 @@ func writeKeysToSSHDir(seckeySshPem []byte, certBytes []byte) error {
 	sshPath := filepath.Join(homePath, ".ssh")
 
 	// Make ~/.ssh if folder does not exist
-	err = os.MkdirAll(sshPath, os.ModePerm)
+	err = l.Fs.MkdirAll(sshPath, os.ModePerm)
 	if err != nil {
 		return err
 	}
@@ -406,14 +407,15 @@ func writeKeysToSSHDir(seckeySshPem []byte, certBytes []byte) error {
 		seckeyPath := filepath.Join(sshPath, keyFilename)
 		pubkeyPath := seckeyPath + ".pub"
 
-		if !fileExists(seckeyPath) {
+		if !l.fileExists(seckeyPath) {
 			// If ssh key file does not currently exist, we don't have to worry about overwriting it
-			return writeKeys(seckeyPath, pubkeyPath, seckeySshPem, certBytes)
-		} else if !fileExists(pubkeyPath) {
+			return l.writeKeys(seckeyPath, pubkeyPath, seckeySshPem, certBytes)
+		} else if !l.fileExists(pubkeyPath) {
 			continue
 		} else {
 			// If the ssh key file does exist, check if it was generated by openpubkey, if it was then it is safe to overwrite
-			sshPubkey, err := os.ReadFile(pubkeyPath)
+			afs := &afero.Afero{Fs: l.Fs}
+			sshPubkey, err := afs.ReadFile(pubkeyPath)
 			if err != nil {
 				log.Println("Failed to read:", pubkeyPath)
 				continue
@@ -426,16 +428,17 @@ func writeKeysToSSHDir(seckeySshPem []byte, certBytes []byte) error {
 
 			// If the key comment is "openpubkey" then we generated it
 			if comment == "openpubkey" {
-				return writeKeys(seckeyPath, pubkeyPath, seckeySshPem, certBytes)
+				return l.writeKeys(seckeyPath, pubkeyPath, seckeySshPem, certBytes)
 			}
 		}
 	}
 	return fmt.Errorf("no default ssh key file free for openpubkey")
 }
 
-func writeKeys(seckeyPath string, pubkeyPath string, seckeySshPem []byte, certBytes []byte) error {
+func (l *LoginCmd) writeKeys(seckeyPath string, pubkeyPath string, seckeySshPem []byte, certBytes []byte) error {
 	// Write ssh secret key to filesystem
-	if err := os.WriteFile(seckeyPath, seckeySshPem, 0600); err != nil {
+	afs := &afero.Afero{Fs: l.Fs}
+	if err := afs.WriteFile(seckeyPath, seckeySshPem, 0600); err != nil {
 		return err
 	}
 
@@ -443,11 +446,11 @@ func writeKeys(seckeyPath string, pubkeyPath string, seckeySshPem []byte, certBy
 
 	certBytes = append(certBytes, []byte(" openpubkey")...)
 	// Write ssh public key (certificate) to filesystem
-	return os.WriteFile(pubkeyPath, certBytes, 0644)
+	return afs.WriteFile(pubkeyPath, certBytes, 0644)
 }
 
-func fileExists(fPath string) bool {
-	_, err := os.Open(fPath)
+func (l *LoginCmd) fileExists(fPath string) bool {
+	_, err := l.Fs.Open(fPath)
 	return !errors.Is(err, os.ErrNotExist)
 }
 
@@ -464,18 +467,161 @@ func IdentityString(pkt pktoken.PKToken) (string, error) {
 	}
 }
 
-func PrettyIdToken(pkt pktoken.PKToken) (string, error) {
+// ProviderConfig is the representation of the provider config:
+// {alias},{provider_url},{client_id},{client_secret},{scopes}
+// client secret is optional, as well as scopes, if not provided, the default for secret is an empty string, for scopes is "openid profile email"
+type ProviderConfig struct {
+	Alias        string
+	Issuer       string
+	ClientID     string
+	ClientSecret string
+	Scopes       []string
+}
 
+// NewProviderConfigFromString is a function to create the provider config from a string of the format
+// {alias},{provider_url},{client_id},{client_secret},{scopes}
+func NewProviderConfigFromString(configStr string, hasAlias bool) (ProviderConfig, error) {
+	parts := strings.Split(configStr, ",")
+	alias := ""
+	if hasAlias {
+		// If the config string has an alias, we need to remove it from the parts
+		alias = parts[0]
+		parts = parts[1:]
+	}
+	if len(parts) < 2 {
+		if hasAlias {
+			return ProviderConfig{}, fmt.Errorf("invalid provider config string. Expected format <alias>,<issuer>,<client_id> or <alias>,<issuer>,<client_id>,<client_secret> or <alias>,<issuer>,<client_id>,<client_secret>,<scopes>")
+		}
+		return ProviderConfig{}, fmt.Errorf("invalid provider config string. Expected format <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes>")
+	}
+
+	providerConfig := ProviderConfig{
+		Alias:    alias,
+		Issuer:   parts[0],
+		ClientID: parts[1],
+	}
+
+	if providerConfig.ClientID == "" {
+		return ProviderConfig{}, fmt.Errorf("invalid provider client-ID value got (%s)", providerConfig.ClientID)
+	}
+
+	if len(parts) > 2 {
+		providerConfig.ClientSecret = parts[2]
+	} else {
+		providerConfig.ClientSecret = ""
+	}
+
+	if len(parts) > 3 {
+		providerConfig.Scopes = strings.Split(parts[3], " ")
+	} else {
+		providerConfig.Scopes = []string{"openid", "profile", "email"}
+	}
+
+	if strings.HasPrefix(providerConfig.Issuer, "https://accounts.google.com") {
+		// The Google OP is strange in that it requires a client secret even if this is a public OIDC App.
+		// Despite its name the Google OP client secret is a public value.
+		if providerConfig.ClientSecret == "" {
+			if hasAlias {
+				return ProviderConfig{}, fmt.Errorf("invalid provider argument format. Expected format for google: <alias>,<issuer>,<client_id>,<client_secret>")
+			} else {
+				return ProviderConfig{}, fmt.Errorf("invalid provider argument format. Expected format for google: <issuer>,<client_id>,<client_secret>")
+			}
+
+		}
+	}
+	return providerConfig, nil
+}
+
+// NewProviderFromConfig is a function to create the provider from the config
+func NewProviderFromConfig(config ProviderConfig, openBrowser bool) (providers.OpenIdProvider, error) {
+
+	if config.Issuer == "" {
+		return nil, fmt.Errorf("invalid provider issuer value got (%s)", config.Issuer)
+	}
+
+	if !strings.HasPrefix(config.Issuer, "https://") {
+		return nil, fmt.Errorf("invalid provider issuer value. Expected issuer to start with 'https://' got (%s)", config.Issuer)
+	}
+
+	if config.ClientID == "" {
+		return nil, fmt.Errorf("invalid provider client-ID value got (%s)", config.ClientID)
+	}
+	var provider providers.OpenIdProvider
+
+	if strings.HasPrefix(config.Issuer, "https://accounts.google.com") {
+		opts := providers.GetDefaultGoogleOpOptions()
+		opts.Issuer = config.Issuer
+		opts.ClientID = config.ClientID
+		opts.ClientSecret = config.ClientSecret
+		opts.GQSign = false
+		opts.OpenBrowser = openBrowser
+		provider = providers.NewGoogleOpWithOptions(opts)
+	} else if strings.HasPrefix(config.Issuer, "https://login.microsoftonline.com") {
+		opts := providers.GetDefaultAzureOpOptions()
+		opts.Issuer = config.Issuer
+		opts.ClientID = config.ClientID
+		opts.GQSign = false
+		opts.OpenBrowser = openBrowser
+		provider = providers.NewAzureOpWithOptions(opts)
+	} else if strings.HasPrefix(config.Issuer, "https://gitlab.com") {
+		opts := providers.GetDefaultGitlabOpOptions()
+		opts.Issuer = config.Issuer
+		opts.ClientID = config.ClientID
+		opts.GQSign = false
+		opts.OpenBrowser = openBrowser
+		provider = providers.NewGitlabOpWithOptions(opts)
+	} else {
+		// Generic provider - Need signing, no encryption
+		opts := providers.GetDefaultGoogleOpOptions()
+		opts.Issuer = config.Issuer
+		opts.ClientID = config.ClientID
+		opts.GQSign = false
+		opts.ClientSecret = config.ClientSecret
+		opts.Scopes = config.Scopes
+		opts.OpenBrowser = openBrowser
+
+		provider = providers.NewGoogleOpWithOptions(opts)
+	}
+
+	return provider, nil
+}
+
+// GetProvidersConfigFromEnv is a function to retrieve the config from the env variables
+// OPKSSH_DEFAULT can be set to an alias
+// OPKSSH_PROVIDERS is a ; separated list of providers of the format <alias>,<issuer>,<client_id>,<client_secret>,<scopes>;<alias>,<issuer>,<client_id>,<client_secret>,<scopes>
+func GetProvidersConfigFromEnv() (map[string]ProviderConfig, error) {
+	providersConfig := make(map[string]ProviderConfig)
+
+	// Get the providers from the env variable
+	providerList, ok := os.LookupEnv(OPKSSH_PROVIDERS_ENVVAR)
+	if !ok {
+		providerList = DefaultProviderList
+	}
+
+	for _, providerStr := range strings.Split(providerList, ";") {
+		config, err := NewProviderConfigFromString(providerStr, true)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing provider config string: %w", err)
+		}
+		// If alias already exists, return an error
+		if _, ok := providersConfig[config.Alias]; ok {
+			return nil, fmt.Errorf("duplicate provider alias found: %s", config.Alias)
+		}
+		providersConfig[config.Alias] = config
+	}
+
+	return providersConfig, nil
+}
+
+func PrettyIdToken(pkt pktoken.PKToken) (string, error) {
 	idt, err := oidc.NewJwt(pkt.OpToken)
 	if err != nil {
 		return "", err
 	}
-
-	idt_json, err := json.MarshalIndent(idt.GetClaims(), "", "    ")
+	idtJson, err := json.MarshalIndent(idt.GetClaims(), "", "    ")
 
 	if err != nil {
 		return "", err
 	}
-
-	return string(idt_json[:]), nil
+	return string(idtJson[:]), nil
 }

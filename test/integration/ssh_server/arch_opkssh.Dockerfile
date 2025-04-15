@@ -59,7 +59,7 @@ COPY --from=builder /app/scripts/install-linux.sh install-linux.sh
 
 # Run install script to install/configure opkssh
 RUN chmod +x install-linux.sh
-RUN bash ./install-linux.sh --install-from=opksshbuild --no-sshd-restart --no-systemd-userdb-keys
+RUN bash ./install-linux.sh --install-from=opksshbuild --no-sshd-restart
 
 RUN opkssh --version
 RUN ls -l /usr/local/bin
