@@ -1,10 +1,8 @@
 name: CD
 
 on:
-  # Wait for the `CI` workflow to finish before starting it.
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
+  release:
+    types: [published]
 
 permissions:
   contents: write
@@ -13,8 +11,6 @@ permissions:
 jobs:
   goreleaser-release:
     name: Build and release opkssh with GoReleaser
-    # Ensure the workflows successfully finished and the ref is a tag
-    if: ${{ startsWith(github.ref, 'refs/tags/') && github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

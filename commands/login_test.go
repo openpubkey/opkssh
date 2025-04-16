@@ -84,9 +84,15 @@ func ProviderFromString(t *testing.T, providerString string) providers.OpenIdPro
 func TestLoginCmd(t *testing.T) {
 	_, _, mockOp := Mocks(t)
 
+	logDir := "./logs"
+	logPath := filepath.Join(logDir, "opkssh.log")
+
 	mockFs := afero.NewMemMapFs()
 	loginCmd := LoginCmd{
 		Fs:                    mockFs,
+		verbosity:             2,
+		printIdTokenArg:       true,
+		logDirArg:             logDir,
 		disableBrowserOpenArg: true,
 		overrideProvider:      &mockOp,
 	}
@@ -102,6 +108,11 @@ func TestLoginCmd(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, secKeyBytes)
 	require.Contains(t, string(secKeyBytes), "-----BEGIN OPENSSH PRIVATE KEY-----")
+
+	logBytes, err := afero.ReadFile(mockFs, logPath)
+	require.NoError(t, err)
+	require.NotNil(t, logBytes)
+	require.Contains(t, string(logBytes), "running login command with args:")
 }
 
 func TestDetermineProvider(t *testing.T) {
@@ -189,7 +200,7 @@ func TestDetermineProvider(t *testing.T) {
 			loginCmd := LoginCmd{
 				disableBrowserOpenArg: true,
 				providerArg:           tt.providerArg,
-				providerAlias:         tt.providerAlias,
+				providerAliasArg:      tt.providerAlias,
 				printIdTokenArg:       true,
 			}
 
@@ -226,13 +237,96 @@ func TestDetermineProvider(t *testing.T) {
 }
 
 func TestProviderConfigFromString(t *testing.T) {
-	providerConfig3, err := NewProviderConfigFromString(providerStr3, true)
-	require.NoError(t, err)
-	provider3, err := NewProviderFromConfig(providerConfig3, false)
-	require.NoError(t, err)
 
-	require.NotNil(t, provider3)
-	require.Equal(t, provider3.Issuer(), providerIssuer3)
+	tests := []struct {
+		name           string
+		configString   string
+		hasAlias       bool
+		expectedIssuer string
+		wantError1     bool
+		errorString1   string
+		wantError2     bool
+		errorString2   string
+	}{
+		{
+			name:           "Good path with test providerStr3",
+			configString:   providerStr3,
+			hasAlias:       true,
+			expectedIssuer: providerIssuer3,
+		},
+		{
+			name:           "Good path with test authentik OP",
+			configString:   "authentik,https://authentik.io/application/o/opkssh/,client_id,,openid profile email",
+			hasAlias:       true,
+			expectedIssuer: "https://authentik.io/application/o/opkssh/",
+		},
+		{
+			name:           "Good path with test Google OP",
+			configString:   "https://accounts.google.com,206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com,NOT-aREAL_3a_GOOGLE-CLIENTSECRET",
+			hasAlias:       false,
+			expectedIssuer: "https://accounts.google.com",
+		},
+		{
+			name:           "Good path with test microsoft OP",
+			configString:   "https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0,096ce0a3-5e72-4da8-9c86-12924b294a01",
+			hasAlias:       false,
+			expectedIssuer: "https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0",
+		},
+		{
+			name:           "Good path with test microsoft OP",
+			configString:   "https://gitlab.com,8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923",
+			hasAlias:       false,
+			expectedIssuer: "https://gitlab.com",
+		},
+		{
+			name:           "Good path with test hello OP",
+			configString:   "https://issuer.hello.coop,client-id,,openid email",
+			hasAlias:       false,
+			expectedIssuer: "https://issuer.hello.coop",
+		},
+		{
+			name:           "Alias set but no alias expected",
+			configString:   "exampleOp,https://token.example.com/,client_id,,openid profile email,",
+			hasAlias:       false,
+			expectedIssuer: "https://token.example.com/",
+			wantError2:     true,
+			errorString2:   "invalid provider issuer value. Expected issuer to start with 'https://'",
+		},
+		{
+			name:           "No alias set but alias expected",
+			configString:   "https://token.example.com/,client_id,,openid profile email,",
+			hasAlias:       true,
+			expectedIssuer: "https://token.example.com/",
+			wantError1:     true,
+			errorString1:   "invalid provider client-ID value got ()",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			providerConfig, err := NewProviderConfigFromString(tt.configString, tt.hasAlias)
+			if tt.wantError1 {
+				require.Error(t, err, "Expected error but got none")
+				if tt.errorString1 != "" {
+					require.ErrorContains(t, err, tt.errorString1, "Got a wrong error message")
+				}
+
+			} else {
+				require.NoError(t, err)
+				provider, err := NewProviderFromConfig(providerConfig, false)
+				if tt.wantError2 {
+					require.Error(t, err, "Expected error but got none")
+					if tt.errorString2 != "" {
+						require.ErrorContains(t, err, tt.errorString2, "Got a wrong error message")
+					}
+				} else {
+					require.NoError(t, err)
+					require.Equal(t, tt.expectedIssuer, provider.Issuer())
+				}
+			}
+		})
+	}
+
 }
 
 func TestNewLogin(t *testing.T) {
