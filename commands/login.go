@@ -51,7 +51,8 @@ const OPKSSH_PROVIDERS_ENVVAR = "OPKSSH_PROVIDERS"
 
 var DefaultProviderList = "google,https://accounts.google.com,206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com,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;" +
 	"microsoft,https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0,096ce0a3-5e72-4da8-9c86-12924b294a01;" +
-	"gitlab,https://gitlab.com,8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923"
+	"gitlab,https://gitlab.com,8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923;" +
+	"hello,https://issuer.hello.coop,app_xejobTKEsDNSRd5vofKB2iay_2rN"
 
 type LoginCmd struct {
 	Fs                    afero.Fs

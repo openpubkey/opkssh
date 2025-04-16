@@ -95,6 +95,8 @@ Arguments:
 				inputIssuer = "https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0"
 			case "gitlab":
 				inputIssuer = "https://gitlab.com"
+			case "hello":
+				inputIssuer = "https://issuer.hello.coop"
 			}
 
 			add := commands.AddCmd{
