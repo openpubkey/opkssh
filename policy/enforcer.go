@@ -33,19 +33,19 @@ type Enforcer struct {
 
 // type for Identity Token requiredClaims
 type requiredClaims struct {
-	Email  string      `json:"email"`
-	Sub    string      `json:"sub"`
+	Email string `json:"email"`
+	Sub   string `json:"sub"`
 }
 
 // type for Identity Token checkedClaims
 type checkedClaims struct {
-	Email  string      `json:"email"`
-	Sub    string      `json:"sub"`
+	Email                string              `json:"email"`
+	Sub                  string              `json:"sub"`
 	PotentialGroupClaims map[string][]string `json:"potentialGroupClaims,omitempty"`
 }
 
-func (s *checkedClaims) UnmarshalJSON(data []byte) error { 
-  // First unmarshal the static fields
+func (s *checkedClaims) UnmarshalJSON(data []byte) error {
+	// First unmarshal the static fields
 	var claims requiredClaims
 	err := json.Unmarshal(data, &claims)
 	if err != nil {
@@ -98,7 +98,7 @@ func validateClaim(claims *checkedClaims, user *User) bool {
 		oidcGroupsName := oidcGroupSections[1]
 
 		return slices.Contains(
-			claims.PotentialGroupClaims[oidcGroupsName], 
+			claims.PotentialGroupClaims[oidcGroupsName],
 			oidcGroupSections[len(oidcGroupSections)-1],
 		)
 	}
