@@ -55,13 +55,14 @@ var DefaultProviderList = "google,https://accounts.google.com,206584157355-7cbe4
 
 type LoginCmd struct {
 	Fs                    afero.Fs
-	autoRefresh           bool
-	logDir                string
+	autoRefreshArg        bool
+	logDirArg             string
 	disableBrowserOpenArg bool
 	printIdTokenArg       bool
 	keyPathArg            string
 	providerArg           string
-	providerAlias         string
+	providerAliasArg      string
+	verbosity             int                       // Default verbosity is 0, 1 is verbose, 2 is debug
 	overrideProvider      *providers.OpenIdProvider // Used in tests to override the provider to inject a mock provider
 	pkt                   *pktoken.PKToken
 	signer                crypto.Signer
@@ -70,25 +71,25 @@ type LoginCmd struct {
 	principals            []string
 }
 
-func NewLogin(autoRefresh bool, logDir string, disableBrowserOpenArg bool, printIdTokenArg bool,
-	providerArg string, keyPathArg string, providerAlias string) *LoginCmd {
+func NewLogin(autoRefreshArg bool, logDirArg string, disableBrowserOpenArg bool, printIdTokenArg bool,
+	providerArg string, keyPathArg string, providerAliasArg string) *LoginCmd {
 
 	return &LoginCmd{
 		Fs:                    afero.NewOsFs(),
-		autoRefresh:           autoRefresh,
-		logDir:                logDir,
+		autoRefreshArg:        autoRefreshArg,
+		logDirArg:             logDirArg,
 		disableBrowserOpenArg: disableBrowserOpenArg,
 		printIdTokenArg:       printIdTokenArg,
 		keyPathArg:            keyPathArg,
 		providerArg:           providerArg,
-		providerAlias:         providerAlias,
+		providerAliasArg:      providerAliasArg,
 	}
 }
 
 func (l *LoginCmd) Run(ctx context.Context) error {
 	// If a log directory was provided, write any logs to a file in that directory AND stdout
-	if l.logDir != "" {
-		logFilePath := filepath.Join(l.logDir, "opkssh.log")
+	if l.logDirArg != "" {
+		logFilePath := filepath.Join(l.logDirArg, "opkssh.log")
 		logFile, err := l.Fs.OpenFile(logFilePath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0660)
 		if err != nil {
 			log.Printf("Failed to open log for writing: %v \n", err)
@@ -98,6 +99,10 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		log.SetOutput(multiWriter)
 	} else {
 		log.SetOutput(os.Stdout)
+	}
+
+	if l.verbosity >= 2 {
+		log.Printf("DEBUG: running login command with args: %+v", *l)
 	}
 
 	var provider providers.OpenIdProvider
@@ -121,7 +126,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 	}
 
 	// Execute login command
-	if l.autoRefresh {
+	if l.autoRefreshArg {
 		if providerRefreshable, ok := provider.(providers.RefreshableOpenIdProvider); ok {
 			err := l.LoginWithRefresh(ctx, providerRefreshable, l.printIdTokenArg, l.keyPathArg)
 			if err != nil {
@@ -169,10 +174,10 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 			return nil, nil, fmt.Errorf("error getting provider config from env: %w", err)
 		}
 
-		if l.providerAlias != "" && l.providerAlias != WEBCHOOSER_ALIAS {
-			config, ok := providerConfigs[l.providerAlias]
+		if l.providerAliasArg != "" && l.providerAliasArg != WEBCHOOSER_ALIAS {
+			config, ok := providerConfigs[l.providerAliasArg]
 			if !ok {
-				return nil, nil, fmt.Errorf("error getting provider config for alias %s", l.providerAlias)
+				return nil, nil, fmt.Errorf("error getting provider config for alias %s", l.providerAliasArg)
 			}
 			provider, err = NewProviderFromConfig(config, openBrowser)
 			if err != nil {
@@ -570,6 +575,13 @@ func NewProviderFromConfig(config ProviderConfig, openBrowser bool) (providers.O
 		opts.GQSign = false
 		opts.OpenBrowser = openBrowser
 		provider = providers.NewGitlabOpWithOptions(opts)
+	} else if strings.HasPrefix(config.Issuer, "https://issuer.hello.coop") {
+		opts := providers.GetDefaultHelloOpOptions()
+		opts.Issuer = config.Issuer
+		opts.ClientID = config.ClientID
+		opts.GQSign = false
+		opts.OpenBrowser = openBrowser
+		provider = providers.NewHelloOpWithOptions(opts)
 	} else {
 		// Generic provider - Need signing, no encryption
 		opts := providers.GetDefaultGoogleOpOptions()

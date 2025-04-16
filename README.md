@@ -5,7 +5,7 @@
 **opkssh** is a tool which enables ssh to be used with OpenID Connect allowing SSH access to be managed via identities like `alice@example.com` instead of long-lived SSH keys.
 It does not replace SSH, but instead generates SSH public keys containing PK Tokens and configures sshd to verify them. These PK Tokens contain standard [OpenID Connect ID Tokens](https://openid.net/specs/openid-connect-core-1_0.html). This protocol builds on the [OpenPubkey](https://github.com/openpubkey/openpubkey/blob/main/README.md) which adds user public keys to OpenID Connect without breaking compatibility with existing OpenID Provider.
 
-Currently opkssh is compatible with Google, Microsoft/Azure and Gitlab OpenID Providers (OP). If you have a gmail, microsoft or a gitlab account you can ssh with that account.
+Currently opkssh is compatible with Google, Microsoft/Azure, Gitlab, hello.dev, and Authelia OpenID Providers (OP). See below for the entire list. If you have a gmail, microsoft or a gitlab account you can ssh with that account.
 
 To ssh with opkssh you first need to download the opkssh binary and then run:
 
@@ -115,6 +115,7 @@ sudo opkssh add root alice@gmail.com google
 ```
 
 To allow a group, `ssh-users`, to ssh to your server as `root`, run:
+
 ```bash
 sudo opkssh add root oidc:groups:ssh-users google
 ```
@@ -191,9 +192,9 @@ Linux user accounts are typically referred to in SSH as *principals* and we cont
 - Column 2: Email address or subject ID of the user (choose one)
   - Email - the email of the identity
   - Subject ID - an unique ID for the user set by the OP. This is the `sub` claim in the ID Token.
-  - Group - the name of the group that the user is part of. This uses the `groups` claim which is presumed to 
+  - Group - the name of the group that the user is part of. This uses the `groups` claim which is presumed to
     be an array. The group identifier uses a structured identifier. I.e. `oidc:groups:{groupId}`. Replace the `groupId`
-    with the id of your group. 
+    with the id of your group.
 - Column 3: Issuer URI
 
 ```bash
@@ -278,7 +279,7 @@ or in the rare case that a client secret is required by the OpenID Provider:
 opkssh login --provider={ISSUER},{CLIENT_ID},{CLIENT_SECRET}
 ```
 
-where ISSUER, CLIENT_ID and CLIENT_SECRET correspond to the issuer client ID and client secret of the custom OpenID Provider. 
+where ISSUER, CLIENT_ID and CLIENT_SECRET correspond to the issuer client ID and client secret of the custom OpenID Provider.
 
 For example if the issuer is `https://authentik.local/application/o/opkssh/` and the client ID was `ClientID123`:
 
@@ -330,7 +331,7 @@ Such replay attacks can be ruled out by simply using a new client ID with opkssh
 
 Note that this requirement of using different client IDs for different audiences and uses is not unique to opkssh and is a best practice in OpenID Connect.
 
-### Server Configuration
+### Provider Server Configuration
 
 In the `/etc/opk/providers` file, add the OpenID Provider as you would any OpenID Provider. For example:
 
@@ -354,7 +355,6 @@ opkssh add root alice@example.com https://authentik.local/application/o/opkssh/
 | [PocketID](https://github.com/pocket-id/pocket-id) | ✅      | Create a new OIDC Client and inside the new client, check "Public client" on OIDC Client Settings                                             |
 
 Do not use Confidential/Secret mode **only** client ID is needed.
-
 
 ## More information
 
