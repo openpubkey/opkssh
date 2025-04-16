@@ -98,14 +98,12 @@ This works because SSH sends the public key written by opkssh in `~/.ssh/id_ecds
 sftp root@example.com
 ```
 
-<details>
-<summary>
-
 ### Custom key name
 
-</summary>
+<details>
+<summary>Instructions</summary>
 
-### SSH command
+#### SSH command
 Tell opkssh to store the name the key-pair `opkssh_server_group1`
 
 ```cmd
@@ -120,22 +118,23 @@ ssh -o "IdentitiesOnly=yes" -i ~/.ssh/opkssh_server_group1.pub -i ~/.ssh/opkssh_
 
 We recommend specifying `-o "IdentitiesOnly=yes"` as it tells ssh to only use the provided key. Otherwise ssh will cycle through other keys in `~/.ssh` first and may not get to the specified ones. Servers are configured to only allow 6 attempts by default the config key is `MaxAuthTries 6`.
 
-### Python - Paramiko
+#### Python - Paramiko
 
 If you use the `paramiko` libary for Python, then you'll have to manually load the public key like this:
 
 ```python
 import paramiko
 
-private_key = paramiko.ECDSAKey(filename='/home/username/.ssh/id_ecdsa')
-private_key.load_certificate('/home/username/.ssh/id_ecdsa.pub')
+private_key = paramiko.ECDSAKey(filename='/home/username/.ssh/opkssh_server_group1')
+private_key.load_certificate('/home/username/.ssh/opkssh_server_group1.pub')
 
-sshcon  = paramiko.SSHClient()  # will create the object
+sshcon  = paramiko.SSHClient()
 sshcon.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 sshcon.connect('192.168.10.10', username='ubuntu', pkey=private_key)
 ```
 
-</details
+</details>
+
 
 ### Installing on a Server
 
