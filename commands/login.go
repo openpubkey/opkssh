@@ -576,7 +576,7 @@ func NewProviderFromConfig(config ProviderConfig, openBrowser bool) (providers.O
 		opts.GQSign = false
 		opts.OpenBrowser = openBrowser
 		provider = providers.NewGitlabOpWithOptions(opts)
-	} else if strings.HasPrefix(config.Issuer, "https://issuer.hello.coop") {
+	} else if config.Issuer == "https://issuer.hello.coop" {
 		opts := providers.GetDefaultHelloOpOptions()
 		opts.Issuer = config.Issuer
 		opts.ClientID = config.ClientID
