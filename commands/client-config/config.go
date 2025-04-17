@@ -38,7 +38,7 @@ func (c *ClientConfig) GetProvidersStr() (string, error) {
 	}
 	var providers []string
 	for _, p := range c.Providers {
-		providerStr := fmt.Sprintf("%s,%s", p.Alias, p.Issuer, p.ClientID, p.ClientSecret, p.Scopes)
+		providerStr := fmt.Sprintf("%s,%s,%s,%s,%s", p.Alias, p.Issuer, p.ClientID, p.ClientSecret, p.Scopes)
 		providers = append(providers, providerStr)
 	}
 	return strings.Join(providers, ";"), nil
