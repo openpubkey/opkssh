@@ -608,18 +608,26 @@ func NewProviderFromConfig(config ProviderConfig, openBrowser bool) (providers.O
 // OPKSSH_PROVIDERS is a ; separated list of providers of the format <alias>,<issuer>,<client_id>,<client_secret>,<scopes>;<alias>,<issuer>,<client_id>,<client_secret>,<scopes>
 func GetProvidersConfigFromEnv() (map[string]ProviderConfig, error) {
 	providersConfig := make(map[string]ProviderConfig)
-
-	clientConfig, err := config.NewClientConfig("./client-config/default-client-config.yml")
-	if err != nil {
-		return nil, fmt.Errorf("error reading client config: %w", err)
-	}
-
 	// Get the providers from the env variable
 	providerList, ok := os.LookupEnv(OPKSSH_PROVIDERS_ENVVAR)
 	if !ok {
-		providerList, err = clientConfig.GetProvidersStr()
-		if err != nil {
-			return nil, fmt.Errorf("error building: %w", err)
+		clientConfig := "./default-client-config.yml"
+		if _, err := os.Stat(clientConfig); err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return nil, fmt.Errorf("no config file found at: %s", clientConfig)
+			} else {
+				return nil, fmt.Errorf("error checking for config file: %w", err)
+			}
+		} else {
+			clientConfig, err := config.NewClientConfig("./default-client-config.yml")
+			if err != nil {
+				return nil, fmt.Errorf("error reading client config: %w", err)
+			}
+
+			providerList, err = clientConfig.GetProvidersStr()
+			if err != nil {
+				return nil, fmt.Errorf("error building: %w", err)
+			}
 		}
 	}
 
