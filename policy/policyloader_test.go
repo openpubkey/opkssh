@@ -345,6 +345,32 @@ func TestLoadSystemDefaultPolicy_Success(t *testing.T) {
 	require.Equal(t, testPolicy, gotPolicy)
 }
 
+func TestLoadSystemDefaultPolicyWithSpaces_Success(t *testing.T) {
+	t.Parallel()
+
+	mockUserLookup := &MockUserLookup{User: ValidUser}
+	policyLoader := NewTestSystemPolicyLoader(afero.NewMemMapFs(), mockUserLookup)
+	mockFs := policyLoader.FileLoader.Fs
+	// Create policy file at default path with valid file
+	testPolicy := &policy.Policy{
+		Users: []policy.User{
+			{
+				IdentityAttribute: "oidc:groups:group with space",
+				Principals:        []string{"test"},
+				Issuer:            "https://example.com",
+			},
+		},
+	}
+	testPolicyFile, err := testPolicy.ToTable()
+	require.NoError(t, err)
+	err = afero.WriteFile(mockFs, policy.SystemDefaultPolicyPath, testPolicyFile, 0640)
+	require.NoError(t, err)
+	gotPolicy, _, err := policyLoader.LoadSystemPolicy()
+
+	require.NoError(t, err)
+	require.Equal(t, testPolicy, gotPolicy)
+}
+
 func TestDump_Success(t *testing.T) {
 	// Test that Dump writes the policy to the mock filesystem when there are no
 	// errors

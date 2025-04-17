@@ -110,6 +110,11 @@ func TestFieldsEscaped(t *testing.T) {
 			expected: []string{"hello", "world"},
 		},
 		{
+			name:     "disappearing escapes",
+			input:    `\a\b\c\d\e\f\ghi\\\\\\jkl \mno\pqr\`,
+			expected: []string{"abcdefghi\\\\\\jkl", "mnopqr"},
+		},
+		{
 			name:     "escaped special characters",
 			input:    `hello\#world test\$case`,
 			expected: []string{"hello#world", "test$case"},
