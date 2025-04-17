@@ -32,6 +32,19 @@ func NewClientConfig(path string) (*ClientConfig, error) {
 	return &config, nil
 }
 
+func (c *ClientConfig) GetProvidersStr() (string, error) {
+	if len(c.Providers) == 0 {
+		return "", fmt.Errorf("no providers found")
+	}
+	var providers []string
+	for _, p := range c.Providers {
+		providerStr := fmt.Sprintf("%s,%s", p.Alias, p.Issuer, p.ClientID, p.ClientSecret, p.Scopes)
+		providers = append(providers, providerStr)
+	}
+	return strings.Join(providers, ";"), nil
+
+}
+
 type ProviderConfig struct {
 	Alias        []string `yaml:"alias"`
 	Issuer       string   `yaml:"issuer"`

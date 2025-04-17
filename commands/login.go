@@ -40,6 +40,7 @@ import (
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/openpubkey/util"
+	config "github.com/openpubkey/opkssh/commands/client-config"
 	"github.com/openpubkey/opkssh/sshcert"
 	"github.com/spf13/afero"
 	"golang.org/x/crypto/ssh"
@@ -49,10 +50,10 @@ const WEBCHOOSER_ALIAS = "WEBCHOOSER"
 const OPKSSH_DEFAULT_ENVVAR = "OPKSSH_DEFAULT"
 const OPKSSH_PROVIDERS_ENVVAR = "OPKSSH_PROVIDERS"
 
-var DefaultProviderList = "google,https://accounts.google.com,206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com,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;" +
-	"microsoft,https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0,096ce0a3-5e72-4da8-9c86-12924b294a01;" +
-	"gitlab,https://gitlab.com,8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923;" +
-	"hello,https://issuer.hello.coop,app_xejobTKEsDNSRd5vofKB2iay_2rN"
+// var DefaultProviderList = "google,https://accounts.google.com,206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com,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;" +
+// 	"microsoft,https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0,096ce0a3-5e72-4da8-9c86-12924b294a01;" +
+// 	"gitlab,https://gitlab.com,8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923;" +
+// 	"hello,https://issuer.hello.coop,app_xejobTKEsDNSRd5vofKB2iay_2rN"
 
 type LoginCmd struct {
 	Fs                    afero.Fs
@@ -588,9 +589,12 @@ func NewProviderFromConfig(config ProviderConfig, openBrowser bool) (providers.O
 		opts := providers.GetDefaultGoogleOpOptions()
 		opts.Issuer = config.Issuer
 		opts.ClientID = config.ClientID
-		opts.GQSign = false
 		opts.ClientSecret = config.ClientSecret
 		opts.Scopes = config.Scopes
+		// opts.PromptType = "consent"
+		// opts.AccessType = "offline"
+		// opts.RedirectURIs = []string{"urn:ietf:wg:oauth:2.0:oob"}
+		opts.GQSign = false
 		opts.OpenBrowser = openBrowser
 
 		provider = providers.NewGoogleOpWithOptions(opts)
@@ -605,10 +609,18 @@ func NewProviderFromConfig(config ProviderConfig, openBrowser bool) (providers.O
 func GetProvidersConfigFromEnv() (map[string]ProviderConfig, error) {
 	providersConfig := make(map[string]ProviderConfig)
 
+	clientConfig, err := config.NewClientConfig("./client-config/default-client-config.yml")
+	if err != nil {
+		return nil, fmt.Errorf("error reading client config: %w", err)
+	}
+
 	// Get the providers from the env variable
 	providerList, ok := os.LookupEnv(OPKSSH_PROVIDERS_ENVVAR)
 	if !ok {
-		providerList = DefaultProviderList
+		providerList, err = clientConfig.GetProvidersStr()
+		if err != nil {
+			return nil, fmt.Errorf("error building: %w", err)
+		}
 	}
 
 	for _, providerStr := range strings.Split(providerList, ";") {
@@ -620,6 +632,7 @@ func GetProvidersConfigFromEnv() (map[string]ProviderConfig, error) {
 		if _, ok := providersConfig[config.Alias]; ok {
 			return nil, fmt.Errorf("duplicate provider alias found: %s", config.Alias)
 		}
+		//TODO: Remember to support more than one alias per provider
 		providersConfig[config.Alias] = config
 	}
 
