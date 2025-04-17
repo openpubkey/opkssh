@@ -120,7 +120,6 @@ func (t *Table) AddRow(row ...string) {
 func (t Table) ToString() string {
 	var sb strings.Builder
 	for _, row := range t.rows {
-		// URL-encode each column before writing
 		sb.WriteString(writeEscaped(row) + "\n")
 	}
 	return sb.String()
