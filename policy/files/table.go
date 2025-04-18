@@ -16,7 +16,12 @@
 
 package files
 
-import "strings"
+import (
+	"log"
+	"strings"
+
+	"github.com/google/shlex"
+)
 
 type Table struct {
 	rows [][]string
@@ -30,7 +35,12 @@ func NewTable(content []byte) *Table {
 		if row == "" {
 			continue
 		}
-		columns := strings.Fields(row)
+		columns, err := shlex.Split(row)
+
+		if err != nil {
+			log.Printf("Unable to parse: %s. (%s), skipping...\n", row, err)
+			continue
+		}
 		table = append(table, columns)
 	}
 	return &Table{rows: table}
