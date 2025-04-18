@@ -16,7 +16,12 @@
 
 package files
 
-import "strings"
+import (
+	"log"
+	"strings"
+
+	"github.com/kballard/go-shellquote"
+)
 
 type Table struct {
 	rows [][]string
@@ -30,7 +35,12 @@ func NewTable(content []byte) *Table {
 		if row == "" {
 			continue
 		}
-		columns := strings.Fields(row)
+		columns, err := shellquote.Split(row)
+
+		if err != nil {
+			log.Printf("Unable to parse: %s. (%s), skipping...\n", row, err)
+			continue
+		}
 		table = append(table, columns)
 	}
 	return &Table{rows: table}
@@ -51,7 +61,7 @@ func (t *Table) AddRow(row ...string) {
 func (t Table) ToString() string {
 	var sb strings.Builder
 	for _, row := range t.rows {
-		sb.WriteString(strings.Join(row, " ") + "\n")
+		sb.WriteString(shellquote.Join(row...) + "\n")
 	}
 	return sb.String()
 }
