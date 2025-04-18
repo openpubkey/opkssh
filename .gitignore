@@ -31,3 +31,6 @@ opk-ssh-login
 
 # Build folder
 dist/
+
+# Created by integration tests
+test/integration/testfile.txt

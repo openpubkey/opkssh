@@ -85,6 +85,22 @@ To run the [Google example](https://github.com/openpubkey/openpubkey/tree/main/e
  3. Execute `./google login` to generate a valid PK token using Google as your OIDC provider.
  4. Execute `./google sign` to use the PK token generated in (3) to sign a verifiable message.
 
+## Integration Tests
+
+To run the integration tests, you need
+[Docker installed](https://docs.docker.com/engine/install/)
+and running, because the integration tests make use of
+[go testcontainers](https://golang.testcontainers.org/).
+
+Then run the integration tests with:
+
+```bash
+# Other supported values are 'centos', 'arch'
+# See test/integrationtest/ssh_server/ssh_server.go for more details
+export OS_TYPE="ubuntu"
+go test -tags=integration ./test/integration -timeout=15m -count=1 -v
+```
+
 ## Building and Packaging `opkssh` Locally
 
 `opkssh` leverages on [GoReleaser](https://goreleaser.com/) to simplify the process of building binaries for all supported systems and architectures, as well as creating distribution packages.
