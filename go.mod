@@ -7,7 +7,7 @@ require (
 	github.com/jeremija/gosubmit v0.2.7
 	github.com/lestrrat-go/jwx/v2 v2.0.21
 	github.com/melbahja/goph v1.4.0
-	github.com/openpubkey/openpubkey v0.10.0
+	github.com/openpubkey/openpubkey v0.12.0
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
 	github.com/testcontainers/testcontainers-go v0.35.0
@@ -92,5 +92,5 @@ require (
 	golang.org/x/oauth2 v0.25.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
+	gopkg.in/yaml.v3 v3.0.1
 )
