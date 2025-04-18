@@ -31,11 +31,58 @@ type Enforcer struct {
 	PolicyLoader Loader
 }
 
+// type for Identity Token requiredClaims
+type requiredClaims struct {
+	Email string `json:"email"`
+	Sub   string `json:"sub"`
+}
+
 // type for Identity Token checkedClaims
 type checkedClaims struct {
-	Email  string   `json:"email"`
-	Sub    string   `json:"sub"`
-	Groups []string `json:"groups"`
+	Email                string              `json:"email"`
+	Sub                  string              `json:"sub"`
+	PotentialGroupClaims map[string][]string `json:"potentialGroupClaims,omitempty"`
+}
+
+func (s *checkedClaims) UnmarshalJSON(data []byte) error {
+	// First unmarshal the static fields
+	var claims requiredClaims
+	err := json.Unmarshal(data, &claims)
+	if err != nil {
+		return err
+	}
+
+	// Unmarshal the rest
+	var schema map[string]interface{}
+	err = json.Unmarshal([]byte(data), &schema)
+	if err != nil {
+		return err
+	}
+
+	s.Email = claims.Email
+	s.Sub = claims.Sub
+	s.PotentialGroupClaims = make(map[string][]string)
+	// Add all []string types as potential group claims
+	for key, value := range schema {
+		groups, ok := value.([]interface{})
+		if ok {
+			isPotentialGroup := true
+			strGroups := make([]string, len(groups))
+			for i, v := range groups {
+				str, ok := v.(string)
+				if !ok {
+					isPotentialGroup = false
+					break
+				}
+				strGroups[i] = str
+			}
+			if isPotentialGroup {
+				s.PotentialGroupClaims[key] = strGroups
+			}
+		}
+	}
+
+	return nil
 }
 
 // Validates that the server defined identity attribute matches the
@@ -44,7 +91,16 @@ func validateClaim(claims *checkedClaims, user *User) bool {
 	if strings.HasPrefix(user.IdentityAttribute, "oidc:groups") {
 		oidcGroupSections := strings.Split(user.IdentityAttribute, ":")
 
-		return slices.Contains(claims.Groups, oidcGroupSections[len(oidcGroupSections)-1])
+		return slices.Contains(claims.PotentialGroupClaims["groups"], oidcGroupSections[len(oidcGroupSections)-1])
+	}
+	if strings.HasPrefix(user.IdentityAttribute, "oidc") {
+		oidcGroupSections := strings.Split(user.IdentityAttribute, "|")
+		oidcGroupsName := oidcGroupSections[1]
+
+		return slices.Contains(
+			claims.PotentialGroupClaims[oidcGroupsName],
+			oidcGroupSections[len(oidcGroupSections)-1],
+		)
 	}
 
 	// email should be a case-insensitive check
