@@ -116,6 +116,7 @@ Arguments:
 	rootCmd.AddCommand(addCmd)
 
 	var autoRefreshArg bool
+	var configPathArg string
 	var logDirArg string
 	var providerArg string
 	var disableBrowserOpenArg bool
@@ -151,7 +152,7 @@ Arguments:
 				providerAliasArg = args[0]
 			}
 
-			login := commands.NewLogin(autoRefreshArg, logDirArg, disableBrowserOpenArg, printIdTokenArg, providerArg, keyPathArg, providerAliasArg)
+			login := commands.NewLogin(autoRefreshArg, configPathArg, logDirArg, disableBrowserOpenArg, printIdTokenArg, providerArg, keyPathArg, providerAliasArg)
 			if err := login.Run(ctx); err != nil {
 				log.Println("Error executing login command:", err)
 				return err
@@ -163,6 +164,7 @@ Arguments:
 
 	// Define flags for login.
 	loginCmd.Flags().BoolVar(&autoRefreshArg, "auto-refresh", false, "Automatically refresh PK token after login")
+	loginCmd.Flags().StringVar(&configPathArg, "configPath", "", "Path to the client config file (default is ~/.opk/config.yaml)")
 	loginCmd.Flags().StringVar(&logDirArg, "log-dir", "", "Directory to write output logs")
 	loginCmd.Flags().BoolVar(&disableBrowserOpenArg, "disable-browser-open", false, "Set this flag to disable opening the browser. Useful for choosing the browser you want to use.")
 	loginCmd.Flags().BoolVar(&printIdTokenArg, "print-id-token", false, "Set this flag to print out the contents of the id_token. Useful for inspecting claims.")

@@ -29,6 +29,7 @@ import (
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/openpubkey/util"
+	config "github.com/openpubkey/opkssh/commands/client-config"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh"
@@ -197,11 +198,15 @@ func TestDetermineProvider(t *testing.T) {
 				}(k)
 			}
 
+			defaultConfig, err := config.DefaultClientConfig()
+			require.NoError(t, err, "Failed to get default client config")
+
 			loginCmd := LoginCmd{
 				disableBrowserOpenArg: true,
 				providerArg:           tt.providerArg,
 				providerAliasArg:      tt.providerAlias,
 				printIdTokenArg:       true,
+				config:                defaultConfig,
 			}
 
 			provider, chooser, err := loginCmd.determineProvider()
@@ -331,6 +336,7 @@ func TestProviderConfigFromString(t *testing.T) {
 
 func TestNewLogin(t *testing.T) {
 	autoRefresh := false
+	configPathArg := filepath.Join("..", "default-client-config.yml")
 	logDir := "./testdata"
 	disableBrowserOpenArg := true
 	printIdTokenArg := false
@@ -338,7 +344,7 @@ func TestNewLogin(t *testing.T) {
 	keyPathArg := ""
 	providerAlias := ""
 
-	loginCmd := NewLogin(autoRefresh, logDir, disableBrowserOpenArg, printIdTokenArg, providerArg, keyPathArg, providerAlias)
+	loginCmd := NewLogin(autoRefresh, configPathArg, logDir, disableBrowserOpenArg, printIdTokenArg, providerArg, keyPathArg, providerAlias)
 	require.NotNil(t, loginCmd)
 }
 

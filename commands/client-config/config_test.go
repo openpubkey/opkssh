@@ -23,7 +23,7 @@ import (
 )
 
 func TestParseConfig(t *testing.T) {
-	clientConfig, err := NewClientConfig("../../default-client-config.yml")
+	clientConfig, err := NewClientConfig(defaultClientConfig)
 	require.NoError(t, err)
 	require.NotNil(t, clientConfig)
 }

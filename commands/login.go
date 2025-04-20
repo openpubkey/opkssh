@@ -56,8 +56,10 @@ const OPKSSH_PROVIDERS_ENVVAR = "OPKSSH_PROVIDERS"
 // 	"hello,https://issuer.hello.coop,app_xejobTKEsDNSRd5vofKB2iay_2rN"
 
 type LoginCmd struct {
+	// Inputs
 	Fs                    afero.Fs
 	autoRefreshArg        bool
+	configPathArg         string
 	logDirArg             string
 	disableBrowserOpenArg bool
 	printIdTokenArg       bool
@@ -66,19 +68,25 @@ type LoginCmd struct {
 	providerAliasArg      string
 	verbosity             int                       // Default verbosity is 0, 1 is verbose, 2 is debug
 	overrideProvider      *providers.OpenIdProvider // Used in tests to override the provider to inject a mock provider
-	pkt                   *pktoken.PKToken
-	signer                crypto.Signer
-	alg                   jwa.SignatureAlgorithm
-	client                *client.OpkClient
-	principals            []string
+
+	// State
+	config *config.ClientConfig
+
+	// Outputs
+	pkt        *pktoken.PKToken
+	signer     crypto.Signer
+	alg        jwa.SignatureAlgorithm
+	client     *client.OpkClient
+	principals []string
 }
 
-func NewLogin(autoRefreshArg bool, logDirArg string, disableBrowserOpenArg bool, printIdTokenArg bool,
+func NewLogin(autoRefreshArg bool, configPathArg, logDirArg string, disableBrowserOpenArg bool, printIdTokenArg bool,
 	providerArg string, keyPathArg string, providerAliasArg string) *LoginCmd {
 
 	return &LoginCmd{
 		Fs:                    afero.NewOsFs(),
 		autoRefreshArg:        autoRefreshArg,
+		configPathArg:         configPathArg,
 		logDirArg:             logDirArg,
 		disableBrowserOpenArg: disableBrowserOpenArg,
 		printIdTokenArg:       printIdTokenArg,
@@ -105,6 +113,29 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 
 	if l.verbosity >= 2 {
 		log.Printf("DEBUG: running login command with args: %+v", *l)
+	}
+
+	if l.configPathArg == "" {
+		l.configPathArg = "~/.opk/default-client-config.yml"
+	}
+
+	var configBytes []byte
+	if _, err := l.Fs.Stat(l.configPathArg); err == nil {
+		// Load the file from the filesystem
+		afs := &afero.Afero{Fs: l.Fs}
+		configBytes, err = afs.ReadFile(l.configPathArg)
+		if err != nil {
+			return fmt.Errorf("failed to read config file: %w", err)
+		}
+		l.config, err = config.NewClientConfig(configBytes)
+		if err != nil {
+			return fmt.Errorf("failed to parse config file: %w", err)
+		}
+	} else {
+		l.config, err = config.DefaultClientConfig()
+		if err != nil {
+			return fmt.Errorf("failed to parse default config file: %w", err)
+		}
 	}
 
 	var provider providers.OpenIdProvider
@@ -149,70 +180,85 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebChooser, error) {
 	openBrowser := !l.disableBrowserOpenArg
 
-	// If the user has supplied commandline arguments for the provider, use those instead of the web chooser
+	var defaultProviderAlias string
+	var providerConfigs map[string]ProviderConfig
 	var provider providers.OpenIdProvider
+	var err error
+
+	// If the user has supplied commandline arguments for the provider, short circuit and use providerArg
 	if l.providerArg != "" {
 		config, err := NewProviderConfigFromString(l.providerArg, false)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error parsing provider argument: %w", err)
 		}
 
-		provider, err = NewProviderFromConfig(config, openBrowser)
+		if provider, err = NewProviderFromConfig(config, openBrowser); err != nil {
+			return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
+		} else {
+			return provider, nil, nil
+		}
+	}
 
+	// Set the default provider from the env variable if specified
+	defaultProviderEnv, _ := os.LookupEnv(OPKSSH_DEFAULT_ENVVAR)
+	providerConfigsEnv, err := GetProvidersConfigFromEnv()
+	if err != nil {
+		return nil, nil, fmt.Errorf("error getting provider config from env: %w", err)
+	}
+
+	providerList, err := l.config.GetProvidersStr()
+	if err != nil {
+		return nil, nil, fmt.Errorf("error building: %w", err)
+	}
+	providerConfigsConf, err := ProvidersConfigFromStrings(providerList)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error parsing provider config: %w", err)
+	}
+
+	if l.providerAliasArg != "" {
+		defaultProviderAlias = l.providerAliasArg
+	} else if defaultProviderEnv != "" {
+		defaultProviderAlias = defaultProviderEnv
+	} else if l.config.DefaultProvider != "" {
+		defaultProviderAlias = l.config.DefaultProvider
+	} else {
+		defaultProviderAlias = WEBCHOOSER_ALIAS
+	}
+
+	if providerConfigsEnv != nil {
+		providerConfigs = providerConfigsEnv
+	} else if providerConfigsConf != nil {
+		providerConfigs = providerConfigsConf
+	} else {
+		return nil, nil, fmt.Errorf("no providers specified")
+	}
+
+	if strings.ToUpper(defaultProviderAlias) != WEBCHOOSER_ALIAS {
+		config, ok := providerConfigs[defaultProviderAlias]
+		if !ok {
+			return nil, nil, fmt.Errorf("error getting provider config for alias %s", defaultProviderAlias)
+		}
+		provider, err = NewProviderFromConfig(config, openBrowser)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
 		}
+		return provider, nil, nil
 	} else {
-		var err error
-
-		// Get the default provider from the env variable
-		defaultProvider, ok := os.LookupEnv(OPKSSH_DEFAULT_ENVVAR)
-		if !ok || defaultProvider == "" {
-			defaultProvider = WEBCHOOSER_ALIAS
-		}
-		providerConfigs, err := GetProvidersConfigFromEnv()
-
-		if err != nil {
-			return nil, nil, fmt.Errorf("error getting provider config from env: %w", err)
-		}
-
-		if l.providerAliasArg != "" && l.providerAliasArg != WEBCHOOSER_ALIAS {
-			config, ok := providerConfigs[l.providerAliasArg]
-			if !ok {
-				return nil, nil, fmt.Errorf("error getting provider config for alias %s", l.providerAliasArg)
-			}
-			provider, err = NewProviderFromConfig(config, openBrowser)
+		// If the default provider is WEBCHOOSER, we need to create a chooser and return it
+		var providerList []providers.BrowserOpenIdProvider
+		for _, config := range providerConfigs {
+			op, err := NewProviderFromConfig(config, openBrowser)
 			if err != nil {
 				return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
 			}
-		} else {
-			if defaultProvider != WEBCHOOSER_ALIAS {
-				config, ok := providerConfigs[defaultProvider]
-				if !ok {
-					return nil, nil, fmt.Errorf("error getting provider config for alias %s", defaultProvider)
-				}
-				provider, err = NewProviderFromConfig(config, openBrowser)
-				if err != nil {
-					return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
-				}
-			} else {
-				var providerList []providers.BrowserOpenIdProvider
-				for _, config := range providerConfigs {
-					op, err := NewProviderFromConfig(config, openBrowser)
-					if err != nil {
-						return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
-					}
-					providerList = append(providerList, op.(providers.BrowserOpenIdProvider))
-				}
-
-				chooser := choosers.NewWebChooser(
-					providerList, openBrowser,
-				)
-				return nil, chooser, nil
-			}
+			providerList = append(providerList, op.(providers.BrowserOpenIdProvider))
 		}
+
+		chooser := choosers.NewWebChooser(
+			providerList, openBrowser,
+		)
+		return nil, chooser, nil
 	}
-	return provider, nil, nil
 }
 
 func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider, printIdToken bool, seckeyPath string) (*LoginCmd, error) {
@@ -591,8 +637,8 @@ func NewProviderFromConfig(config ProviderConfig, openBrowser bool) (providers.O
 		opts.ClientID = config.ClientID
 		opts.ClientSecret = config.ClientSecret
 		opts.Scopes = config.Scopes
-		// opts.PromptType = "consent"
-		// opts.AccessType = "offline"
+		opts.PromptType = "consent"
+		opts.AccessType = "offline"
 		// opts.RedirectURIs = []string{"urn:ietf:wg:oauth:2.0:oob"}
 		opts.GQSign = false
 		opts.OpenBrowser = openBrowser
@@ -607,30 +653,20 @@ func NewProviderFromConfig(config ProviderConfig, openBrowser bool) (providers.O
 // OPKSSH_DEFAULT can be set to an alias
 // OPKSSH_PROVIDERS is a ; separated list of providers of the format <alias>,<issuer>,<client_id>,<client_secret>,<scopes>;<alias>,<issuer>,<client_id>,<client_secret>,<scopes>
 func GetProvidersConfigFromEnv() (map[string]ProviderConfig, error) {
-	providersConfig := make(map[string]ProviderConfig)
 	// Get the providers from the env variable
 	providerList, ok := os.LookupEnv(OPKSSH_PROVIDERS_ENVVAR)
-	if !ok {
-		clientConfig := "./default-client-config.yml"
-		if _, err := os.Stat(clientConfig); err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				return nil, fmt.Errorf("no config file found at: %s", clientConfig)
-			} else {
-				return nil, fmt.Errorf("error checking for config file: %w", err)
-			}
-		} else {
-			clientConfig, err := config.NewClientConfig("./default-client-config.yml")
-			if err != nil {
-				return nil, fmt.Errorf("error reading client config: %w", err)
-			}
-
-			providerList, err = clientConfig.GetProvidersStr()
-			if err != nil {
-				return nil, fmt.Errorf("error building: %w", err)
-			}
-		}
+	if !ok || providerList == "" {
+		return nil, nil
 	}
+	if providersConfig, err := ProvidersConfigFromStrings(providerList); err != nil {
+		return nil, fmt.Errorf("error getting provider config from env: %w", err)
+	} else {
+		return providersConfig, nil
+	}
+}
 
+func ProvidersConfigFromStrings(providerList string) (map[string]ProviderConfig, error) {
+	providersConfig := make(map[string]ProviderConfig)
 	for _, providerStr := range strings.Split(providerList, ";") {
 		config, err := NewProviderConfigFromString(providerStr, true)
 		if err != nil {
@@ -643,7 +679,6 @@ func GetProvidersConfigFromEnv() (map[string]ProviderConfig, error) {
 		//TODO: Remember to support more than one alias per provider
 		providersConfig[config.Alias] = config
 	}
-
 	return providersConfig, nil
 }
 

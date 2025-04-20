@@ -1,35 +1,37 @@
 package config
 
 import (
+	_ "embed"
 	"fmt"
-	"os"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
+
+//go:embed default-client-config.yml
+var defaultClientConfig []byte
 
 type ClientConfig struct {
 	DefaultProvider string           `yaml:"default_provider"`
 	Providers       []ProviderConfig `yaml:"providers"`
 }
 
-func NewClientConfig(path string) (*ClientConfig, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
+func NewClientConfig(c []byte) (*ClientConfig, error) {
 	var config ClientConfig
-	if err := yaml.Unmarshal(data, &config); err != nil {
+	if err := yaml.Unmarshal(c, &config); err != nil {
 		return nil, err
 	}
 
-	fmt.Printf("Default Provider: %s\n\n", config.DefaultProvider)
-	for _, p := range config.Providers {
-		fmt.Printf("Aliases: %v\nIssuer: %s\nScopes: %v\nAccessType: %s\nPrompt: %s\n\n",
-			p.Alias, p.Issuer, p.Scopes, p.AccessType, p.Prompt)
-	}
+	// fmt.Printf("Default Provider: %s\n\n", config.DefaultProvider)
+	// for _, p := range config.Providers {
+	// 	fmt.Printf("Aliases: %v\nIssuer: %s\nScopes: %v\nAccessType: %s\nPrompt: %s\n\n",
+	// 		p.Alias, p.Issuer, p.Scopes, p.AccessType, p.Prompt)
+	// }
 	return &config, nil
+}
+
+func DefaultClientConfig() (*ClientConfig, error) {
+	return NewClientConfig(defaultClientConfig)
 }
 
 func (c *ClientConfig) GetProvidersStr() (string, error) {
