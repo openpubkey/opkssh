@@ -18,11 +18,16 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/openpubkey/openpubkey/providers"
 	"gopkg.in/yaml.v3"
 )
+
+const WEBCHOOSER_ALIAS = "WEBCHOOSER"
+const OPKSSH_DEFAULT_ENVVAR = "OPKSSH_DEFAULT"
+const OPKSSH_PROVIDERS_ENVVAR = "OPKSSH_PROVIDERS"
 
 type ProviderConfig struct {
 	AliasList    []string `yaml:"alias"`
@@ -205,4 +210,39 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 	}
 
 	return provider, nil
+}
+
+// GetProvidersConfigFromEnv is a function to retrieve the config from the env variables
+// OPKSSH_DEFAULT can be set to an alias
+// OPKSSH_PROVIDERS is a ; separated list of providers of the format <alias>,<issuer>,<client_id>,<client_secret>,<scopes>;<alias>,<issuer>,<client_id>,<client_secret>,<scopes>
+func GetProvidersConfigFromEnv() (map[string]ProviderConfig, error) {
+	// Get the providers from the env variable
+	providerList, ok := os.LookupEnv(OPKSSH_PROVIDERS_ENVVAR)
+	if !ok || providerList == "" {
+		return nil, nil
+	}
+	if providersConfig, err := ProvidersConfigFromStrings(providerList); err != nil {
+		return nil, fmt.Errorf("error getting provider config from env: %w", err)
+	} else {
+		return providersConfig, nil
+	}
+}
+
+func ProvidersConfigFromStrings(providerList string) (map[string]ProviderConfig, error) {
+	providersConfig := make(map[string]ProviderConfig)
+	for _, providerStr := range strings.Split(providerList, ";") {
+		providerConfig, err := NewProviderConfigFromString(providerStr, true)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing provider config string: %w", err)
+		}
+		for _, alias := range providerConfig.AliasList {
+			// If alias already exists, return an error
+			if _, ok := providersConfig[alias]; ok {
+				return nil, fmt.Errorf("duplicate provider alias found: %s", alias)
+			}
+			providersConfig[alias] = providerConfig
+		}
+
+	}
+	return providersConfig, nil
 }

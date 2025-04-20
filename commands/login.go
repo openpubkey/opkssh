@@ -46,15 +46,6 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-const WEBCHOOSER_ALIAS = "WEBCHOOSER"
-const OPKSSH_DEFAULT_ENVVAR = "OPKSSH_DEFAULT"
-const OPKSSH_PROVIDERS_ENVVAR = "OPKSSH_PROVIDERS"
-
-// var DefaultProviderList = "google,https://accounts.google.com,206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com,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;" +
-// 	"microsoft,https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0,096ce0a3-5e72-4da8-9c86-12924b294a01;" +
-// 	"gitlab,https://gitlab.com,8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923;" +
-// 	"hello,https://issuer.hello.coop,app_xejobTKEsDNSRd5vofKB2iay_2rN"
-
 type LoginCmd struct {
 	// Inputs
 	Fs                    afero.Fs
@@ -132,6 +123,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 			return fmt.Errorf("failed to parse config file: %w", err)
 		}
 	} else {
+		log.Printf("failed to find client config file to generate a default config, run `opkssh login --create-config` to create a default config file")
 		l.config, err = config.DefaultClientConfig()
 		if err != nil {
 			return fmt.Errorf("failed to parse default config file: %w", err)
@@ -200,8 +192,8 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 	}
 
 	// Set the default provider from the env variable if specified
-	defaultProviderEnv, _ := os.LookupEnv(OPKSSH_DEFAULT_ENVVAR)
-	providerConfigsEnv, err := GetProvidersConfigFromEnv()
+	defaultProviderEnv, _ := os.LookupEnv(config.OPKSSH_DEFAULT_ENVVAR)
+	providerConfigsEnv, err := config.GetProvidersConfigFromEnv()
 	if err != nil {
 		return nil, nil, fmt.Errorf("error getting provider config from env: %w", err)
 	}
@@ -218,7 +210,7 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 	} else if l.config.DefaultProvider != "" {
 		defaultProviderAlias = l.config.DefaultProvider
 	} else {
-		defaultProviderAlias = WEBCHOOSER_ALIAS
+		defaultProviderAlias = config.WEBCHOOSER_ALIAS
 	}
 
 	if providerConfigsEnv != nil {
@@ -229,7 +221,7 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 		return nil, nil, fmt.Errorf("no providers specified")
 	}
 
-	if strings.ToUpper(defaultProviderAlias) != WEBCHOOSER_ALIAS {
+	if strings.ToUpper(defaultProviderAlias) != config.WEBCHOOSER_ALIAS {
 		providerConfig, ok := providerConfigs[defaultProviderAlias]
 		if !ok {
 			return nil, nil, fmt.Errorf("error getting provider config for alias %s", defaultProviderAlias)
@@ -514,41 +506,6 @@ func IdentityString(pkt pktoken.PKToken) (string, error) {
 	} else {
 		return "Email, sub, issuer, audience: \n" + claims.Email + " " + claims.Subject + " " + claims.Issuer + " " + claims.Audience, nil
 	}
-}
-
-// GetProvidersConfigFromEnv is a function to retrieve the config from the env variables
-// OPKSSH_DEFAULT can be set to an alias
-// OPKSSH_PROVIDERS is a ; separated list of providers of the format <alias>,<issuer>,<client_id>,<client_secret>,<scopes>;<alias>,<issuer>,<client_id>,<client_secret>,<scopes>
-func GetProvidersConfigFromEnv() (map[string]config.ProviderConfig, error) {
-	// Get the providers from the env variable
-	providerList, ok := os.LookupEnv(OPKSSH_PROVIDERS_ENVVAR)
-	if !ok || providerList == "" {
-		return nil, nil
-	}
-	if providersConfig, err := ProvidersConfigFromStrings(providerList); err != nil {
-		return nil, fmt.Errorf("error getting provider config from env: %w", err)
-	} else {
-		return providersConfig, nil
-	}
-}
-
-func ProvidersConfigFromStrings(providerList string) (map[string]config.ProviderConfig, error) {
-	providersConfig := make(map[string]config.ProviderConfig)
-	for _, providerStr := range strings.Split(providerList, ";") {
-		providerConfig, err := config.NewProviderConfigFromString(providerStr, true)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing provider config string: %w", err)
-		}
-		for _, alias := range providerConfig.AliasList {
-			// If alias already exists, return an error
-			if _, ok := providersConfig[alias]; ok {
-				return nil, fmt.Errorf("duplicate provider alias found: %s", alias)
-			}
-			providersConfig[alias] = providerConfig
-		}
-
-	}
-	return providersConfig, nil
 }
 
 func PrettyIdToken(pkt pktoken.PKToken) (string, error) {

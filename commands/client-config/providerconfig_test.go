@@ -23,32 +23,27 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const providerAlias1 = "op1"
-const providerIssuer1 = "https://example.com/tokens-1/"
-const providerArg1 = providerIssuer1 + ",client-id1234,,"
-const providerStr1 = providerAlias1 + "," + providerArg1
-
-const providerAlias2 = "op2"
-const providerIssuer2 = "https://auth.issuer/tokens-2/"
-const providerArg2 = providerIssuer2 + ",client-id5678,,"
-const providerStr2 = providerAlias2 + "," + providerArg2
-
-const providerAlias3 = "op3"
-const providerIssuer3 = "https://openidprovider.openidconnect/tokens-3/"
-const providerArg3 = providerIssuer3 + ",client-id91011,,"
-const providerStr3 = providerAlias3 + "," + providerArg3
-
-const allProvidersStr = providerStr1 + ";" + providerStr2 + ";" + providerStr3
-
 func ProviderFromString(t *testing.T, providerString string) providers.OpenIdProvider {
-	providerConfig3, err := NewProviderConfigFromString(providerStr3, true)
+	providerAlias := "op1"
+	providerIssuer := "https://example.com/tokens-1/"
+	providerScopes := "openid profile email"
+	providerArg := providerIssuer + ",client-id1234," + "," + "" + "," + providerScopes
+	providerStr := providerAlias + "," + providerArg
+
+	providerConfig, err := NewProviderConfigFromString(providerStr, true)
 	require.NoError(t, err)
-	provider3, err := providerConfig3.ToProvider(false)
+	provider, err := providerConfig.ToProvider(false)
 	require.NoError(t, err)
-	return provider3
+	return provider
 }
 
 func TestProviderConfigFromString(t *testing.T) {
+
+	providerAlias := "op1"
+	providerIssuer := "https://example.com/tokens-1/"
+	providerScopes := "openid profile email"
+	providerArg := providerIssuer + ",client-id1234," + "," + "" + "," + providerScopes
+	providerStr := providerAlias + "," + providerArg
 
 	tests := []struct {
 		name           string
@@ -61,10 +56,10 @@ func TestProviderConfigFromString(t *testing.T) {
 		errorString2   string
 	}{
 		{
-			name:           "Good path with test providerStr3",
-			configString:   providerStr3,
+			name:           "Good path with test providerStr",
+			configString:   providerStr,
 			hasAlias:       true,
-			expectedIssuer: providerIssuer3,
+			expectedIssuer: providerIssuer,
 		},
 		{
 			name:           "Good path with test authentik OP",
