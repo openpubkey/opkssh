@@ -20,6 +20,9 @@ Then you can ssh under this identity to any ssh server which is configured to us
 ssh user@example.com
 ```
 
+### OpenPubkey Mailing List
+For updates and announcements join the [OpenPubkey mailing list.](https://groups.google.com/g/openpubkey)
+
 ## Getting Started
 
 To ssh with opkssh, Alice first needs to install opkssh using homebrew or manually downloading the binary.
