@@ -18,7 +18,6 @@ package config
 
 import (
 	_ "embed"
-	"fmt"
 
 	"gopkg.in/yaml.v3"
 )
@@ -44,15 +43,6 @@ func DefaultClientConfig() (*ClientConfig, error) {
 	return NewClientConfig(defaultClientConfig)
 }
 
-func (c *ClientConfig) GetProviders() (map[string]ProviderConfig, error) {
-	if len(c.Providers) == 0 {
-		return nil, fmt.Errorf("no providers found")
-	}
-	providers := make(map[string]ProviderConfig)
-	for _, p := range c.Providers {
-		for _, alias := range p.AliasList {
-			providers[alias] = p
-		}
-	}
-	return providers, nil
+func (c *ClientConfig) GetProvidersMap() (map[string]ProviderConfig, error) {
+	return CreateProvidersMap(c.Providers)
 }

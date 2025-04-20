@@ -198,7 +198,7 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 		return nil, nil, fmt.Errorf("error getting provider config from env: %w", err)
 	}
 
-	providerConfigsConf, err := l.config.GetProviders()
+	providerConfigsConf, err := l.config.GetProvidersMap()
 	if err != nil {
 		return nil, nil, fmt.Errorf("error building: %w", err)
 	}

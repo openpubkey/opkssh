@@ -17,28 +17,94 @@
 package config
 
 import (
+	"os"
 	"testing"
 
-	"github.com/openpubkey/openpubkey/providers"
 	"github.com/stretchr/testify/require"
 )
 
-func ProviderFromString(t *testing.T, providerString string) providers.OpenIdProvider {
-	providerAlias := "op1"
-	providerIssuer := "https://example.com/tokens-1/"
-	providerScopes := "openid profile email"
-	providerArg := providerIssuer + ",client-id1234," + "," + "" + "," + providerScopes
-	providerStr := providerAlias + "," + providerArg
+func TestProvidersConfigFromStrings(t *testing.T) {
+	providersString := "google,https://accounts.google.com,206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com,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;" +
+		"microsoft,https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0,096ce0a3-5e72-4da8-9c86-12924b294a01;" +
+		"gitlab,https://gitlab.com,8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923;" +
+		"hello,https://issuer.hello.coop,app_xejobTKEsDNSRd5vofKB2iay_2rN"
 
-	providerConfig, err := NewProviderConfigFromString(providerStr, true)
+	providerConfigs, err := ProvidersConfigMapFromStrings(providersString)
 	require.NoError(t, err)
-	provider, err := providerConfig.ToProvider(false)
-	require.NoError(t, err)
-	return provider
+	require.NotNil(t, providerConfigs)
+	require.Equal(t, len(providerConfigs), 4)
+
+	providersStringRepeatsAlias := "google,https://accounts.google.com,1234,4566;" +
+		"fakeOP1,https://fake1.example.com,abcde,,openid email;" +
+		"fakeOP2,https://fake2.example.com,abcde,,openid email;" +
+		"fakeOP1,https://fake3.example.com,xyz"
+
+	providerConfigs, err = ProvidersConfigMapFromStrings(providersStringRepeatsAlias)
+	require.ErrorContains(t, err, "duplicate provider alias found: fakeOP1")
+	require.Nil(t, providerConfigs)
+
+	providersStringNoClientID := "fakeOP1,https://fake1.example.com,,,"
+	providerConfigs, err = ProvidersConfigMapFromStrings(providersStringNoClientID)
+	require.ErrorContains(t, err, "invalid provider client-ID value got ()")
+	require.Nil(t, providerConfigs)
+
+	providersStringInvalidFormat := "fakeOP1,https://fake1.example.com"
+	providerConfigs, err = ProvidersConfigMapFromStrings(providersStringInvalidFormat)
+	require.ErrorContains(t, err, "invalid provider config string")
+	require.Nil(t, providerConfigs)
+}
+
+func TestProvidersConfigFromEnv(t *testing.T) {
+
+	tests := []struct {
+		name        string
+		envVar      string
+		envValue    string
+		expectedLen int
+		wantOutput  string
+		wantError   string
+	}{
+		{
+			name:   "Set OPKSSH_PROVIDERS to good value",
+			envVar: "OPKSSH_PROVIDERS",
+			envValue: "google,https://accounts.google.com,1234,4566;" +
+				"fakeOP1,https://fake1.example.com,abcde,,openid email",
+			expectedLen: 2,
+			wantError:   "",
+		},
+		{
+			name:      "Set OPKSSH_PROVIDERS to emptye",
+			envVar:    "OPKSSH_PROVIDERS",
+			envValue:  "",
+			wantError: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_ = os.Setenv(tt.envVar, tt.envValue)
+			defer func(key string) {
+				_ = os.Unsetenv(key)
+			}(tt.envVar)
+
+			providerConfigs, err := GetProvidersConfigFromEnv()
+			if tt.wantError != "" {
+				require.ErrorContains(t, err, tt.wantError)
+				require.Nil(t, providerConfigs)
+			} else {
+				require.NoError(t, err)
+				if tt.expectedLen > 0 {
+					require.Equal(t, tt.expectedLen, len(providerConfigs))
+				} else {
+					// If no providers, this this should be nil
+					require.Nil(t, providerConfigs)
+				}
+			}
+		})
+	}
 }
 
 func TestProviderConfigFromString(t *testing.T) {
-
 	providerAlias := "op1"
 	providerIssuer := "https://example.com/tokens-1/"
 	providerScopes := "openid profile email"
@@ -133,5 +199,4 @@ func TestProviderConfigFromString(t *testing.T) {
 			}
 		})
 	}
-
 }

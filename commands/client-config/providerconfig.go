@@ -221,20 +221,28 @@ func GetProvidersConfigFromEnv() (map[string]ProviderConfig, error) {
 	if !ok || providerList == "" {
 		return nil, nil
 	}
-	if providersConfig, err := ProvidersConfigFromStrings(providerList); err != nil {
+	if providersConfig, err := ProvidersConfigMapFromStrings(providerList); err != nil {
 		return nil, fmt.Errorf("error getting provider config from env: %w", err)
 	} else {
 		return providersConfig, nil
 	}
 }
 
-func ProvidersConfigFromStrings(providerList string) (map[string]ProviderConfig, error) {
-	providersConfig := make(map[string]ProviderConfig)
+func ProvidersConfigMapFromStrings(providerList string) (map[string]ProviderConfig, error) {
+	providerConfigList := make([]ProviderConfig, 0)
 	for _, providerStr := range strings.Split(providerList, ";") {
 		providerConfig, err := NewProviderConfigFromString(providerStr, true)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing provider config string: %w", err)
 		}
+		providerConfigList = append(providerConfigList, providerConfig)
+	}
+	return CreateProvidersMap(providerConfigList)
+}
+
+func CreateProvidersMap(providerConfigList []ProviderConfig) (map[string]ProviderConfig, error) {
+	providersConfig := make(map[string]ProviderConfig)
+	for _, providerConfig := range providerConfigList {
 		for _, alias := range providerConfig.AliasList {
 			// If alias already exists, return an error
 			if _, ok := providersConfig[alias]; ok {
@@ -242,7 +250,6 @@ func ProvidersConfigFromStrings(providerList string) (map[string]ProviderConfig,
 			}
 			providersConfig[alias] = providerConfig
 		}
-
 	}
 	return providersConfig, nil
 }

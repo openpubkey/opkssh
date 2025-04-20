@@ -33,6 +33,15 @@ func TestParseConfig(t *testing.T) {
 
 	require.Equal(t, clientConfigDefault, clientConfigAlsoDefault)
 	require.Equal(t, clientConfigDefault.DefaultProvider, "webchooser")
+	require.Equal(t, 4, len(clientConfigDefault.Providers))
 
-	require.Equal(t, len(clientConfigDefault.Providers), 4)
+	providerMap, err := clientConfigDefault.GetProvidersMap()
+	require.NoError(t, err)
+	// This is 5 rather than 4 because one of the providers has 2 aliases
+	require.Equal(t, 5, len(providerMap))
+
+	// Test failure
+	clientConfigDefault, err = NewClientConfig([]byte("invalid yaml"))
+	require.ErrorContains(t, err, "yaml: unmarshal errors")
+	require.Nil(t, clientConfigDefault)
 }
