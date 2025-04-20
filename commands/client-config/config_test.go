@@ -23,7 +23,16 @@ import (
 )
 
 func TestParseConfig(t *testing.T) {
-	clientConfig, err := NewClientConfig(defaultClientConfig)
+	clientConfigDefault, err := NewClientConfig(defaultClientConfig)
 	require.NoError(t, err)
-	require.NotNil(t, clientConfig)
+	require.NotNil(t, clientConfigDefault)
+
+	clientConfigAlsoDefault, err := DefaultClientConfig()
+	require.NoError(t, err)
+	require.NotNil(t, clientConfigAlsoDefault)
+
+	require.Equal(t, clientConfigDefault, clientConfigAlsoDefault)
+	require.Equal(t, clientConfigDefault.DefaultProvider, "webchooser")
+
+	require.Equal(t, len(clientConfigDefault.Providers), 4)
 }

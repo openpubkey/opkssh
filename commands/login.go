@@ -181,18 +181,18 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 	openBrowser := !l.disableBrowserOpenArg
 
 	var defaultProviderAlias string
-	var providerConfigs map[string]ProviderConfig
+	var providerConfigs map[string]config.ProviderConfig
 	var provider providers.OpenIdProvider
 	var err error
 
 	// If the user has supplied commandline arguments for the provider, short circuit and use providerArg
 	if l.providerArg != "" {
-		config, err := NewProviderConfigFromString(l.providerArg, false)
+		providerConfig, err := config.NewProviderConfigFromString(l.providerArg, false)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error parsing provider argument: %w", err)
 		}
 
-		if provider, err = NewProviderFromConfig(config, openBrowser); err != nil {
+		if provider, err = providerConfig.ToProvider(openBrowser); err != nil {
 			return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
 		} else {
 			return provider, nil, nil
@@ -206,13 +206,9 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 		return nil, nil, fmt.Errorf("error getting provider config from env: %w", err)
 	}
 
-	providerList, err := l.config.GetProvidersStr()
+	providerConfigsConf, err := l.config.GetProviders()
 	if err != nil {
 		return nil, nil, fmt.Errorf("error building: %w", err)
-	}
-	providerConfigsConf, err := ProvidersConfigFromStrings(providerList)
-	if err != nil {
-		return nil, nil, fmt.Errorf("error parsing provider config: %w", err)
 	}
 
 	if l.providerAliasArg != "" {
@@ -234,11 +230,11 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 	}
 
 	if strings.ToUpper(defaultProviderAlias) != WEBCHOOSER_ALIAS {
-		config, ok := providerConfigs[defaultProviderAlias]
+		providerConfig, ok := providerConfigs[defaultProviderAlias]
 		if !ok {
 			return nil, nil, fmt.Errorf("error getting provider config for alias %s", defaultProviderAlias)
 		}
-		provider, err = NewProviderFromConfig(config, openBrowser)
+		provider, err = providerConfig.ToProvider(openBrowser)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
 		}
@@ -246,8 +242,8 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 	} else {
 		// If the default provider is WEBCHOOSER, we need to create a chooser and return it
 		var providerList []providers.BrowserOpenIdProvider
-		for _, config := range providerConfigs {
-			op, err := NewProviderFromConfig(config, openBrowser)
+		for _, providerConfig := range providerConfigs {
+			op, err := providerConfig.ToProvider(openBrowser)
 			if err != nil {
 				return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
 			}
@@ -520,139 +516,10 @@ func IdentityString(pkt pktoken.PKToken) (string, error) {
 	}
 }
 
-// ProviderConfig is the representation of the provider config:
-// {alias},{provider_url},{client_id},{client_secret},{scopes}
-// client secret is optional, as well as scopes, if not provided, the default for secret is an empty string, for scopes is "openid profile email"
-type ProviderConfig struct {
-	Alias        string
-	Issuer       string
-	ClientID     string
-	ClientSecret string
-	Scopes       []string
-}
-
-// NewProviderConfigFromString is a function to create the provider config from a string of the format
-// {alias},{provider_url},{client_id},{client_secret},{scopes}
-func NewProviderConfigFromString(configStr string, hasAlias bool) (ProviderConfig, error) {
-	parts := strings.Split(configStr, ",")
-	alias := ""
-	if hasAlias {
-		// If the config string has an alias, we need to remove it from the parts
-		alias = parts[0]
-		parts = parts[1:]
-	}
-	if len(parts) < 2 {
-		if hasAlias {
-			return ProviderConfig{}, fmt.Errorf("invalid provider config string. Expected format <alias>,<issuer>,<client_id> or <alias>,<issuer>,<client_id>,<client_secret> or <alias>,<issuer>,<client_id>,<client_secret>,<scopes>")
-		}
-		return ProviderConfig{}, fmt.Errorf("invalid provider config string. Expected format <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes>")
-	}
-
-	providerConfig := ProviderConfig{
-		Alias:    alias,
-		Issuer:   parts[0],
-		ClientID: parts[1],
-	}
-
-	if providerConfig.ClientID == "" {
-		return ProviderConfig{}, fmt.Errorf("invalid provider client-ID value got (%s)", providerConfig.ClientID)
-	}
-
-	if len(parts) > 2 {
-		providerConfig.ClientSecret = parts[2]
-	} else {
-		providerConfig.ClientSecret = ""
-	}
-
-	if len(parts) > 3 {
-		providerConfig.Scopes = strings.Split(parts[3], " ")
-	} else {
-		providerConfig.Scopes = []string{"openid", "profile", "email"}
-	}
-
-	if strings.HasPrefix(providerConfig.Issuer, "https://accounts.google.com") {
-		// The Google OP is strange in that it requires a client secret even if this is a public OIDC App.
-		// Despite its name the Google OP client secret is a public value.
-		if providerConfig.ClientSecret == "" {
-			if hasAlias {
-				return ProviderConfig{}, fmt.Errorf("invalid provider argument format. Expected format for google: <alias>,<issuer>,<client_id>,<client_secret>")
-			} else {
-				return ProviderConfig{}, fmt.Errorf("invalid provider argument format. Expected format for google: <issuer>,<client_id>,<client_secret>")
-			}
-
-		}
-	}
-	return providerConfig, nil
-}
-
-// NewProviderFromConfig is a function to create the provider from the config
-func NewProviderFromConfig(config ProviderConfig, openBrowser bool) (providers.OpenIdProvider, error) {
-
-	if config.Issuer == "" {
-		return nil, fmt.Errorf("invalid provider issuer value got (%s)", config.Issuer)
-	}
-
-	if !strings.HasPrefix(config.Issuer, "https://") {
-		return nil, fmt.Errorf("invalid provider issuer value. Expected issuer to start with 'https://' got (%s)", config.Issuer)
-	}
-
-	if config.ClientID == "" {
-		return nil, fmt.Errorf("invalid provider client-ID value got (%s)", config.ClientID)
-	}
-	var provider providers.OpenIdProvider
-
-	if strings.HasPrefix(config.Issuer, "https://accounts.google.com") {
-		opts := providers.GetDefaultGoogleOpOptions()
-		opts.Issuer = config.Issuer
-		opts.ClientID = config.ClientID
-		opts.ClientSecret = config.ClientSecret
-		opts.GQSign = false
-		opts.OpenBrowser = openBrowser
-		provider = providers.NewGoogleOpWithOptions(opts)
-	} else if strings.HasPrefix(config.Issuer, "https://login.microsoftonline.com") {
-		opts := providers.GetDefaultAzureOpOptions()
-		opts.Issuer = config.Issuer
-		opts.ClientID = config.ClientID
-		opts.GQSign = false
-		opts.OpenBrowser = openBrowser
-		provider = providers.NewAzureOpWithOptions(opts)
-	} else if strings.HasPrefix(config.Issuer, "https://gitlab.com") {
-		opts := providers.GetDefaultGitlabOpOptions()
-		opts.Issuer = config.Issuer
-		opts.ClientID = config.ClientID
-		opts.GQSign = false
-		opts.OpenBrowser = openBrowser
-		provider = providers.NewGitlabOpWithOptions(opts)
-	} else if config.Issuer == "https://issuer.hello.coop" {
-		opts := providers.GetDefaultHelloOpOptions()
-		opts.Issuer = config.Issuer
-		opts.ClientID = config.ClientID
-		opts.GQSign = false
-		opts.OpenBrowser = openBrowser
-		provider = providers.NewHelloOpWithOptions(opts)
-	} else {
-		// Generic provider - Need signing, no encryption
-		opts := providers.GetDefaultGoogleOpOptions()
-		opts.Issuer = config.Issuer
-		opts.ClientID = config.ClientID
-		opts.ClientSecret = config.ClientSecret
-		opts.Scopes = config.Scopes
-		opts.PromptType = "consent"
-		opts.AccessType = "offline"
-		// opts.RedirectURIs = []string{"urn:ietf:wg:oauth:2.0:oob"}
-		opts.GQSign = false
-		opts.OpenBrowser = openBrowser
-
-		provider = providers.NewGoogleOpWithOptions(opts)
-	}
-
-	return provider, nil
-}
-
 // GetProvidersConfigFromEnv is a function to retrieve the config from the env variables
 // OPKSSH_DEFAULT can be set to an alias
 // OPKSSH_PROVIDERS is a ; separated list of providers of the format <alias>,<issuer>,<client_id>,<client_secret>,<scopes>;<alias>,<issuer>,<client_id>,<client_secret>,<scopes>
-func GetProvidersConfigFromEnv() (map[string]ProviderConfig, error) {
+func GetProvidersConfigFromEnv() (map[string]config.ProviderConfig, error) {
 	// Get the providers from the env variable
 	providerList, ok := os.LookupEnv(OPKSSH_PROVIDERS_ENVVAR)
 	if !ok || providerList == "" {
@@ -665,19 +532,21 @@ func GetProvidersConfigFromEnv() (map[string]ProviderConfig, error) {
 	}
 }
 
-func ProvidersConfigFromStrings(providerList string) (map[string]ProviderConfig, error) {
-	providersConfig := make(map[string]ProviderConfig)
+func ProvidersConfigFromStrings(providerList string) (map[string]config.ProviderConfig, error) {
+	providersConfig := make(map[string]config.ProviderConfig)
 	for _, providerStr := range strings.Split(providerList, ";") {
-		config, err := NewProviderConfigFromString(providerStr, true)
+		providerConfig, err := config.NewProviderConfigFromString(providerStr, true)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing provider config string: %w", err)
 		}
-		// If alias already exists, return an error
-		if _, ok := providersConfig[config.Alias]; ok {
-			return nil, fmt.Errorf("duplicate provider alias found: %s", config.Alias)
+		for _, alias := range providerConfig.AliasList {
+			// If alias already exists, return an error
+			if _, ok := providersConfig[alias]; ok {
+				return nil, fmt.Errorf("duplicate provider alias found: %s", alias)
+			}
+			providersConfig[alias] = providerConfig
 		}
-		//TODO: Remember to support more than one alias per provider
-		providersConfig[config.Alias] = config
+
 	}
 	return providersConfig, nil
 }

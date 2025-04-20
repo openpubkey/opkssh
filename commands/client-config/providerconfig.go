@@ -1,0 +1,208 @@
+// Copyright 2025 OpenPubkey
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
+package config
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/openpubkey/openpubkey/providers"
+	"gopkg.in/yaml.v3"
+)
+
+type ProviderConfig struct {
+	AliasList    []string `yaml:"alias"`
+	Issuer       string   `yaml:"issuer"`
+	ClientID     string   `yaml:"client_id"`
+	ClientSecret string   `yaml:"client_secret,omitempty"`
+	Scopes       []string `yaml:"scopes"`
+	AccessType   string   `yaml:"access_type,omitempty"`
+	Prompt       string   `yaml:"prompt,omitempty"`
+	RedirectURIs []string `yaml:"redirect_uris"`
+}
+
+func (p *ProviderConfig) UnmarshalYAML(value *yaml.Node) error {
+	var tmp struct {
+		AliasList    string   `yaml:"alias"`
+		Issuer       string   `yaml:"issuer"`
+		ClientID     string   `yaml:"client_id"`
+		ClientSecret string   `yaml:"client_secret"`
+		Scopes       string   `yaml:"scopes"`
+		AccessType   string   `yaml:"access_type"`
+		Prompt       string   `yaml:"prompt"`
+		RedirectURIs []string `yaml:"redirect_uris"`
+	}
+	if err := value.Decode(&tmp); err != nil {
+		return err
+	}
+	*p = ProviderConfig{
+		AliasList:    strings.Fields(tmp.AliasList),
+		Issuer:       tmp.Issuer,
+		ClientID:     tmp.ClientID,
+		ClientSecret: tmp.ClientSecret,
+		Scopes:       strings.Fields(tmp.Scopes),
+		AccessType:   tmp.AccessType,
+		Prompt:       tmp.Prompt,
+		RedirectURIs: tmp.RedirectURIs,
+	}
+	return nil
+}
+
+// TODO: Move this into OpenPubkey providers package
+func DefaultProviderConfig() ProviderConfig {
+	return ProviderConfig{
+		AliasList:    []string{},
+		Issuer:       "",
+		ClientID:     "",
+		ClientSecret: "",
+		Scopes:       []string{"openid", "profile", "email"},
+		AccessType:   "offline",
+		RedirectURIs: []string{
+			"http://localhost:3000/login-callback",
+			"http://localhost:10001/login-callback",
+			"http://localhost:11110/login-callback",
+		},
+		Prompt: "consent",
+	}
+}
+
+// NewProviderConfigFromString is a function to create the provider config from a string of the format
+// {alias},{provider_url},{client_id},{client_secret},{scopes}
+func NewProviderConfigFromString(configStr string, hasAlias bool) (ProviderConfig, error) {
+	parts := strings.Split(configStr, ",")
+	alias := ""
+	if hasAlias {
+		// If the config string has an alias, we need to remove it from the parts
+		alias = parts[0]
+		parts = parts[1:]
+	}
+	if len(parts) < 2 {
+		if hasAlias {
+			return ProviderConfig{}, fmt.Errorf("invalid provider config string. Expected format <alias>,<issuer>,<client_id> or <alias>,<issuer>,<client_id>,<client_secret> or <alias>,<issuer>,<client_id>,<client_secret>,<scopes>")
+		}
+		return ProviderConfig{}, fmt.Errorf("invalid provider config string. Expected format <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes>")
+	}
+
+	providerConfig := DefaultProviderConfig()
+	providerConfig.AliasList = []string{alias}
+	providerConfig.Issuer = parts[0]
+	providerConfig.ClientID = parts[1]
+
+	if providerConfig.ClientID == "" {
+		return ProviderConfig{}, fmt.Errorf("invalid provider client-ID value got (%s)", providerConfig.ClientID)
+	}
+
+	if len(parts) > 2 {
+		providerConfig.ClientSecret = parts[2]
+	} else {
+		providerConfig.ClientSecret = ""
+	}
+
+	if len(parts) > 3 {
+		providerConfig.Scopes = strings.Split(parts[3], " ")
+	} else {
+		providerConfig.Scopes = []string{"openid", "profile", "email"}
+	}
+
+	if strings.HasPrefix(providerConfig.Issuer, "https://accounts.google.com") {
+		// The Google OP is strange in that it requires a client secret even if this is a public OIDC App.
+		// Despite its name the Google OP client secret is a public value.
+		if providerConfig.ClientSecret == "" {
+			if hasAlias {
+				return ProviderConfig{}, fmt.Errorf("invalid provider argument format. Expected format for google: <alias>,<issuer>,<client_id>,<client_secret>")
+			} else {
+				return ProviderConfig{}, fmt.Errorf("invalid provider argument format. Expected format for google: <issuer>,<client_id>,<client_secret>")
+			}
+		}
+	}
+	return providerConfig, nil
+}
+
+// NewProviderFromConfig is a function to create the provider from the config
+func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider, error) {
+
+	if p.Issuer == "" {
+		return nil, fmt.Errorf("invalid provider issuer value got (%s)", p.Issuer)
+	}
+
+	if !strings.HasPrefix(p.Issuer, "https://") {
+		return nil, fmt.Errorf("invalid provider issuer value. Expected issuer to start with 'https://' got (%s)", p.Issuer)
+	}
+
+	if p.ClientID == "" {
+		return nil, fmt.Errorf("invalid provider client-ID value got (%s)", p.ClientID)
+	}
+	var provider providers.OpenIdProvider
+
+	if strings.HasPrefix(p.Issuer, "https://accounts.google.com") {
+		opts := providers.GetDefaultGoogleOpOptions()
+		opts.Issuer = p.Issuer
+		opts.ClientID = p.ClientID
+		opts.ClientSecret = p.ClientSecret
+		opts.GQSign = false
+		opts.Scopes = p.Scopes
+		opts.PromptType = p.Prompt
+		opts.AccessType = p.AccessType
+		opts.RedirectURIs = p.RedirectURIs
+		opts.OpenBrowser = openBrowser
+		provider = providers.NewGoogleOpWithOptions(opts)
+	} else if strings.HasPrefix(p.Issuer, "https://login.microsoftonline.com") {
+		opts := providers.GetDefaultAzureOpOptions()
+		opts.Issuer = p.Issuer
+		opts.ClientID = p.ClientID
+		opts.GQSign = false
+		opts.PromptType = p.Prompt
+		opts.AccessType = p.AccessType
+		opts.RedirectURIs = p.RedirectURIs
+		opts.OpenBrowser = openBrowser
+		provider = providers.NewAzureOpWithOptions(opts)
+	} else if strings.HasPrefix(p.Issuer, "https://gitlab.com") {
+		opts := providers.GetDefaultGitlabOpOptions()
+		opts.Issuer = p.Issuer
+		opts.ClientID = p.ClientID
+		opts.GQSign = false
+		opts.PromptType = p.Prompt
+		opts.AccessType = p.AccessType
+		opts.RedirectURIs = p.RedirectURIs
+		opts.OpenBrowser = openBrowser
+		provider = providers.NewGitlabOpWithOptions(opts)
+	} else if p.Issuer == "https://issuer.hello.coop" {
+		opts := providers.GetDefaultHelloOpOptions()
+		opts.Issuer = p.Issuer
+		opts.ClientID = p.ClientID
+		opts.GQSign = false
+		opts.PromptType = p.Prompt
+		opts.AccessType = p.AccessType
+		opts.RedirectURIs = p.RedirectURIs
+		opts.OpenBrowser = openBrowser
+		provider = providers.NewHelloOpWithOptions(opts)
+	} else {
+		// Generic provider
+		opts := providers.GetDefaultGoogleOpOptions()
+		opts.Issuer = p.Issuer
+		opts.ClientID = p.ClientID
+		opts.ClientSecret = p.ClientSecret
+		opts.PromptType = p.Prompt
+		opts.AccessType = p.AccessType
+		opts.RedirectURIs = p.RedirectURIs
+		opts.GQSign = false
+		opts.OpenBrowser = openBrowser
+		provider = providers.NewGoogleOpWithOptions(opts)
+	}
+
+	return provider, nil
+}

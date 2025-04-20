@@ -1,9 +1,24 @@
+// Copyright 2025 OpenPubkey
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package config
 
 import (
 	_ "embed"
 	"fmt"
-	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -22,11 +37,6 @@ func NewClientConfig(c []byte) (*ClientConfig, error) {
 		return nil, err
 	}
 
-	// fmt.Printf("Default Provider: %s\n\n", config.DefaultProvider)
-	// for _, p := range config.Providers {
-	// 	fmt.Printf("Aliases: %v\nIssuer: %s\nScopes: %v\nAccessType: %s\nPrompt: %s\n\n",
-	// 		p.Alias, p.Issuer, p.Scopes, p.AccessType, p.Prompt)
-	// }
 	return &config, nil
 }
 
@@ -34,53 +44,15 @@ func DefaultClientConfig() (*ClientConfig, error) {
 	return NewClientConfig(defaultClientConfig)
 }
 
-func (c *ClientConfig) GetProvidersStr() (string, error) {
+func (c *ClientConfig) GetProviders() (map[string]ProviderConfig, error) {
 	if len(c.Providers) == 0 {
-		return "", fmt.Errorf("no providers found")
+		return nil, fmt.Errorf("no providers found")
 	}
-	var providers []string
+	providers := make(map[string]ProviderConfig)
 	for _, p := range c.Providers {
-		providerStr := fmt.Sprintf("%s,%s,%s,%s,%s", p.Alias, p.Issuer, p.ClientID, p.ClientSecret, p.Scopes)
-		providers = append(providers, providerStr)
+		for _, alias := range p.AliasList {
+			providers[alias] = p
+		}
 	}
-	return strings.Join(providers, ";"), nil
-
-}
-
-type ProviderConfig struct {
-	Alias        []string `yaml:"alias"`
-	Issuer       string   `yaml:"issuer"`
-	ClientID     string   `yaml:"client_id"`
-	ClientSecret string   `yaml:"client_secret,omitempty"`
-	Scopes       []string `yaml:"scopes"`
-	AccessType   string   `yaml:"access_type,omitempty"`
-	Prompt       string   `yaml:"prompt,omitempty"`
-	RedirectURIs []string `yaml:"redirect_uris"`
-}
-
-func (p *ProviderConfig) UnmarshalYAML(value *yaml.Node) error {
-	var tmp struct {
-		Alias        string   `yaml:"alias"`
-		Issuer       string   `yaml:"issuer"`
-		ClientID     string   `yaml:"client_id"`
-		ClientSecret string   `yaml:"client_secret"`
-		Scopes       string   `yaml:"scopes"`
-		AccessType   string   `yaml:"access_type"`
-		Prompt       string   `yaml:"prompt"`
-		RedirectURIs []string `yaml:"redirect_uris"`
-	}
-	if err := value.Decode(&tmp); err != nil {
-		return err
-	}
-	*p = ProviderConfig{
-		Alias:        strings.Fields(tmp.Alias),
-		Issuer:       tmp.Issuer,
-		ClientID:     tmp.ClientID,
-		ClientSecret: tmp.ClientSecret,
-		Scopes:       strings.Fields(tmp.Scopes),
-		AccessType:   tmp.AccessType,
-		Prompt:       tmp.Prompt,
-		RedirectURIs: tmp.RedirectURIs,
-	}
-	return nil
+	return providers, nil
 }
