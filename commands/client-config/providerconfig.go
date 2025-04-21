@@ -208,16 +208,14 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 		provider = providers.NewHelloOpWithOptions(opts)
 	} else {
 		// Generic provider
-		opts := providers.GetDefaultGoogleOpOptions()
-		opts.Issuer = p.Issuer
-		opts.ClientID = p.ClientID
+		opts := providers.GetDefaultStandardOpOptions(p.Issuer, p.ClientID)
 		opts.ClientSecret = p.ClientSecret
 		opts.PromptType = p.Prompt
 		opts.AccessType = p.AccessType
 		opts.RedirectURIs = p.RedirectURIs
 		opts.GQSign = false
 		opts.OpenBrowser = openBrowser
-		provider = providers.NewGoogleOpWithOptions(opts)
+		provider = providers.NewStandardOpWithOptions(opts)
 	}
 
 	return provider, nil
