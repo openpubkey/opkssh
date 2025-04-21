@@ -142,7 +142,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 				return fmt.Errorf("failed to write default config file: %w", err)
 			}
 			log.Printf("created client config file at %s", l.configPathArg)
-
+			return nil
 		} else {
 			log.Printf("failed to find client config file to generate a default config, run `opkssh login --create-config` to create a default config file")
 		}
