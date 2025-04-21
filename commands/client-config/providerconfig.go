@@ -53,7 +53,7 @@ func (p *ProviderConfig) UnmarshalYAML(value *yaml.Node) error {
 	}
 
 	// Set default values
-	tmp.Scopes = "openid email"
+	tmp.Scopes = "openid profile email"
 	tmp.AccessType = "offline"
 	tmp.Prompt = "consent"
 	tmp.RedirectURIs = []string{
