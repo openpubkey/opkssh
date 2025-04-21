@@ -325,7 +325,7 @@ You can use this shortcut which will use a provider alias to find the provider.
 opkssh login authentik
 ```
 
-This alias to provider mapping can configured using the OPKSSH_PROVIDERS environment variables.
+This alias to provider mapping be can configured using the OPKSSH_PROVIDERS environment variables.
 
 ### Client Config File
 
