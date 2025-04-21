@@ -135,7 +135,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 	} else {
 		if l.createConfigArg {
 			afs := &afero.Afero{Fs: l.Fs}
-			if err := l.Fs.MkdirAll(filepath.Dir(l.configPathArg), 0644); err != nil {
+			if err := l.Fs.MkdirAll(filepath.Dir(l.configPathArg), 0755); err != nil {
 				return fmt.Errorf("failed to create config directory: %w", err)
 			}
 			if err := afs.WriteFile(l.configPathArg, config.DefaultClientConfig, 0644); err != nil {
