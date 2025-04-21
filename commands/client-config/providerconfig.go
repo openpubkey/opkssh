@@ -51,6 +51,17 @@ func (p *ProviderConfig) UnmarshalYAML(value *yaml.Node) error {
 		Prompt       string   `yaml:"prompt"`
 		RedirectURIs []string `yaml:"redirect_uris"`
 	}
+
+	// Set default values
+	tmp.Scopes = "openid email"
+	tmp.AccessType = "offline"
+	tmp.Prompt = "consent"
+	tmp.RedirectURIs = []string{
+		"http://localhost:3000/login-callback",
+		"http://localhost:10001/login-callback",
+		"http://localhost:11110/login-callback",
+	}
+
 	if err := value.Decode(&tmp); err != nil {
 		return err
 	}
