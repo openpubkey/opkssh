@@ -51,6 +51,7 @@ type LoginCmd struct {
 	Fs                    afero.Fs
 	autoRefreshArg        bool
 	configPathArg         string
+	createConfigArg       bool
 	logDirArg             string
 	disableBrowserOpenArg bool
 	printIdTokenArg       bool
@@ -71,13 +72,14 @@ type LoginCmd struct {
 	principals []string
 }
 
-func NewLogin(autoRefreshArg bool, configPathArg, logDirArg string, disableBrowserOpenArg bool, printIdTokenArg bool,
+func NewLogin(autoRefreshArg bool, configPathArg string, createConfigArg bool, logDirArg string, disableBrowserOpenArg bool, printIdTokenArg bool,
 	providerArg string, keyPathArg string, providerAliasArg string) *LoginCmd {
 
 	return &LoginCmd{
 		Fs:                    afero.NewOsFs(),
 		autoRefreshArg:        autoRefreshArg,
 		configPathArg:         configPathArg,
+		createConfigArg:       createConfigArg,
 		logDirArg:             logDirArg,
 		disableBrowserOpenArg: disableBrowserOpenArg,
 		printIdTokenArg:       printIdTokenArg,
@@ -112,6 +114,10 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 
 	var configBytes []byte
 	if _, err := l.Fs.Stat(l.configPathArg); err == nil {
+		if l.createConfigArg {
+			log.Printf("--create-config=true but config file already exists at %s", l.configPathArg)
+		}
+
 		// Load the file from the filesystem
 		afs := &afero.Afero{Fs: l.Fs}
 		configBytes, err = afs.ReadFile(l.configPathArg)
@@ -123,8 +129,17 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 			return fmt.Errorf("failed to parse config file: %w", err)
 		}
 	} else {
-		log.Printf("failed to find client config file to generate a default config, run `opkssh login --create-config` to create a default config file")
-		l.config, err = config.DefaultClientConfig()
+		if l.createConfigArg {
+			afs := &afero.Afero{Fs: l.Fs}
+			if err := afs.WriteFile(l.configPathArg, config.DefaultClientConfig, 0644); err != nil {
+				return fmt.Errorf("failed to write default config file: %w", err)
+			}
+			log.Printf("created client config file at %s", l.configPathArg)
+
+		} else {
+			log.Printf("failed to find client config file to generate a default config, run `opkssh login --create-config` to create a default config file")
+		}
+		l.config, err = config.NewClientConfig(config.DefaultClientConfig)
 		if err != nil {
 			return fmt.Errorf("failed to parse default config file: %w", err)
 		}
@@ -173,7 +188,7 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 	openBrowser := !l.disableBrowserOpenArg
 
 	var defaultProviderAlias string
-	var providerConfigs map[string]config.ProviderConfig
+	var providerConfigs []config.ProviderConfig
 	var provider providers.OpenIdProvider
 	var err error
 
@@ -198,11 +213,6 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 		return nil, nil, fmt.Errorf("error getting provider config from env: %w", err)
 	}
 
-	providerConfigsConf, err := l.config.GetProvidersMap()
-	if err != nil {
-		return nil, nil, fmt.Errorf("error building: %w", err)
-	}
-
 	if l.providerAliasArg != "" {
 		defaultProviderAlias = l.providerAliasArg
 	} else if defaultProviderEnv != "" {
@@ -215,14 +225,18 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 
 	if providerConfigsEnv != nil {
 		providerConfigs = providerConfigsEnv
-	} else if providerConfigsConf != nil {
-		providerConfigs = providerConfigsConf
+	} else if l.config.Providers != nil && len(l.config.Providers) > 0 {
+		providerConfigs = l.config.Providers
 	} else {
 		return nil, nil, fmt.Errorf("no providers specified")
 	}
 
 	if strings.ToUpper(defaultProviderAlias) != config.WEBCHOOSER_ALIAS {
-		providerConfig, ok := providerConfigs[defaultProviderAlias]
+		providerMap, err := config.CreateProvidersMap(providerConfigs)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error creating provider map: %w", err)
+		}
+		providerConfig, ok := providerMap[defaultProviderAlias]
 		if !ok {
 			return nil, nil, fmt.Errorf("error getting provider config for alias %s", defaultProviderAlias)
 		}

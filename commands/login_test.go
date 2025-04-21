@@ -190,7 +190,7 @@ func TestDetermineProvider(t *testing.T) {
 				}(k)
 			}
 
-			defaultConfig, err := config.DefaultClientConfig()
+			defaultConfig, err := config.NewClientConfig(config.DefaultClientConfig)
 			require.NoError(t, err, "Failed to get default client config")
 
 			loginCmd := LoginCmd{
@@ -236,6 +236,7 @@ func TestDetermineProvider(t *testing.T) {
 func TestNewLogin(t *testing.T) {
 	autoRefresh := false
 	configPathArg := filepath.Join("..", "default-client-config.yml")
+	createConfig := false
 	logDir := "./testdata"
 	disableBrowserOpenArg := true
 	printIdTokenArg := false
@@ -243,7 +244,8 @@ func TestNewLogin(t *testing.T) {
 	keyPathArg := ""
 	providerAlias := ""
 
-	loginCmd := NewLogin(autoRefresh, configPathArg, logDir, disableBrowserOpenArg, printIdTokenArg, providerArg, keyPathArg, providerAlias)
+	loginCmd := NewLogin(autoRefresh, configPathArg, createConfig, logDir,
+		disableBrowserOpenArg, printIdTokenArg, providerArg, keyPathArg, providerAlias)
 	require.NotNil(t, loginCmd)
 }
 

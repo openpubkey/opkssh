@@ -23,7 +23,7 @@ import (
 )
 
 //go:embed default-client-config.yml
-var defaultClientConfig []byte
+var DefaultClientConfig []byte
 
 type ClientConfig struct {
 	DefaultProvider string           `yaml:"default_provider"`
@@ -39,9 +39,9 @@ func NewClientConfig(c []byte) (*ClientConfig, error) {
 	return &config, nil
 }
 
-func DefaultClientConfig() (*ClientConfig, error) {
-	return NewClientConfig(defaultClientConfig)
-}
+// func DefaultClientConfig() (*ClientConfig, error) {
+// 	return NewClientConfig(defaultClientConfig)
+// }
 
 func (c *ClientConfig) GetProvidersMap() (map[string]ProviderConfig, error) {
 	return CreateProvidersMap(c.Providers)

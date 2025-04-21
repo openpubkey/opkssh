@@ -215,20 +215,20 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 // GetProvidersConfigFromEnv is a function to retrieve the config from the env variables
 // OPKSSH_DEFAULT can be set to an alias
 // OPKSSH_PROVIDERS is a ; separated list of providers of the format <alias>,<issuer>,<client_id>,<client_secret>,<scopes>;<alias>,<issuer>,<client_id>,<client_secret>,<scopes>
-func GetProvidersConfigFromEnv() (map[string]ProviderConfig, error) {
+func GetProvidersConfigFromEnv() ([]ProviderConfig, error) {
 	// Get the providers from the env variable
 	providerList, ok := os.LookupEnv(OPKSSH_PROVIDERS_ENVVAR)
 	if !ok || providerList == "" {
 		return nil, nil
 	}
-	if providersConfig, err := ProvidersConfigMapFromStrings(providerList); err != nil {
+	if providerConfigList, err := ProvidersConfigListFromStrings(providerList); err != nil {
 		return nil, fmt.Errorf("error getting provider config from env: %w", err)
 	} else {
-		return providersConfig, nil
+		return providerConfigList, nil
 	}
 }
 
-func ProvidersConfigMapFromStrings(providerList string) (map[string]ProviderConfig, error) {
+func ProvidersConfigListFromStrings(providerList string) ([]ProviderConfig, error) {
 	providerConfigList := make([]ProviderConfig, 0)
 	for _, providerStr := range strings.Split(providerList, ";") {
 		providerConfig, err := NewProviderConfigFromString(providerStr, true)
@@ -237,7 +237,7 @@ func ProvidersConfigMapFromStrings(providerList string) (map[string]ProviderConf
 		}
 		providerConfigList = append(providerConfigList, providerConfig)
 	}
-	return CreateProvidersMap(providerConfigList)
+	return providerConfigList, nil
 }
 
 func CreateProvidersMap(providerConfigList []ProviderConfig) (map[string]ProviderConfig, error) {

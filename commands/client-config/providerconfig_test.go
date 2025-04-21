@@ -29,7 +29,7 @@ func TestProvidersConfigFromStrings(t *testing.T) {
 		"gitlab,https://gitlab.com,8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923;" +
 		"hello,https://issuer.hello.coop,app_xejobTKEsDNSRd5vofKB2iay_2rN"
 
-	providerConfigs, err := ProvidersConfigMapFromStrings(providersString)
+	providerConfigs, err := ProvidersConfigListFromStrings(providersString)
 	require.NoError(t, err)
 	require.NotNil(t, providerConfigs)
 	require.Equal(t, len(providerConfigs), 4)
@@ -39,17 +39,19 @@ func TestProvidersConfigFromStrings(t *testing.T) {
 		"fakeOP2,https://fake2.example.com,abcde,,openid email;" +
 		"fakeOP1,https://fake3.example.com,xyz"
 
-	providerConfigs, err = ProvidersConfigMapFromStrings(providersStringRepeatsAlias)
+	providerConfigs, err = ProvidersConfigListFromStrings(providersStringRepeatsAlias)
+	require.NoError(t, err)
+	providerMap, err := CreateProvidersMap(providerConfigs)
 	require.ErrorContains(t, err, "duplicate provider alias found: fakeOP1")
-	require.Nil(t, providerConfigs)
+	require.Nil(t, providerMap)
 
 	providersStringNoClientID := "fakeOP1,https://fake1.example.com,,,"
-	providerConfigs, err = ProvidersConfigMapFromStrings(providersStringNoClientID)
+	providerConfigs, err = ProvidersConfigListFromStrings(providersStringNoClientID)
 	require.ErrorContains(t, err, "invalid provider client-ID value got ()")
 	require.Nil(t, providerConfigs)
 
 	providersStringInvalidFormat := "fakeOP1,https://fake1.example.com"
-	providerConfigs, err = ProvidersConfigMapFromStrings(providersStringInvalidFormat)
+	providerConfigs, err = ProvidersConfigListFromStrings(providersStringInvalidFormat)
 	require.ErrorContains(t, err, "invalid provider config string")
 	require.Nil(t, providerConfigs)
 }

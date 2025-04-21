@@ -292,7 +292,7 @@ func TestWithEnvVars(t *testing.T) {
 			envVar:     "OPKSSH_PROVIDERS",
 			envValue:   "alias1,https://accounts.google.com,client_id,client_secret,scope1;alias1,https://accounts.google.com,client_id,client_secret,scope2",
 			args:       []string{"opkssh", "login"},
-			wantOutput: "error getting provider config from env: duplicate provider alias found: alias1",
+			wantOutput: "provider in web chooser found with duplicate issuer",
 			wantExit:   1,
 		},
 		{
@@ -303,7 +303,6 @@ func TestWithEnvVars(t *testing.T) {
 			wantOutput: "error creating provider from config: invalid provider issuer value. Expected issuer to start with 'https://' got (http://insecure.badprovider.com)",
 			wantExit:   1,
 		},
-
 		{
 			name:       "Set OPKSSH_PROVIDERS with good provider but asking for wrong alias",
 			envVar:     "OPKSSH_PROVIDERS",
