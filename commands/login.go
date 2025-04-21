@@ -225,7 +225,7 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 
 	if providerConfigsEnv != nil {
 		providerConfigs = providerConfigsEnv
-	} else if l.config.Providers != nil && len(l.config.Providers) > 0 {
+	} else if len(l.config.Providers) > 0 {
 		providerConfigs = l.config.Providers
 	} else {
 		return nil, nil, fmt.Errorf("no providers specified")
