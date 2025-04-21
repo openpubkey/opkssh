@@ -39,10 +39,6 @@ func NewClientConfig(c []byte) (*ClientConfig, error) {
 	return &config, nil
 }
 
-// func DefaultClientConfig() (*ClientConfig, error) {
-// 	return NewClientConfig(defaultClientConfig)
-// }
-
 func (c *ClientConfig) GetProvidersMap() (map[string]ProviderConfig, error) {
 	return CreateProvidersMap(c.Providers)
 }

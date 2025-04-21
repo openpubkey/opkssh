@@ -109,7 +109,11 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 	}
 
 	if l.configPathArg == "" {
-		l.configPathArg = "~/.opk/default-client-config.yml"
+		dir, dirErr := os.UserConfigDir()
+		if dirErr != nil {
+			return fmt.Errorf("failed to get user config dir: %w", dirErr)
+		}
+		l.configPathArg = filepath.Join(dir, ".opk", "config.yml")
 	}
 
 	var configBytes []byte
@@ -131,6 +135,9 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 	} else {
 		if l.createConfigArg {
 			afs := &afero.Afero{Fs: l.Fs}
+			if err := l.Fs.MkdirAll(filepath.Dir(l.configPathArg), 644); err != nil {
+				return fmt.Errorf("failed to create config directory: %w", err)
+			}
 			if err := afs.WriteFile(l.configPathArg, config.DefaultClientConfig, 0644); err != nil {
 				return fmt.Errorf("failed to write default config file: %w", err)
 			}
