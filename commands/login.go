@@ -109,7 +109,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 	}
 
 	if l.configPathArg == "" {
-		dir, dirErr := os.UserConfigDir()
+		dir, dirErr := os.UserHomeDir()
 		if dirErr != nil {
 			return fmt.Errorf("failed to get user config dir: %w", dirErr)
 		}
