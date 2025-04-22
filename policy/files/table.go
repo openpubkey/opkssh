@@ -20,7 +20,8 @@ import (
 	"log"
 	"strings"
 
-	"github.com/google/shlex"
+	// "github.com/google/shlex"
+	"github.com/kballard/go-shellquote"
 )
 
 type Table struct {
@@ -35,7 +36,8 @@ func NewTable(content []byte) *Table {
 		if row == "" {
 			continue
 		}
-		columns, err := shlex.Split(row)
+		// columns, err := shlex.Split(row)
+		columns, err := shellquote.Split(row)
 
 		if err != nil {
 			log.Printf("Unable to parse: %s. (%s), skipping...\n", row, err)
@@ -61,7 +63,8 @@ func (t *Table) AddRow(row ...string) {
 func (t Table) ToString() string {
 	var sb strings.Builder
 	for _, row := range t.rows {
-		sb.WriteString(strings.Join(row, " ") + "\n")
+		sb.WriteString(shellquote.Join(row...) + "\n")
+		// sb.WriteString(strings.Join(row, " ") + "\n")
 	}
 	return sb.String()
 }
