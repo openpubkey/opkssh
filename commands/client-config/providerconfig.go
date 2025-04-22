@@ -85,7 +85,7 @@ func DefaultProviderConfig() ProviderConfig {
 		Issuer:       "",
 		ClientID:     "",
 		ClientSecret: "",
-		Scopes:       []string{"openid", "profile", "email"},
+		Scopes:       []string{"openid", "email"},
 		AccessType:   "offline",
 		RedirectURIs: []string{
 			"http://localhost:3000/login-callback",
@@ -131,7 +131,7 @@ func NewProviderConfigFromString(configStr string, hasAlias bool) (ProviderConfi
 	if len(parts) > 3 {
 		providerConfig.Scopes = strings.Split(parts[3], " ")
 	} else {
-		providerConfig.Scopes = []string{"openid", "profile", "email"}
+		providerConfig.Scopes = []string{"openid", "email"}
 	}
 
 	if strings.HasPrefix(providerConfig.Issuer, "https://accounts.google.com") {
