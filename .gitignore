@@ -34,3 +34,7 @@ dist/
 
 # Created by integration tests
 test/integration/testfile.txt
+
+# Go build cache
+.cache
+.mod-cache

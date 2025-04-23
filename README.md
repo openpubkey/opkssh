@@ -453,6 +453,43 @@ opkssh add root alice@example.com https://authentik.local/application/o/opkssh/
 
 Do not use Confidential/Secret mode **only** client ID is needed.
 
+## Developing
+### Building
+#### Docker
+
+1. Run `./hack/build.sh`
+
+#### Native
+
+1. Run 
+```bash
+CGO_ENABLED=false go build -v -o opkssh
+
+chmod u+x opkssh
+```
+
+### Testing
+#### Unit
+
+Run:
+  ```bash
+  go test -v ./ ./commands/... ./policy/... ./sshcert/...
+  ```
+  or
+  ```bash
+  ./hack/unit-tests.sh
+  ```
+#### Integration
+
+Run:
+```bash
+OS_TYPE=ubuntu go test -tags=integration ./test/integration -timeout=15m -count=1 -parallel=2 -v
+```
+  or
+```bash
+./hack/integration-tests.sh
+```
+
 ## More information
 
 We document how to manually install opkssh on a server [here](scripts/installing.md).
