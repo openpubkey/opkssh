@@ -19,9 +19,11 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/openpubkey/openpubkey/providers"
+	"github.com/spf13/afero"
 	"gopkg.in/yaml.v3"
 )
 
@@ -235,6 +237,31 @@ func GetProvidersConfigFromEnv() ([]ProviderConfig, error) {
 	} else {
 		return providerConfigList, nil
 	}
+}
+
+// GetClientConfigFromFile is a function to retrieve the client config from the configuration at
+// configPath. If configPath is not specified then the default configuration path is uses ~/.opk/config.yml
+func GetClientConfigFromFile(configPath string, Fs afero.Fs) (*ClientConfig, error) {
+	if configPath == "" {
+		dir, dirErr := os.UserHomeDir()
+		if dirErr != nil {
+			return nil, fmt.Errorf("failed to get user config dir: %w", dirErr)
+		}
+		configPath = filepath.Join(dir, ".opk", "config.yml")
+	}
+
+	var configBytes []byte
+	// Load the file from the filesystem
+	afs := &afero.Afero{Fs: Fs}
+	configBytes, err := afs.ReadFile(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+	config, err := NewClientConfig(configBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+	return config, nil
 }
 
 func ProvidersConfigListFromStrings(providerList string) ([]ProviderConfig, error) {
