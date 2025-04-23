@@ -20,6 +20,7 @@ import (
 	_ "embed"
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 
 	"github.com/spf13/afero"
@@ -58,8 +59,26 @@ func (c *ClientConfig) GetByIssuer(issuer string) (*ProviderConfig, bool) {
 	return nil, false
 }
 
+func GetDefaultClientConfigPath(configPath string) (string, error) {
+	dir, dirErr := os.UserHomeDir()
+	if dirErr != nil {
+		return "", fmt.Errorf("failed to get user config dir: %w", dirErr)
+	}
+	return filepath.Join(dir, ".opk", "config.yml"), nil
+}
+
 // GetClientConfigFromFile retrieves the client config from the configuration file at configPath.
+// If configPath is not specified then the default configuration path is uses ~/.opk/config.yml
 func GetClientConfigFromFile(configPath string, Fs afero.Fs) (*ClientConfig, error) {
+	if configPath == "" {
+		var err error
+		configPath, err = GetDefaultClientConfigPath(configPath)
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	var configBytes []byte
 	// Load the file from the filesystem
 	afs := &afero.Afero{Fs: Fs}

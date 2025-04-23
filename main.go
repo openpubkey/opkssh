@@ -33,9 +33,12 @@ import (
 
 	"github.com/thediveo/enumflag/v2"
 
+	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/openpubkey/opkssh/commands"
+	config "github.com/openpubkey/opkssh/commands/config"
 	"github.com/openpubkey/opkssh/policy"
 	"github.com/openpubkey/opkssh/policy/files"
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 )
 
@@ -299,6 +302,60 @@ Arguments:
 	}
 	verifyCmd.Flags().StringVar(&serverConfigPathArg, "config-path", "/etc/opk/config.yml", "Path to the server config file. Default: /etc/opk/config.yml.")
 	rootCmd.AddCommand(verifyCmd)
+
+	clientCmd := &cobra.Command{
+		Use:     "client [subcommand]",
+		Short:   "Interact with client configuration",
+		Example: `  opkssh client provider list`,
+		Args:    cobra.ExactArgs(0),
+	}
+
+	providerCmd := &cobra.Command{
+		Use:     "provider [subcommand]",
+		Short:   "Interact with provider configuration",
+		Example: `  opkssh client provider list`,
+		Args:    cobra.ExactArgs(0),
+	}
+
+	providerListCmd := &cobra.Command{
+		Use:     "list",
+		Short:   "List configured providers",
+		Example: `  opkssh client provider list`,
+		Args:    cobra.ExactArgs(0),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client_config, err := config.GetClientConfigFromFile(configPathArg, afero.NewOsFs())
+
+			if err != nil {
+				log.Fatal("Unable to load providers. ", err)
+			}
+
+			providersMap, err := config.CreateProvidersMap(client_config.Providers)
+
+			if err != nil {
+				log.Fatal("Unable to load providers. ", err)
+
+			}
+
+			t := table.NewWriter()
+			t.SetOutputMirror(os.Stdout)
+			t.AppendHeader(table.Row{"Providers", "Issuer"})
+
+			for alias, p := range providersMap {
+				t.AppendRow(table.Row{alias, p.Issuer})
+			}
+			t.Render()
+
+			return nil
+		},
+	}
+
+	providerListCmd.Flags().StringVar(&configPathArg, "config-path", "", "Path to the client config file. Default: ~/.opk/config.yml on linux and %APPDATA%\\.opk\\config.yml on windows.")
+
+	providerCmd.AddCommand(providerListCmd)
+
+	clientCmd.AddCommand(providerCmd)
+
+	rootCmd.AddCommand(clientCmd)
 
 	err := rootCmd.Execute()
 	if err != nil {
