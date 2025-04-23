@@ -94,6 +94,19 @@ func GetClientConfigFromFile(configPath string, Fs afero.Fs) (*ClientConfig, err
 }
 
 func CreateDefaultClientConfig(configPath string, Fs afero.Fs) error {
+	if configPath == "" {
+		var err error
+		configPath, err = GetDefaultClientConfigPath(configPath)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	if _, err := Fs.Stat(configPath); err == nil {
+		return fmt.Errorf("attempting to create config file but config file already exists at %s", configPath)
+	}
+
 	afs := &afero.Afero{Fs: Fs}
 	if err := afs.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
