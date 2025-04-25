@@ -89,14 +89,11 @@ invalid_field: true
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockFs := afero.NewMemMapFs()
-			tempDir, err := afero.TempDir(mockFs, "", "policy_test")
+			tempDir, _ := afero.TempDir(mockFs, "", "policy_test")
 
 			enforcer := &PolicyPluginEnforcer{
 				Fs: mockFs,
 			}
-
-			require.NoError(t, err)
-			defer afero.Afero{Fs: mockFs}.RemoveAll(tempDir) // Clean up after the test
 
 			// Write test config plugins files
 			for fileName, content := range tt.files {
@@ -145,7 +142,7 @@ command: /usr/bin/local/opk/policy-cmd %sub %iss %aud`,
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockFs := afero.NewMemMapFs()
-			tempDir, err := afero.TempDir(mockFs, "", "policy_test")
+			tempDir, _ := afero.TempDir(mockFs, "", "policy_test")
 
 			// Write test config plugins files
 			for fileName, content := range tt.files {
