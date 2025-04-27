@@ -85,7 +85,7 @@ func DefaultProviderConfig() ProviderConfig {
 		Issuer:       "",
 		ClientID:     "",
 		ClientSecret: "",
-		Scopes:       []string{"openid", "profile", "email"},
+		Scopes:       []string{"openid", "email"},
 		AccessType:   "offline",
 		RedirectURIs: []string{
 			"http://localhost:3000/login-callback",
@@ -131,7 +131,7 @@ func NewProviderConfigFromString(configStr string, hasAlias bool) (ProviderConfi
 	if len(parts) > 3 {
 		providerConfig.Scopes = strings.Split(parts[3], " ")
 	} else {
-		providerConfig.Scopes = []string{"openid", "profile", "email"}
+		providerConfig.Scopes = []string{"openid", "email"}
 	}
 
 	if strings.HasPrefix(providerConfig.Issuer, "https://accounts.google.com") {
@@ -208,16 +208,14 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 		provider = providers.NewHelloOpWithOptions(opts)
 	} else {
 		// Generic provider
-		opts := providers.GetDefaultGoogleOpOptions()
-		opts.Issuer = p.Issuer
-		opts.ClientID = p.ClientID
+		opts := providers.GetDefaultStandardOpOptions(p.Issuer, p.ClientID)
 		opts.ClientSecret = p.ClientSecret
 		opts.PromptType = p.Prompt
 		opts.AccessType = p.AccessType
 		opts.RedirectURIs = p.RedirectURIs
 		opts.GQSign = false
 		opts.OpenBrowser = openBrowser
-		provider = providers.NewGoogleOpWithOptions(opts)
+		provider = providers.NewStandardOpWithOptions(opts)
 	}
 
 	return provider, nil
