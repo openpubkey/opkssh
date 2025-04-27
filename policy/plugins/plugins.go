@@ -49,7 +49,7 @@ func (r PluginResults) Errors() (errs []error) {
 
 func (r PluginResults) Allowed() bool {
 	for _, pluginResult := range r {
-		if pluginResult.Success != false {
+		if pluginResult.Success {
 			return true
 		}
 	}
