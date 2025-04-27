@@ -141,7 +141,10 @@ func TestSshCertCreation(t *testing.T) {
 	require.NoError(t, err)
 
 	sshCert, err := cert.SignCert(caSigner)
+	println(sshCert.Marshal())
 	require.NoError(t, err)
+	encodedCert := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(sshCert)))
+	fmt.Println(encodedCert)
 
 	err = cert.VerifyCaSig(caPubkey)
 	require.NoError(t, err)

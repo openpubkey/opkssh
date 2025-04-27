@@ -17,11 +17,13 @@
 package plugins
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/spf13/afero"
 	"gopkg.in/yaml.v3"
 )
@@ -30,7 +32,7 @@ type PluginResult struct {
 	Path         string
 	PluginConfig PluginConfig
 	Error        error
-	PolicyError  error
+	PolicyTrace  string
 	Success      bool
 }
 
@@ -45,20 +47,13 @@ func (r PluginResults) Errors() (errs []error) {
 	return errs
 }
 
-// PluginConfig represents the structure of a policy command configuration.
-type PluginConfig struct {
-	Name             string `yaml:"name"`
-	Command          string `yaml:"command"`
-	EnforceProviders bool   `yaml:"enforce_providers"`
-}
-
-func (c PluginConfig) TokensToArgs(tokens map[string]string) string {
-	command := c.Command
-	for key, value := range tokens {
-		placeholder := "%" + key
-		command = strings.ReplaceAll(command, placeholder, value)
+func (r PluginResults) Allowed() bool {
+	for _, pluginResult := range r {
+		if pluginResult.Success != false {
+			return true
+		}
 	}
-	return command
+	return false
 }
 
 type CmdExecutor func(name string, arg ...string) ([]byte, error)
@@ -79,8 +74,8 @@ func NewPolicyPluginEnforcer(fs afero.Fs) *PolicyPluginEnforcer {
 	}
 }
 
-// LoadPlugins loads the plugin config files from the given directory.
-func (p *PolicyPluginEnforcer) LoadPlugins(dir string) (pluginResults PluginResults, err error) {
+// loadPlugins loads the plugin config files from the given directory.
+func (p *PolicyPluginEnforcer) loadPlugins(dir string) (pluginResults PluginResults, err error) {
 	files, err := afero.ReadDir(p.Fs, dir)
 	if err != nil {
 		return nil, err
@@ -116,7 +111,7 @@ func (p *PolicyPluginEnforcer) LoadPlugins(dir string) (pluginResults PluginResu
 				continue
 			}
 
-			if cmd.Command == "" {
+			if cmd.CommandTemplate == "" {
 				pluginResult.Error = fmt.Errorf("policy plugin config missing required field 'command' in file %s: ", path)
 				continue
 			}
@@ -127,16 +122,24 @@ func (p *PolicyPluginEnforcer) LoadPlugins(dir string) (pluginResults PluginResu
 	return pluginResults, nil
 }
 
-func (p *PolicyPluginEnforcer) CheckPolicies(dir string, tokens map[string]string) (PluginResults, error) {
-	pluginResults, err := p.LoadPlugins(dir)
+func (p *PolicyPluginEnforcer) CheckPolicies(dir string, pkt *pktoken.PKToken, sshCert string) (PluginResults, error) {
+	tokens := NewTokens(pkt, sshCert)
+	return p.checkPolicies(dir, tokens)
+}
+
+func (p *PolicyPluginEnforcer) checkPolicies(dir string, tokens map[string]string) (PluginResults, error) {
+	pluginResults, err := p.loadPlugins(dir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load policy commands: %w", err)
 	}
 	for _, pluginResult := range pluginResults {
-		// TODO: Check the command output
-		_, err := p.ExecutePolicyCommand(pluginResult.PluginConfig, tokens)
-		pluginResult.PolicyError = err
-		if err != nil {
+		if pluginResult.Error != nil {
+			continue
+		}
+		output, err := p.executePolicyCommand(pluginResult.PluginConfig, tokens)
+		pluginResult.Error = err
+		pluginResult.PolicyTrace = string(output)
+		if err != nil || string(output) != "allowed" {
 			pluginResult.Success = false
 		} else {
 			pluginResult.Success = true
@@ -145,9 +148,19 @@ func (p *PolicyPluginEnforcer) CheckPolicies(dir string, tokens map[string]strin
 	return pluginResults, nil
 }
 
-// ExecutePolicyCommand executes the policy command with the provided tokens.
-func (p *PolicyPluginEnforcer) ExecutePolicyCommand(config PluginConfig, tokens map[string]string) ([]byte, error) {
+// executePolicyCommand executes the policy command with the provided tokens.
+func (p *PolicyPluginEnforcer) executePolicyCommand(config PluginConfig, tokens map[string]string) ([]byte, error) {
+	// Add PluginConfig to the tokens map for expansion
+	configJson, err := yaml.Marshal(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal config to JSON: %w", err)
+	}
+	tokens["%config%"] = base64.StdEncoding.EncodeToString(configJson)
+
 	// Replace tokens in the command string.
-	command := config.TokensToArgs(tokens)
-	return p.cmdExecutor(command)
+	command, err := config.PercentExpand(tokens)
+	if err != nil {
+		return nil, err
+	}
+	return p.cmdExecutor(command[0], command[1:]...)
 }

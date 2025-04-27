@@ -27,11 +27,11 @@ import (
 
 func TestLoadPolicyPlugins(t *testing.T) {
 	tests := []struct {
-		name                    string
-		files                   map[string]string // File name to content mapping
-		expectedCount           int
-		expectResultsErrorCount int
-		expectError             bool
+		name             string
+		files            map[string]string // File name to content mapping
+		expectedCount    int
+		expectErrorCount int
+		expectError      bool
 	}{
 		{
 			name: "Valid plugin config",
@@ -41,8 +41,8 @@ name: Example Policy Command
 enforce_providers: true
 command: /usr/bin/local/opk/policy-cmd %sub %iss %aud`,
 			},
-			expectedCount:           1,
-			expectResultsErrorCount: 0,
+			expectedCount:    1,
+			expectErrorCount: 0,
 		},
 		{
 			name: "Invalid plugin configs (missing required fields)",
@@ -58,8 +58,8 @@ command:
 enforce_providers: true
 `,
 			},
-			expectedCount:           2,
-			expectResultsErrorCount: 2,
+			expectedCount:    2,
+			expectErrorCount: 2,
 		},
 		{
 			name: "Mixed valid and invalid plugin config",
@@ -75,14 +75,23 @@ enforce_providers: true
 invalid_field: true
 `,
 			},
-			expectedCount:           2,
-			expectResultsErrorCount: 1,
+			expectedCount:    2,
+			expectErrorCount: 1,
 		},
 		{
-			name:                    "No files in directory",
-			files:                   map[string]string{},
-			expectedCount:           0,
-			expectResultsErrorCount: 0,
+			name: "Corrupt YAML file",
+			files: map[string]string{
+				"corrupt_policy.yml": `{`,
+			},
+			expectedCount:    1,
+			expectErrorCount: 1,
+		},
+
+		{
+			name:             "No files in directory",
+			files:            map[string]string{},
+			expectedCount:    0,
+			expectErrorCount: 0,
 		},
 	}
 
@@ -102,40 +111,146 @@ invalid_field: true
 			}
 
 			// Load policy commands
-			pluginResults, err := enforcer.LoadPlugins(tempDir)
+			pluginResults, err := enforcer.loadPlugins(tempDir)
 			if tt.expectError {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 
 				require.Len(t, pluginResults, tt.expectedCount)
-				require.Len(t, pluginResults.Errors(), tt.expectResultsErrorCount, "Expected number of errors does not match actual number of errors")
+				require.Len(t, pluginResults.Errors(), tt.expectErrorCount, "Expected number of errors does not match actual number of errors")
 			}
 		})
 	}
 }
 
 func TestPolicyPluginsWithMock(t *testing.T) {
-
 	mockCmdExecutor := func(name string, arg ...string) ([]byte, error) {
 		if "/usr/bin/local/opk/policy-cmd" == name {
-			return []byte("Thor Odin's son, protector of mankind"), nil
+			if len(arg) != 3 {
+				return nil, fmt.Errorf("expected 3 arguments, got %d", len(arg))
+			} else if arg[0] == "https://example.com" && arg[1] == "1234" && arg[2] == "abcd" {
+				return []byte("allowed"), nil
+			} else if arg[0] == "https://example.com" && arg[1] == "sub with spaces" && arg[2] == "abcd" {
+				return []byte("allowed"), nil
+			} else if arg[0] == "https://example.com" && arg[1] == "sub\"withquote" && arg[2] == "abcd" {
+				return []byte("allowed"), nil
+			} else {
+				// Designed to test an command that doesn't output an error but returns deny. Deny should return an error as well.
+				return []byte("deny"), nil
+			}
 		}
-		return nil, fmt.Errorf("command not found")
+		return nil, fmt.Errorf("command '%s' not found", name)
 	}
 
+	validPluginConfigFile := map[string]string{
+		"valid_policy.yml": `
+name: Example Policy Command
+enforce_providers: true
+command: /usr/bin/local/opk/policy-cmd %iss% %sub% %aud%`}
+
+	missingCommandConfigFile := map[string]string{"missing-command.yml": `
+name: Example Policy Command
+enforce_providers: true
+command: /usr/bin/local/opk/missing-cmd %iss% %sub% %aud%`}
+
+	InvalidCommandConfigFile := map[string]string{"missing-command.yml": `
+name: Example Policy Command
+enforce_providers: true
+command: /usr/bin/local/opk/missing-cmd %iss% %sub% %aud%"`}
+
 	tests := []struct {
-		name  string
-		files map[string]string // File name to content mapping
+		name                string
+		tokens              map[string]string
+		files               map[string]string // File name to content mapping
+		CmdExecutor         func(name string, arg ...string) ([]byte, error)
+		expectedAllowed     bool
+		expectedResultCount int
+		expectErrorCount    int
+		errorExpected       string
 	}{
 		{
 			name: "Valid plugin config",
-			files: map[string]string{
-				"valid_policy.yml": `
-name: Example Policy Command
-enforce_providers: true
-command: /usr/bin/local/opk/policy-cmd %sub %iss %aud`,
+			tokens: map[string]string{
+				"%iss%": "https://example.com",
+				"%sub%": "1234",
+				"%aud%": "abcd",
 			},
+			files:               validPluginConfigFile,
+			CmdExecutor:         mockCmdExecutor,
+			expectedAllowed:     true,
+			expectedResultCount: 1,
+			expectErrorCount:    0,
+		},
+		{
+			name: "Plugin config not found",
+			tokens: map[string]string{
+				"%iss%": "https://example.com",
+				"%sub%": "1234",
+				"%aud%": "abcd",
+			},
+			files:               missingCommandConfigFile,
+			CmdExecutor:         mockCmdExecutor,
+			expectedAllowed:     false,
+			expectedResultCount: 1,
+			expectErrorCount:    1,
+			errorExpected:       "command '/usr/bin/local/opk/missing-cmd' not found",
+		},
+		{
+			name: "Check we handle spaces in claims",
+			tokens: map[string]string{
+				"%iss%": "https://example.com",
+				"%sub%": "sub with spaces",
+				"%aud%": "abcd",
+			},
+			files:               validPluginConfigFile,
+			CmdExecutor:         mockCmdExecutor,
+			expectedAllowed:     true,
+			expectedResultCount: 1,
+			expectErrorCount:    0,
+			errorExpected:       "",
+		},
+		{
+			name: "Test we handle quotes in tokens",
+			tokens: map[string]string{
+				"%iss%": "https://example.com",
+				"%sub%": `sub"withquote`,
+				"%aud%": "abcd",
+			},
+			files:               validPluginConfigFile,
+			CmdExecutor:         mockCmdExecutor,
+			expectedAllowed:     true,
+			expectedResultCount: 1,
+			expectErrorCount:    0,
+			errorExpected:       "",
+		},
+		{
+			name: "Policy command denial",
+			tokens: map[string]string{
+				"%iss%": "https://example.com",
+				"%sub%": "wrong",
+				"%aud%": "abcd",
+			},
+			files:               validPluginConfigFile,
+			CmdExecutor:         mockCmdExecutor,
+			expectedAllowed:     false,
+			expectedResultCount: 1,
+			expectErrorCount:    0,
+			errorExpected:       "",
+		},
+		{
+			name: "Policy invalid command template",
+			tokens: map[string]string{
+				"%iss%": "https://example.com",
+				"%sub%": "1234",
+				"%aud%": "abcd",
+			},
+			files:               InvalidCommandConfigFile,
+			CmdExecutor:         mockCmdExecutor,
+			expectedAllowed:     false,
+			expectedResultCount: 1,
+			expectErrorCount:    1,
+			errorExpected:       "failed to parse command field: Unterminated double-quoted string",
 		},
 	}
 
@@ -152,18 +267,19 @@ command: /usr/bin/local/opk/policy-cmd %sub %iss %aud`,
 
 			enforcer := &PolicyPluginEnforcer{
 				Fs:          mockFs,
-				cmdExecutor: mockCmdExecutor,
+				cmdExecutor: tt.CmdExecutor,
 			}
-			// TODO: Tokens
-			tokens := map[string]string{
-				"sub": "Thor",
-				"iss": "",
-				"aud": "",
-			}
-			res, err := enforcer.CheckPolicies(tempDir, tokens)
+			res, err := enforcer.checkPolicies(tempDir, tt.tokens)
 			require.NoError(t, err)
-			require.Len(t, res, 1)
+			require.Len(t, res, tt.expectedResultCount)
+			require.Len(t, res.Errors(), tt.expectErrorCount, "Errors in result does not match expected number of errors")
+			require.Equal(t, tt.expectedAllowed, res.Allowed())
+
+			if tt.errorExpected != "" {
+				// Our error contains checking only works if there is 1 result
+				require.Len(t, res, 1)
+				require.ErrorContains(t, res[0].Error, tt.errorExpected)
+			}
 		})
 	}
-
 }
