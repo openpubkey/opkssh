@@ -330,7 +330,7 @@ This alias to provider mapping be can configured using the OPKSSH_PROVIDERS envi
 ### Client Config File
 
 Rather than type in the provider each time, you can create a client config file by running `opkssh login --create-config` at
-`C:\Users\{USER}\AppData\Roaming\.opk\config.yml` on windows and `~/.opk/config.yml` on linux.
+`C:\Users\{USER}\.opk\config.yml` on windows and `~/.opk/config.yml` on linux.
 You can then edit this config file to add your provider.
 
 <details>
