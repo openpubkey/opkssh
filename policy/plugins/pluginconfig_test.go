@@ -47,6 +47,7 @@ func TestPercent(t *testing.T) {
 		"%upk%":     "upkToken",
 		"%pkt%":     "pktToken",
 		"%idt%":     "idtToken",
+		"%idtRef%":  "idtRefToken",
 		"%config%":  "configToken",
 	}
 
@@ -69,6 +70,7 @@ func TestPercent(t *testing.T) {
 		"%upk%":     b64(`example public key`),
 		"%pkt%":     "abcd:1234:efgh:5678:ijkl:9012:mnoq:3456",
 		"%idt%":     "abcd.1234.efgh",
+		"%idtRef%":  "abcd.1234.efgh",
 		"%config%": b64(`
 name: Example Policy Command
 command: /usr/bin/local/opk/policy-cmd %sub %iss %aud`),
@@ -90,14 +92,14 @@ command: /usr/bin/local/opk/policy-cmd %sub %iss %aud`),
 		{
 			name:            "Valid command template (all tokens)",
 			tokens:          tokenTestMap,
-			commandTemplate: `cmd %u% %k% %t% %iss% %sub% %email% %email_verified% %aud% %exp% %nbf% %iat% %jti% %payload% %upk% %pkt% %idt% %config%`,
-			expectedCommand: []string{"cmd", "uToken", "kToken", "tToken", "issToken", "subToken", "emailToken", "emailVerifiedToken", "audToken", "expToken", "nbfToken", "iatToken", "jtiToken", "payloadToken", "upkToken", "pktToken", "idtToken", "configToken"},
+			commandTemplate: `cmd %u% %k% %t% %iss% %sub% %email% %email_verified% %aud% %exp% %nbf% %iat% %jti% %payload% %upk% %pkt% %idt% %idtRef% %config%`,
+			expectedCommand: []string{"cmd", "uToken", "kToken", "tToken", "issToken", "subToken", "emailToken", "emailVerifiedToken", "audToken", "expToken", "nbfToken", "iatToken", "jtiToken", "payloadToken", "upkToken", "pktToken", "idtToken", "idtRefToken", "configToken"},
 		},
 		{
 			name:            "Valid command templat (all tokens realistic)",
 			tokens:          tokenMapSemiRealisticValues,
-			commandTemplate: `cmd %u% %k% %t% %iss% %sub% %email% %email_verified% %aud% %exp% %nbf% %iat% %jti% %payload% %upk% %pkt% %idt% %config%`,
-			expectedCommand: []string{"cmd", "root", b64("SSH certificate"), "ecdsa-sha2-nistp256-cert-v01@openssh.com", "https://example.com", "AAAAAAAAAAAAAAAAAAAAAJ8PFm0pjpXKQouYRalE11g", "bd345b9c-6902-400d-9e18-45abdf0f698f", "true", "bd345b9c-6902-400d-9e18-45abdf0f698f", "1737500954", "1737414254", "1737414254", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "eyJpc3MiOiJodHRwczovL2V4YW1wbGUuY29tIiwic3ViIjoiMTIzNCJ9", "ZXhhbXBsZSBwdWJsaWMga2V5", "abcd:1234:efgh:5678:ijkl:9012:mnoq:3456", "abcd.1234.efgh", b64(`
+			commandTemplate: `cmd %u% %k% %t% %iss% %sub% %email% %email_verified% %aud% %exp% %nbf% %iat% %jti% %payload% %upk% %pkt% %idt% %idtRef% %config%`,
+			expectedCommand: []string{"cmd", "root", b64("SSH certificate"), "ecdsa-sha2-nistp256-cert-v01@openssh.com", "https://example.com", "AAAAAAAAAAAAAAAAAAAAAJ8PFm0pjpXKQouYRalE11g", "bd345b9c-6902-400d-9e18-45abdf0f698f", "true", "bd345b9c-6902-400d-9e18-45abdf0f698f", "1737500954", "1737414254", "1737414254", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "eyJpc3MiOiJodHRwczovL2V4YW1wbGUuY29tIiwic3ViIjoiMTIzNCJ9", "ZXhhbXBsZSBwdWJsaWMga2V5", "abcd:1234:efgh:5678:ijkl:9012:mnoq:3456", "abcd.1234.efgh", "abcd.1234.efgh", b64(`
 name: Example Policy Command
 command: /usr/bin/local/opk/policy-cmd %sub %iss %aud`)},
 		},
