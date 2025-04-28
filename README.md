@@ -20,6 +20,9 @@ Then you can ssh under this identity to any ssh server which is configured to us
 ssh user@example.com
 ```
 
+### OpenPubkey Mailing List
+For updates and announcements join the [OpenPubkey mailing list.](https://groups.google.com/g/openpubkey)
+
 ## Getting Started
 
 To ssh with opkssh, Alice first needs to install opkssh using homebrew or manually downloading the binary.
@@ -97,6 +100,29 @@ This works because SSH sends the public key written by opkssh in `~/.ssh/id_ecds
 ```bash
 sftp root@example.com
 ```
+
+### Custom key name
+
+<details>
+<summary>Instructions</summary>
+
+#### SSH command
+
+Tell opkssh to store the name the key-pair `opkssh_server_group1`
+
+```cmd
+opkssh login -i opkssh_server_group1
+```
+
+Tell ssh to use the generated key pair.
+
+```bash
+ssh -o "IdentitiesOnly=yes" -i ~/.ssh/opkssh_server_group1.pub -i ~/.ssh/opkssh_server_group1 root@example.com
+```
+
+We recommend specifying `-o "IdentitiesOnly=yes"` as it tells ssh to only use the provided key. Otherwise ssh will cycle through other keys in `~/.ssh` first and may not get to the specified ones. Servers are configured to only allow 6 attempts by default the config key is `MaxAuthTries 6`.
+
+</details>
 
 ### Installing on a Server
 
@@ -274,13 +300,13 @@ AuthorizedKeysCommandUser opksshuser
 To log in using a custom OpenID Provider, run:
 
 ```bash
-opkssh login --provider={ISSUER},{CLIENT_ID}
+opkssh login --provider="{ISSUER},{CLIENT_ID}"
 ```
 
 or in the rare case that a client secret is required by the OpenID Provider:
 
 ```bash
-opkssh login --provider={ISSUER},{CLIENT_ID},{CLIENT_SECRET}
+opkssh login --provider="{ISSUER},{CLIENT_ID},{CLIENT_SECRET},{SCOPES}"
 ```
 
 where ISSUER, CLIENT_ID and CLIENT_SECRET correspond to the issuer client ID and client secret of the custom OpenID Provider.
@@ -288,7 +314,13 @@ where ISSUER, CLIENT_ID and CLIENT_SECRET correspond to the issuer client ID and
 For example if the issuer is `https://authentik.local/application/o/opkssh/` and the client ID was `ClientID123`:
 
 ```bash
-opkssh login --provider=https://authentik.local/application/o/opkssh/,ClientID123
+opkssh login --provider="https://authentik.local/application/o/opkssh/,ClientID123"
+```
+
+to specify scopes
+
+```bash
+opkssh login --provider="https://authentik.local/application/o/opkssh/,ClientID123,,openid profile email groups"
 ```
 
 You can use this shortcut which will use a provider alias to find the provider.
@@ -297,7 +329,72 @@ You can use this shortcut which will use a provider alias to find the provider.
 opkssh login authentik
 ```
 
-This alias to provider mapping can configured using the OPKSSH_PROVIDERS environment variables.
+This alias to provider mapping be can configured using the OPKSSH_PROVIDERS environment variables.
+
+### Client Config File
+
+Rather than type in the provider each time, you can create a client config file by running `opkssh login --create-config` at
+`C:\Users\{USER}\AppData\Roaming\.opk\config.yml` on windows and `~/.opk/config.yml` on linux.
+You can then edit this config file to add your provider.
+
+<details>
+<summary>config.yml</summary>
+
+You can delete any providers you don't plan on using.
+If you have a provider you want to open by default, change `default_provider` to the name of your alias of your custom provider.
+
+```yaml
+---
+default_provider: webchooser
+
+providers:
+  - alias: google
+    issuer: https://accounts.google.com
+    client_id: 206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com
+    client_secret: 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
+    scopes: openid email profile
+    access_type: offline
+    prompt: consent
+    redirect_uris:
+      - http://localhost:3000/login-callback
+      - http://localhost:10001/login-callback
+      - http://localhost:11110/login-callback
+
+  - alias: azure microsoft
+    issuer: https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
+    client_id: 096ce0a3-5e72-4da8-9c86-12924b294a01
+    scopes: openid profile email offline_access
+    access_type: offline
+    prompt: consent
+    redirect_uris:
+      - http://localhost:3000/login-callback
+      - http://localhost:10001/login-callback
+      - http://localhost:11110/login-callback
+
+  - alias: gitlab
+    issuer: https://gitlab.com
+    client_id: 8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923
+    scopes: openid email
+    access_type: offline
+    prompt: consent
+    redirect_uris:
+      - http://localhost:3000/login-callback
+      - http://localhost:10001/login-callback
+      - http://localhost:11110/login-callback
+
+  - alias: hello
+    issuer: https://issuer.hello.coop
+    client_id: app_xejobTKEsDNSRd5vofKB2iay_2rN
+    scopes: openid email
+    access_type: offline
+    prompt: consent
+    redirect_uris:
+      - http://localhost:3000/login-callback
+      - http://localhost:10001/login-callback
+      - http://localhost:11110/login-callback
+```
+
+</details>
 
 ### Environment Variables
 

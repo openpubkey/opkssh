@@ -245,7 +245,8 @@ func spawnTestContainers(t *testing.T) (oidcContainer *testprovider.ExampleOpCon
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		require.NoError(t, oidcContainer.Terminate(TestCtx), "failed to terminate OIDC container")
+		t.Log("Terminating OIDC container")
+		require.NoError(t, oidcContainer.Terminate(TestCtx, testcontainers.StopTimeout(time.Millisecond)), "failed to terminate OIDC container")
 	})
 
 	// Track OIDC server logs and dump if test fails
@@ -273,7 +274,8 @@ func spawnTestContainers(t *testing.T) (oidcContainer *testprovider.ExampleOpCon
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		require.NoError(t, serverContainer.Terminate(TestCtx), "failed to terminate SSH container")
+		t.Log("Terminating SSH container")
+		require.NoError(t, serverContainer.Terminate(TestCtx, testcontainers.StopTimeout(time.Millisecond)), "failed to terminate SSH container")
 	})
 
 	// Use backdoor (non-OPK) SSH client to dump opkssh logs if test fails

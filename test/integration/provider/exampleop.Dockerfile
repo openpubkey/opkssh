@@ -1,4 +1,4 @@
-FROM golang:1.20.12-bookworm
+FROM golang:1.23
 
 ENV AUTH_CALLBACK_PATH ""
 ENV REDIRECT_PORT ""
