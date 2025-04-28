@@ -122,8 +122,11 @@ func (p *PolicyPluginEnforcer) loadPlugins(dir string) (pluginResults PluginResu
 	return pluginResults, nil
 }
 
-func (p *PolicyPluginEnforcer) CheckPolicies(dir string, pkt *pktoken.PKToken, sshCert string) (PluginResults, error) {
-	tokens := NewTokens(pkt, sshCert)
+func (p *PolicyPluginEnforcer) CheckPolicies(dir string, pkt *pktoken.PKToken, principal string, sshCert string, keyType string) (PluginResults, error) {
+	tokens, err := NewTokens(pkt, principal, sshCert, keyType)
+	if err != nil {
+		return nil, err
+	}
 	return p.checkPolicies(dir, tokens)
 }
 
