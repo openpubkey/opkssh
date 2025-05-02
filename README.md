@@ -157,21 +157,21 @@ Second, we use the `AuthorizedKeysCommand` configuration option in `sshd_config`
 
 ### Client support
 
-| OS               | Supported | Tested | Version Tested         | Possible Future Support |
-| --------        | --------      | ------- | ---------------------- |----------- |
-| Linux       | ✅             |  ✅     |  Ubuntu 24.04.1 LTS  | -  |
-| OSX       | ✅             |  ✅     |  OSX 15.3.2 (Sequoia)  | -  |
-| Windows11 | ✅            |   ✅     |  Windows 11  | -  |
+| OS        | Supported | Tested  | Version Tested        |
+| --------- | --------  | ------- | --------------------- |
+| Linux     | ✅        | ✅      |  Ubuntu 24.04.1 LTS   |
+| OSX       | ✅        | ✅      |  OSX 15.3.2 (Sequoia) |
+| Windows11 | ✅        | ✅      |  Windows 11           |
 
 ### Server support
 
 | OS               | Supported | Tested | Version Tested         | Possible Future Support |
-| --------        | --------      | ------- | ---------------------- |----------- |
-| Linux       | ✅             |  ✅     |  Ubuntu 24.04.1 LTS  | -  |
-| Linux       | ✅             |  ✅     |  Centos 9  | -  |
-| Linux       | ✅             |  ✅     |  Arch Linux  | -  |
-| OSX       | ❌             |  ❌     |  -  | Likely  |
-| Windows11 | ❌            |   ❌     |  -                              | Likely |
+| ---------------- | --------  | ------ | ---------------------- | ----------------------- |
+| Linux            | ✅        | ✅     |  Ubuntu 24.04.1 LTS    | -                       |
+| Linux            | ✅        | ✅     |  Centos 9              | -                       |
+| Linux            | ✅        | ✅     |  Arch Linux            | -                       |
+| OSX              | ❌        | ❌     |  -                     | Likely                  |
+| Windows11        | ❌        | ❌     |  -                     | Likely                  |
 
 ## Server Configuration
 
@@ -230,7 +230,7 @@ guest alice@example.com https://accounts.google.com
 root alice@example.com https://accounts.google.com
 dev bob@microsoft.com https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
 
-# Group identifier 
+# Group identifier
 dev oidc:groups:developer https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
 ```
 
@@ -444,13 +444,13 @@ opkssh add root alice@example.com https://authentik.local/application/o/opkssh/
 
 ### Tested
 
-| OpenID Provider | Tested | Notes                                                                                     |
-|-----------------|--------|-------------------------------------------------------------------------------------------|
-| Authelia        | ✅      | [Authelia Integration Guide](https://www.authelia.com/integration/openid-connect/opkssh/) |
-| Authentik       | ✅      | Do not add a certificate in the encryption section of the provider                        |
-| Zitadel         | ✅      | Check the UserInfo box on the Token Settings                                              |
-| [PocketID](https://github.com/pocket-id/pocket-id) | ✅      | Create a new OIDC Client and inside the new client, check "Public client" on OIDC Client Settings                                             |
-| [Kanidm](https://kanidm.com/) | ✅      | [Kanidm Integration Guide](https://kanidm.github.io/kanidm/master/integrations/oauth2/examples.html#opkssh) |
+| OpenID Provider                       | Tested | Notes                                                                                                       |
+| ------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------- |
+| [Authelia](https://www.authelia.com/) | ✅     | [Authelia Integration Guide](https://www.authelia.com/integration/openid-connect/opkssh/)                   |
+| [Authentik](https://goauthentik.io/)  | ✅     | Do not add a certificate in the encryption section of the provider                                          |
+| [Kanidm](https://kanidm.com/)         | ✅     | [Kanidm Integration Guide](https://kanidm.github.io/kanidm/master/integrations/oauth2/examples.html#opkssh) |
+| [PocketID](https://pocket-id.org/)    | ✅     | Create a new OIDC Client and inside the new client, check "Public client" on OIDC Client Settings           |
+| [Zitadel](https://zitadel.com/)       | ✅     | Check the UserInfo box on the Token Settings                                                                |
 
 Do not use Confidential/Secret mode **only** client ID is needed.
 
