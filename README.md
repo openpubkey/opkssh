@@ -450,6 +450,7 @@ opkssh add root alice@example.com https://authentik.local/application/o/opkssh/
 | Authentik       | ✅      | Do not add a certificate in the encryption section of the provider                        |
 | Zitadel         | ✅      | Check the UserInfo box on the Token Settings                                              |
 | [PocketID](https://github.com/pocket-id/pocket-id) | ✅      | Create a new OIDC Client and inside the new client, check "Public client" on OIDC Client Settings                                             |
+| [Kanidm](https://kanidm.com/) | ✅      | [Kanidm Integration Guide](https://kanidm.github.io/kanidm/master/integrations/oauth2/examples.html#opkssh) |
 
 Do not use Confidential/Secret mode **only** client ID is needed.
 
