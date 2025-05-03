@@ -162,7 +162,3 @@ command: /usr/bin/local/opk/policy-cmd %sub %iss %aud`)},
 		})
 	}
 }
-
-func b64(s string) string {
-	return base64.StdEncoding.EncodeToString([]byte(s))
-}

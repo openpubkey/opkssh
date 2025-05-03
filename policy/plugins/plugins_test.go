@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )
@@ -102,11 +103,17 @@ invalid_field: true
 
 			enforcer := &PolicyPluginEnforcer{
 				Fs: mockFs,
+				permChecker: files.PermsChecker{
+					Fs: mockFs,
+					CmdRunner: func(name string, arg ...string) ([]byte, error) {
+						return []byte("root" + " " + "group"), nil
+					},
+				},
 			}
 
 			// Write test config plugins files
 			for fileName, content := range tt.files {
-				err := afero.WriteFile(mockFs, filepath.Join(tempDir, fileName), []byte(content), 0644)
+				err := afero.WriteFile(mockFs, filepath.Join(tempDir, fileName), []byte(content), 0640)
 				require.NoError(t, err)
 			}
 
@@ -194,7 +201,7 @@ command: /usr/bin/local/opk/missing-cmd %iss% %sub% %aud%"`}
 			expectedAllowed:     false,
 			expectedResultCount: 1,
 			expectErrorCount:    1,
-			errorExpected:       "command '/usr/bin/local/opk/missing-cmd' not found",
+			errorExpected:       "file does not exist",
 		},
 		{
 			name: "Check we handle spaces in claims",
@@ -261,13 +268,23 @@ command: /usr/bin/local/opk/missing-cmd %iss% %sub% %aud%"`}
 
 			// Write test config plugins files
 			for fileName, content := range tt.files {
-				err := afero.WriteFile(mockFs, filepath.Join(tempDir, fileName), []byte(content), 0644)
+				err := afero.WriteFile(mockFs, filepath.Join(tempDir, fileName), []byte(content), 0640)
 				require.NoError(t, err)
 			}
+
+			// Create the command we are going to call. It needs to be exist but it can be empty.
+			err := afero.WriteFile(mockFs, filepath.Join("/usr/bin/local/opk/policy-cmd"), []byte(""), 0755)
+			require.NoError(t, err)
 
 			enforcer := &PolicyPluginEnforcer{
 				Fs:          mockFs,
 				cmdExecutor: tt.CmdExecutor,
+				permChecker: files.PermsChecker{
+					Fs: mockFs,
+					CmdRunner: func(name string, arg ...string) ([]byte, error) {
+						return []byte("root" + " " + "group"), nil
+					},
+				},
 			}
 			res, err := enforcer.checkPolicies(tempDir, tt.tokens)
 			require.NoError(t, err)

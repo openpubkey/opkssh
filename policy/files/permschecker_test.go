@@ -147,17 +147,16 @@ func TestPermissionsChecker(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			execCmdMock := func(name string, arg ...string) ([]byte, error) {
-				if tt.cmdError != nil {
-					return nil, tt.cmdError
-				}
-				return []byte(tt.owner + " " + tt.group), nil
-			}
 
 			mockFs := afero.NewMemMapFs()
 			permChecker := PermsChecker{
-				Fs:        mockFs,
-				cmdRunner: execCmdMock,
+				Fs: mockFs,
+				CmdRunner: func(name string, arg ...string) ([]byte, error) {
+					if tt.cmdError != nil {
+						return nil, tt.cmdError
+					}
+					return []byte(tt.owner + " " + tt.group), nil
+				},
 			}
 
 			err := afero.WriteFile(mockFs, tt.filePath, []byte("1234567890"), tt.perms)

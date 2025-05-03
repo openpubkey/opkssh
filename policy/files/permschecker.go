@@ -40,11 +40,11 @@ const ModeHomePerms = fs.FileMode(0600)
 // and file permissions of a file on a Unix-like system.
 type PermsChecker struct {
 	Fs        afero.Fs
-	cmdRunner func(string, ...string) ([]byte, error)
+	CmdRunner func(string, ...string) ([]byte, error)
 }
 
 func NewPermsChecker(fs afero.Fs) *PermsChecker {
-	return &PermsChecker{Fs: fs, cmdRunner: execCmd}
+	return &PermsChecker{Fs: fs, CmdRunner: ExecCmd}
 }
 
 // CheckPerm checks the file at the given path if it has the desired permissions.
@@ -61,7 +61,7 @@ func (u *PermsChecker) CheckPerm(path string, requirePerm fs.FileMode, requiredO
 	// if the requiredOwner or requiredGroup are specified then run stat and check if they match
 	if requiredOwner != "" || requiredGroup != "" {
 		log.Println("Running, command: ", "stat", "-c", "%U %G", path)
-		statOutput, err := u.cmdRunner("stat", "-c", "%U %G", path)
+		statOutput, err := u.CmdRunner("stat", "-c", "%U %G", path)
 		log.Println("Got output:", string(statOutput))
 		if err != nil {
 			return fmt.Errorf("failed to run stat: %w", err)
@@ -93,7 +93,7 @@ func (u *PermsChecker) CheckPerm(path string, requirePerm fs.FileMode, requiredO
 	return nil
 }
 
-func execCmd(name string, arg ...string) ([]byte, error) {
+func ExecCmd(name string, arg ...string) ([]byte, error) {
 	cmd := exec.Command(name, arg...)
 	return cmd.CombinedOutput()
 }

@@ -19,14 +19,19 @@ package plugins
 import (
 	"encoding/base64"
 	"fmt"
+	"io/fs"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/openpubkey/openpubkey/pktoken"
+	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/spf13/afero"
 	"gopkg.in/yaml.v3"
 )
+
+const requiredPolicyPerms = fs.FileMode(0640)
+const requiredPolicyCmdPerms = fs.FileMode(0755)
 
 type PluginResult struct {
 	Path         string
@@ -65,27 +70,37 @@ func DefaultCmdExecutor(name string, arg ...string) ([]byte, error) {
 type PolicyPluginEnforcer struct {
 	Fs          afero.Fs
 	cmdExecutor CmdExecutor // This lets us mock command exec in unit tests
+	permChecker files.PermsChecker
 }
 
-func NewPolicyPluginEnforcer(fs afero.Fs) *PolicyPluginEnforcer {
+func NewPolicyPluginEnforcer() *PolicyPluginEnforcer {
+	fs := afero.NewOsFs()
 	return &PolicyPluginEnforcer{
-		Fs:          afero.NewOsFs(),
+		Fs:          fs,
 		cmdExecutor: DefaultCmdExecutor,
+		permChecker: files.PermsChecker{
+			Fs:        fs,
+			CmdRunner: files.ExecCmd,
+		},
 	}
 }
 
 // loadPlugins loads the plugin config files from the given directory.
 func (p *PolicyPluginEnforcer) loadPlugins(dir string) (pluginResults PluginResults, err error) {
-	files, err := afero.ReadDir(p.Fs, dir)
+	filesFound, err := afero.ReadDir(p.Fs, dir)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, entry := range files {
+	for _, entry := range filesFound {
 		path := filepath.Join(dir, entry.Name())
 		info, err := p.Fs.Stat(path)
 		if err != nil {
 			return nil, err
+		}
+
+		if err := p.permChecker.CheckPerm(path, requiredPolicyPerms, "root", ""); err != nil {
+			return nil, fmt.Errorf("policy plugin config file (%s) has insecure permissions: %w", path, err)
 		}
 
 		if !info.IsDir() && strings.HasSuffix(info.Name(), ".yml") {
@@ -165,5 +180,18 @@ func (p *PolicyPluginEnforcer) executePolicyCommand(config PluginConfig, tokens 
 	if err != nil {
 		return nil, err
 	}
+
+	if err := p.permChecker.CheckPerm(command[0], requiredPolicyCmdPerms, "root", ""); err != nil {
+		if strings.Contains(err.Error(), "file does not exist") {
+			return nil, err
+		} else {
+			return nil, fmt.Errorf("policy plugin command (%s) has insecure permissions: %w", command[0], err)
+		}
+	}
+
 	return p.cmdExecutor(command[0], command[1:]...)
+}
+
+func b64(s string) string {
+	return base64.StdEncoding.EncodeToString([]byte(s))
 }
