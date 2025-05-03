@@ -181,6 +181,7 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 		opts.Issuer = p.Issuer
 		opts.ClientID = p.ClientID
 		opts.GQSign = false
+		opts.Scopes = p.Scopes
 		opts.PromptType = p.Prompt
 		opts.AccessType = p.AccessType
 		opts.RedirectURIs = p.RedirectURIs
@@ -191,6 +192,7 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 		opts.Issuer = p.Issuer
 		opts.ClientID = p.ClientID
 		opts.GQSign = false
+		opts.Scopes = p.Scopes
 		opts.PromptType = p.Prompt
 		opts.AccessType = p.AccessType
 		opts.RedirectURIs = p.RedirectURIs
@@ -201,6 +203,7 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 		opts.Issuer = p.Issuer
 		opts.ClientID = p.ClientID
 		opts.GQSign = false
+		opts.Scopes = p.Scopes
 		opts.PromptType = p.Prompt
 		opts.AccessType = p.AccessType
 		opts.RedirectURIs = p.RedirectURIs
@@ -214,6 +217,7 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 		opts.AccessType = p.AccessType
 		opts.RedirectURIs = p.RedirectURIs
 		opts.GQSign = false
+		opts.Scopes = p.Scopes
 		opts.OpenBrowser = openBrowser
 		provider = providers.NewStandardOpWithOptions(opts)
 	}
