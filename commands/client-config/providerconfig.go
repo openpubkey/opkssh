@@ -170,7 +170,9 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 		opts.ClientID = p.ClientID
 		opts.ClientSecret = p.ClientSecret
 		opts.GQSign = false
-		opts.Scopes = p.Scopes
+		if p.hasScopes() {
+			opts.Scopes = p.Scopes
+		}
 		opts.PromptType = p.Prompt
 		opts.AccessType = p.AccessType
 		opts.RedirectURIs = p.RedirectURIs
@@ -181,7 +183,9 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 		opts.Issuer = p.Issuer
 		opts.ClientID = p.ClientID
 		opts.GQSign = false
-		opts.Scopes = p.Scopes
+		if p.hasScopes() {
+			opts.Scopes = p.Scopes
+		}
 		opts.PromptType = p.Prompt
 		opts.AccessType = p.AccessType
 		opts.RedirectURIs = p.RedirectURIs
@@ -192,7 +196,9 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 		opts.Issuer = p.Issuer
 		opts.ClientID = p.ClientID
 		opts.GQSign = false
-		opts.Scopes = p.Scopes
+		if p.hasScopes() {
+			opts.Scopes = p.Scopes
+		}
 		opts.PromptType = p.Prompt
 		opts.AccessType = p.AccessType
 		opts.RedirectURIs = p.RedirectURIs
@@ -203,7 +209,9 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 		opts.Issuer = p.Issuer
 		opts.ClientID = p.ClientID
 		opts.GQSign = false
-		opts.Scopes = p.Scopes
+		if p.hasScopes() {
+			opts.Scopes = p.Scopes
+		}
 		opts.PromptType = p.Prompt
 		opts.AccessType = p.AccessType
 		opts.RedirectURIs = p.RedirectURIs
@@ -217,12 +225,18 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 		opts.AccessType = p.AccessType
 		opts.RedirectURIs = p.RedirectURIs
 		opts.GQSign = false
-		opts.Scopes = p.Scopes
+		if p.hasScopes() {
+			opts.Scopes = p.Scopes
+		}
 		opts.OpenBrowser = openBrowser
 		provider = providers.NewStandardOpWithOptions(opts)
 	}
 
 	return provider, nil
+}
+
+func (p *ProviderConfig) hasScopes() bool {
+	return len(p.Scopes) > 0 && (len(p.Scopes) > 1 || p.Scopes[0] != "")
 }
 
 // GetProvidersConfigFromEnv is a function to retrieve the config from the env variables
