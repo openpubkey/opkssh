@@ -67,10 +67,12 @@ func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, ss
 	//TODO: get the certificate type from the SSH certificate
 	results, err := pluginPolicy.CheckPolicies("/etc/opk/policy.d", pkt, principalDesired, sshCert, keyType)
 	if err != nil {
-		return fmt.Errorf("error checking policy via plugins: %w", err)
-	}
-	if results.Allowed() {
-		return nil
+		// TODO: log this error
+		// return fmt.Errorf("error checking policy via plugins: %w", err)
+	} else {
+		if results.Allowed() {
+			return nil
+		}
 	}
 
 	policy, source, err := p.PolicyLoader.Load()
