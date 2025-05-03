@@ -448,10 +448,10 @@ opkssh add root alice@example.com https://authentik.local/application/o/opkssh/
 |-------------------------------------------|--------|-------------------------------------------------------------------------------------------------------------|
 | [Authelia](https://www.authelia.com/)     | ✅      | [Authelia Integration Guide](https://www.authelia.com/integration/openid-connect/opkssh/)                   |
 | [Authentik](https://goauthentik.io/)      | ✅      | Do not add a certificate in the encryption section of the provider                                          |
+| [Gitlab Self-hosted](https://gitlab.com/) | ✅      | [Configuration guide](docs/gitlab-selfhosted.md)                                                            |
 | [Kanidm](https://kanidm.com/)             | ✅      | [Kanidm Integration Guide](https://kanidm.github.io/kanidm/master/integrations/oauth2/examples.html#opkssh) |
 | [PocketID](https://pocket-id.org/)        | ✅      | Create a new OIDC Client and inside the new client, check "Public client" on OIDC Client Settings           |
 | [Zitadel](https://zitadel.com/)           | ✅      | Check the UserInfo box on the Token Settings                                                                |
-| [Gitlab Self-hosted](https://gitlab.com/) | ✅      | [Configuration guide](docs/gitlab-selfhosted.md)                                                            |
 
 Do not use Confidential/Secret mode **only** client ID is needed.
 
