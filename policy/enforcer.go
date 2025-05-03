@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/openpubkey/openpubkey/pktoken"
+	"github.com/openpubkey/opkssh/policy/plugins"
 	"golang.org/x/exp/slices"
 )
 
@@ -60,7 +61,18 @@ func validateClaim(claims *checkedClaims, user *User) bool {
 // It is security critical to verify the pkt first before calling this function.
 // This is because if this function is called first, a timing channel exists which
 // allows an attacker check what identities and principals are allowed by the policy.
-func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken) error {
+func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, sshCert string, keyType string) error {
+	pluginPolicy := plugins.NewPolicyPluginEnforcer()
+
+	//TODO: get the certificate type from the SSH certificate
+	results, err := pluginPolicy.CheckPolicies("/etc/opk/policy.d", pkt, principalDesired, sshCert, keyType)
+	if err != nil {
+		return fmt.Errorf("error checking policy via plugins: %w", err)
+	}
+	if results.Allowed() {
+		return nil
+	}
+
 	policy, source, err := p.PolicyLoader.Load()
 	if err != nil {
 		return fmt.Errorf("error loading policy: %w", err)

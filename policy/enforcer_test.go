@@ -156,7 +156,7 @@ func TestPolicyApproved(t *testing.T) {
 	}
 
 	// Check that policy file is properly parsed and checked
-	err = policyEnforcer.CheckPolicy("test", pkt)
+	err = policyEnforcer.CheckPolicy("test", pkt, "example-base64Cert", "ssh-rsa")
 	require.NoError(t, err)
 }
 
@@ -185,7 +185,7 @@ func TestPolicyEmailDifferentCase(t *testing.T) {
 		PolicyLoader: &MockPolicyLoader{Policy: policyWithDiffCapitalizationThanEmail},
 	}
 
-	err = policyEnforcer.CheckPolicy("test", pkt)
+	err = policyEnforcer.CheckPolicy("test", pkt, "example-base64Cert", "ssh-rsa")
 	require.NoError(t, err, "user should have access despite email capitalization differences")
 }
 
@@ -204,7 +204,7 @@ func TestPolicyDeniedBadUser(t *testing.T) {
 		PolicyLoader: &MockPolicyLoader{Policy: policyTest},
 	}
 
-	err = policyEnforcer.CheckPolicy("baduser", pkt)
+	err = policyEnforcer.CheckPolicy("baduser", pkt, "example-base64Cert", "ssh-rsa")
 	require.Error(t, err, "user should not have access")
 }
 
@@ -223,7 +223,7 @@ func TestPolicyDeniedNoUserEntry(t *testing.T) {
 		PolicyLoader: &MockPolicyLoader{Policy: policyTestNoEntry},
 	}
 
-	err = policyEnforcer.CheckPolicy("test", pkt)
+	err = policyEnforcer.CheckPolicy("test", pkt, "example-base64Cert", "ssh-rsa")
 	require.Error(t, err, "user should not have access")
 }
 
@@ -252,7 +252,7 @@ func TestPolicyDeniedWrongIssuer(t *testing.T) {
 		PolicyLoader: &MockPolicyLoader{Policy: policyWithDiffCapitalizationThanEmail},
 	}
 
-	err = policyEnforcer.CheckPolicy("test", pkt)
+	err = policyEnforcer.CheckPolicy("test", pkt, "example-base64Cert", "ssh-rsa")
 	require.Error(t, err, "user should not have access due to wrong issuer")
 }
 
@@ -272,7 +272,7 @@ func TestPolicyApprovedOidcGroups(t *testing.T) {
 		PolicyLoader: &MockPolicyLoader{Policy: policyWithOidcGroup},
 	}
 
-	err = policyEnforcer.CheckPolicy("test", pkt)
+	err = policyEnforcer.CheckPolicy("test", pkt, "example-base64Cert", "ssh-rsa")
 	require.NoError(t, err)
 }
 
@@ -302,7 +302,7 @@ func TestPolicyApprovedOidcGroupWithAtSign(t *testing.T) {
 		PolicyLoader: &MockPolicyLoader{Policy: policyLine},
 	}
 
-	err = policyEnforcer.CheckPolicy("test", pkt)
+	err = policyEnforcer.CheckPolicy("test", pkt, "example-base64Cert", "ssh-rsa")
 	require.NoError(t, err)
 }
 
@@ -322,7 +322,7 @@ func TestPolicyDeniedOidcGroups(t *testing.T) {
 		PolicyLoader: &MockPolicyLoader{Policy: policyWithOidcGroup},
 	}
 
-	err = policyEnforcer.CheckPolicy("test", pkt)
+	err = policyEnforcer.CheckPolicy("test", pkt, "example-base64Cert", "ssh-rsa")
 	require.Error(t, err, "user should not as they don't have group 'c'")
 }
 
@@ -342,6 +342,6 @@ func TestPolicyDeniedMissingOidcGroupsClaim(t *testing.T) {
 		PolicyLoader: &MockPolicyLoader{Policy: policyWithOidcGroup},
 	}
 
-	err = policyEnforcer.CheckPolicy("test", pkt)
+	err = policyEnforcer.CheckPolicy("test", pkt, "example-base64Cert", "ssh-rsa")
 	require.Error(t, err, "user should not as the token is missing the groups claim")
 }
