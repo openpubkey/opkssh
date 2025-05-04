@@ -300,3 +300,22 @@ command: /usr/bin/local/opk/missing-cmd %iss% %sub% %aud%"`}
 		})
 	}
 }
+
+func TestPluginPanics(t *testing.T) {
+	result := &PluginResult{
+		Allowed:      true,
+		PolicyOutput: "denied",
+		Path:         "/etc/opk/plugin.yml",
+	}
+	results := PluginResults{result}
+
+	require.PanicsWithValue(t,
+		fmt.Sprintf(
+			"Danger!!! Policy plugin command (%s) returned 'allowed' but the plugin command did not approve. If you encounter this, report this as a vulnerability.",
+			result.Path,
+		),
+		func() {
+			_ = results.Allowed()
+		},
+	)
+}

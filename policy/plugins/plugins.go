@@ -37,8 +37,8 @@ type PluginResult struct {
 	Path         string
 	PluginConfig PluginConfig
 	Error        error
-	PolicyTrace  string
-	Success      bool
+	PolicyOutput string
+	Allowed      bool
 }
 
 type PluginResults []*PluginResult
@@ -54,7 +54,18 @@ func (r PluginResults) Errors() (errs []error) {
 
 func (r PluginResults) Allowed() bool {
 	for _, pluginResult := range r {
-		if pluginResult.Success {
+		if pluginResult.Allowed {
+			if pluginResult.PolicyOutput != "allowed" {
+				// This uses a double-entry bookkeeping approach to catch
+				// security critical bugs.
+				// Allowed is only set to true if the policy plugin command
+				// returns exactly "allowed" and we set PolicyOutput to the
+				// value that the policy plugin command returned. Thus if
+				// (PolicyOutput != "allowed") AND (Allowed == true) something
+				// went epically wrong and we should panic.
+				// This should never happen.
+				panic(fmt.Sprintf("Danger!!! Policy plugin command (%s) returned 'allowed' but the plugin command did not approve. If you encounter this, report this as a vulnerability.", pluginResult.Path))
+			}
 			return true
 		}
 	}
@@ -106,7 +117,6 @@ func (p *PolicyPluginEnforcer) loadPlugins(dir string) (pluginResults PluginResu
 		if !info.IsDir() && strings.HasSuffix(info.Name(), ".yml") {
 			pluginResult := &PluginResult{}
 			pluginResults = append(pluginResults, pluginResult)
-
 			pluginResult.Path = path
 
 			file, err := afero.ReadFile(p.Fs, path)
@@ -137,6 +147,19 @@ func (p *PolicyPluginEnforcer) loadPlugins(dir string) (pluginResults PluginResu
 	return pluginResults, nil
 }
 
+// CheckPolicies loads the policies plugin configs in the directory dir
+// and then runs the policy command specified in which policy plugin config
+// to determine if the user is allowed to assume access as the given principal.
+// It returns PluginResults for each plugin configs found in the policy
+// plugin directory.
+//
+// Run PluginResults.Allowed() to determine if the user is allowed to
+// assume access.
+//
+// CheckPolicies does not short circuit if a policy returns allow. This is to
+// enable admins to do a test rollout of a new policy plugin without needing to
+// disable the old policy plugin until they are sure the new policy plugin is
+// working correctly.
 func (p *PolicyPluginEnforcer) CheckPolicies(dir string, pkt *pktoken.PKToken, principal string, sshCert string, keyType string) (PluginResults, error) {
 	tokens, err := NewTokens(pkt, principal, sshCert, keyType)
 	if err != nil {
@@ -151,16 +174,19 @@ func (p *PolicyPluginEnforcer) checkPolicies(dir string, tokens map[string]strin
 		return nil, fmt.Errorf("failed to load policy commands: %w", err)
 	}
 	for _, pluginResult := range pluginResults {
-		if pluginResult.Error != nil {
-			continue
-		}
-		output, err := p.executePolicyCommand(pluginResult.PluginConfig, tokens)
-		pluginResult.Error = err
-		pluginResult.PolicyTrace = string(output)
-		if err != nil || string(output) != "allowed" {
-			pluginResult.Success = false
-		} else {
-			pluginResult.Success = true
+		// Only run the command in the plugin config if there was no error loading the plugin config
+		if pluginResult.Error == nil {
+			output, err := p.executePolicyCommand(pluginResult.PluginConfig, tokens)
+			pluginResult.Error = err
+			pluginResult.PolicyOutput = string(output)
+			if err != nil {
+				pluginResult.Error = fmt.Errorf("failed to run policy command %s got error (%w)", pluginResult.PluginConfig.CommandTemplate, err)
+				continue
+			} else if string(output) != "allowed" {
+				pluginResult.Allowed = false
+			} else {
+				pluginResult.Allowed = true
+			}
 		}
 	}
 	return pluginResults, nil
@@ -192,6 +218,7 @@ func (p *PolicyPluginEnforcer) executePolicyCommand(config PluginConfig, tokens 
 	return p.cmdExecutor(command[0], command[1:]...)
 }
 
+// b64 is a simple helper function to base64 encode a string.
 func b64(s string) string {
 	return base64.StdEncoding.EncodeToString([]byte(s))
 }
