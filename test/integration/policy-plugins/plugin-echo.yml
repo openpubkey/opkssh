@@ -1,2 +1,0 @@
-name: integration_test_echo_policy_cmd
-command: /bin/echo allowed

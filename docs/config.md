@@ -1,6 +1,7 @@
 # opkssh configuration files
 
 Herein we document the various configuration files used by opkssh.
+The documentation for the `/etc/opk/policy.d/` policy plugin system is found [here](policyplugins.md).
 
 All our configuration files are space delimited like ssh authorized key files.
 We have the follow syntax rules:

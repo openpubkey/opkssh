@@ -1,2 +1,2 @@
-name: integration_test_echo_policy_cmd
+name: integration test policy plugin
 command: /tmp/plugin-cmd.sh %u% %email%
