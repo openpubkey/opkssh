@@ -157,21 +157,21 @@ Second, we use the `AuthorizedKeysCommand` configuration option in `sshd_config`
 
 ### Client support
 
-| OS               | Supported | Tested | Version Tested         | Possible Future Support |
-| --------        | --------      | ------- | ---------------------- |----------- |
-| Linux       | ✅             |  ✅     |  Ubuntu 24.04.1 LTS  | -  |
-| OSX       | ✅             |  ✅     |  OSX 15.3.2 (Sequoia)  | -  |
-| Windows11 | ✅            |   ✅     |  Windows 11  | -  |
+| OS        | Supported | Tested  | Version Tested        |
+| --------- | --------  | ------- | --------------------- |
+| Linux     | ✅        | ✅      |  Ubuntu 24.04.1 LTS   |
+| OSX       | ✅        | ✅      |  OSX 15.3.2 (Sequoia) |
+| Windows11 | ✅        | ✅      |  Windows 11           |
 
 ### Server support
 
 | OS               | Supported | Tested | Version Tested         | Possible Future Support |
-| --------        | --------      | ------- | ---------------------- |----------- |
-| Linux       | ✅             |  ✅     |  Ubuntu 24.04.1 LTS  | -  |
-| Linux       | ✅             |  ✅     |  Centos 9  | -  |
-| Linux       | ✅             |  ✅     |  Arch Linux  | -  |
-| OSX       | ❌             |  ❌     |  -  | Likely  |
-| Windows11 | ❌            |   ❌     |  -                              | Likely |
+| ---------------- | --------  | ------ | ---------------------- | ----------------------- |
+| Linux            | ✅        | ✅     |  Ubuntu 24.04.1 LTS    | -                       |
+| Linux            | ✅        | ✅     |  Centos 9              | -                       |
+| Linux            | ✅        | ✅     |  Arch Linux            | -                       |
+| OSX              | ❌        | ❌     |  -                     | Likely                  |
+| Windows11        | ❌        | ❌     |  -                     | Likely                  |
 
 ## Server Configuration
 
@@ -230,7 +230,7 @@ guest alice@example.com https://accounts.google.com
 root alice@example.com https://accounts.google.com
 dev bob@microsoft.com https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
 
-# Group identifier 
+# Group identifier
 dev oidc:groups:developer https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
 ```
 
@@ -330,7 +330,7 @@ This alias to provider mapping be can configured using the OPKSSH_PROVIDERS envi
 ### Client Config File
 
 Rather than type in the provider each time, you can create a client config file by running `opkssh login --create-config` at
-`C:\Users\{USER}\AppData\Roaming\.opk\config.yml` on windows and `~/.opk/config.yml` on linux.
+`C:\Users\{USER}\.opk\config.yml` on windows and `~/.opk/config.yml` on linux.
 You can then edit this config file to add your provider.
 
 <details>
@@ -444,14 +444,49 @@ opkssh add root alice@example.com https://authentik.local/application/o/opkssh/
 
 ### Tested
 
-| OpenID Provider | Tested | Notes                                                                                     |
-|-----------------|--------|-------------------------------------------------------------------------------------------|
-| Authelia        | ✅      | [Authelia Integration Guide](https://www.authelia.com/integration/openid-connect/opkssh/) |
-| Authentik       | ✅      | Do not add a certificate in the encryption section of the provider                        |
-| Zitadel         | ✅      | Check the UserInfo box on the Token Settings                                              |
-| [PocketID](https://github.com/pocket-id/pocket-id) | ✅      | Create a new OIDC Client and inside the new client, check "Public client" on OIDC Client Settings                                             |
+| OpenID Provider                           | Tested | Notes                                                                                                       |
+|-------------------------------------------|--------|-------------------------------------------------------------------------------------------------------------|
+| [Authelia](https://www.authelia.com/)     | ✅      | [Authelia Integration Guide](https://www.authelia.com/integration/openid-connect/opkssh/)                   |
+| [Authentik](https://goauthentik.io/)      | ✅      | Do not add a certificate in the encryption section of the provider                                          |
+| [Gitlab Self-hosted](https://gitlab.com/) | ✅      | [Configuration guide](docs/gitlab-selfhosted.md)                                                            |
+| [Kanidm](https://kanidm.com/)             | ✅      | [Kanidm Integration Guide](https://kanidm.github.io/kanidm/master/integrations/oauth2/examples.html#opkssh) |
+| [PocketID](https://pocket-id.org/)        | ✅      | Create a new OIDC Client and inside the new client, check "Public client" on OIDC Client Settings           |
+| [Zitadel](https://zitadel.com/)           | ✅      | Check the UserInfo box on the Token Settings                                                                |
 
 Do not use Confidential/Secret mode **only** client ID is needed.
+
+## Developing
+
+For a complete developers guide see [CONTRIBUTING.md](CONTRIBUTING.md)
+
+### Building
+
+Run:
+
+```bash
+CGO_ENABLED=false go build -v -o opkssh
+chmod u+x opkssh
+```
+
+to build with docker run:
+
+```bash
+./hack/build.sh
+```
+
+### Testing
+
+For unit tests run
+
+```bash
+go test ./...
+```
+
+For integration tests run:
+
+```bash
+./hack/integration-tests.sh
+```
 
 ## More information
 
