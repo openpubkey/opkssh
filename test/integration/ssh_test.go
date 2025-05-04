@@ -704,16 +704,14 @@ func CreatePolicyPlugin(t *testing.T, serverContainer *ssh_server.SshServerConta
 	})
 	require.NoError(t, err)
 
-	content := `
-	name: integration_test_policy_cmd
-	enforce_providers: true
-	command: echo allowed
-	`
+	policyPlugin := `name: integration_test_policy_cmd
+command: echo allowed
+`
 
 	// write/overwrite the remote file in one command
 	writePluginCmd := fmt.Sprintf(`sudo tee /etc/opk/policy.d/test-plugin.yml << 'EOF'
 	%s
-	EOF`, content)
+	EOF`, policyPlugin)
 
 	_, err = nonOpkSshClient.Run(writePluginCmd)
 	require.NoError(t, err, "writing policy plugin file")
