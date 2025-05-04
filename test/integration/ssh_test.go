@@ -685,7 +685,7 @@ func TestSSHPolicyPlugin(t *testing.T) {
 	authKey := OpksshLoginAs(t, "test-user2", "pluginkey", oidcContainer, authCallbackRedirectPort)
 	// authKey := OpksshLoginAs(t, "test-user@oidc.local", "pluginkey", oidcContainer, authCallbackRedirectPort)
 
-	opkSshClient, err := goph.NewConn(&goph.Config{
+	opkSshClientSuccess, err := goph.NewConn(&goph.Config{
 		User:     "root",
 		Addr:     serverContainer.Host,
 		Port:     uint(serverContainer.Port),
@@ -698,7 +698,7 @@ func TestSSHPolicyPlugin(t *testing.T) {
 	// CreatePolicyPlugin(t, echoAllowPlugin, serverContainer)
 	CreatePolicyPlugin(t, simplePlugin, pluginCommand, serverContainer)
 
-	opkSshClient2, err := goph.NewConn(&goph.Config{
+	opkSshClientSuccess, err = goph.NewConn(&goph.Config{
 		User:     "root",
 		Addr:     serverContainer.Host,
 		Port:     uint(serverContainer.Port),
@@ -707,12 +707,12 @@ func TestSSHPolicyPlugin(t *testing.T) {
 		Callback: ssh.InsecureIgnoreHostKey(),
 	})
 	require.NoError(t, err)
-	defer opkSshClient2.Close()
+	defer opkSshClientSuccess.Close()
 
 	// Run simple command to test the connection
-	out, err := opkSshClient.Run("whoami")
+	out, err := opkSshClientSuccess.Run("whoami")
 	require.NoError(t, err)
-	require.Equal(t, serverContainer.User, strings.TrimSpace(string(out)))
+	require.Equal(t, "root", strings.TrimSpace(string(out)))
 }
 
 func CreatePolicyPlugin(t *testing.T, pluginConfig []byte, pluginCmd []byte, serverContainer *ssh_server.SshServerContainer) {

@@ -58,16 +58,16 @@ func (r PluginResults) Errors() (errs []error) {
 func (r PluginResults) Allowed() bool {
 	for _, pluginResult := range r {
 		if pluginResult.Allowed {
-			if pluginResult.PolicyOutput != "allowed" {
+			if pluginResult.PolicyOutput != "allow" {
 				// This uses a double-entry bookkeeping approach to catch
 				// security critical bugs.
 				// Allowed is only set to true if the policy plugin command
-				// returns exactly "allowed" and we set PolicyOutput to the
+				// returns exactly "allow" and we set PolicyOutput to the
 				// value that the policy plugin command returned. Thus if
-				// (PolicyOutput != "allowed") AND (Allowed == true) something
+				// (PolicyOutput != "allow") AND (Allowed == true) something
 				// went epically wrong and we should panic.
 				// This should never happen.
-				panic(fmt.Sprintf("Danger!!! Policy plugin command (%s) returned 'allowed' but the plugin command did not approve. If you encounter this, report this as a vulnerability.", pluginResult.Path))
+				panic(fmt.Sprintf("Danger!!! Policy plugin command (%s) returned 'allow' but the plugin command did not approve. If you encounter this, report this as a vulnerability.", pluginResult.Path))
 			}
 			return true
 		}
@@ -191,7 +191,7 @@ func (p *PolicyPluginEnforcer) checkPolicies(dir string, tokens map[string]strin
 			if err != nil {
 				pluginResult.Error = fmt.Errorf("failed to run policy command %s got error (%w)", pluginResult.PluginConfig.CommandTemplate, err)
 				continue
-			} else if string(output) != "allowed" {
+			} else if string(output) != "allow" {
 				pluginResult.Allowed = false
 			} else {
 				pluginResult.Allowed = true

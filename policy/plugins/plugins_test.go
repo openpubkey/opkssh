@@ -137,11 +137,11 @@ func TestPolicyPluginsWithMock(t *testing.T) {
 			if len(arg) != 3 {
 				return nil, fmt.Errorf("expected 3 arguments, got %d", len(arg))
 			} else if arg[0] == "https://example.com" && arg[1] == "1234" && arg[2] == "abcd" {
-				return []byte("allowed"), nil
+				return []byte("allow"), nil
 			} else if arg[0] == "https://example.com" && arg[1] == "sub with spaces" && arg[2] == "abcd" {
-				return []byte("allowed"), nil
+				return []byte("allow"), nil
 			} else if arg[0] == "https://example.com" && arg[1] == "sub\"withquote" && arg[2] == "abcd" {
-				return []byte("allowed"), nil
+				return []byte("allow"), nil
 			} else {
 				// Designed to test an command that doesn't output an error but returns deny. Deny should return an error as well.
 				return []byte("deny"), nil
@@ -311,7 +311,7 @@ func TestPluginPanics(t *testing.T) {
 
 	require.PanicsWithValue(t,
 		fmt.Sprintf(
-			"Danger!!! Policy plugin command (%s) returned 'allowed' but the plugin command did not approve. If you encounter this, report this as a vulnerability.",
+			"Danger!!! Policy plugin command (%s) returned 'allow' but the plugin command did not approve. If you encounter this, report this as a vulnerability.",
 			result.Path,
 		),
 		func() {
