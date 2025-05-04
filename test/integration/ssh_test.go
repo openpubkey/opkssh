@@ -669,7 +669,10 @@ func TestSSHPolicyPlugin(t *testing.T) {
 	// Spawn test containers to run these tests
 	oidcContainer, authCallbackRedirectPort, serverContainer := spawnTestContainers(t)
 
-	CreatePolicyPlugin(t, serverContainer)
+	//go:embed policy-plugins/echo-allow.yml
+	var echoAllowPlugin []byte
+
+	CreatePolicyPlugin(t, echoAllowPlugin, serverContainer)
 
 	// We set the oidc user to "test-user2" (email: "test-user2@zitadel.ch") which is not in the auth_id
 	// but is in our test policy plugin.
@@ -693,7 +696,7 @@ func TestSSHPolicyPlugin(t *testing.T) {
 	require.Equal(t, serverContainer.User, strings.TrimSpace(string(out)))
 }
 
-func CreatePolicyPlugin(t *testing.T, serverContainer *ssh_server.SshServerContainer) {
+func CreatePolicyPlugin(t *testing.T, plugin []byte, serverContainer *ssh_server.SshServerContainer) {
 	// Use backdoor (non-OPK) SSH client to dump opkssh logs if test fails
 	auth := goph.Password(serverContainer.Password)
 	nonOpkSshClient, err := goph.NewConn(&goph.Config{
@@ -706,15 +709,10 @@ func CreatePolicyPlugin(t *testing.T, serverContainer *ssh_server.SshServerConta
 	})
 	require.NoError(t, err)
 
-	policyPlugin := `
-name: integration_test_policy_cmd
-command: /bin/echo allowed
-`
-
 	// write/overwrite the remote file in one command
 	writePluginCmd := fmt.Sprintf(`sudo tee /etc/opk/policy.d/test-plugin.yml << 'EOF'
 %s
-EOF`, policyPlugin)
+EOF`, string(plugin))
 
 	_, err = nonOpkSshClient.Run(writePluginCmd)
 	require.NoError(t, err, "writing policy plugin file")

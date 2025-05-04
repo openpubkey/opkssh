@@ -17,6 +17,7 @@
 package plugins
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
 	"io/fs"
@@ -184,6 +185,7 @@ func (p *PolicyPluginEnforcer) checkPolicies(dir string, tokens map[string]strin
 		// Only run the command in the plugin config if there was no error loading the plugin config
 		if pluginResult.Error == nil {
 			output, err := p.executePolicyCommand(pluginResult.PluginConfig, tokens)
+			output = bytes.TrimSpace(output)
 			pluginResult.Error = err
 			pluginResult.PolicyOutput = string(output)
 			if err != nil {
