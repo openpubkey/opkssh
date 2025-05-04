@@ -20,6 +20,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io/fs"
+	"log"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -126,6 +127,9 @@ func (p *PolicyPluginEnforcer) loadPlugins(dir string) (pluginResults PluginResu
 				pluginResult.Error = fmt.Errorf("failed to read file %s: %w", path, err)
 				continue
 			}
+
+			// TODO: Delete
+			log.Printf("Parsing %s\n", file)
 
 			var cmd PluginConfig
 			if err := yaml.Unmarshal(file, &cmd); err != nil {
