@@ -70,6 +70,12 @@ const (
 //go:embed policy-plugins/plugin-echo.yml
 var echoAllowPlugin []byte
 
+//go:embed policy-plugins/plugin-simple.yml
+var simplePlugin []byte
+
+//go:embed policy-plugins/plugin-cmd.sh
+var pluginCommand []byte
+
 // oidcHttpClientTransport wraps an existing http.RoundTripper and sets the
 // `Host` header of all HTTP requests to one of the registered issuer hostnames
 // (oidc.local) of the dynamic zitadel example server. The zitadel server, when
@@ -674,7 +680,8 @@ func TestSSHPolicyPlugin(t *testing.T) {
 	// Spawn test containers to run these tests
 	oidcContainer, authCallbackRedirectPort, serverContainer := spawnTestContainers(t)
 
-	CreatePolicyPlugin(t, echoAllowPlugin, serverContainer)
+	// CreatePolicyPlugin(t, echoAllowPlugin, serverContainer)
+	CreatePolicyPlugin(t, simplePlugin, pluginCommand, serverContainer)
 
 	// We set the oidc user to "test-user2" (email: "test-user2@zitadel.ch") which is not in the auth_id
 	// but is in our test policy plugin.
@@ -698,7 +705,7 @@ func TestSSHPolicyPlugin(t *testing.T) {
 	require.Equal(t, serverContainer.User, strings.TrimSpace(string(out)))
 }
 
-func CreatePolicyPlugin(t *testing.T, plugin []byte, serverContainer *ssh_server.SshServerContainer) {
+func CreatePolicyPlugin(t *testing.T, pluginConfig []byte, pluginCmd []byte, serverContainer *ssh_server.SshServerContainer) {
 	// Use backdoor (non-OPK) SSH client to dump opkssh logs if test fails
 	auth := goph.Password(serverContainer.Password)
 	nonOpkSshClient, err := goph.NewConn(&goph.Config{
@@ -711,20 +718,33 @@ func CreatePolicyPlugin(t *testing.T, plugin []byte, serverContainer *ssh_server
 	})
 	require.NoError(t, err)
 
-	// write/overwrite the remote file in one command
-	writePluginCmd := fmt.Sprintf(`sudo tee /etc/opk/policy.d/test-plugin.yml << 'EOF'
+	writePluginConfig := fmt.Sprintf(`sudo tee /etc/opk/policy.d/test-plugin.yml << 'EOF'
 %s
-EOF`, string(plugin))
+EOF`, string(pluginConfig))
 
-	_, err = nonOpkSshClient.Run(writePluginCmd)
-	require.NoError(t, err, "writing policy plugin file")
+	_, err = nonOpkSshClient.Run(writePluginConfig)
+	require.NoError(t, err, "writing policy plugin config")
 
 	// now fix perms/ownership
 	_, err = nonOpkSshClient.Run("sudo chmod 640 /etc/opk/policy.d/test-plugin.yml")
-	require.NoError(t, err, "chmod policy plugin file")
+	require.NoError(t, err, "chmod policy plugin config")
 
 	_, err = nonOpkSshClient.Run("sudo chown root:opksshuser /etc/opk/policy.d/test-plugin.yml")
-	require.NoError(t, err, "chown policy plugin file")
+	require.NoError(t, err, "chown policy plugin config")
+
+	writePluginCmd := fmt.Sprintf(`sudo tee /tmp/plugin-cmd.sh << 'EOF'
+%s
+EOF`, string(pluginCmd))
+
+	_, err = nonOpkSshClient.Run(writePluginCmd)
+	require.NoError(t, err, "writing policy plugin command")
+
+	// now fix perms/ownership
+	_, err = nonOpkSshClient.Run("sudo chmod 755 /tmp/plugin-cmd.sh")
+	require.NoError(t, err, "chmod policy plugin command")
+
+	_, err = nonOpkSshClient.Run("sudo chown root:opksshuser /tmp/plugin-cmd.sh")
+	require.NoError(t, err, "chown policy plugin command")
 
 	require.NoError(t, nonOpkSshClient.Close(), "failed to close test setup (non-OPK) SSH client")
 }
