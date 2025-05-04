@@ -29,6 +29,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -656,4 +657,91 @@ func TestEndToEndSSHWithRefresh(t *testing.T) {
 	out, err := opkSshClient.Run("whoami")
 	require.NoError(t, err)
 	require.Equal(t, serverContainer.User, strings.TrimSpace(string(out)))
+}
+
+func TestSSHPolicyPlugin(t *testing.T) {
+	// Test policy plugin system e2e by performing an SSH connection to a linux container.
+	//
+	// Tests login, policy, and verify against an example OIDC server and
+	// container configured with opkssh in the "AuthorizedKeysCommand"
+	var err error
+
+	// Spawn test containers to run these tests
+	oidcContainer, authCallbackRedirectPort, serverContainer := spawnTestContainers(t)
+
+	// authKey := OpksshLoginAs(t, "test-plugin-user@oidc.local", "pluginkey", oidcContainer, authCallbackRedirectPort)
+	authKey := OpksshLoginAs(t, "test-user@oidc.local", "pluginkey", oidcContainer, authCallbackRedirectPort)
+
+	opkSshClient, err := goph.NewConn(&goph.Config{
+		User:     serverContainer.User,
+		Addr:     serverContainer.Host,
+		Port:     uint(serverContainer.Port),
+		Auth:     authKey,
+		Timeout:  goph.DefaultTimeout,
+		Callback: ssh.InsecureIgnoreHostKey(),
+	})
+	require.NoError(t, err)
+	defer opkSshClient.Close()
+
+	// Run simple command to test the connection
+	out, err := opkSshClient.Run("whoami")
+	require.NoError(t, err)
+	require.Equal(t, serverContainer.User, strings.TrimSpace(string(out)))
+}
+
+func OpksshLoginAs(t *testing.T, oidcUser string, keyName string,
+	oidcContainer *testprovider.ExampleOpContainer, authCallbackRedirectPort int) goph.Auth {
+	// Create OPK SSH provider that is configured against the spawned OIDC
+	// container's issuer server
+	zitadelOp, customTransport := createZitadelOPKSshProvider(oidcContainer.Port, authCallbackRedirectPort)
+
+	homePath, err := os.UserHomeDir()
+	require.NoError(t, err)
+	sshPath := filepath.Join(homePath, ".ssh")
+
+	// Make ~/.ssh if folder does not exist
+	err = os.MkdirAll(sshPath, os.ModePerm)
+	require.NoError(t, err)
+	seckeyPath := filepath.Join(sshPath, keyName)
+
+	// Call login
+	errCh := make(chan error)
+	t.Log("------- call login cmd ------")
+	go func() {
+		loginCmd := commands.LoginCmd{Fs: afero.NewOsFs()}
+		err := loginCmd.Login(TestCtx, zitadelOp, false, seckeyPath)
+		errCh <- err
+	}()
+
+	// Wait for login-callback server on localhost to come up. It should come up
+	// when login command is called
+	timeoutErr := WaitForServer(TestCtx, fmt.Sprintf("http://localhost:%d", authCallbackRedirectPort), LoginCallbackServerTimeout)
+	require.NoError(t, timeoutErr, "login callback server took too long to startup")
+
+	// Do OIDC login. Use custom transport that adds the expected Host
+	// header--if not specified, then the zitadel server will say it is an
+	// unexpected issuer
+	// We set the user to "test-plugin-user@oidc.local" which is not in the auth_id
+	// but is in our test policy plugin.
+	DoOidcInteractiveLogin(t, customTransport, fmt.Sprintf("http://localhost:%d/login", authCallbackRedirectPort), "test-plugin-user@oidc.local", "verysecure")
+
+	// Wait for interactive login to complete and assert no error occurred
+	timeoutCtx, cancel := context.WithTimeout(TestCtx, 3*time.Second)
+	defer cancel()
+	select {
+	case loginErr := <-errCh:
+		require.NoError(t, loginErr, "failed login")
+	case <-timeoutCtx.Done():
+		t.Fatal(timeoutCtx.Err())
+	}
+
+	// Expect to find OPK SSH key is written to disk
+	pubKey, secKeyFilePath, err := GetOPKSshKey(seckeyPath)
+	require.NoError(t, err, "expected to find OPK ssh key written to disk at %s", seckeyPath)
+
+	// Create OPK SSH signer using the found OPK SSH key on disk
+	certSigner, _ := createOpkSshSigner(t, pubKey, secKeyFilePath)
+
+	// Return key that can be used to SSH into the server container
+	return goph.Auth{ssh.PublicKeys(certSigner)}
 }
