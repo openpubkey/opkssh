@@ -723,7 +723,7 @@ func OpksshLoginAs(t *testing.T, oidcUser string, keyName string,
 	// unexpected issuer
 	// We set the user to "test-plugin-user@oidc.local" which is not in the auth_id
 	// but is in our test policy plugin.
-	DoOidcInteractiveLogin(t, customTransport, fmt.Sprintf("http://localhost:%d/login", authCallbackRedirectPort), "test-plugin-user@oidc.local", "verysecure")
+	DoOidcInteractiveLogin(t, customTransport, fmt.Sprintf("http://localhost:%d/login", authCallbackRedirectPort), oidcUser, "verysecure")
 
 	// Wait for interactive login to complete and assert no error occurred
 	timeoutCtx, cancel := context.WithTimeout(TestCtx, 3*time.Second)
