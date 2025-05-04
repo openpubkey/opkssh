@@ -708,7 +708,7 @@ func CreatePolicyPlugin(t *testing.T, serverContainer *ssh_server.SshServerConta
 
 	policyPlugin := `
 name: integration_test_policy_cmd
-command: echo allowed
+command: /bin/echo allowed
 `
 
 	// write/overwrite the remote file in one command
