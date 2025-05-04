@@ -67,9 +67,6 @@ const (
 	networkName = "opkssh-integration-test-net"
 )
 
-//go:embed policy-plugins/plugin-echo.yml
-var echoAllowPlugin []byte
-
 //go:embed policy-plugins/plugin-simple.yml
 var simplePlugin []byte
 
