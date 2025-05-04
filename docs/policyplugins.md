@@ -127,10 +127,13 @@ principal="$1"
 email="$2"
 email_verified="$3"
 
-if [ "$principal" = "root" ]; then
-  echo "deny"
-  exit 1
-fi
+DENY_LIST="root admin email backup"
+for deny_principal in $DENY_LIST; do
+  if [ "$principal" = "$deny_principal" ]; then
+    echo "deny"
+    exit 1
+  fi
+done
 
 expectedEmail="${principal}@example.com"
 if [ "$expectedEmail" = "$email" ] && [ "$email_verified" = "true" ]; then
