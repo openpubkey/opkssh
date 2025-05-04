@@ -669,8 +669,8 @@ func TestSSHPolicyPlugin(t *testing.T) {
 	// Spawn test containers to run these tests
 	oidcContainer, authCallbackRedirectPort, serverContainer := spawnTestContainers(t)
 
-	// authKey := OpksshLoginAs(t, "test-plugin-user@oidc.local", "pluginkey", oidcContainer, authCallbackRedirectPort)
-	authKey := OpksshLoginAs(t, "test-user@oidc.local", "pluginkey", oidcContainer, authCallbackRedirectPort)
+	authKey := OpksshLoginAs(t, "test-user2@oidc.local", "pluginkey", oidcContainer, authCallbackRedirectPort)
+	// authKey := OpksshLoginAs(t, "test-user@oidc.local", "pluginkey", oidcContainer, authCallbackRedirectPort)
 
 	opkSshClient, err := goph.NewConn(&goph.Config{
 		User:     serverContainer.User,
