@@ -706,7 +706,8 @@ func CreatePolicyPlugin(t *testing.T, serverContainer *ssh_server.SshServerConta
 	})
 	require.NoError(t, err)
 
-	policyPlugin := `name: integration_test_policy_cmd
+	policyPlugin := `
+name: integration_test_policy_cmd
 command: echo allowed
 `
 

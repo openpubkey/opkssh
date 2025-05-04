@@ -59,6 +59,12 @@ func NewTokens(pkt *pktoken.PKToken, principal string, sshCert string, keyType s
 		return nil, fmt.Errorf("error unmarshalling pk token payload: %w", err)
 	}
 
+	// idt, err := oidc.NewJwt(pkt.OpToken)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("error unmarshalling id token payload: %w", err)
+	// }
+	// claims := idt.GetClaims()
+
 	groupsStr := ""
 	if claims.Groups != nil {
 		groupsStr = fmt.Sprintf(`["%s"]`, strings.Join(*claims.Groups, `","`))
