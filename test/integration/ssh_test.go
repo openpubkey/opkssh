@@ -671,6 +671,8 @@ func TestSSHPolicyPlugin(t *testing.T) {
 
 	CreatePolicyPlugin(t, serverContainer)
 
+	// We set the oidc user to "test-user2" (email: "test-user2@zitadel.ch") which is not in the auth_id
+	// but is in our test policy plugin.
 	authKey := OpksshLoginAs(t, "test-user2", "pluginkey", oidcContainer, authCallbackRedirectPort)
 	// authKey := OpksshLoginAs(t, "test-user@oidc.local", "pluginkey", oidcContainer, authCallbackRedirectPort)
 
@@ -758,8 +760,6 @@ func OpksshLoginAs(t *testing.T, oidcUser string, keyName string,
 	// Do OIDC login. Use custom transport that adds the expected Host
 	// header--if not specified, then the zitadel server will say it is an
 	// unexpected issuer
-	// We set the user to "test-plugin-user@oidc.local" which is not in the auth_id
-	// but is in our test policy plugin.
 	DoOidcInteractiveLogin(t, customTransport, fmt.Sprintf("http://localhost:%d/login", authCallbackRedirectPort), oidcUser, "verysecure")
 
 	// Wait for interactive login to complete and assert no error occurred

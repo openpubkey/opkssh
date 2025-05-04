@@ -105,19 +105,21 @@ func (p *PolicyPluginEnforcer) loadPlugins(dir string) (pluginResults PluginResu
 
 	for _, entry := range filesFound {
 		path := filepath.Join(dir, entry.Name())
+
 		info, err := p.Fs.Stat(path)
 		if err != nil {
 			return nil, err
-		}
-
-		if err := p.permChecker.CheckPerm(path, requiredPolicyPerms, "root", ""); err != nil {
-			return nil, fmt.Errorf("policy plugin config file (%s) has insecure permissions: %w", path, err)
 		}
 
 		if !info.IsDir() && strings.HasSuffix(info.Name(), ".yml") {
 			pluginResult := &PluginResult{}
 			pluginResults = append(pluginResults, pluginResult)
 			pluginResult.Path = path
+
+			if err := p.permChecker.CheckPerm(path, requiredPolicyPerms, "root", ""); err != nil {
+				pluginResult.Error = fmt.Errorf("policy plugin config file (%s) has insecure permissions: %w", path, err)
+				continue
+			}
 
 			file, err := afero.ReadFile(p.Fs, path)
 			if err != nil {
