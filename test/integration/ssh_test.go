@@ -67,6 +67,9 @@ const (
 	networkName = "opkssh-integration-test-net"
 )
 
+//go:embed policy-plugins/plugin-echo.yml
+var echoAllowPlugin []byte
+
 // oidcHttpClientTransport wraps an existing http.RoundTripper and sets the
 // `Host` header of all HTTP requests to one of the registered issuer hostnames
 // (oidc.local) of the dynamic zitadel example server. The zitadel server, when
@@ -670,9 +673,6 @@ func TestSSHPolicyPlugin(t *testing.T) {
 
 	// Spawn test containers to run these tests
 	oidcContainer, authCallbackRedirectPort, serverContainer := spawnTestContainers(t)
-
-	//go:embed policy-plugins/plugin-echo.yml
-	var echoAllowPlugin []byte
 
 	CreatePolicyPlugin(t, echoAllowPlugin, serverContainer)
 
