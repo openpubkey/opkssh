@@ -43,16 +43,16 @@ func NewTokens(pkt *pktoken.PKToken, principal string, sshCert string, keyType s
 	upkB64 := base64.StdEncoding.EncodeToString(upkJson)
 
 	type Claims struct {
-		Issuer        string `json:"iss"`
-		Sub           string `json:"sub"`
-		Email         string `json:"email"`
-		EmailVerified *bool  `json:"email_verified"`
-		// Aud           string    `json:"aud"` // TODO: Get this from the claims to handle the string string[] issue
-		Exp    *int64    `json:"exp"`
-		Nbf    *int64    `json:"nbf"`
-		Iat    *int64    `json:"iat"`
-		Jti    string    `json:"jti"`
-		Groups *[]string `json:"groups"`
+		Issuer        string    `json:"iss"`
+		Sub           string    `json:"sub"`
+		Email         string    `json:"email"`
+		EmailVerified *bool     `json:"email_verified"`
+		Aud           Audience  `json:"aud"`
+		Exp           *int64    `json:"exp"`
+		Nbf           *int64    `json:"nbf"`
+		Iat           *int64    `json:"iat"`
+		Jti           string    `json:"jti"`
+		Groups        *[]string `json:"groups"`
 	}
 	var claims Claims
 	if err := json.Unmarshal(pkt.Payload, &claims); err != nil {
@@ -99,12 +99,12 @@ func NewTokens(pkt *pktoken.PKToken, principal string, sshCert string, keyType s
 		"%sub%":            claims.Sub,
 		"%email%":          claims.Email,
 		"%email_verified%": emailVerifiedStr,
-		// "%aud%":            claims.Aud,
-		"%exp%":    expStr,
-		"%nbf%":    nbfStr,
-		"%iat%":    iatStr,
-		"%jti%":    claims.Jti,
-		"%groups%": groupsStr,
+		"%aud%":            string(claims.Aud),
+		"%exp%":            expStr,
+		"%nbf%":            nbfStr,
+		"%iat%":            iatStr,
+		"%jti%":            claims.Jti,
+		"%groups%":         groupsStr,
 
 		"%payload%": string(b64(string(pkt.Payload))), // base64-encoded ID Token payload
 		"%upk%":     string(upkB64),                   // base64-encoded JWK of the user's public key
@@ -113,4 +113,23 @@ func NewTokens(pkt *pktoken.PKToken, principal string, sshCert string, keyType s
 	}
 
 	return tokens, nil
+}
+
+type Audience string
+
+func (a *Audience) UnmarshalJSON(data []byte) error {
+	var multi []string
+	if err := json.Unmarshal(data, &multi); err == nil {
+		*a = Audience(`["` + strings.Join(multi, `","`) + `"]`)
+		return nil
+	}
+
+	var single string
+	if err := json.Unmarshal(data, &single); err == nil {
+		*a = Audience(single)
+		return nil
+	} else {
+		return err
+	}
+
 }
