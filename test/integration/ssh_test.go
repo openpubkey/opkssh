@@ -680,16 +680,26 @@ func TestSSHPolicyPlugin(t *testing.T) {
 	// Spawn test containers to run these tests
 	oidcContainer, authCallbackRedirectPort, serverContainer := spawnTestContainers(t)
 
-	// CreatePolicyPlugin(t, echoAllowPlugin, serverContainer)
-	CreatePolicyPlugin(t, simplePlugin, pluginCommand, serverContainer)
-
 	// We set the oidc user to "test-user2" (email: "test-user2@zitadel.ch") which is not in the auth_id
 	// but is in our test policy plugin.
 	authKey := OpksshLoginAs(t, "test-user2", "pluginkey", oidcContainer, authCallbackRedirectPort)
 	// authKey := OpksshLoginAs(t, "test-user@oidc.local", "pluginkey", oidcContainer, authCallbackRedirectPort)
 
 	opkSshClient, err := goph.NewConn(&goph.Config{
-		User:     serverContainer.User,
+		User:     "root",
+		Addr:     serverContainer.Host,
+		Port:     uint(serverContainer.Port),
+		Auth:     authKey,
+		Timeout:  goph.DefaultTimeout,
+		Callback: ssh.InsecureIgnoreHostKey(),
+	})
+	require.Error(t, err, "OPK SSH connection fail since we haven't added the policy plugin yet")
+
+	// CreatePolicyPlugin(t, echoAllowPlugin, serverContainer)
+	CreatePolicyPlugin(t, simplePlugin, pluginCommand, serverContainer)
+
+	opkSshClient2, err := goph.NewConn(&goph.Config{
+		User:     "root",
 		Addr:     serverContainer.Host,
 		Port:     uint(serverContainer.Port),
 		Auth:     authKey,
@@ -697,7 +707,7 @@ func TestSSHPolicyPlugin(t *testing.T) {
 		Callback: ssh.InsecureIgnoreHostKey(),
 	})
 	require.NoError(t, err)
-	defer opkSshClient.Close()
+	defer opkSshClient2.Close()
 
 	// Run simple command to test the connection
 	out, err := opkSshClient.Run("whoami")
