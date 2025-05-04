@@ -19,6 +19,8 @@
 package integration
 
 import (
+	_ "embed"
+
 	"bytes"
 	"context"
 	"encoding/json"
@@ -669,7 +671,7 @@ func TestSSHPolicyPlugin(t *testing.T) {
 	// Spawn test containers to run these tests
 	oidcContainer, authCallbackRedirectPort, serverContainer := spawnTestContainers(t)
 
-	//go:embed policy-plugins/echo-allow.yml
+	//go:embed policy-plugins/plugin-echo.yml
 	var echoAllowPlugin []byte
 
 	CreatePolicyPlugin(t, echoAllowPlugin, serverContainer)
