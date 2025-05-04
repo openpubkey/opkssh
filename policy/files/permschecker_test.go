@@ -162,7 +162,7 @@ func TestPermissionsChecker(t *testing.T) {
 			err := afero.WriteFile(mockFs, tt.filePath, []byte("1234567890"), tt.perms)
 			require.NoError(t, err)
 
-			err = permChecker.CheckPerm(tt.filePathExpected, tt.permsExpected, tt.ownerExpected, tt.groupExpected)
+			err = permChecker.CheckPerm(tt.filePathExpected, []fs.FileMode{tt.permsExpected}, tt.ownerExpected, tt.groupExpected)
 			if tt.errorExpected != "" {
 				require.Error(t, err)
 				require.ErrorContains(t, err, tt.errorExpected)

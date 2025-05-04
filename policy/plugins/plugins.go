@@ -32,7 +32,8 @@ import (
 )
 
 const requiredPolicyPerms = fs.FileMode(0640)
-const requiredPolicyCmdPerms = fs.FileMode(0755)
+
+var requiredPolicyCmdPerms = []fs.FileMode{fs.FileMode(0555), fs.FileMode(0755)}
 
 type PluginResult struct {
 	Path         string
@@ -117,7 +118,7 @@ func (p *PolicyPluginEnforcer) loadPlugins(dir string) (pluginResults PluginResu
 			pluginResults = append(pluginResults, pluginResult)
 			pluginResult.Path = path
 
-			if err := p.permChecker.CheckPerm(path, requiredPolicyPerms, "root", ""); err != nil {
+			if err := p.permChecker.CheckPerm(path, []fs.FileMode{requiredPolicyPerms}, "root", ""); err != nil {
 				pluginResult.Error = fmt.Errorf("policy plugin config file (%s) has insecure permissions: %w", path, err)
 				continue
 			}
