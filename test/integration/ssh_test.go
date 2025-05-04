@@ -713,8 +713,8 @@ command: echo allowed
 
 	// write/overwrite the remote file in one command
 	writePluginCmd := fmt.Sprintf(`sudo tee /etc/opk/policy.d/test-plugin.yml << 'EOF'
-	%s
-	EOF`, policyPlugin)
+%s
+EOF`, policyPlugin)
 
 	_, err = nonOpkSshClient.Run(writePluginCmd)
 	require.NoError(t, err, "writing policy plugin file")

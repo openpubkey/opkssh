@@ -124,7 +124,7 @@ func (p *PolicyPluginEnforcer) loadPlugins(dir string) (pluginResults PluginResu
 
 			file, err := afero.ReadFile(p.Fs, path)
 			if err != nil {
-				pluginResult.Error = fmt.Errorf("failed to read file %s: %w", path, err)
+				pluginResult.Error = fmt.Errorf("failed to read policy plugin config at (%s): %w", path, err)
 				continue
 			}
 
@@ -133,17 +133,17 @@ func (p *PolicyPluginEnforcer) loadPlugins(dir string) (pluginResults PluginResu
 
 			var cmd PluginConfig
 			if err := yaml.Unmarshal(file, &cmd); err != nil {
-				pluginResult.Error = fmt.Errorf("failed to parse YAML in file %s: %w", path, err)
+				pluginResult.Error = fmt.Errorf("failed to parse YAML in policy plugin config at (%s): %w", path, err)
 				continue
 			}
 
 			if cmd.Name == "" {
-				pluginResult.Error = fmt.Errorf("policy plugin config missing required field 'name' in file %s:", path)
+				pluginResult.Error = fmt.Errorf("policy plugin config missing required field 'name' in policy plugin config at (%s)", path)
 				continue
 			}
 
 			if cmd.CommandTemplate == "" {
-				pluginResult.Error = fmt.Errorf("policy plugin config missing required field 'command' in file %s: ", path)
+				pluginResult.Error = fmt.Errorf("policy plugin config missing required field 'command' in policy plugin config at (%s): ", path)
 				continue
 			}
 
