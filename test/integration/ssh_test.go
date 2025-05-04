@@ -669,6 +669,8 @@ func TestSSHPolicyPlugin(t *testing.T) {
 	// Spawn test containers to run these tests
 	oidcContainer, authCallbackRedirectPort, serverContainer := spawnTestContainers(t)
 
+	CreatePolicyPlugin(t, serverContainer)
+
 	authKey := OpksshLoginAs(t, "test-user2", "pluginkey", oidcContainer, authCallbackRedirectPort)
 	// authKey := OpksshLoginAs(t, "test-user@oidc.local", "pluginkey", oidcContainer, authCallbackRedirectPort)
 
@@ -702,33 +704,28 @@ func CreatePolicyPlugin(t *testing.T, serverContainer *ssh_server.SshServerConta
 	})
 	require.NoError(t, err)
 
-	_, err = nonOpkSshClient.Run(`sudo touch /etc/opk/policy.d/test-plugin.yml`)
-	require.NoError(t, err, "failed to create policy plugin file")
-	_, err = nonOpkSshClient.Run(`sudo echo "name: integration_test_policy_cmd" >> /etc/opk/policy.d/test-plugin.yml`)
-	_, err = nonOpkSshClient.Run(`sudo echo "enforce_providers: true" >> /etc/opk/policy.d/test-plugin.yml`)
-	_, err = nonOpkSshClient.Run(`sudo echo "command: echo allowed" >> /etc/opk/policy.d/test-plugin.yml`)
-	_, err = nonOpkSshClient.Run(`sudo echo "" >> /etc/opk/policy.d/test-plugin.yml`)
-	require.NoError(t, err, "failed to write policy plugin file")
+	content := `
+	name: integration_test_policy_cmd
+	enforce_providers: true
+	command: echo allowed
+	`
 
-	_, err = nonOpkSshClient.Run("sudo chmod 640  /etc/opk/policy.d/test-plugin.yml")
-	require.NoError(t, err, "failed to chmod policy plugin file")
+	// write/overwrite the remote file in one command
+	writePluginCmd := fmt.Sprintf(`sudo tee /etc/opk/policy.d/test-plugin.yml << 'EOF'
+	%s
+	EOF`, content)
+
+	_, err = nonOpkSshClient.Run(writePluginCmd)
+	require.NoError(t, err, "writing policy plugin file")
+
+	// now fix perms/ownership
+	_, err = nonOpkSshClient.Run("sudo chmod 640 /etc/opk/policy.d/test-plugin.yml")
+	require.NoError(t, err, "chmod policy plugin file")
+
 	_, err = nonOpkSshClient.Run("sudo chown root:opksshuser /etc/opk/policy.d/test-plugin.yml")
-	require.NoError(t, err, "failed to chown policy plugin file")
+	require.NoError(t, err, "chown policy plugin file")
 
-	t.Cleanup(func() {
-		if t.Failed() {
-			// Get opkssh error logs
-			_, err := nonOpkSshClient.Run("sudo chmod 777 /var/log/opkssh.log")
-			if assert.NoError(t, err) {
-				errorLog, err := nonOpkSshClient.Run("cat /var/log/opkssh.log")
-				if assert.NoError(t, err) {
-					t.Logf("/var/log/opkssh.log: \n%v", string(errorLog))
-				}
-			}
-		}
-		require.NoError(t, nonOpkSshClient.Close(), "failed to close backdoor (non-OPK) SSH client")
-	})
-
+	require.NoError(t, nonOpkSshClient.Close(), "failed to close test setup (non-OPK) SSH client")
 }
 
 func OpksshLoginAs(t *testing.T, oidcUser string, keyName string,
