@@ -24,9 +24,8 @@ import (
 
 // PluginConfig represents the structure of a policy command configuration.
 type PluginConfig struct {
-	Name             string `yaml:"name"`
-	CommandTemplate  string `yaml:"command"`
-	EnforceProviders bool   `yaml:"enforce_providers"`
+	Name            string `yaml:"name"`
+	CommandTemplate string `yaml:"command"`
 }
 
 func (c PluginConfig) PercentExpand(tokenMap map[string]string) ([]string, error) {
