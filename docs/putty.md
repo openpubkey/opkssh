@@ -20,7 +20,7 @@ We provide this guide for those circumstances in which someone absolutely has to
 ## Importing an SSH certificate into PuTTY
 
 PuTTY has its own incompatible SSH certificate and SSH private key format and can not understand regular SSH certificates and SSH private keys.
-Thankfully PuTTY provides a tool PuTTYgen which can convert regular SSH certificates and private keys into into this special format.
+Thankfully PuTTY provides a tool PuTTYgen which can convert regular SSH certificates and private keys into this special format.
 In the following steps we provide a walkthrough on how to import the regular SSH certificate and SSH private key into the PuTTY format.
 
 **Note:** Some parts of the PuTTY interface will refer to an SSH public key rather than an SSH certificate. Do not be confused, SSH certificates are a type SSH public keys.
