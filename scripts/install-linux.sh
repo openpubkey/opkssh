@@ -258,7 +258,7 @@ if command -v $INSTALL_DIR/$BINARY_NAME &> /dev/null; then
     # Setup configuration
     echo "Configuring opkssh:"
     mkdir -p /etc/opk
-    mkdir /etc/opk/policy.d
+    mkdir -p /etc/opk/policy.d
 
     touch /etc/opk/auth_id
     chown root:${AUTH_CMD_GROUP} /etc/opk/auth_id
