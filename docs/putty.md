@@ -42,7 +42,7 @@ The output of this command will tell you the location opkssh wrote the key on yo
 Open PuTTYgen. PuTTyGen comes automatically with your PuTTY, so if you have PuTTY installed you have PuTTYgen installed.
 
 In PuTTYgen click "Conversions --> Import Key" in the taskbar and then select the SSH private key `opkssh login` generated in step 1.
-BNy default this should be `C:\Users\{USERNAME}\.ssh\id_ecdsa`.
+By default this should be `C:\Users\{USERNAME}\.ssh\id_ecdsa`.
 You should know see the PuTTYgen has imported your private key because PuTTYgen will look something like:
 
 ![PuTTYgen after importing a private key](https://github.com/user-attachments/assets/bef3d39d-d602-41d6-b5fc-e456690df038)
