@@ -67,16 +67,17 @@ func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, ss
 
 	results, err := pluginPolicy.CheckPolicies("/etc/opk/policy.d", pkt, principalDesired, sshCert, keyType)
 	if err != nil {
-		log.Printf("error checking policy plugins: %v \n", err)
+		log.Printf("Error checking policy plugins: %v \n", err)
 		// Despite the error, we don't fail here because we still want to check
 		// the standard policy below. Policy plugins can only expand the set of
 		// allow set, not shrink it.
 	} else {
 		for _, result := range results {
-			log.Printf("policy plugin result, path: (%s), allowed: (%t), error: (%v), policyOutput: (%s)\n", result.Path, result.Allowed, result.Error, result.PolicyOutput)
+			commandRunStr := strings.Join(result.CommandRun, " ")
+			log.Printf("Policy plugin result, path: (%s), allowed: (%t), error: (%v), command_run: (%s), policyOutput: (%s)\n", result.Path, result.Allowed, result.Error, commandRunStr, result.PolicyOutput)
 		}
 		if results.Allowed() {
-			log.Printf("access granted by policy plugin\n")
+			log.Printf("Access granted by policy plugin\n")
 			return nil
 		}
 	}

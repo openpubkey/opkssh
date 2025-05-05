@@ -40,6 +40,7 @@ type PluginResult struct {
 	Path         string
 	PluginConfig PluginConfig
 	Error        error
+	CommandRun   []string
 	PolicyOutput string
 	Allowed      bool
 }
@@ -184,10 +185,11 @@ func (p *PolicyPluginEnforcer) checkPolicies(dir string, tokens map[string]strin
 	for _, pluginResult := range pluginResults {
 		// Only run the command in the plugin config if there was no error loading the plugin config
 		if pluginResult.Error == nil {
-			output, err := p.executePolicyCommand(pluginResult.PluginConfig, tokens)
+			commandRun, output, err := p.executePolicyCommand(pluginResult.PluginConfig, tokens)
 			output = bytes.TrimSpace(output)
 			pluginResult.Error = err
 			pluginResult.PolicyOutput = string(output)
+			pluginResult.CommandRun = commandRun
 			if err != nil {
 				pluginResult.Error = fmt.Errorf("failed to run policy command %s got error (%w)", pluginResult.PluginConfig.CommandTemplate, err)
 				continue
@@ -202,29 +204,29 @@ func (p *PolicyPluginEnforcer) checkPolicies(dir string, tokens map[string]strin
 }
 
 // executePolicyCommand executes the policy command with the provided tokens.
-func (p *PolicyPluginEnforcer) executePolicyCommand(config PluginConfig, tokens map[string]string) ([]byte, error) {
+func (p *PolicyPluginEnforcer) executePolicyCommand(config PluginConfig, tokens map[string]string) ([]string, []byte, error) {
 	// Add PluginConfig to the tokens map for expansion
 	configJson, err := yaml.Marshal(config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal config to JSON: %w", err)
+		return nil, nil, fmt.Errorf("failed to marshal config to JSON: %w", err)
 	}
 	tokens["%config%"] = base64.StdEncoding.EncodeToString(configJson)
 
 	// Replace tokens in the command string.
 	command, err := config.PercentExpand(tokens)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if err := p.permChecker.CheckPerm(command[0], requiredPolicyCmdPerms, "root", ""); err != nil {
 		if strings.Contains(err.Error(), "file does not exist") {
-			return nil, err
+			return nil, nil, err
 		} else {
-			return nil, fmt.Errorf("policy plugin command (%s) has insecure permissions: %w", command[0], err)
+			return nil, nil, fmt.Errorf("policy plugin command (%s) has insecure permissions: %w", command[0], err)
 		}
 	}
-
-	return p.cmdExecutor(command[0], command[1:]...)
+	output, err := p.cmdExecutor(command[0], command[1:]...)
+	return command, output, err
 }
 
 // b64 is a simple helper function to base64 encode a string.

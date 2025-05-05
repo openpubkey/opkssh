@@ -69,7 +69,7 @@ We inherit the following tokens from OpenSSHd
 - %iss% Issuer (iss) claim
 - %sub% Sub claim of the identity
 - %email% Email claim of the identity
-- %email_verified% Optional claim that signals if the email address has been verified 
+- %email_verified% Optional claim that signals if the email address has been verified
 - %aud% Audience/client_id (aud) claim
 - %exp% Expiration (exp) claim
 - %nb%f Not Before (nbf) claim
@@ -111,9 +111,17 @@ would result in a command string such as: `{"/etc/opk/plugin-cmd.sh", "https://e
 
 We do this to avoid situations where a policy plugin includes a claim to check if present but does not require it. If we threw an error if it was not found then this may cause hard to debug policy failures when an ID Token is missing that claim.
 
-If a policy plugin wishes to discriminate between claims which are missing or merely set to the empty string, they could use the `%idt` and parse the ID Token themselves. 
+If a policy plugin wishes to discriminate between claims which are missing or merely set to the empty string, they could use the `%idt` and parse the ID Token themselves.
 
 ## Example policy configs
+
+### Match username to email address
+
+This policy plugin allows ssh access as the principal (linux user) if the principal is the same as the username part of the email address in the ID Token, i.e. when email of the user fits the pattern `principal@example.com`.  For instance this would allow `ssh alice@hostname` if Alice's email address is `alice@example.com`.
+
+To prevent issues where someone might get the email `root@example.com` it has a list of default linux principles always denies such as `root`, `admin`, `email`, `backup`...
+
+Note that this hardcodes the last part of the email address to `example.com`. If you wanted to use this for say `gmail.com` change this value from `example.com` to `gmail.com`.
 
 ```yml
 name: Match linux username to email username

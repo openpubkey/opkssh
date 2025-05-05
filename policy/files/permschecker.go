@@ -19,7 +19,6 @@ package files
 import (
 	"fmt"
 	"io/fs"
-	"log"
 	"os/exec"
 	"strings"
 
@@ -62,9 +61,7 @@ func (u *PermsChecker) CheckPerm(path string, requirePerm []fs.FileMode, require
 
 	// if the requiredOwner or requiredGroup are specified then run stat and check if they match
 	if requiredOwner != "" || requiredGroup != "" {
-		log.Println("Running, command: ", "stat", "-c", "%U %G", path)
 		statOutput, err := u.CmdRunner("stat", "-c", "%U %G", path)
-		log.Println("Got output:", string(statOutput))
 		if err != nil {
 			return fmt.Errorf("failed to run stat: %w", err)
 		}
