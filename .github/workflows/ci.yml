@@ -35,6 +35,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Check Nix flake inputs
+        uses: DeterminateSystems/flake-checker-action@v9
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@main
       - name: Build
