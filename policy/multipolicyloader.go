@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -96,7 +97,12 @@ func (l *MultiPolicyLoader) Load() (*Policy, Source, error) {
 // full root privileges.
 func ReadWithSudoScript(h *HomePolicyLoader, username string) ([]byte, error) {
 	// opkssh readhome ensures the file is not a symlink and has the permissions/ownership.
-	cmd := exec.Command("sudo", "-n", "/usr/local/bin/opkssh", "readhome", username)
+	// The default path is /usr/local/bin/opkssh
+	opkBin, err := os.Executable()
+	if err != nil {
+		return nil, fmt.Errorf("error getting opkssh executable path: %w", err)
+	}
+	cmd := exec.Command("sudo", "-n", opkBin, "readhome", username)
 	homePolicyFileBytes, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("error reading %s home policy using command %v got output %v and err %v", username, cmd, string(homePolicyFileBytes), err)
