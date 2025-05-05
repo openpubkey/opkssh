@@ -490,4 +490,5 @@ For integration tests run:
 
 ## More information
 
-We document how to manually install opkssh on a server [here](scripts/installing.md).
+- [docs/putty.md](docs/putty.md)  provides instructions on using PuTTY with opkssh.
+- [scripts/installing.md](scripts/installing.md) documents our install script and how to manually install opkssh on a server.
