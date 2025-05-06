@@ -71,7 +71,7 @@ func NewTokens(pkt *pktoken.PKToken, principal string, sshCert string, keyType s
 
 	expStr := ""
 	if claims.Exp != nil {
-		expStr = fmt.Sprintf("%d", claims.Exp)
+		expStr = fmt.Sprintf("%d", *claims.Exp)
 	}
 
 	nbfStr := ""

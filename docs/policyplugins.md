@@ -104,7 +104,7 @@ with following plugin_config that requires `email` and `aud`:
 
 ```yml
 name: example command
-command: /etc/opk/plugin-cmd.sh %{iss} %sub} %{email} %{exp} %{aud}
+command: /etc/opk/plugin-cmd.sh %{iss} %{sub} %{email} %{exp} %{aud}
 ```
 
 would result in a command string such as: `{"/etc/opk/plugin-cmd.sh", "https://example.com", "123", "", "34", ""}`
