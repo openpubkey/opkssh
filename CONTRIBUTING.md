@@ -8,6 +8,14 @@ OPKSSH is part of [the OpenPubkey project.](https://github.com/openpubkey/openpu
 
 Whether you're addressing an open issue (or filing a new one), fixing a typo in our documentation, adding to core capabilities of the project, or introducing a new use case, anyone from the community is welcome here at OpenPubkey.
 
+### Development environment
+
+If you’re using Nix with flakes support, you can enter a _barebones_
+development shell by running `nix develop` in the repo.  You can also
+easily test that `opkssh` builds by running `nix build`.  The binary
+will be under `./result/bin`.  If you just want to run `opkssh`, you
+can do so with `nix run`.
+
 ### Include Licensing at the Top of Each File
 
 At the top of each file in your commit, please ensure the following is captured in a comment:
@@ -77,6 +85,19 @@ Our automated PR checks verify that:
  1. All unit tests pass, which can be done locally by running `go test ./...`.
  2. The code has been formatted correctly, according to `go fmt`.
  3. There are no obvious errors, according to `go vet`.
+ 4. `opkssh` can be built with Nix.
+ 5. The `nixpkgs` Nix flake input isn’t stale.
+
+#### Nix specifics
+
+Technically speaking, the `flake.nix` doesn’t have to be updated _at
+all_; however, it’s generally a good idea to keep the `nixpkgs` input
+relatively up-to-date to pull in the latest security updates.  The
+pull request continuous integration checks are configured to try and
+build `opkssh` à la `nix build` and also check that the `nixpkgs`
+flake input isn’t stale.  If `opkssh` fails to build, ensure that you
+can build it manually in the Nix develop shell.  If the Nix flake
+input check fails, try running `nix flake update nixpkgs`.
 
 ## Building and Testing
 
