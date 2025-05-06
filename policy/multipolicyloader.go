@@ -25,7 +25,9 @@ import (
 	"strings"
 )
 
-var _ Loader = &MultiPolicyLoader{}
+var _ Loader = &MultiPolicyLoader{
+	LoaderScript: ReadWithSudoScript,
+}
 
 // FileSource implements policy.Source by returning a string that is expected to
 // be a filepath
@@ -35,13 +37,22 @@ func (s FileSource) Source() string {
 	return string(s)
 }
 
+func NewMultiPolicyLoader(username string, loader OptionalLoader) *MultiPolicyLoader {
+	return &MultiPolicyLoader{
+		HomePolicyLoader:   NewHomePolicyLoader(),
+		SystemPolicyLoader: NewSystemPolicyLoader(),
+		LoaderScript:       loader,
+		Username:           username,
+	}
+}
+
 // MultiPolicyLoader implements policy.Loader by reading both the system default
 // policy (root policy) and user policy (~/.opk/auth_id where ~ maps to
 // Username's home directory)
 type MultiPolicyLoader struct {
 	HomePolicyLoader   *HomePolicyLoader
 	SystemPolicyLoader *SystemPolicyLoader
-	LoadWithScript     bool
+	LoaderScript       OptionalLoader
 	Username           string
 }
 
@@ -53,8 +64,9 @@ func (l *MultiPolicyLoader) Load() (*Policy, Source, error) {
 	if rootPolicyErr != nil {
 		log.Println("warning: failed to load system default policy:", rootPolicyErr)
 	}
+
 	// Try to load the user policy
-	userPolicy, userPolicyFilePath, userPolicyErr := l.HomePolicyLoader.LoadHomePolicy(l.Username, true, ReadWithSudoScript)
+	userPolicy, userPolicyFilePath, userPolicyErr := l.HomePolicyLoader.LoadHomePolicy(l.Username, true, l.LoaderScript)
 	if userPolicyErr != nil {
 		log.Println("warning: failed to load user policy:", userPolicyErr)
 	}
@@ -103,6 +115,7 @@ func ReadWithSudoScript(h *HomePolicyLoader, username string) ([]byte, error) {
 		return nil, fmt.Errorf("error getting opkssh executable path: %w", err)
 	}
 	cmd := exec.Command("sudo", "-n", opkBin, "readhome", username)
+
 	homePolicyFileBytes, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("error reading %s home policy using command %v got output %v and err %v", username, cmd, string(homePolicyFileBytes), err)
