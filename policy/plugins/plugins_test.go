@@ -40,7 +40,7 @@ func TestLoadPolicyPlugins(t *testing.T) {
 				"valid_policy.yml": `
 name: Example Policy Command
 enforce_providers: true
-command: /usr/bin/local/opk/policy-cmd %sub %iss %aud`,
+command: /usr/bin/local/opk/policy-cmd %{sub} %{iss} %{aud}`,
 			},
 			expectedCount:    1,
 			expectErrorCount: 0,
@@ -154,17 +154,17 @@ func TestPolicyPluginsWithMock(t *testing.T) {
 		"valid_policy.yml": `
 name: Example Policy Command
 enforce_providers: true
-command: /usr/bin/local/opk/policy-cmd %iss% %sub% %aud%`}
+command: /usr/bin/local/opk/policy-cmd %{iss} %{sub} %{aud}`}
 
 	missingCommandConfigFile := map[string]string{"missing-command.yml": `
 name: Example Policy Command
 enforce_providers: true
-command: /usr/bin/local/opk/missing-cmd %iss% %sub% %aud%`}
+command: /usr/bin/local/opk/missing-cmd %{iss} %{sub} %{aud}`}
 
 	InvalidCommandConfigFile := map[string]string{"missing-command.yml": `
 name: Example Policy Command
 enforce_providers: true
-command: /usr/bin/local/opk/missing-cmd %iss% %sub% %aud%"`}
+command: /usr/bin/local/opk/missing-cmd  %{iss} %{sub} %{aud}"`}
 
 	tests := []struct {
 		name                string
@@ -179,9 +179,9 @@ command: /usr/bin/local/opk/missing-cmd %iss% %sub% %aud%"`}
 		{
 			name: "Valid plugin config",
 			tokens: map[string]string{
-				"%iss%": "https://example.com",
-				"%sub%": "1234",
-				"%aud%": "abcd",
+				"%{iss}": "https://example.com",
+				"%{sub}": "1234",
+				"%{aud}": "abcd",
 			},
 			files:               validPluginConfigFile,
 			CmdExecutor:         mockCmdExecutor,
@@ -192,9 +192,9 @@ command: /usr/bin/local/opk/missing-cmd %iss% %sub% %aud%"`}
 		{
 			name: "Plugin config not found",
 			tokens: map[string]string{
-				"%iss%": "https://example.com",
-				"%sub%": "1234",
-				"%aud%": "abcd",
+				"%{iss}": "https://example.com",
+				"%{sub}": "1234",
+				"%{aud}": "abcd",
 			},
 			files:               missingCommandConfigFile,
 			CmdExecutor:         mockCmdExecutor,
@@ -206,9 +206,9 @@ command: /usr/bin/local/opk/missing-cmd %iss% %sub% %aud%"`}
 		{
 			name: "Check we handle spaces in claims",
 			tokens: map[string]string{
-				"%iss%": "https://example.com",
-				"%sub%": "sub with spaces",
-				"%aud%": "abcd",
+				"%{iss}": "https://example.com",
+				"%{sub}": "sub with spaces",
+				"%{aud}": "abcd",
 			},
 			files:               validPluginConfigFile,
 			CmdExecutor:         mockCmdExecutor,
@@ -220,9 +220,9 @@ command: /usr/bin/local/opk/missing-cmd %iss% %sub% %aud%"`}
 		{
 			name: "Test we handle quotes in tokens",
 			tokens: map[string]string{
-				"%iss%": "https://example.com",
-				"%sub%": `sub"withquote`,
-				"%aud%": "abcd",
+				"%{iss}": "https://example.com",
+				"%{sub}": `sub"withquote`,
+				"%{aud}": "abcd",
 			},
 			files:               validPluginConfigFile,
 			CmdExecutor:         mockCmdExecutor,
@@ -234,9 +234,9 @@ command: /usr/bin/local/opk/missing-cmd %iss% %sub% %aud%"`}
 		{
 			name: "Policy command denial",
 			tokens: map[string]string{
-				"%iss%": "https://example.com",
-				"%sub%": "wrong",
-				"%aud%": "abcd",
+				"%{iss}": "https://example.com",
+				"%{sub}": "wrong",
+				"%{aud}": "abcd",
 			},
 			files:               validPluginConfigFile,
 			CmdExecutor:         mockCmdExecutor,
@@ -248,9 +248,9 @@ command: /usr/bin/local/opk/missing-cmd %iss% %sub% %aud%"`}
 		{
 			name: "Policy invalid command template",
 			tokens: map[string]string{
-				"%iss%": "https://example.com",
-				"%sub%": "1234",
-				"%aud%": "abcd",
+				"%{iss}": "https://example.com",
+				"%{sub}": "1234",
+				"%{aud}": "abcd",
 			},
 			files:               InvalidCommandConfigFile,
 			CmdExecutor:         mockCmdExecutor,

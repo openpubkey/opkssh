@@ -70,23 +70,23 @@ func TestNewTokens(t *testing.T) {
 			sshCert:   b64("SSH certificate"),
 			keyType:   "ssh-rsa",
 			expectTokens: map[string]string{
-				"%aud%":            "test_client_id",
-				"%email%":          "alice@gmail.com",
-				"%email_verified%": "true",
-				"%exp%":            "-",
-				"%groups%":         `["admin","user"]`,
-				"%iat%":            "99999999900",
-				"%idt%":            "-",
-				"%iss%":            "https://accounts.example.com",
-				"%jti%":            "abcdefg",
-				"%k%":              b64("SSH certificate"),
-				"%nbf%":            "12345678900",
-				"%payload%":        "-",
-				"%pkt%":            "-",
-				"%sub%":            "1234",
-				"%t%":              "ssh-rsa",
-				"%u%":              "root",
-				"%upk%":            "-",
+				"%{aud}":            "test_client_id",
+				"%{email}":          "alice@gmail.com",
+				"%{email_verified}": "true",
+				"%{exp}":            "-",
+				"%{groups}":         `["admin","user"]`,
+				"%{iat}":            "99999999900",
+				"%{idt}":            "-",
+				"%{iss}":            "https://accounts.example.com",
+				"%{jti}":            "abcdefg",
+				"%{k}":              b64("SSH certificate"),
+				"%{nbf}":            "12345678900",
+				"%{payload}":        "-",
+				"%{pkt}":            "-",
+				"%{sub}":            "1234",
+				"%{t}":              "ssh-rsa",
+				"%{u}":              "root",
+				"%{upk}":            "-",
 			},
 		},
 		{
@@ -98,23 +98,23 @@ func TestNewTokens(t *testing.T) {
 			sshCert:   b64("SSH certificate"),
 			keyType:   "ssh-rsa",
 			expectTokens: map[string]string{
-				"%aud%":            "test_client_id",
-				"%email%":          "",
-				"%email_verified%": "",
-				"%exp%":            "-",
-				"%groups%":         "",
-				"%iat%":            "99999999900",
-				"%idt%":            "-",
-				"%iss%":            "https://accounts.example.com",
-				"%jti%":            "",
-				"%k%":              b64("SSH certificate"),
-				"%nbf%":            "",
-				"%payload%":        "-",
-				"%pkt%":            "-",
-				"%sub%":            "me",
-				"%t%":              "ssh-rsa",
-				"%u%":              "root",
-				"%upk%":            "-",
+				"%{aud}":            "test_client_id",
+				"%{email}":          "",
+				"%{email_verified}": "",
+				"%{exp}":            "-",
+				"%{groups}":         "",
+				"%{iat}":            "99999999900",
+				"%{idt}":            "-",
+				"%{iss}":            "https://accounts.example.com",
+				"%{jti}":            "",
+				"%{k}":              b64("SSH certificate"),
+				"%{nbf}":            "",
+				"%{payload}":        "-",
+				"%{pkt}":            "-",
+				"%{sub}":            "me",
+				"%{t}":              "ssh-rsa",
+				"%{u}":              "root",
+				"%{upk}":            "-",
 			},
 		},
 		{
@@ -127,23 +127,23 @@ func TestNewTokens(t *testing.T) {
 			sshCert:   b64("SSH certificate"),
 			keyType:   "ssh-rsa",
 			expectTokens: map[string]string{
-				"%aud%":            `["test_client_id","other_client_id"]`,
-				"%email%":          "",
-				"%email_verified%": "",
-				"%exp%":            "-",
-				"%groups%":         "",
-				"%iat%":            "99999999900",
-				"%idt%":            "-",
-				"%iss%":            "https://accounts.example.com",
-				"%jti%":            "",
-				"%k%":              b64("SSH certificate"),
-				"%nbf%":            "",
-				"%payload%":        "-",
-				"%pkt%":            "-",
-				"%sub%":            "me",
-				"%t%":              "ssh-rsa",
-				"%u%":              "root",
-				"%upk%":            "-",
+				"%{aud}":            `["test_client_id","other_client_id"]`,
+				"%{email}":          "",
+				"%{email_verified}": "",
+				"%{exp}":            "-",
+				"%{groups}":         "",
+				"%{iat}":            "99999999900",
+				"%{idt}":            "-",
+				"%{iss}":            "https://accounts.example.com",
+				"%{jti}":            "",
+				"%{k}":              b64("SSH certificate"),
+				"%{nbf}":            "",
+				"%{payload}":        "-",
+				"%{pkt}":            "-",
+				"%{sub}":            "me",
+				"%{t}":              "ssh-rsa",
+				"%{u}":              "root",
+				"%{upk}":            "-",
 			},
 		},
 		{
@@ -169,20 +169,20 @@ func TestNewTokens(t *testing.T) {
 				require.NotNil(t, tokens)
 
 				// Simple smoke test that these values where set. They are random so we check equality.
-				require.Equal(t, len(strings.Split(tokens["%pkt%"], ":")), 5)
-				tokens["%pkt%"] = "-"
+				require.Equal(t, len(strings.Split(tokens["%{pkt}"], ":")), 5)
+				tokens["%{pkt}"] = "-"
 
-				require.Equal(t, len(strings.Split(tokens["%idt%"], ".")), 3)
-				tokens["%idt%"] = "-"
+				require.Equal(t, len(strings.Split(tokens["%{idt}"], ".")), 3)
+				tokens["%{idt}"] = "-"
 
-				require.Greater(t, len(tokens["%upk%"]), 10)
-				tokens["%upk%"] = "-"
+				require.Greater(t, len(tokens["%{upk}"]), 10)
+				tokens["%{upk}"] = "-"
 
-				require.Greater(t, len(tokens["%payload%"]), 10)
-				tokens["%payload%"] = "-"
+				require.Greater(t, len(tokens["%{payload}"]), 10)
+				tokens["%{payload}"] = "-"
 
-				require.Greater(t, len(tokens["%exp%"]), 10)
-				tokens["%exp%"] = "-"
+				require.Greater(t, len(tokens["%{exp}"]), 10)
+				tokens["%{exp}"] = "-"
 
 				require.Equal(t, tt.expectTokens, tokens)
 			}

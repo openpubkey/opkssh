@@ -85,25 +85,25 @@ func NewTokens(pkt *pktoken.PKToken, principal string, sshCert string, keyType s
 	}
 
 	tokens := map[string]string{
-		"%u%": principal,
-		"%k%": sshCert,
-		"%t%": keyType,
+		"%{u}": principal,
+		"%{k}": sshCert,
+		"%{t}": keyType,
 
-		"%iss%":            claims.Issuer,
-		"%sub%":            claims.Sub,
-		"%email%":          claims.Email,
-		"%email_verified%": emailVerifiedStr,
-		"%aud%":            string(claims.Aud),
-		"%exp%":            expStr,
-		"%nbf%":            nbfStr,
-		"%iat%":            iatStr,
-		"%jti%":            claims.Jti,
-		"%groups%":         groupsStr,
+		"%{iss}":            claims.Issuer,
+		"%{sub}":            claims.Sub,
+		"%{email}":          claims.Email,
+		"%{email_verified}": emailVerifiedStr,
+		"%{aud}":            string(claims.Aud),
+		"%{exp}":            expStr,
+		"%{nbf}":            nbfStr,
+		"%{iat}":            iatStr,
+		"%{jti}":            claims.Jti,
+		"%{groups}":         groupsStr,
 
-		"%payload%": string(b64(string(pkt.Payload))), // base64-encoded ID Token payload
-		"%upk%":     string(upkB64),                   // base64-encoded JWK of the user's public key
-		"%pkt%":     string(pktCom),                   // compact-encoded PK Token
-		"%idt%":     string(pkt.OpToken),              // base64-encoded ID Token
+		"%{payload}": string(b64(string(pkt.Payload))), // base64-encoded ID Token payload
+		"%{upk}":     string(upkB64),                   // base64-encoded JWK of the user's public key
+		"%{pkt}":     string(pktCom),                   // compact-encoded PK Token
+		"%{idt}":     string(pkt.OpToken),              // base64-encoded ID Token
 	}
 
 	return tokens, nil

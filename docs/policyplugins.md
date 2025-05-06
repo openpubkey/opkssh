@@ -11,7 +11,7 @@ For example by creating the file in `/etc/opk/policy.d/example-plugin.yml`:
 
 ```yml
 name: Example plugin config
-command: /etc/opk/plugin-cmd.sh %u% %email% %email_verified%
+command: /etc/opk/plugin-cmd.sh %{u} %{email} %{email_verified}
 ```
 
 and then when someone runs `ssh dev alice@example.com` the opkssh will call `/tmp/plugin-cmd.sh dev alice@gmail.com true` to determine if policy should allow `alice@gmail.com` to assume ssh access as the linux principal `dev`.
@@ -54,36 +54,36 @@ These rules are required so that these policy files are only write by root.
 
 ## Tokens
 
-We support the following tokens to send information about the login attempt to the policy command
+We support the following tokens to send information about the login attempt to the policy plugin command
 
 ### OpenSSH Tokens
 
 We inherit the following tokens from OpenSSHd
 
-- %u% Target username (requested principal)
-- %k% Base64-encoded SSH public key (SSH certificate) provided for authentication. This is useful if someone really wants to see everything opkssh sees.
-- %t% Public key type (SSH certificate format, e.g., [ecdsa-sha2-nistp256-cert-v01@openssh.com](mailto:ecdsa-sha2-nistp256-cert-v01@openssh.com))
+- %{u} Target username (requested principal)
+- %{k} Base64-encoded SSH public key (SSH certificate) provided for authentication. This is useful if someone really wants to see everything opkssh sees.
+- %{t} Public key type (SSH certificate format, e.g., [ecdsa-sha2-nistp256-cert-v01@openssh.com](mailto:ecdsa-sha2-nistp256-cert-v01@openssh.com))
 
 ### Tokens for ID Token claims
 
-- %iss% Issuer (iss) claim
-- %sub% Sub claim of the identity
-- %email% Email claim of the identity
-- %email_verified% Optional claim that signals if the email address has been verified
-- %aud% Audience/client_id (aud) claim
-- %exp% Expiration (exp) claim
-- %nb%f Not Before (nbf) claim
-- %iat% IssuedAt
-- %jti% JTI JWT ID
+- %{iss} Issuer (iss) claim
+- %{sub} Sub claim of the identity
+- %{email} Email claim of the identity
+- %{email_verified} Optional claim that signals if the email address has been verified
+- %{aud} Audience/client_id (aud) claim
+- %{exp} Expiration (exp) claim
+- %{nbf} Not Before (nbf) claim
+- %{iat} IssuedAt
+- %{jti} JTI JWT ID
 
 #### Misc
 
-- %payload% Based64-encoded ID Token payload (JSON)
-- %upk% Base64-encoded JWK of the user's public key in the PK Token
-- %idt% Compact-encoded ID Token
-- %pkt% Compact-encoded PK Token
-- %config% Base64 encoded bytes of the plugin config used in this call. Useful for debugging.
-- %groups% Groups claim (if present) of the identity.
+- %{payload} Based64-encoded ID Token payload (JSON)
+- %{upk} Base64-encoded JWK of the user's public key in the PK Token
+- %{idt} Compact-encoded ID Token
+- %{pkt} Compact-encoded PK Token
+- %{config} Base64 encoded bytes of the plugin config used in this call. Useful for debugging.
+- %{groups} Groups claim (if present) of the identity.
 
 ### Handling missing or empty claims
 
@@ -104,7 +104,7 @@ with following plugin_config that requires `email` and `aud`:
 
 ```yml
 name: example command
-command: /etc/opk/plugin-cmd.sh %iss %sub %email %exp %aud
+command: /etc/opk/plugin-cmd.sh %{iss} %sub} %{email} %{exp} %{aud}
 ```
 
 would result in a command string such as: `{"/etc/opk/plugin-cmd.sh", "https://example.com", "123", "", "34", ""}`
@@ -121,11 +121,12 @@ This policy plugin allows ssh access as the principal (linux user) if the princi
 
 To prevent issues where someone might get the email `root@example.com` it has a list of default linux principles always denies such as `root`, `admin`, `email`, `backup`...
 
-Note that this hardcodes the last part of the email address to `example.com`. If you wanted to use this for say `gmail.com` change this value from `example.com` to `gmail.com`.
+The last part of the email address must match the value supplied at the commandline, for instance in the policy plugin config below, this would be `example.com`. If you wanted to use this for say `gmail.com` change this value from `example.com` to `gmail.com` in the config:
+
 
 ```yml
 name: Match linux username to email username
-command: /etc/opk/match-email.sh %u% %email% %email_verified%
+command: /etc/opk/match-email.sh %{u} %{email} %{email_verified} example.com
 ```
 
 ```bash
@@ -134,8 +135,10 @@ command: /etc/opk/match-email.sh %u% %email% %email_verified%
 principal="$1"
 email="$2"
 email_verified="$3"
+req_domain="$4"
 
 DENY_LIST="root admin email backup"
+
 for deny_principal in $DENY_LIST; do
   if [ "$principal" = "$deny_principal" ]; then
     echo "deny"
@@ -143,7 +146,7 @@ for deny_principal in $DENY_LIST; do
   fi
 done
 
-expectedEmail="${principal}@example.com"
+expectedEmail="${principal}@${req_domain}"
 if [ "$expectedEmail" = "$email" ] && [ "$email_verified" = "true" ]; then
   echo "allow"
   exit 0

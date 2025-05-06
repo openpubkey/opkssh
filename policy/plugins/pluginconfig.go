@@ -30,17 +30,18 @@ type PluginConfig struct {
 
 func (c PluginConfig) PercentExpand(tokenMap map[string]string) ([]string, error) {
 	commandStr := ""
-	openPercentIndex := -1
+	tokenIndex := -1
 	for i := 0; i < len(c.CommandTemplate); i++ {
 		ch := c.CommandTemplate[i]
 		if ch == '%' && i != len(c.CommandTemplate)-1 && c.CommandTemplate[i+1] == '%' {
 			// We allow escaping % with %% and we have hit %%,
 			commandStr += "%"
 			i++ // Skip the next %
-		} else if ch == '%' && openPercentIndex == -1 {
-			openPercentIndex = i
-		} else if ch == '%' && openPercentIndex != -1 {
-			token := c.CommandTemplate[openPercentIndex:(i + 1)]
+		} else if ch == '%' && i != len(c.CommandTemplate)-1 && c.CommandTemplate[i+1] == '{' {
+			tokenIndex = i
+			i++ // Skip past to the {
+		} else if ch == '}' && tokenIndex != -1 {
+			token := c.CommandTemplate[tokenIndex:(i + 1)]
 
 			if value, ok := tokenMap[token]; ok {
 				// Expand the token into the value in the tokenMap
@@ -50,13 +51,13 @@ func (c PluginConfig) PercentExpand(tokenMap map[string]string) ([]string, error
 				return nil, fmt.Errorf("invalid token %s", token)
 			}
 
-			openPercentIndex = -1
-		} else if openPercentIndex == -1 {
+			tokenIndex = -1
+		} else if tokenIndex == -1 {
 			commandStr += string(ch)
 		}
 	}
-	if openPercentIndex != -1 {
-		return nil, fmt.Errorf("unmatched %% in at position (%d) in command template: %s", openPercentIndex, c.CommandTemplate)
+	if tokenIndex != -1 {
+		return nil, fmt.Errorf("unmatched %% in at position (%d) in command template: %s", tokenIndex, c.CommandTemplate)
 	}
 
 	cmdParsed, err := shellquote.Split(commandStr)
