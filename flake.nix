@@ -31,5 +31,9 @@
         };
         default = opkssh;
       });
+
+      overlays.default = final: prev: {
+        opkssh = self.packages.${final.stdenv.system}.opkssh;
+      };
     };
 }
