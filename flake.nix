@@ -28,6 +28,7 @@
           src = self;
           vendorHash = "sha256-6nTRiybsNtP/BiDaNrFEGEGM41BAjGpOyQ0AlQimSE4=";
           goSum = ./go.sum;
+          meta.mainProgram = "opkssh";
         };
         default = opkssh;
       });
