@@ -22,10 +22,12 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/kballard/go-shellquote"
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/spf13/afero"
@@ -145,7 +147,7 @@ func (p *PolicyPluginEnforcer) loadPlugins(dir string) (pluginResults PluginResu
 				continue
 			}
 
-			if cmd.CommandTemplate == "" {
+			if cmd.Command == "" {
 				pluginResult.Error = fmt.Errorf("policy plugin config missing required field 'command' in policy plugin config at (%s): ", path)
 				continue
 			}
@@ -170,7 +172,7 @@ func (p *PolicyPluginEnforcer) loadPlugins(dir string) (pluginResults PluginResu
 // disable the old policy plugin until they are sure the new policy plugin is
 // working correctly.
 func (p *PolicyPluginEnforcer) CheckPolicies(dir string, pkt *pktoken.PKToken, principal string, sshCert string, keyType string) (PluginResults, error) {
-	tokens, err := NewTokens(pkt, principal, sshCert, keyType)
+	tokens, err := PopulatePluginEnvVars(pkt, principal, sshCert, keyType)
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +193,7 @@ func (p *PolicyPluginEnforcer) checkPolicies(dir string, tokens map[string]strin
 			pluginResult.PolicyOutput = string(output)
 			pluginResult.CommandRun = commandRun
 			if err != nil {
-				pluginResult.Error = fmt.Errorf("failed to run policy command %s got error (%w)", pluginResult.PluginConfig.CommandTemplate, err)
+				pluginResult.Error = fmt.Errorf("failed to run policy command %s got error (%w)", pluginResult.PluginConfig.Command, err)
 				continue
 			} else if string(output) != "allow" {
 				pluginResult.Allowed = false
@@ -204,16 +206,28 @@ func (p *PolicyPluginEnforcer) checkPolicies(dir string, tokens map[string]strin
 }
 
 // executePolicyCommand executes the policy command with the provided tokens.
-func (p *PolicyPluginEnforcer) executePolicyCommand(config PluginConfig, tokens map[string]string) ([]string, []byte, error) {
+func (p *PolicyPluginEnforcer) executePolicyCommand(config PluginConfig, inputEnvVars map[string]string) ([]string, []byte, error) {
 	// Add PluginConfig to the tokens map for expansion
 	configJson, err := yaml.Marshal(config)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal config to JSON: %w", err)
 	}
-	tokens["%config%"] = base64.StdEncoding.EncodeToString(configJson)
+	inputEnvVars["OPKSSH_PLUGIN_CONFIG"] = base64.StdEncoding.EncodeToString(configJson)
 
-	// Replace tokens in the command string.
-	command, err := config.PercentExpand(tokens)
+	// Ensure we don't use any environment variables as an input to
+	// the policy plugin command that this process inherited. We only
+	// want to pass values we set ourselves.
+	for _, envVar := range os.Environ() {
+		if strings.HasPrefix(envVar, "OPKSSH_PLUGIN_") {
+			os.Unsetenv(strings.Split(envVar, "=")[0])
+		}
+	}
+
+	for envK, envV := range inputEnvVars {
+		os.Setenv(envK, envV)
+	}
+
+	command, err := shellquote.Split(config.Command)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -225,6 +239,7 @@ func (p *PolicyPluginEnforcer) executePolicyCommand(config PluginConfig, tokens 
 			return nil, nil, fmt.Errorf("policy plugin command (%s) has insecure permissions: %w", command[0], err)
 		}
 	}
+
 	output, err := p.cmdExecutor(command[0], command[1:]...)
 	return command, output, err
 }

@@ -17,14 +17,28 @@
 package plugins
 
 import (
+	"context"
 	"fmt"
+	"io/fs"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/lestrrat-go/jwx/v2/jwa"
+	"github.com/openpubkey/openpubkey/client"
+	"github.com/openpubkey/openpubkey/providers"
+	"github.com/openpubkey/openpubkey/util"
 	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )
+
+type mockFile struct {
+	Name       string
+	Permission fs.FileMode
+	Content    string
+}
 
 func TestLoadPolicyPlugins(t *testing.T) {
 	tests := []struct {
@@ -40,7 +54,7 @@ func TestLoadPolicyPlugins(t *testing.T) {
 				"valid_policy.yml": `
 name: Example Policy Command
 enforce_providers: true
-command: /usr/bin/local/opk/policy-cmd %{sub} %{iss} %{aud}`,
+command: /usr/bin/local/opk/policy-cmd`,
 			},
 			expectedCount:    1,
 			expectErrorCount: 0,
@@ -68,7 +82,7 @@ enforce_providers: true
 				"valid_policy.yml": `
 name: Example Policy Command
 enforce_providers: true
-command: /usr/bin/local/opk/policy-cmd %sub %iss %aud
+command: /usr/bin/local/opk/policy-cmd
 `,
 				"invalid_policy.yml": `
 name: Invalid Policy Command
@@ -133,14 +147,19 @@ invalid_field: true
 
 func TestPolicyPluginsWithMock(t *testing.T) {
 	mockCmdExecutor := func(name string, arg ...string) ([]byte, error) {
+		iss, _ := os.LookupEnv("OPKSSH_PLUGIN_ISS")
+		sub, _ := os.LookupEnv("OPKSSH_PLUGIN_SUB")
+		aud, _ := os.LookupEnv("OPKSSH_PLUGIN_AUD")
+
 		if "/usr/bin/local/opk/policy-cmd" == name {
+
 			if len(arg) != 3 {
 				return nil, fmt.Errorf("expected 3 arguments, got %d", len(arg))
-			} else if arg[0] == "https://example.com" && arg[1] == "1234" && arg[2] == "abcd" {
+			} else if iss == "https://example.com" && sub == "1234" && aud == "abcd" {
 				return []byte("allow"), nil
-			} else if arg[0] == "https://example.com" && arg[1] == "sub with spaces" && arg[2] == "abcd" {
+			} else if iss == "https://example.com" && sub == "sub with spaces" && aud == "abcd" {
 				return []byte("allow"), nil
-			} else if arg[0] == "https://example.com" && arg[1] == "sub\"withquote" && arg[2] == "abcd" {
+			} else if iss == "https://example.com" && sub == "sub\"withquote" && aud == "abcd" {
 				return []byte("allow"), nil
 			} else {
 				// Designed to test an command that doesn't output an error but returns deny. Deny should return an error as well.
@@ -150,27 +169,56 @@ func TestPolicyPluginsWithMock(t *testing.T) {
 		return nil, fmt.Errorf("command '%s' not found", name)
 	}
 
-	validPluginConfigFile := map[string]string{
-		"valid_policy.yml": `
+	validPluginConfigFile := []mockFile{
+		{
+			Name:       "valid_policy.yml",
+			Permission: 0640,
+			Content: `
 name: Example Policy Command
 enforce_providers: true
-command: /usr/bin/local/opk/policy-cmd %{iss} %{sub} %{aud}`}
+command: /usr/bin/local/opk/policy-cmd arg1 arg2 arg3`}}
 
-	missingCommandConfigFile := map[string]string{"missing-command.yml": `
+	missingCommandConfig := []mockFile{
+		{
+			Name:       "missing-command.yml",
+			Permission: 0640,
+			Content: `
 name: Example Policy Command
 enforce_providers: true
-command: /usr/bin/local/opk/missing-cmd %{iss} %{sub} %{aud}`}
+command: /usr/bin/local/opk/missing-cmd`}}
 
-	InvalidCommandConfigFile := map[string]string{"missing-command.yml": `
+	invalidCommandConfig := []mockFile{
+		{
+			Name:       "missing-command.yml",
+			Permission: 0640,
+			Content: `
 name: Example Policy Command
 enforce_providers: true
-command: /usr/bin/local/opk/missing-cmd  %{iss} %{sub} %{aud}"`}
+command: /usr/bin/local/opk/missing-cmd"`}}
+
+	configWithBadPerms := []mockFile{
+		{
+			Name:       "bad-perms-config.yml",
+			Permission: 0606,
+			Content: `
+name: Example Policy Command
+enforce_providers: true
+command: /usr/bin/local/opk/missing-cmd"`}}
+
+	commandWithBadPerms := []mockFile{
+		{
+			Name:       "bad-perms-command.yml",
+			Permission: 0640,
+			Content: `
+name: Example Policy Command
+enforce_providers: true
+command: /usr/bin/local/opk/bad-perms-policy-cmd`}}
 
 	tests := []struct {
 		name                string
 		tokens              map[string]string
-		files               map[string]string // File name to content mapping
-		CmdExecutor         func(name string, arg ...string) ([]byte, error)
+		files               []mockFile // File name to content mapping
+		cmdExecutor         func(name string, arg ...string) ([]byte, error)
 		expectedAllowed     bool
 		expectedResultCount int
 		expectErrorCount    int
@@ -179,12 +227,12 @@ command: /usr/bin/local/opk/missing-cmd  %{iss} %{sub} %{aud}"`}
 		{
 			name: "Valid plugin config",
 			tokens: map[string]string{
-				"%{iss}": "https://example.com",
-				"%{sub}": "1234",
-				"%{aud}": "abcd",
+				"OPKSSH_PLUGIN_ISS": "https://example.com",
+				"OPKSSH_PLUGIN_SUB": "1234",
+				"OPKSSH_PLUGIN_AUD": "abcd",
 			},
 			files:               validPluginConfigFile,
-			CmdExecutor:         mockCmdExecutor,
+			cmdExecutor:         mockCmdExecutor,
 			expectedAllowed:     true,
 			expectedResultCount: 1,
 			expectErrorCount:    0,
@@ -192,12 +240,12 @@ command: /usr/bin/local/opk/missing-cmd  %{iss} %{sub} %{aud}"`}
 		{
 			name: "Plugin config not found",
 			tokens: map[string]string{
-				"%{iss}": "https://example.com",
-				"%{sub}": "1234",
-				"%{aud}": "abcd",
+				"OPKSSH_PLUGIN_ISS": "https://example.com",
+				"OPKSSH_PLUGIN_SUB": "1234",
+				"OPKSSH_PLUGIN_AUD": "abcd",
 			},
-			files:               missingCommandConfigFile,
-			CmdExecutor:         mockCmdExecutor,
+			files:               missingCommandConfig,
+			cmdExecutor:         mockCmdExecutor,
 			expectedAllowed:     false,
 			expectedResultCount: 1,
 			expectErrorCount:    1,
@@ -206,12 +254,12 @@ command: /usr/bin/local/opk/missing-cmd  %{iss} %{sub} %{aud}"`}
 		{
 			name: "Check we handle spaces in claims",
 			tokens: map[string]string{
-				"%{iss}": "https://example.com",
-				"%{sub}": "sub with spaces",
-				"%{aud}": "abcd",
+				"OPKSSH_PLUGIN_ISS": "https://example.com",
+				"OPKSSH_PLUGIN_SUB": "sub with spaces",
+				"OPKSSH_PLUGIN_AUD": "abcd",
 			},
 			files:               validPluginConfigFile,
-			CmdExecutor:         mockCmdExecutor,
+			cmdExecutor:         mockCmdExecutor,
 			expectedAllowed:     true,
 			expectedResultCount: 1,
 			expectErrorCount:    0,
@@ -220,12 +268,12 @@ command: /usr/bin/local/opk/missing-cmd  %{iss} %{sub} %{aud}"`}
 		{
 			name: "Test we handle quotes in tokens",
 			tokens: map[string]string{
-				"%{iss}": "https://example.com",
-				"%{sub}": `sub"withquote`,
-				"%{aud}": "abcd",
+				"OPKSSH_PLUGIN_ISS": "https://example.com",
+				"OPKSSH_PLUGIN_SUB": `sub"withquote`,
+				"OPKSSH_PLUGIN_AUD": "abcd",
 			},
 			files:               validPluginConfigFile,
-			CmdExecutor:         mockCmdExecutor,
+			cmdExecutor:         mockCmdExecutor,
 			expectedAllowed:     true,
 			expectedResultCount: 1,
 			expectErrorCount:    0,
@@ -234,12 +282,12 @@ command: /usr/bin/local/opk/missing-cmd  %{iss} %{sub} %{aud}"`}
 		{
 			name: "Policy command denial",
 			tokens: map[string]string{
-				"%{iss}": "https://example.com",
-				"%{sub}": "wrong",
-				"%{aud}": "abcd",
+				"OPKSSH_PLUGIN_ISS": "https://example.com",
+				"OPKSSH_PLUGIN_SUB": "wrong",
+				"OPKSSH_PLUGIN_AUD": "abcd",
 			},
 			files:               validPluginConfigFile,
-			CmdExecutor:         mockCmdExecutor,
+			cmdExecutor:         mockCmdExecutor,
 			expectedAllowed:     false,
 			expectedResultCount: 1,
 			expectErrorCount:    0,
@@ -248,27 +296,66 @@ command: /usr/bin/local/opk/missing-cmd  %{iss} %{sub} %{aud}"`}
 		{
 			name: "Policy invalid command template",
 			tokens: map[string]string{
-				"%{iss}": "https://example.com",
-				"%{sub}": "1234",
-				"%{aud}": "abcd",
+				"OPKSSH_PLUGIN_ISS": "https://example.com",
+				"OPKSSH_PLUGIN_SUB": "1234",
+				"OPKSSH_PLUGIN_AUD": "abcd",
 			},
-			files:               InvalidCommandConfigFile,
-			CmdExecutor:         mockCmdExecutor,
+			files:               invalidCommandConfig,
+			cmdExecutor:         mockCmdExecutor,
 			expectedAllowed:     false,
 			expectedResultCount: 1,
 			expectErrorCount:    1,
-			errorExpected:       "failed to parse command field: Unterminated double-quoted string",
+			errorExpected:       "Unterminated double-quoted string",
+		},
+		{
+			name: "Policy invalid config permissions",
+			tokens: map[string]string{
+				"OPKSSH_PLUGIN_ISS": "https://example.com",
+				"OPKSSH_PLUGIN_SUB": "1234",
+				"OPKSSH_PLUGIN_AUD": "abcd",
+			},
+			files:               configWithBadPerms,
+			cmdExecutor:         mockCmdExecutor,
+			expectedAllowed:     false,
+			expectedResultCount: 1,
+			expectErrorCount:    1,
+			errorExpected:       "expected one of the following permissions [640], got (606)",
+		},
+		{
+			name: "Policy invalid command permissions",
+			tokens: map[string]string{
+				"OPKSSH_PLUGIN_ISS": "https://example.com",
+				"OPKSSH_PLUGIN_SUB": "1234",
+				"OPKSSH_PLUGIN_AUD": "abcd",
+			},
+			files:               commandWithBadPerms,
+			cmdExecutor:         mockCmdExecutor,
+			expectedAllowed:     false,
+			expectedResultCount: 1,
+			expectErrorCount:    1,
+			errorExpected:       "expected one of the following permissions [555, 755], got (766)",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Ensure we flush all OPKSSH_PLUGIN_ env vars before and after the test.
+			for _, envVar := range os.Environ() {
+				if strings.HasPrefix(envVar, "OPKSSH_PLUGIN_") {
+					envVarName := strings.Split(envVar, "=")[0]
+					_ = os.Unsetenv(envVarName)
+					defer func(key string) {
+						_ = os.Unsetenv(key)
+					}(envVarName)
+				}
+			}
+
 			mockFs := afero.NewMemMapFs()
 			tempDir, _ := afero.TempDir(mockFs, "", "policy_test")
 
 			// Write test config plugins files
-			for fileName, content := range tt.files {
-				err := afero.WriteFile(mockFs, filepath.Join(tempDir, fileName), []byte(content), 0640)
+			for _, configFile := range tt.files {
+				err := afero.WriteFile(mockFs, filepath.Join(tempDir, configFile.Name), []byte(configFile.Content), configFile.Permission)
 				require.NoError(t, err)
 			}
 
@@ -276,9 +363,13 @@ command: /usr/bin/local/opk/missing-cmd  %{iss} %{sub} %{aud}"`}
 			err := afero.WriteFile(mockFs, filepath.Join("/usr/bin/local/opk/policy-cmd"), []byte(""), 0755)
 			require.NoError(t, err)
 
+			// We create this command with bad permissions and then trigger it from a config file that points to it
+			err = afero.WriteFile(mockFs, filepath.Join("/usr/bin/local/opk/bad-perms-policy-cmd"), []byte(""), 0766)
+			require.NoError(t, err)
+
 			enforcer := &PolicyPluginEnforcer{
 				Fs:          mockFs,
-				cmdExecutor: tt.CmdExecutor,
+				cmdExecutor: tt.cmdExecutor,
 				permChecker: files.PermsChecker{
 					Fs: mockFs,
 					CmdRunner: func(name string, arg ...string) ([]byte, error) {
@@ -318,4 +409,99 @@ func TestPluginPanics(t *testing.T) {
 			_ = results.Allowed()
 		},
 	)
+}
+
+func TestPluginUnsetsEnvVar(t *testing.T) {
+	mockFs := afero.NewMemMapFs()
+	tempDir, _ := afero.TempDir(mockFs, "", "policy_test")
+
+	enforcer := &PolicyPluginEnforcer{
+		Fs: mockFs,
+		cmdExecutor: func(name string, arg ...string) ([]byte, error) {
+			_, okTestValue := os.LookupEnv("OPKSSH_PLUGIN_TESTVALUE")
+			issValue, okIss := os.LookupEnv("OPKSSH_PLUGIN_ISS")
+			require.False(t, okTestValue, "OPKSSH_PLUGIN_TESTVALUE should have been unset before calling the command")
+			require.True(t, okIss, "OPKSSH_PLUGIN_ISS should still be set before calling the command")
+			require.Equal(t, issValue, "https://example.com")
+			return []byte("allow"), nil
+		},
+		permChecker: files.PermsChecker{
+			Fs: mockFs,
+			CmdRunner: func(name string, arg ...string) ([]byte, error) {
+				return []byte("root" + " " + "group"), nil
+			},
+		},
+	}
+
+	// Write test config plugins files
+	err := afero.WriteFile(mockFs, filepath.Join(tempDir, "policy.yml"), []byte(`
+name: Example Policy Command
+enforce_providers: true
+command: /usr/bin/local/opk/policy-cmd arg1 arg2 arg3`), 0640)
+	require.NoError(t, err)
+
+	os.Setenv("OPKSSH_PLUGIN_TESTVALUE", "testvalue")
+	os.Setenv("OPKSSH_PLUGIN_ISS", "should be overwritten")
+	res, err := enforcer.checkPolicies(tempDir, map[string]string{"OPKSSH_PLUGIN_ISS": "https://example.com"})
+	require.NoError(t, err)
+	require.NotNil(t, res)
+}
+
+func TestPublicCheckPolicy(t *testing.T) {
+	mockFs := afero.NewMemMapFs()
+	tempDir, _ := afero.TempDir(mockFs, "", "policy_test")
+
+	enforcer := &PolicyPluginEnforcer{
+		Fs: mockFs,
+		cmdExecutor: func(name string, arg ...string) ([]byte, error) {
+			_, okTestValue := os.LookupEnv("OPKSSH_PLUGIN_TESTVALUE")
+			_, okIss := os.LookupEnv("OPKSSH_PLUGIN_ISS")
+			require.False(t, okTestValue, "OPKSSH_PLUGIN_TESTVALUE should have been unset before calling the command")
+			require.True(t, okIss, "OPKSSH_PLUGIN_ISS should still be set before calling the command")
+			return []byte("allow"), nil
+		},
+		permChecker: files.PermsChecker{
+			Fs: mockFs,
+			CmdRunner: func(name string, arg ...string) ([]byte, error) {
+				return []byte("root" + " " + "group"), nil
+			},
+		},
+	}
+
+	// Write test config plugins files
+	err := afero.WriteFile(mockFs, filepath.Join(tempDir, "policy.yml"), []byte(`
+name: Example Policy Command
+enforce_providers: true
+command: /usr/bin/local/opk/policy-cmd arg1 arg2 arg3`), 0640)
+	require.NoError(t, err)
+
+	alg := jwa.ES256
+	signer, err := util.GenKeyPair(alg)
+	require.NoError(t, err)
+
+	providerOpts := providers.DefaultMockProviderOpts()
+	op, _, idtTemplate, err := providers.NewMockProvider(providerOpts)
+	require.NoError(t, err)
+
+	mockEmail := "arthur.aardvark@example.com"
+	idtTemplate.ExtraClaims = map[string]any{
+		"email": mockEmail,
+	}
+
+	client, err := client.New(op, client.WithSigner(signer, alg))
+	require.NoError(t, err)
+
+	pkt, err := client.Auth(context.Background())
+	require.NoError(t, err)
+
+	res, err := enforcer.CheckPolicies(tempDir, pkt, "root", "ssh-cert", "ssh-rsa")
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	brokenPkt := pkt
+	brokenPkt.OpToken = []byte("corrupt.corrupt.corrupt")
+
+	res, err = enforcer.CheckPolicies(tempDir, brokenPkt, "root", "ssh-cert", "ssh-rsa")
+	require.Error(t, err)
+	require.Nil(t, res)
 }

@@ -25,7 +25,7 @@ import (
 	"github.com/openpubkey/openpubkey/pktoken"
 )
 
-func NewTokens(pkt *pktoken.PKToken, principal string, sshCert string, keyType string) (map[string]string, error) {
+func PopulatePluginEnvVars(pkt *pktoken.PKToken, principal string, sshCert string, keyType string) (map[string]string, error) {
 	pktCom, err := pkt.Compact()
 	if err != nil {
 		return nil, err
@@ -85,25 +85,25 @@ func NewTokens(pkt *pktoken.PKToken, principal string, sshCert string, keyType s
 	}
 
 	tokens := map[string]string{
-		"%{u}": principal,
-		"%{k}": sshCert,
-		"%{t}": keyType,
+		"OPKSSH_PLUGIN_U": principal,
+		"OPKSSH_PLUGIN_K": sshCert,
+		"OPKSSH_PLUGIN_T": keyType,
 
-		"%{iss}":            claims.Issuer,
-		"%{sub}":            claims.Sub,
-		"%{email}":          claims.Email,
-		"%{email_verified}": emailVerifiedStr,
-		"%{aud}":            string(claims.Aud),
-		"%{exp}":            expStr,
-		"%{nbf}":            nbfStr,
-		"%{iat}":            iatStr,
-		"%{jti}":            claims.Jti,
-		"%{groups}":         groupsStr,
+		"OPKSSH_PLUGIN_ISS":            claims.Issuer,
+		"OPKSSH_PLUGIN_SUB":            claims.Sub,
+		"OPKSSH_PLUGIN_EMAIL":          claims.Email,
+		"OPKSSH_PLUGIN_EMAIL_VERIFIED": emailVerifiedStr,
+		"OPKSSH_PLUGIN_AUD":            string(claims.Aud),
+		"OPKSSH_PLUGIN_EXP":            expStr,
+		"OPKSSH_PLUGIN_NBF":            nbfStr,
+		"OPKSSH_PLUGIN_IAT":            iatStr,
+		"OPKSSH_PLUGIN_JTI":            claims.Jti,
+		"OPKSSH_PLUGIN_GROUPS":         groupsStr,
 
-		"%{payload}": string(b64(string(pkt.Payload))), // base64-encoded ID Token payload
-		"%{upk}":     string(upkB64),                   // base64-encoded JWK of the user's public key
-		"%{pkt}":     string(pktCom),                   // compact-encoded PK Token
-		"%{idt}":     string(pkt.OpToken),              // base64-encoded ID Token
+		"OPKSSH_PLUGIN_PAYLOAD": string(b64(string(pkt.Payload))), // base64-encoded ID Token payload
+		"OPKSSH_PLUGIN_UPK":     string(upkB64),                   // base64-encoded JWK of the user's public key
+		"OPKSSH_PLUGIN_PKT":     string(pktCom),                   // compact-encoded PK Token
+		"OPKSSH_PLUGIN_IDT":     string(pkt.OpToken),              // base64-encoded ID Token
 	}
 
 	return tokens, nil

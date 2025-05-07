@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 
-if [ "$1" = "root" ] && [ "$2" = "test-user2@zitadel.ch" ]; then
+if [ "${OPKSSH_PLUGIN_U}" = "root" ] && [ "${OPKSSH_PLUGIN_EMAIL}" = "test-user2@zitadel.ch" ]; then
   echo "allow"
 else
   echo "deny"

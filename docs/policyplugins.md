@@ -1,34 +1,36 @@
 # Policy plugins
 
 Inspired by the power of [the OpenSSH AuthorizedKeysCommand](https://man.openbsd.org/sshd_config.5#AuthorizedKeysCommand), opkssh provides policy plugins.
-These policy plugins provide a simple way to bring your own policy which replaces the default opkssh policy by placing a configuration file in `/etc/opk/policy.d`.
+These policy plugins provide a simple way to bring your own policy which replaces the default opkssh policy.
 
-This calls out to a command to evaluate policy. If the command returns anything else other than "allowed" and exit code 0, the call is viewed as a policy rejection.
+To use your own policy create a policy plugin config file in `/etc/opk/policy.d`. This config files specifies what command you want to calls out to evaluate policy. If the command returns anything else other than "allowed" and exit code 0, this is viewed as a policy rejection.
 
-The policy plugin does not bypass the providers check. This means that a policy plugin can count on the ID Token having been validated as validly signed by one of the OPs in the /etc/opk/providers. We do this to allow people to write policies without having to rebuild all the code in opkssh verify.
+The policy plugin does not bypass the providers check. This means that a policy plugin can count on the ID Token having been validated as validly signed by one of the OPs in the `/etc/opk/providers`. We do this to allow people to write policies without having to rebuild all the code in opkssh verify.
 
 For example by creating the file in `/etc/opk/policy.d/example-plugin.yml`:
 
 ```yml
 name: Example plugin config
-command: /etc/opk/plugin-cmd.sh %{u} %{email} %{email_verified}
+command: /etc/opk/plugin-cmd.sh
 ```
 
-and then when someone runs `ssh dev alice@example.com` the opkssh will call `/tmp/plugin-cmd.sh dev alice@gmail.com true` to determine if policy should allow `alice@gmail.com` to assume ssh access as the linux principal `dev`.
+and then when someone runs `ssh dev alice@example.com` the opkssh will call `/tmp/plugin-cmd.sh` to determine if policy should allow `alice@gmail.com` to assume ssh access as the linux principal `dev`. [Environment variables](https://en.wikipedia.org/wiki/Environment_variable) are set to communicate the details of the ssh login attempt to the command such as:
+
+```bash
+OPKSSH_PLUGIN_U=dev
+OPKSSH_PLUGIN_EMAIL=alice@gmail.com
+OPKSSH_PLUGIN_EMAIL_VERIFIED=true
+```
 
 The command `/etc/opk/plugin-cmd.sh` would allow `alice@example.com` to log as any user:
 
 ```bash
 #!/usr/bin/env sh
 
-principal="$1"
-email="$2"
-email_verified="$3"
-
-if [ "$email" = "alice@example.com" ] && [ "$email_verified" = "true" ]; then
+if [ "${OPKSSH_PLUGIN_EMAIL}" = "alice@example.com" ] && [ "${OPKSSH_PLUGIN_EMAIL_VERIFIED}" = "true" ]; then
     echo "allow"
     exit 0
-else 
+else
     echo "deny"
     exit 1
 fi
@@ -52,42 +54,42 @@ chmod root:opksshuser /etc/opk/plugin-cmd.sh
 
 These rules are required so that these policy files are only write by root.
 
-## Tokens
+## Environment Variables Set
 
-We support the following tokens to send information about the login attempt to the policy plugin command
+We support set the following information about the login attempt to the policy plugin command
 
-### OpenSSH Tokens
+### OpenSSH
 
-We inherit the following tokens from OpenSSHd
+We provide the following values specified by [OpenSSHd AuthorizedKeysCommand TOKENS pattern](https://man.openbsd.org/sshd_config#TOKENS).
 
-- %{u} Target username (requested principal)
-- %{k} Base64-encoded SSH public key (SSH certificate) provided for authentication. This is useful if someone really wants to see everything opkssh sees.
-- %{t} Public key type (SSH certificate format, e.g., [ecdsa-sha2-nistp256-cert-v01@openssh.com](mailto:ecdsa-sha2-nistp256-cert-v01@openssh.com))
+- OPKSSH_PLUGIN_U Target username (requested principal). This is `%u` token in SSH.
+- OPKSSH_PLUGIN_K Base64-encoded SSH public key (SSH certificate) provided for authentication. This is useful if someone really wants to see everything opkssh sees. This is the `%k` token in SSH.
+- OPKSSH_PLUGIN_T Public key type (SSH certificate format, e.g., [ecdsa-sha2-nistp256-cert-v01@openssh.com](mailto:ecdsa-sha2-nistp256-cert-v01@openssh.com)). This is the `%t` token in SSH.
 
-### Tokens for ID Token claims
+### From ID Token claims
 
-- %{iss} Issuer (iss) claim
-- %{sub} Sub claim of the identity
-- %{email} Email claim of the identity
-- %{email_verified} Optional claim that signals if the email address has been verified
-- %{aud} Audience/client_id (aud) claim
-- %{exp} Expiration (exp) claim
-- %{nbf} Not Before (nbf) claim
-- %{iat} IssuedAt
-- %{jti} JTI JWT ID
+- OPKSSH_PLUGIN_ISS Issuer (iss) claim
+- OPKSSH_PLUGIN_SUB Sub claim of the identity
+- OPKSSH_PLUGIN_EMAIL Email claim of the identity
+- OPKSSH_PLUGIN_EMAIL_VERIFIED Optional claim that signals if the email address has been verified
+- OPKSSH_PLUGIN_AUD Audience/client_id (aud) claim
+- OPKSSH_PLUGIN_EXP Expiration (exp) claim
+- OPKSSH_PLUGIN_NBF Not Before (nbf) claim
+- OPKSSH_PLUGIN_IAT IssuedAt
+- OPKSSH_PLUGIN_JTI JTI JWT ID
 
 #### Misc
 
-- %{payload} Based64-encoded ID Token payload (JSON)
-- %{upk} Base64-encoded JWK of the user's public key in the PK Token
-- %{idt} Compact-encoded ID Token
-- %{pkt} Compact-encoded PK Token
-- %{config} Base64 encoded bytes of the plugin config used in this call. Useful for debugging.
-- %{groups} Groups claim (if present) of the identity.
+- OPKSSH_PLUGIN_PAYLOAD Based64-encoded ID Token payload (JSON)
+- OPKSSH_PLUGIN_UPK Base64-encoded JWK of the user's public key in the PK Token
+- OPKSSH_PLUGIN_IDT Compact-encoded ID Token
+- OPKSSH_PLUGIN_PKT Compact-encoded PK Token
+- OPKSSH_PLUGIN_CONFIG Base64 encoded bytes of the plugin config used in this call. Useful for debugging.
+- OPKSSH_PLUGIN_GROUPS Groups claim (if present) of the identity.
 
 ### Handling missing or empty claims
 
-Note that if an claim is not present we set to the empty string, "". For instance for an ID Token payload with `aud` we set to the empty string ("") and no email claim:
+Note that if an claim is not present we set to the empty string, "". For instance for an ID Token payload below, we set `OPKSSH_PLUGIN_AUD` and `OPKSSH_PLUGIN_EMAIL` to the empty string ("") since there is no `aud` claim and no email claim:
 
 ```json
 {
@@ -100,18 +102,9 @@ Note that if an claim is not present we set to the empty string, "". For instanc
 }
 ```
 
-with following plugin_config that requires `email` and `aud`:
+We do this to avoid situations where a policy plugin includes a claim to check if it present but does not require it. If we threw an error if it was not found then this would cause hard to debug policy failures if an ID Token is missing that claim.
 
-```yml
-name: example command
-command: /etc/opk/plugin-cmd.sh %{iss} %{sub} %{email} %{exp} %{aud}
-```
-
-would result in a command string such as: `{"/etc/opk/plugin-cmd.sh", "https://example.com", "123", "", "34", ""}`
-
-We do this to avoid situations where a policy plugin includes a claim to check if present but does not require it. If we threw an error if it was not found then this may cause hard to debug policy failures when an ID Token is missing that claim.
-
-If a policy plugin wishes to discriminate between claims which are missing or merely set to the empty string, they could use the `%idt` and parse the ID Token themselves.
+If a policy plugin wishes to discriminate between claims which are missing or merely set to the empty string, they could use the `OPKSSH_PLUGIN_IDT` and parse the ID Token themselves.
 
 ## Example policy configs
 
@@ -123,19 +116,18 @@ To prevent issues where someone might get the email `root@example.com` it has a 
 
 The last part of the email address must match the value supplied at the commandline, for instance in the policy plugin config below, this would be `example.com`. If you wanted to use this for say `gmail.com` change this value from `example.com` to `gmail.com` in the config:
 
-
 ```yml
 name: Match linux username to email username
-command: /etc/opk/match-email.sh %{u} %{email} %{email_verified} example.com
+command: /etc/opk/match-email.sh example.com
 ```
 
 ```bash
 #!/usr/bin/env sh
 
-principal="$1"
-email="$2"
-email_verified="$3"
-req_domain="$4"
+principal="${OPKSSH_PLUGIN_U}"
+email="${OPKSSH_PLUGIN_EMAIL}"
+email_verified="${OPKSSH_PLUGIN_EMAIL_VERIFIED}"
+req_domain="$1"
 
 DENY_LIST="root admin email backup"
 

@@ -70,23 +70,23 @@ func TestNewTokens(t *testing.T) {
 			sshCert:   b64("SSH certificate"),
 			keyType:   "ssh-rsa",
 			expectTokens: map[string]string{
-				"%{aud}":            "test_client_id",
-				"%{email}":          "alice@gmail.com",
-				"%{email_verified}": "true",
-				"%{exp}":            "-",
-				"%{groups}":         `["admin","user"]`,
-				"%{iat}":            "99999999900",
-				"%{idt}":            "-",
-				"%{iss}":            "https://accounts.example.com",
-				"%{jti}":            "abcdefg",
-				"%{k}":              b64("SSH certificate"),
-				"%{nbf}":            "12345678900",
-				"%{payload}":        "-",
-				"%{pkt}":            "-",
-				"%{sub}":            "1234",
-				"%{t}":              "ssh-rsa",
-				"%{u}":              "root",
-				"%{upk}":            "-",
+				"OPKSSH_PLUGIN_AUD":            "test_client_id",
+				"OPKSSH_PLUGIN_EMAIL":          "alice@gmail.com",
+				"OPKSSH_PLUGIN_EMAIL_VERIFIED": "true",
+				"OPKSSH_PLUGIN_EXP":            "-",
+				"OPKSSH_PLUGIN_GROUPS":         `["admin","user"]`,
+				"OPKSSH_PLUGIN_IAT":            "99999999900",
+				"OPKSSH_PLUGIN_IDT":            "-",
+				"OPKSSH_PLUGIN_ISS":            "https://accounts.example.com",
+				"OPKSSH_PLUGIN_JTI":            "abcdefg",
+				"OPKSSH_PLUGIN_K":              b64("SSH certificate"),
+				"OPKSSH_PLUGIN_NBF":            "12345678900",
+				"OPKSSH_PLUGIN_PAYLOAD":        "-",
+				"OPKSSH_PLUGIN_PKT":            "-",
+				"OPKSSH_PLUGIN_SUB":            "1234",
+				"OPKSSH_PLUGIN_T":              "ssh-rsa",
+				"OPKSSH_PLUGIN_U":              "root",
+				"OPKSSH_PLUGIN_UPK":            "-",
 			},
 		},
 		{
@@ -98,23 +98,23 @@ func TestNewTokens(t *testing.T) {
 			sshCert:   b64("SSH certificate"),
 			keyType:   "ssh-rsa",
 			expectTokens: map[string]string{
-				"%{aud}":            "test_client_id",
-				"%{email}":          "",
-				"%{email_verified}": "",
-				"%{exp}":            "-",
-				"%{groups}":         "",
-				"%{iat}":            "99999999900",
-				"%{idt}":            "-",
-				"%{iss}":            "https://accounts.example.com",
-				"%{jti}":            "",
-				"%{k}":              b64("SSH certificate"),
-				"%{nbf}":            "",
-				"%{payload}":        "-",
-				"%{pkt}":            "-",
-				"%{sub}":            "me",
-				"%{t}":              "ssh-rsa",
-				"%{u}":              "root",
-				"%{upk}":            "-",
+				"OPKSSH_PLUGIN_AUD":            "test_client_id",
+				"OPKSSH_PLUGIN_EMAIL":          "",
+				"OPKSSH_PLUGIN_EMAIL_VERIFIED": "",
+				"OPKSSH_PLUGIN_EXP":            "-",
+				"OPKSSH_PLUGIN_GROUPS":         "",
+				"OPKSSH_PLUGIN_IAT":            "99999999900",
+				"OPKSSH_PLUGIN_IDT":            "-",
+				"OPKSSH_PLUGIN_ISS":            "https://accounts.example.com",
+				"OPKSSH_PLUGIN_JTI":            "",
+				"OPKSSH_PLUGIN_K":              b64("SSH certificate"),
+				"OPKSSH_PLUGIN_NBF":            "",
+				"OPKSSH_PLUGIN_PAYLOAD":        "-",
+				"OPKSSH_PLUGIN_PKT":            "-",
+				"OPKSSH_PLUGIN_SUB":            "me",
+				"OPKSSH_PLUGIN_T":              "ssh-rsa",
+				"OPKSSH_PLUGIN_U":              "root",
+				"OPKSSH_PLUGIN_UPK":            "-",
 			},
 		},
 		{
@@ -127,23 +127,23 @@ func TestNewTokens(t *testing.T) {
 			sshCert:   b64("SSH certificate"),
 			keyType:   "ssh-rsa",
 			expectTokens: map[string]string{
-				"%{aud}":            `["test_client_id","other_client_id"]`,
-				"%{email}":          "",
-				"%{email_verified}": "",
-				"%{exp}":            "-",
-				"%{groups}":         "",
-				"%{iat}":            "99999999900",
-				"%{idt}":            "-",
-				"%{iss}":            "https://accounts.example.com",
-				"%{jti}":            "",
-				"%{k}":              b64("SSH certificate"),
-				"%{nbf}":            "",
-				"%{payload}":        "-",
-				"%{pkt}":            "-",
-				"%{sub}":            "me",
-				"%{t}":              "ssh-rsa",
-				"%{u}":              "root",
-				"%{upk}":            "-",
+				"OPKSSH_PLUGIN_AUD":            `["test_client_id","other_client_id"]`,
+				"OPKSSH_PLUGIN_EMAIL":          "",
+				"OPKSSH_PLUGIN_EMAIL_VERIFIED": "",
+				"OPKSSH_PLUGIN_EXP":            "-",
+				"OPKSSH_PLUGIN_GROUPS":         "",
+				"OPKSSH_PLUGIN_IAT":            "99999999900",
+				"OPKSSH_PLUGIN_IDT":            "-",
+				"OPKSSH_PLUGIN_ISS":            "https://accounts.example.com",
+				"OPKSSH_PLUGIN_JTI":            "",
+				"OPKSSH_PLUGIN_K":              b64("SSH certificate"),
+				"OPKSSH_PLUGIN_NBF":            "",
+				"OPKSSH_PLUGIN_PAYLOAD":        "-",
+				"OPKSSH_PLUGIN_PKT":            "-",
+				"OPKSSH_PLUGIN_SUB":            "me",
+				"OPKSSH_PLUGIN_T":              "ssh-rsa",
+				"OPKSSH_PLUGIN_U":              "root",
+				"OPKSSH_PLUGIN_UPK":            "-",
 			},
 		},
 		{
@@ -160,7 +160,7 @@ func TestNewTokens(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens, err := NewTokens(tt.pkt, tt.principal, tt.sshCert, tt.keyType)
+			tokens, err := PopulatePluginEnvVars(tt.pkt, tt.principal, tt.sshCert, tt.keyType)
 			if tt.expectErrorString != "" {
 				require.Error(t, err)
 				require.ErrorContains(t, err, tt.expectErrorString)
@@ -169,20 +169,20 @@ func TestNewTokens(t *testing.T) {
 				require.NotNil(t, tokens)
 
 				// Simple smoke test that these values where set. They are random so we check equality.
-				require.Equal(t, len(strings.Split(tokens["%{pkt}"], ":")), 5)
-				tokens["%{pkt}"] = "-"
+				require.Equal(t, len(strings.Split(tokens["OPKSSH_PLUGIN_PKT"], ":")), 5)
+				tokens["OPKSSH_PLUGIN_PKT"] = "-"
 
-				require.Equal(t, len(strings.Split(tokens["%{idt}"], ".")), 3)
-				tokens["%{idt}"] = "-"
+				require.Equal(t, len(strings.Split(tokens["OPKSSH_PLUGIN_IDT"], ".")), 3)
+				tokens["OPKSSH_PLUGIN_IDT"] = "-"
 
-				require.Greater(t, len(tokens["%{upk}"]), 10)
-				tokens["%{upk}"] = "-"
+				require.Greater(t, len(tokens["OPKSSH_PLUGIN_UPK"]), 10)
+				tokens["OPKSSH_PLUGIN_UPK"] = "-"
 
-				require.Greater(t, len(tokens["%{payload}"]), 10)
-				tokens["%{payload}"] = "-"
+				require.Greater(t, len(tokens["OPKSSH_PLUGIN_PAYLOAD"]), 10)
+				tokens["OPKSSH_PLUGIN_PAYLOAD"] = "-"
 
-				require.Greater(t, len(tokens["%{exp}"]), 8)
-				tokens["%{exp}"] = "-"
+				require.Greater(t, len(tokens["OPKSSH_PLUGIN_EXP"]), 8)
+				tokens["OPKSSH_PLUGIN_EXP"] = "-"
 
 				require.Equal(t, tt.expectTokens, tokens)
 			}
