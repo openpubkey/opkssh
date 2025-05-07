@@ -128,7 +128,7 @@ func TestPermissionsChecker(t *testing.T) {
 			group:            "testGroup",
 			groupExpected:    "",
 			cmdError:         nil,
-			errorExpected:    "expected permissions (650), got (640)",
+			errorExpected:    "expected one of the following permissions [650], got (640)",
 		},
 		{
 			name:             "error (stat command error)",

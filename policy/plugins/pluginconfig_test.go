@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPercent(t *testing.T) {
+func TestPercentExpand(t *testing.T) {
 	base64OfExample := "ZXhhbXBsZQ=="
 	base64OfExampleActual := base64.StdEncoding.EncodeToString([]byte("example"))
 	require.Equal(t, base64OfExample, base64OfExampleActual)
@@ -141,6 +141,13 @@ command: /usr/bin/local/opk/policy-cmd %{sub} %{iss} %{aud}`)},
 			commandTemplate: `cmd "%{token}`,
 			expectedCommand: nil,
 			errorExpected:   "Unterminated double-quoted string",
+		},
+		{
+			name:            "Spaces and other special characters in token",
+			tokens:          map[string]string{"%{token}": "abc\n \n def"},
+			commandTemplate: `cmd %{token}`,
+			expectedCommand: []string{"cmd", "abc\n \n def"},
+			errorExpected:   "",
 		},
 	}
 

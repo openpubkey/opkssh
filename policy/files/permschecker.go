@@ -94,7 +94,7 @@ func (u *PermsChecker) CheckPerm(path string, requirePerm []fs.FileMode, require
 		}
 	}
 	if !permMatch {
-		return fmt.Errorf("expected permissions (%s), got (%o)", strings.Join(requiredPermString, ","), mode.Perm())
+		return fmt.Errorf("expected one of the following permissions [%s], got (%o)", strings.Join(requiredPermString, ", "), mode.Perm())
 	}
 
 	return nil
