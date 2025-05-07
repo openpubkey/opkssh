@@ -224,7 +224,9 @@ func (p *PolicyPluginEnforcer) executePolicyCommand(config PluginConfig, inputEn
 	}
 
 	for envK, envV := range inputEnvVars {
-		os.Setenv(envK, envV)
+		if err := os.Setenv(envK, envV); err != nil {
+			return nil, nil, fmt.Errorf("failed to set environment variable %s: %w", envK, err)
+		}
 	}
 
 	command, err := shellquote.Split(config.Command)
