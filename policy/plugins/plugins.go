@@ -36,6 +36,8 @@ import (
 
 const requiredPolicyPerms = fs.FileMode(0640)
 
+var requiredPolicyDirPerms = []fs.FileMode{fs.FileMode(0700), fs.FileMode(0750), fs.FileMode(0755)}
+
 var requiredPolicyCmdPerms = []fs.FileMode{fs.FileMode(0555), fs.FileMode(0755)}
 
 type PluginResult struct {
@@ -104,6 +106,11 @@ func NewPolicyPluginEnforcer() *PolicyPluginEnforcer {
 
 // loadPlugins loads the plugin config files from the given directory.
 func (p *PolicyPluginEnforcer) loadPlugins(dir string) (pluginResults PluginResults, err error) {
+	// Ensure the /opk/ssh/policy.d can only be written by root
+	if err := p.permChecker.CheckPerm(dir, requiredPolicyDirPerms, "root", ""); err != nil {
+		return nil, fmt.Errorf("policy plugin directory (%s) has insecure permissions: %w", dir, err)
+	}
+
 	filesFound, err := afero.ReadDir(p.Fs, dir)
 	if err != nil {
 		return nil, err
