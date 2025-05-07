@@ -133,7 +133,7 @@ command: /usr/bin/local/opk/policy-cmd %{sub} %{iss} %{aud}`)},
 			tokens:          map[string]string{"%{token}": "word"},
 			commandTemplate: `cmd %{token} %{abcdef`,
 			expectedCommand: nil,
-			errorExpected:   "unmatched % in at position (13) in command template: cmd %{token} %{abcdef",
+			errorExpected:   "unmatched { in at position (13) in command template: cmd %{token} %{abcdef",
 		},
 		{
 			name:            "Error shell escape",
