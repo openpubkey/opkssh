@@ -18,7 +18,7 @@ RUN  echo "test:test" | chpasswd
 # Source: https://askubuntu.com/a/878705
 RUN echo "test ALL=(ALL:ALL) NOPASSWD: ALL" | tee /etc/sudoers.d/test
 
-# Create unprivileged user named "test2" 
+# Create unprivileged user named "test2"
 RUN useradd -rm -d /home/test2 -s /bin/bash -u 1001 test2
 # Set password to "test"
 RUN  echo "test2:test" | chpasswd
@@ -40,18 +40,17 @@ RUN go mod download
 COPY . ./
 
 # Build "opkssh" binary and write to the opk directory
-ARG ISSUER_PORT="9998"
+# ARG ISSUER_PORT="9998"
 RUN go build -v -o opksshbuild
 RUN chmod +x ./scripts/install-linux.sh
 RUN bash ./scripts/install-linux.sh --install-from=opksshbuild --no-sshd-restart
 # RUN chmod 700 /usr/local/bin/opkssh
 
-RUN echo "http://oidc.local:${ISSUER_PORT}/ web oidc_refreshed" >> /etc/opk/providers
+RUN echo "https://token.actions.githubusercontent.com github 24h" >> /etc/opk/providers
 
 # Add integration test user as allowed email in policy (this directly tests
 # policy "add" command)
-ARG BOOTSTRAP_POLICY
-RUN if [ -n "$BOOTSTRAP_POLICY" ] ; then opkssh add "test" "test-user@zitadel.ch" "http://oidc.local:${ISSUER_PORT}/"; else echo "Will not init policy" ; fi
+RUN opkssh add "test" "repo:datosh/opkssh:ref:refs/heads/gha-based-login" "https://token.actions.githubusercontent.com"
 
 # Start SSH server on container startup
 CMD ["/usr/sbin/sshd", "-D"]
