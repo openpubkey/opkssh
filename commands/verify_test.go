@@ -57,7 +57,7 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 	require.NoError(t, err)
 
 	principals := []string{"guest", "dev"}
-	cert, err := sshcert.New(pkt, principals)
+	cert, err := sshcert.New(pkt, nil, principals)
 	require.NoError(t, err)
 
 	sshSigner, err := ssh.NewSignerFromSigner(signer)
