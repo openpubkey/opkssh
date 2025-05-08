@@ -19,7 +19,6 @@ package files
 import (
 	"fmt"
 	"io/fs"
-	"log"
 	"os/exec"
 	"strings"
 
@@ -40,18 +39,20 @@ const ModeHomePerms = fs.FileMode(0600)
 // and file permissions of a file on a Unix-like system.
 type PermsChecker struct {
 	Fs        afero.Fs
-	cmdRunner func(string, ...string) ([]byte, error)
+	CmdRunner func(string, ...string) ([]byte, error)
 }
 
 func NewPermsChecker(fs afero.Fs) *PermsChecker {
-	return &PermsChecker{Fs: fs, cmdRunner: execCmd}
+	return &PermsChecker{Fs: fs, CmdRunner: ExecCmd}
 }
 
 // CheckPerm checks the file at the given path if it has the desired permissions.
+// The argument requirePerm is a list to enable the caller to specify multiple
+// permissions only one of which needs to match the permissions on the file.
 // If the requiredOwner or requiredGroup are not empty then the function will also
 // that the owner and group of the file match the requiredOwner and requiredGroup
 // specified and fail if they do not.
-func (u *PermsChecker) CheckPerm(path string, requirePerm fs.FileMode, requiredOwner string, requiredGroup string) error {
+func (u *PermsChecker) CheckPerm(path string, requirePerm []fs.FileMode, requiredOwner string, requiredGroup string) error {
 	fileInfo, err := u.Fs.Stat(path)
 	if err != nil {
 		return fmt.Errorf("failed to describe the file at path: %w", err)
@@ -60,9 +61,7 @@ func (u *PermsChecker) CheckPerm(path string, requirePerm fs.FileMode, requiredO
 
 	// if the requiredOwner or requiredGroup are specified then run stat and check if they match
 	if requiredOwner != "" || requiredGroup != "" {
-		log.Println("Running, command: ", "stat", "-c", "%U %G", path)
-		statOutput, err := u.cmdRunner("stat", "-c", "%U %G", path)
-		log.Println("Got output:", string(statOutput))
+		statOutput, err := u.CmdRunner("stat", "-c", "%U %G", path)
 		if err != nil {
 			return fmt.Errorf("failed to run stat: %w", err)
 		}
@@ -86,14 +85,22 @@ func (u *PermsChecker) CheckPerm(path string, requirePerm fs.FileMode, requiredO
 		}
 	}
 
-	if mode.Perm() != requirePerm {
-		return fmt.Errorf("expected permissions (%o), got (%o)", requirePerm.Perm(), mode.Perm())
+	permMatch := false
+	requiredPermString := []string{}
+	for _, p := range requirePerm {
+		requiredPermString = append(requiredPermString, fmt.Sprintf("%o", p.Perm()))
+		if mode.Perm() == p {
+			permMatch = true
+		}
+	}
+	if !permMatch {
+		return fmt.Errorf("expected one of the following permissions [%s], got (%o)", strings.Join(requiredPermString, ", "), mode.Perm())
 	}
 
 	return nil
 }
 
-func execCmd(name string, arg ...string) ([]byte, error) {
+func ExecCmd(name string, arg ...string) ([]byte, error) {
 	cmd := exec.Command(name, arg...)
 	return cmd.CombinedOutput()
 }

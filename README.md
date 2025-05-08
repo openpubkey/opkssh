@@ -176,6 +176,7 @@ Second, we use the `AuthorizedKeysCommand` configuration option in `sshd_config`
 ## Server Configuration
 
 All opkssh configuration files are space delimited and live on the server.
+Below we discuss our basic policy system, to read how to configure complex policies rules see our [documentation on our policy plugin system](policyplugins.md). Using the policy plugin system you can enforce any policy rule that be computed on a [Turing Machine](https://en.wikipedia.org/wiki/Turing_machine).
 
 ### `/etc/opk/providers`
 

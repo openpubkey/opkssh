@@ -258,6 +258,8 @@ if command -v $INSTALL_DIR/$BINARY_NAME &> /dev/null; then
     # Setup configuration
     echo "Configuring opkssh:"
     mkdir -p /etc/opk
+    mkdir -p /etc/opk/policy.d
+
     touch /etc/opk/auth_id
     chown root:${AUTH_CMD_GROUP} /etc/opk/auth_id
     chmod 640 /etc/opk/auth_id
@@ -340,7 +342,6 @@ if command -v $INSTALL_DIR/$BINARY_NAME &> /dev/null; then
     else
         echo "  Skipping sudoers configuration as it is only needed for home policy (--no-home-policy option supplied)"
     fi
-
 
     touch /var/log/opkssh.log
     chown root:${AUTH_CMD_GROUP} /var/log/opkssh.log

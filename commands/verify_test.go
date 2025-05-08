@@ -32,7 +32,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func AllowAllPolicyEnforcer(userDesired string, pkt *pktoken.PKToken) error {
+func AllowAllPolicyEnforcer(userDesired string, pkt *pktoken.PKToken, certB64 string, typArg string) error {
 	return nil
 }
 

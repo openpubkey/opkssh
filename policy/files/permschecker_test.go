@@ -128,7 +128,7 @@ func TestPermissionsChecker(t *testing.T) {
 			group:            "testGroup",
 			groupExpected:    "",
 			cmdError:         nil,
-			errorExpected:    "expected permissions (650), got (640)",
+			errorExpected:    "expected one of the following permissions [650], got (640)",
 		},
 		{
 			name:             "error (stat command error)",
@@ -147,23 +147,22 @@ func TestPermissionsChecker(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			execCmdMock := func(name string, arg ...string) ([]byte, error) {
-				if tt.cmdError != nil {
-					return nil, tt.cmdError
-				}
-				return []byte(tt.owner + " " + tt.group), nil
-			}
 
 			mockFs := afero.NewMemMapFs()
 			permChecker := PermsChecker{
-				Fs:        mockFs,
-				cmdRunner: execCmdMock,
+				Fs: mockFs,
+				CmdRunner: func(name string, arg ...string) ([]byte, error) {
+					if tt.cmdError != nil {
+						return nil, tt.cmdError
+					}
+					return []byte(tt.owner + " " + tt.group), nil
+				},
 			}
 
 			err := afero.WriteFile(mockFs, tt.filePath, []byte("1234567890"), tt.perms)
 			require.NoError(t, err)
 
-			err = permChecker.CheckPerm(tt.filePathExpected, tt.permsExpected, tt.ownerExpected, tt.groupExpected)
+			err = permChecker.CheckPerm(tt.filePathExpected, []fs.FileMode{tt.permsExpected}, tt.ownerExpected, tt.groupExpected)
 			if tt.errorExpected != "" {
 				require.Error(t, err)
 				require.ErrorContains(t, err, tt.errorExpected)

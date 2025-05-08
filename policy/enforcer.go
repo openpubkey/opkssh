@@ -19,9 +19,11 @@ package policy
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/openpubkey/openpubkey/pktoken"
+	"github.com/openpubkey/opkssh/policy/plugins"
 	"golang.org/x/exp/slices"
 )
 
@@ -52,15 +54,34 @@ func validateClaim(claims *checkedClaims, user *User) bool {
 	return strings.EqualFold(claims.Email, user.IdentityAttribute) || string(claims.Sub) == user.IdentityAttribute
 }
 
-// CheckPolicy loads the opkssh policy and checks to see if there is a policy
+// CheckPolicy loads opkssh policy and checks to see if there is a policy
 // permitting access to principalDesired for the user identified by the PKT's
 // email claim. Returns nil if access is granted. Otherwise, an error is
 // returned.
 //
 // It is security critical to verify the pkt first before calling this function.
 // This is because if this function is called first, a timing channel exists which
-// allows an attacker check what identities and principals are allowed by the policy.
-func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken) error {
+// allows an attacker check what identities and principals are allowed by the policy.F
+func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, sshCert string, keyType string) error {
+	pluginPolicy := plugins.NewPolicyPluginEnforcer()
+
+	results, err := pluginPolicy.CheckPolicies("/etc/opk/policy.d", pkt, principalDesired, sshCert, keyType)
+	if err != nil {
+		log.Printf("Error checking policy plugins: %v \n", err)
+		// Despite the error, we don't fail here because we still want to check
+		// the standard policy below. Policy plugins can only expand the set of
+		// allow set, not shrink it.
+	} else {
+		for _, result := range results {
+			commandRunStr := strings.Join(result.CommandRun, " ")
+			log.Printf("Policy plugin result, path: (%s), allowed: (%t), error: (%v), command_run: (%s), policyOutput: (%s)\n", result.Path, result.Allowed, result.Error, commandRunStr, result.PolicyOutput)
+		}
+		if results.Allowed() {
+			log.Printf("Access granted by policy plugin\n")
+			return nil
+		}
+	}
+
 	policy, source, err := p.PolicyLoader.Load()
 	if err != nil {
 		return fmt.Errorf("error loading policy: %w", err)
