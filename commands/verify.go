@@ -124,13 +124,11 @@ func (v *VerifyCmd) SetEnvVarInConfig() error {
 		return err
 	}
 
-	conf, err := config.NewServerConfig(configBytes)
+	serverConfig, err := config.NewServerConfig(configBytes)
 	if err != nil {
 		return fmt.Errorf("failed to parse config file: %w", err)
 	}
-	conf.SetEnvVars()
-
-	return nil
+	return serverConfig.SetEnvVars()
 }
 
 // OpkPolicyEnforcerAuthFunc returns an opkssh policy.Enforcer that can be
