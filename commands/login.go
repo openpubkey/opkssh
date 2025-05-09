@@ -116,7 +116,6 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		l.configPathArg = filepath.Join(dir, ".opk", "config.yml")
 	}
 
-	var configBytes []byte
 	if _, err := l.Fs.Stat(l.configPathArg); err == nil {
 		if l.createConfigArg {
 			log.Printf("--create-config=true but config file already exists at %s", l.configPathArg)
@@ -124,13 +123,10 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 
 		// Load the file from the filesystem
 		afs := &afero.Afero{Fs: l.Fs}
-		configBytes, err = afs.ReadFile(l.configPathArg)
-		if err != nil {
-			return fmt.Errorf("failed to read config file: %w", err)
-		}
-		l.config, err = config.NewClientConfig(configBytes)
-		if err != nil {
-			return fmt.Errorf("failed to parse config file: %w", err)
+		if client_config, err := config.GetClientConfigFromFile((l.configPathArg), afs); err != nil {
+			return err
+		} else {
+			l.config = client_config
 		}
 	} else {
 		if l.createConfigArg {
