@@ -139,7 +139,7 @@ env_vars:
 			permission:  0640,
 			owner:       "opksshuser",
 			group:       "opksshuser",
-			errorString: "expected owner (root), got (opkssh)",
+			errorString: "expected owner (root), got (opksshuser)",
 		},
 		{
 			name:        "Missing config",
