@@ -47,3 +47,6 @@ providers:
       - http://localhost:10001/login-callback
       - http://localhost:11110/login-callback
 
+  - alias: github
+    issuer: https://token.actions.githubusercontent.com
+    client_id: 1234567890
