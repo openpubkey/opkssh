@@ -351,6 +351,11 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 	}, nil
 }
 
+// integration testing only
+func (l *LoginCmd) SetConfig(config *config.ClientConfig) {
+	l.config = config
+}
+
 // Login performs the OIDC login procedure and creates the SSH certs/keys in the
 // default SSH key location.
 func (l *LoginCmd) Login(ctx context.Context, provider providers.OpenIdProvider, printIdToken bool, seckeyPath string) error {
