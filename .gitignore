@@ -38,3 +38,7 @@ test/integration/testfile.txt
 # Go build cache
 .cache
 .mod-cache
+
+# Direnv files, because these should be opt-in by the developer.
+.direnv
+.envrc

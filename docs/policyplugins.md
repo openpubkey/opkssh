@@ -1,7 +1,7 @@
 # Policy plugins
 
 Inspired by the power of [the OpenSSH AuthorizedKeysCommand](https://man.openbsd.org/sshd_config.5#AuthorizedKeysCommand), opkssh provides policy plugins.
-These policy plugins provide a simple way to bring your own policy which replaces the default opkssh policy.
+These policy plugins provide a simple way to bring your own policy which extends the default opkssh policy.
 
 To use your own policy create a policy plugin config file in `/etc/opk/policy.d`. This config files specifies what command you want to calls out to evaluate policy. If the command returns anything else other than "allowed" and exit code 0, this is viewed as a policy rejection.
 
@@ -35,6 +35,23 @@ else
     exit 1
 fi
 ```
+
+**Important:** If you have multiple policy plugins only one of them needs to return "allow" for the action to be allowed.
+If you added five policy plugins and four of them say "deny" and one of them says "allow" the allow wins out. Additionally policy plugins do not disable standard policy.
+To completely turn off standard policy and only use policy plugins ensure all auth_id files are empty.
+
+The pseudocode policy is:
+
+1. pluginAllowsAccess = false
+2. FOR each policy-plugin config in `/etc/opk/policy.d/*.yml`
+   1. IF config.command() == "allow":
+       1. pluginAllowsAccess = true
+3. IF pluginAllowsAccess == true:
+   1. return "allow"
+4. ELSE IF standardPolicy() == "allow"
+   1. return "allow"
+5. ELSE:
+   1. return "deny"
 
 ## Permission requirements
 
