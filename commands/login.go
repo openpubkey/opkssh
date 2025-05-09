@@ -27,8 +27,8 @@ import (
 	"io"
 	"log"
 	"os"
-
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -40,10 +40,17 @@ import (
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/openpubkey/util"
-	config "github.com/openpubkey/opkssh/commands/client-config"
-	"github.com/openpubkey/opkssh/sshcert"
 	"github.com/spf13/afero"
 	"golang.org/x/crypto/ssh"
+
+	config "github.com/openpubkey/opkssh/commands/client-config"
+	"github.com/openpubkey/opkssh/sshcert"
+)
+
+const (
+	sshDirPerm     = 0700
+	privateKeyPerm = 0600
+	publicKeyPerm  = 0644
 )
 
 type LoginCmd struct {
@@ -111,7 +118,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 	if l.configPathArg == "" {
 		dir, dirErr := os.UserHomeDir()
 		if dirErr != nil {
-			return fmt.Errorf("failed to get user config dir: %w", dirErr)
+			return fmt.Errorf("failed to get user home: %w", dirErr)
 		}
 		l.configPathArg = filepath.Join(dir, ".opk", "config.yml")
 	}
@@ -131,6 +138,10 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		l.config, err = config.NewClientConfig(configBytes)
 		if err != nil {
 			return fmt.Errorf("failed to parse config file: %w", err)
+		}
+		err = l.config.CheckKeyDir()
+		if err != nil {
+			return fmt.Errorf("failed key dir check: %w", err)
 		}
 	} else {
 		if l.createConfigArg {
@@ -302,10 +313,16 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 		if err := l.writeKeys(seckeyPath, seckeyPath+".pub", seckeySshPem, certBytes); err != nil {
 			return nil, fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
 		}
+	} else if l.config.KeyManagement.DefaultKeyDir != "" {
+		// If keyPath isn't set then write it to the configured or default location
+		err = l.writeKeysToDefaultDir(provider.Issuer(), seckeySshPem, certBytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to write SSH keys to default dir: %w", err)
+		}
 	} else {
-		// If keyPath isn't set then write it to the default location
-		if err := l.writeKeysToSSHDir(seckeySshPem, certBytes); err != nil {
-			return nil, fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
+		err = l.writeKeysToSSHDir(seckeySshPem, certBytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to write SSH keys to ssh dir: %w", err)
 		}
 	}
 
@@ -332,6 +349,11 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 		alg:        alg,
 		principals: principals,
 	}, nil
+}
+
+// integration testing only
+func (l *LoginCmd) SetConfig(config *config.ClientConfig) {
+	l.config = config
 }
 
 // Login performs the OIDC login procedure and creates the SSH certs/keys in the
@@ -454,7 +476,7 @@ func (l *LoginCmd) writeKeysToSSHDir(seckeySshPem []byte, certBytes []byte) erro
 	sshPath := filepath.Join(homePath, ".ssh")
 
 	// Make ~/.ssh if folder does not exist
-	err = l.Fs.MkdirAll(sshPath, os.ModePerm)
+	err = l.Fs.MkdirAll(sshPath, sshDirPerm)
 	if err != nil {
 		return err
 	}
@@ -497,10 +519,146 @@ func (l *LoginCmd) writeKeysToSSHDir(seckeySshPem []byte, certBytes []byte) erro
 	return fmt.Errorf("no default ssh key file free for openpubkey")
 }
 
+func (l *LoginCmd) writeKeysToDefaultDir(issuer string, seckeySshPem []byte, certBytes []byte) (err error) {
+
+	var (
+		configKeyDir string
+		secKeyPath   string
+		pubKeyPath   string
+
+		keyFileName string
+	)
+
+	configKeyDir, err = l.config.KeyManagement.GetKeyDir()
+	if err != nil {
+		return err
+	}
+
+	// Make ~/.ssh if folder does not exist
+	err = l.Fs.MkdirAll(configKeyDir, sshDirPerm)
+	if err != nil {
+		return
+	}
+
+	// get file name from issuer
+	keyFileName = makeSSHKeyFileName(issuer)
+
+	secKeyPath = filepath.Join(configKeyDir, keyFileName)
+	pubKeyPath = secKeyPath + ".pub"
+
+	// write keys to configured dir
+	err = l.writeKeys(secKeyPath, pubKeyPath, seckeySshPem, certBytes)
+	if err != nil {
+		err = fmt.Errorf("failed to write keys to default directory: %w", err)
+		return
+	}
+
+	if !l.config.KeyManagement.UseIdentityConfig {
+		return
+	}
+
+	return l.handleIdentityConfig(secKeyPath)
+}
+
+func (l *LoginCmd) handleIdentityConfig(keyFileName string) (err error) {
+	var (
+		userHomeDir string
+		opkKeyDir   string
+
+		sshConfig    string
+		opkSSHConfig string
+
+		includeString string
+
+		fileBytes []byte
+
+		identityFileString = `IdentityFile ` + keyFileName
+
+		afs = &afero.Afero{Fs: l.Fs}
+	)
+
+	// build user SSH dir
+	userHomeDir, err = os.UserHomeDir()
+	if err != nil {
+		return
+	}
+
+	sshConfig = filepath.Join(userHomeDir, ".ssh", "config")
+	opkSSHConfig = filepath.Join(userHomeDir, ".opk", "config")
+
+	// build configured ssh key dir
+	opkKeyDir, err = l.config.KeyManagement.GetKeyDir()
+	if err != nil {
+		return
+	}
+
+	// check config gets included
+	fileBytes, err = afs.ReadFile(sshConfig)
+	if err != nil && !os.IsNotExist(err) {
+		return
+	}
+
+	includeString = "Include " + opkSSHConfig
+	if !strings.Contains(string(fileBytes), includeString) {
+
+		// prepend Include directive
+		newConfig := includeString + "\n" + string(fileBytes)
+
+		err = afs.WriteFile(sshConfig+".new", []byte(newConfig), publicKeyPerm)
+		if err != nil {
+			// we failed, restore the backup config
+			err = fmt.Errorf("failed to write user ssh config: %w", err)
+			return
+		}
+	}
+
+	// make sure the user specified directory exists
+	err = afs.MkdirAll(opkKeyDir, sshDirPerm)
+	if err != nil {
+		err = fmt.Errorf("failed to create opk key directory: %w", err)
+		return
+	}
+
+	// write identity to config
+	fileBytes, err = afs.ReadFile(opkSSHConfig)
+	if err != nil && !os.IsNotExist(err) {
+		err = fmt.Errorf("failed to read opk ssh config: %w", err)
+		return
+	}
+
+	if !strings.Contains(string(fileBytes), identityFileString) {
+		newConfig := identityFileString + "\n" + string(fileBytes)
+
+		err = afs.WriteFile(opkSSHConfig, []byte(newConfig), publicKeyPerm)
+		if err != nil {
+			err = fmt.Errorf("failed to write opk ssh config: %w", err)
+			return
+		}
+	}
+
+	err = afs.Rename(sshConfig+".new", sshConfig)
+	if err != nil {
+		err = fmt.Errorf("failed to rename ssh config: %w", err)
+		return
+	}
+
+	return
+}
+
+func makeSSHKeyFileName(issuer string) string {
+
+	regex := regexp.MustCompile(`[^a-zA-Z0-9_\-.]+`)
+
+	issuer, _ = strings.CutPrefix(issuer, "https://")
+	issuer = regex.ReplaceAllString(issuer, "_")
+
+	return issuer
+}
+
 func (l *LoginCmd) writeKeys(seckeyPath string, pubkeyPath string, seckeySshPem []byte, certBytes []byte) error {
 	// Write ssh secret key to filesystem
 	afs := &afero.Afero{Fs: l.Fs}
-	if err := afs.WriteFile(seckeyPath, seckeySshPem, 0600); err != nil {
+	if err := afs.WriteFile(seckeyPath, seckeySshPem, privateKeyPerm); err != nil {
 		return err
 	}
 
@@ -508,7 +666,7 @@ func (l *LoginCmd) writeKeys(seckeyPath string, pubkeyPath string, seckeySshPem 
 
 	certBytes = append(certBytes, []byte(" openpubkey")...)
 	// Write ssh public key (certificate) to filesystem
-	return afs.WriteFile(pubkeyPath, certBytes, 0644)
+	return afs.WriteFile(pubkeyPath, certBytes, publicKeyPerm)
 }
 
 func (l *LoginCmd) fileExists(fPath string) bool {

@@ -27,11 +27,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openpubkey/opkssh/commands"
 	"github.com/spf13/afero"
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh"
+
+	"github.com/openpubkey/opkssh/commands"
+	config "github.com/openpubkey/opkssh/commands/client-config"
 )
 
 func TestLogin(t *testing.T) {
@@ -52,6 +54,7 @@ func TestLogin(t *testing.T) {
 	require.NoError(t, err, "failed to create OPK provider")
 	go func() {
 		loginCmd := commands.LoginCmd{Fs: afero.NewOsFs()}
+		loginCmd.SetConfig(&config.ClientConfig{})
 		err := loginCmd.Login(TestCtx, opkProvider, false, "")
 		errCh <- err
 	}()
