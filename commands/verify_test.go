@@ -122,7 +122,7 @@ env_vars:
 			configFile:  map[string]string{"server_config.yml": configContent},
 			permission:  0640,
 			owner:       "root",
-			group:       "opkssh",
+			group:       "opksshuser",
 			errorString: "",
 		},
 		{
@@ -130,15 +130,15 @@ env_vars:
 			configFile:  map[string]string{"server_config.yml": configContent},
 			permission:  0677,
 			owner:       "root",
-			group:       "opkssh",
+			group:       "opksshuser",
 			errorString: "expected one of the following permissions [640], got (677)",
 		},
 		{
 			name:        "Wrong ownership",
 			configFile:  map[string]string{"server_config.yml": configContent},
 			permission:  0640,
-			owner:       "opkssh",
-			group:       "opkssh",
+			owner:       "opksshuser",
+			group:       "opksshuser",
 			errorString: "expected owner (root), got (opkssh)",
 		},
 		{
@@ -146,7 +146,7 @@ env_vars:
 			configFile:  map[string]string{"wrong-filename.yml": configContent},
 			permission:  0640,
 			owner:       "root",
-			group:       "opkssh",
+			group:       "opksshuser",
 			errorString: "file does not exist",
 		},
 		{
@@ -154,7 +154,7 @@ env_vars:
 			configFile:  map[string]string{"server_config.yml": `;;;corrupted`},
 			permission:  0640,
 			owner:       "root",
-			group:       "opkssh",
+			group:       "opksshuser",
 			errorString: "failed to parse config file",
 		},
 	}

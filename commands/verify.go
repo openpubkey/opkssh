@@ -124,7 +124,7 @@ func (v *VerifyCmd) SetEnvVarInConfig() error {
 		return fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	err = v.filePermChecker.CheckPerm(v.ConfigPathArg, []fs.FileMode{0640}, "root", "opkssh")
+	err = v.filePermChecker.CheckPerm(v.ConfigPathArg, []fs.FileMode{0640}, "root", "opksshuser")
 	if err != nil {
 		return err
 	}
