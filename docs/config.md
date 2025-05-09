@@ -10,6 +10,19 @@ We have the follow syntax rules:
 
 Our goal is to have an distinct meaning for each column. This way if we want to extend the rules we can add additional columns.
 
+## Server config `/etc/opk/config.yml`
+
+This is the config file for opkssh when used on the SSH server.
+The only current config field it supports is setting additional environment variables when `opkssh verify` is called.
+For instance if you want to specify the URI of a proxy server you can pass the environment variable HTTPS_PROXY:
+
+```yml
+---
+env_vars:
+  HTTPS_PROXY: http://yourproxy:3128
+```
+
+
 ## Allowed OpenID Providers: `/etc/opk/providers`
 
 This file functions as an access control list that enables admins to determine the OpenID Providers and Client IDs they wish to use.
