@@ -54,11 +54,16 @@ type VerifyCmd struct {
 }
 
 func NewVerifyCmd(pktVerifier verifier.Verifier, checkPolicy PolicyEnforcerFunc, configPathArg string) *VerifyCmd {
+	fs := afero.NewOsFs()
 	return &VerifyCmd{
-		Fs:            afero.NewOsFs(),
+		Fs:            fs,
 		PktVerifier:   pktVerifier,
 		CheckPolicy:   checkPolicy,
 		ConfigPathArg: configPathArg,
+		filePermChecker: files.PermsChecker{
+			Fs:        fs,
+			CmdRunner: files.ExecCmd,
+		},
 	}
 }
 
