@@ -22,6 +22,12 @@ env_vars:
   HTTPS_PROXY: http://yourproxy:3128
 ```
 
+It requires the following permissions be set:
+
+```bash
+sudo chown root:opksshuser /etc/opk/config.yml
+sudo chmod 640 /etc/opk/config.yml
+```
 
 ## Allowed OpenID Providers: `/etc/opk/providers`
 
