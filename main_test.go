@@ -254,7 +254,7 @@ func TestRun(t *testing.T) {
 		{
 			name:       "Verify command fail on bad log file path",
 			args:       []string{"opkssh", "verify", "arg1", "arg2", "arg3"},
-			wantOutput: "Error opening log file: open /var/log/opkssh.log: The system cannot find the path specified.",
+			wantOutput: "Error opening log file:",
 			wantExit:   1,
 		},
 	}
