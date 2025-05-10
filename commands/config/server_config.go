@@ -17,28 +17,29 @@
 package config
 
 import (
-	_ "embed"
+	"os"
 
 	"gopkg.in/yaml.v3"
 )
 
-//go:embed default-client-config.yml
-var DefaultClientConfig []byte
-
-type ClientConfig struct {
-	DefaultProvider string           `yaml:"default_provider"`
-	Providers       []ProviderConfig `yaml:"providers"`
+type ServerConfig struct {
+	EnvVars map[string]string `yaml:"env_vars"`
 }
 
-func NewClientConfig(c []byte) (*ClientConfig, error) {
-	var config ClientConfig
-	if err := yaml.Unmarshal(c, &config); err != nil {
+func NewServerConfig(c []byte) (*ServerConfig, error) {
+	var serverConfig ServerConfig
+	if err := yaml.Unmarshal(c, &serverConfig); err != nil {
 		return nil, err
 	}
 
-	return &config, nil
+	return &serverConfig, nil
 }
 
-func (c *ClientConfig) GetProvidersMap() (map[string]ProviderConfig, error) {
-	return CreateProvidersMap(c.Providers)
+func (c *ServerConfig) SetEnvVars() error {
+	for k, v := range c.EnvVars {
+		if err := os.Setenv(k, v); err != nil {
+			return err
+		}
+	}
+	return nil
 }

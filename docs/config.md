@@ -10,11 +10,30 @@ We have the follow syntax rules:
 
 Our goal is to have an distinct meaning for each column. This way if we want to extend the rules we can add additional columns.
 
+## Server config `/etc/opk/config.yml`
+
+This is the config file for opkssh when used on the SSH server.
+The only current config field it supports is setting additional environment variables when `opkssh verify` is called.
+For instance if you want to specify the URI of a proxy server you can pass the environment variable HTTPS_PROXY:
+
+```yml
+---
+env_vars:
+  HTTPS_PROXY: http://yourproxy:3128
+```
+
+It requires the following permissions be set:
+
+```bash
+sudo chown root:opksshuser /etc/opk/config.yml
+sudo chmod 640 /etc/opk/config.yml
+```
+
 ## Allowed OpenID Providers: `/etc/opk/providers`
 
 This file functions as an access control list that enables admins to determine the OpenID Providers and Client IDs they wish to use.
 This file contains a list of allowed OPKSSH OPs (OpenID Providers) and the associated client ID.
-The client ID must match the aud (audience) claim in the PK Token. 
+The client ID must match the aud (audience) claim in the PK Token.
 
 ### Columns
 
@@ -70,7 +89,7 @@ Groups must be prefixed with `oidc:group`. So to allow anyone with the group `ad
 sudo opkssh add root oidc:group:admin azure
 ```
 
-Note that currently Google does not put their groups in the ID Token, so groups based auth does not work if you OpenID Provider is Google. 
+Note that currently Google does not put their groups in the ID Token, so groups based auth does not work if you OpenID Provider is Google.
 
 The system authorized identity file requires the following permissions:
 
@@ -104,7 +123,3 @@ chmod 600 /home/{USER}/.opk/auth_id
 ## See Also
 
 Our documentation on the changes our install script makes to a server: [installing.md](../scripts/installing.md)
-
-
-
-

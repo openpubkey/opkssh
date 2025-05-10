@@ -251,6 +251,12 @@ func TestRun(t *testing.T) {
 			wantOutput: "error getting provider config for alias badalias",
 			wantExit:   1,
 		},
+		{
+			name:       "Verify command fail on bad log file path",
+			args:       []string{"opkssh", "verify", "arg1", "arg2", "arg3"},
+			wantOutput: "Error opening log file:",
+			wantExit:   1,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

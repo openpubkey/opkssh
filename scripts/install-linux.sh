@@ -264,6 +264,10 @@ if command -v $INSTALL_DIR/$BINARY_NAME &> /dev/null; then
     chown root:${AUTH_CMD_GROUP} /etc/opk/auth_id
     chmod 640 /etc/opk/auth_id
 
+    touch /etc/opk/config.yml
+    chown root:${AUTH_CMD_GROUP} /etc/opk/config.yml
+    chmod 640 /etc/opk/config.yml
+
     touch /etc/opk/providers
     chown root:${AUTH_CMD_GROUP} /etc/opk/providers
     chmod 640 /etc/opk/providers

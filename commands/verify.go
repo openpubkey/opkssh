@@ -18,11 +18,16 @@ package commands
 
 import (
 	"context"
+	"fmt"
+	"io/fs"
 
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/openpubkey/verifier"
+	"github.com/openpubkey/opkssh/commands/config"
 	"github.com/openpubkey/opkssh/policy"
+	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/openpubkey/opkssh/sshcert"
+	"github.com/spf13/afero"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -35,12 +40,31 @@ type PolicyEnforcerFunc func(username string, pkt *pktoken.PKToken, sshCert stri
 // configurable authorization system. It is designed to be used in conjunction
 // with sshd's AuthorizedKeysCommand feature.
 type VerifyCmd struct {
+	Fs afero.Fs
 	// PktVerifier is responsible for verifying the PK token
 	// contained in the SSH certificate
 	PktVerifier verifier.Verifier
 	// CheckPolicy determines whether the verified PK token is permitted to SSH as a
 	// specific user
 	CheckPolicy PolicyEnforcerFunc
+	// ConfigPathArg is the path to the server config file
+	ConfigPathArg string
+	// filePermChecker is used to check the file permissions of the config file
+	filePermChecker files.PermsChecker
+}
+
+func NewVerifyCmd(pktVerifier verifier.Verifier, checkPolicy PolicyEnforcerFunc, configPathArg string) *VerifyCmd {
+	fs := afero.NewOsFs()
+	return &VerifyCmd{
+		Fs:            fs,
+		PktVerifier:   pktVerifier,
+		CheckPolicy:   checkPolicy,
+		ConfigPathArg: configPathArg,
+		filePermChecker: files.PermsChecker{
+			Fs:        fs,
+			CmdRunner: files.ExecCmd,
+		},
+	}
 }
 
 // This function is called by the SSH server as the AuthorizedKeysCommand:
@@ -87,6 +111,29 @@ func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, t
 		pubkeyBytes := ssh.MarshalAuthorizedKey(cert.SshCert.SignatureKey)
 		return "cert-authority " + string(pubkeyBytes), nil
 	}
+}
+
+// SetEnvVarInConfig sets the environment variables specified in the server config file
+func (v *VerifyCmd) SetEnvVarInConfig() error {
+	var configBytes []byte
+
+	// Load the file from the filesystem
+	afs := &afero.Afero{Fs: v.Fs}
+	configBytes, err := afs.ReadFile(v.ConfigPathArg)
+	if err != nil {
+		return fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	err = v.filePermChecker.CheckPerm(v.ConfigPathArg, []fs.FileMode{0640}, "root", "opksshuser")
+	if err != nil {
+		return err
+	}
+
+	serverConfig, err := config.NewServerConfig(configBytes)
+	if err != nil {
+		return fmt.Errorf("failed to parse config file: %w", err)
+	}
+	return serverConfig.SetEnvVars()
 }
 
 // OpkPolicyEnforcerAuthFunc returns an opkssh policy.Enforcer that can be
