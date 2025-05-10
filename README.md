@@ -74,6 +74,8 @@ To install on linux, run:
 curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64 -o opkssh; chmod +x opkssh
 
 or for ARM
+
+```bash
 curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-arm64 -o opkssh; chmod +x opkssh
 ```
 
