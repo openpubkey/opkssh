@@ -313,7 +313,7 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 		if err := l.writeKeys(seckeyPath, seckeyPath+".pub", seckeySshPem, certBytes); err != nil {
 			return nil, fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
 		}
-	} else if l.config.KeyManagement.DefaultKeyDir != "" {
+	} else if l.config != nil && l.config.KeyManagement.DefaultKeyDir != "" {
 		// If keyPath isn't set then write it to the configured or default location
 		err = l.writeKeysToDefaultDir(provider.Issuer(), seckeySshPem, certBytes)
 		if err != nil {
@@ -557,6 +557,8 @@ func (l *LoginCmd) writeKeysToDefaultDir(issuer string, seckeySshPem []byte, cer
 
 func (l *LoginCmd) handleIdentityConfig(keyFileName string) (err error) {
 	var (
+		hasNewConfig bool
+
 		userHomeDir string
 		opkKeyDir   string
 
@@ -596,6 +598,7 @@ func (l *LoginCmd) handleIdentityConfig(keyFileName string) (err error) {
 	includeString = "Include " + opkSSHConfig
 	if !strings.Contains(string(fileBytes), includeString) {
 
+		hasNewConfig = true
 		// prepend Include directive
 		newConfig := includeString + "\n" + string(fileBytes)
 
@@ -629,6 +632,10 @@ func (l *LoginCmd) handleIdentityConfig(keyFileName string) (err error) {
 			err = fmt.Errorf("failed to write opk ssh config: %w", err)
 			return
 		}
+	}
+
+	if !hasNewConfig {
+		return
 	}
 
 	err = afs.Rename(sshConfig+".new", sshConfig)
