@@ -44,6 +44,14 @@ To install with winget run:
 winget install openpubkey.opkssh
 ```
 
+### Chocolatey Install (Windows)
+
+To install with [Chocolatey](https://chocolatey.org/install) run:
+
+```powershell
+choco install opkssh -y
+```
+
 ### Manual Install (Windows, Linux, OSX)
 
 To install manually, download the opkssh binary and run it:
