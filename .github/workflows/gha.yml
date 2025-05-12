@@ -1,0 +1,58 @@
+name: Test GitHub Provider
+
+on:
+  push:
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    timeout-minutes: 5
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Install Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 1.23.x
+    - name: Install dependencies
+      run: go mod download
+    - name: Build
+      run: go build -v -o /dev/null
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    - name: Build and export to Docker
+      uses: docker/build-push-action@v6
+      with:
+        build-args: |
+          AUTHORIZED_REPOSITORY=${{ github.repository }}
+        load: true
+        tags: sshserver:latest
+        file: .github/workflows/gha_opkssh.Dockerfile
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Run SSH Container
+      run: docker run -d -p 2222:22 sshserver:latest
+
+    - name: Login
+      run: go run main.go login github --print-id-token
+
+    - name: SSH into Container with opkssh
+      run: |
+        ssh -o StrictHostKeyChecking=no -p 2222 test@localhost ls -la
+
+    - name: Debug - dump opkssh config
+      run: |
+        sshpass -p test ssh -o StrictHostKeyChecking=no -p 2222 test@localhost ls -la /etc/opk || true
+        sshpass -p test ssh -o StrictHostKeyChecking=no -p 2222 test@localhost sudo cat /etc/opk/providers || true
+        sshpass -p test ssh -o StrictHostKeyChecking=no -p 2222 test@localhost sudo cat /etc/opk/auth_id || true
+      if: always()
+
+    - name: Debug - dump logs
+      run: |
+        sshpass -p test ssh -o StrictHostKeyChecking=no -p 2222 test@localhost sudo cat /var/log/opkssh.log
+      if: always()

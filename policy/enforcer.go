@@ -49,6 +49,14 @@ func validateClaim(claims *checkedClaims, user *User) bool {
 		return slices.Contains(claims.Groups, oidcGroupSections[len(oidcGroupSections)-1])
 	}
 
+	if strings.Contains(user.IdentityAttribute, "*") {
+		parts := strings.SplitN(user.IdentityAttribute, "*", 2)
+		prefix := parts[0]
+		if strings.HasPrefix(claims.Sub, prefix) {
+			return true
+		}
+	}
+
 	// email should be a case-insensitive check
 	// sub should be a case-sensitive check
 	return strings.EqualFold(claims.Email, user.IdentityAttribute) || string(claims.Sub) == user.IdentityAttribute

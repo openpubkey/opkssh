@@ -27,7 +27,6 @@ import (
 	"io"
 	"log"
 	"os"
-
 	"path/filepath"
 	"strings"
 	"time"
@@ -151,6 +150,8 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 			return fmt.Errorf("failed to parse default config file: %w", err)
 		}
 	}
+
+	l.config.Providers = append(l.config.Providers, config.GitHubProviderConfig())
 
 	var provider providers.OpenIdProvider
 	if l.overrideProvider != nil {
@@ -311,7 +312,6 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 
 	if printIdToken {
 		idTokenStr, err := PrettyIdToken(*pkt)
-
 		if err != nil {
 			return nil, fmt.Errorf("failed to format ID Token: %w", err)
 		}
@@ -535,7 +535,6 @@ func PrettyIdToken(pkt pktoken.PKToken) (string, error) {
 		return "", err
 	}
 	idtJson, err := json.MarshalIndent(idt.GetClaims(), "", "    ")
-
 	if err != nil {
 		return "", err
 	}
