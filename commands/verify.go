@@ -100,16 +100,32 @@ func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, t
 	if err != nil {
 		return "", err
 	}
+
+	// TODO: pass this to Check Policy
+
 	if pkt, err := cert.VerifySshPktCert(ctx, v.PktVerifier); err != nil { // Verify the PKT contained in the cert
 		return "", err
-	} else if err := v.CheckPolicy(userArg, pkt, certB64Arg, typArg); err != nil { // Check if username is authorized
-		return "", err
-	} else { // Success!
-		// sshd expects the public key in the cert, not the cert itself. This
-		// public key is key of the CA that signs the cert, in our setting there
-		// is no CA.
-		pubkeyBytes := ssh.MarshalAuthorizedKey(cert.SshCert.SignatureKey)
-		return "cert-authority " + string(pubkeyBytes), nil
+	} else {
+		userInfo := ""
+		if accessToken := cert.GetAccessToken(); accessToken != "" {
+			if userInfoJson, err := v.UserInfoLookup(pkt, accessToken); err != nil {
+				// userInfo is option so we should not fail if we can't access it
+				userInfo = userInfoJson
+			}
+		}
+
+		// TODO: plug this into CheckPolicy
+		fmt.Println("UserInfo: ", userInfo)
+
+		if err := v.CheckPolicy(userArg, pkt, certB64Arg, typArg); err != nil {
+			return "", err
+		} else { // Success!
+			// sshd expects the public key in the cert, not the cert itself. This
+			// public key is key of the CA that signs the cert, in our setting there
+			// is no CA.
+			pubkeyBytes := ssh.MarshalAuthorizedKey(cert.SshCert.SignatureKey)
+			return "cert-authority " + string(pubkeyBytes), nil
+		}
 	}
 }
 
@@ -134,6 +150,11 @@ func (v *VerifyCmd) SetEnvVarInConfig() error {
 		return fmt.Errorf("failed to parse config file: %w", err)
 	}
 	return serverConfig.SetEnvVars()
+}
+
+func (v *VerifyCmd) UserInfoLookup(pkt *pktoken.PKToken, accessToken string) (string, error) {
+	// TODO: Implement user info lookup
+	return "", nil
 }
 
 // OpkPolicyEnforcerAuthFunc returns an opkssh policy.Enforcer that can be

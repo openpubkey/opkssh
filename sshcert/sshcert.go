@@ -123,6 +123,14 @@ func (s *SshCertSmuggler) GetPKToken() (*pktoken.PKToken, error) {
 	return pkt, nil
 }
 
+func (s *SshCertSmuggler) GetAccessToken() string {
+	// Generally we don't expect this to be set, but if it is, we return it
+	if accessToken, ok := s.SshCert.Extensions["openpubkey-act"]; ok {
+		return accessToken
+	}
+	return ""
+}
+
 func (s *SshCertSmuggler) VerifySshPktCert(ctx context.Context, pktVerifier verifier.Verifier) (*pktoken.PKToken, error) {
 	pkt, err := s.GetPKToken()
 	if err != nil {
