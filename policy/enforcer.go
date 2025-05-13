@@ -101,18 +101,37 @@ func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, us
 	if err != nil {
 		return fmt.Errorf("error getting issuer from pk token: %w", err)
 	}
+
+	var userInfoClaims *checkedClaims
+	if userInfoJson != "" {
+		userInfoClaims = new(checkedClaims)
+		if err := json.Unmarshal([]byte(userInfoJson), &userInfoClaims); err != nil {
+			return fmt.Errorf("error unmarshalling claims from userinfo endpoint: %w", err)
+		}
+	}
+
 	for _, user := range policy.Users {
+		if issuer != user.Issuer {
+			continue
+		}
+
+		// if they are, then check if the desired principal is allowed
+		if !slices.Contains(user.Principals, principalDesired) {
+			continue
+		}
+
 		// check each entry to see if the user in the checkedClaims is included
 		if validateClaim(&claims, &user) {
-			if issuer != user.Issuer {
-				continue
-			}
-			// if they are, then check if the desired principal is allowed
-			if slices.Contains(user.Principals, principalDesired) {
-				// access granted
-				return nil
-			}
+			// access granted
+			return nil
 		}
+
+		// check each entry to see if the user matches the userInfoClaims
+		if userInfoClaims != nil && validateClaim(userInfoClaims, &user) {
+			// access granted
+			return nil
+		}
+
 	}
 
 	return fmt.Errorf("no policy to allow %s with (issuer=%s) to assume %s, check policy config at %s", claims.Email, issuer, principalDesired, sourceStr)
