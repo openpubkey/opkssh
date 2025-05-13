@@ -43,9 +43,12 @@ func CreateMockPKToken(t *testing.T, claims map[string]any) *pktoken.PKToken {
 }
 
 func TestNewTokens(t *testing.T) {
+	userInfoJson := `{"email":"alice@gmail.com","email_verified":true,"family_name":"Example","given_name":"Alice","name":"Alice Example","picture":"https://example.com/me.jpg","sub":"1234"}`
+
 	tests := []struct {
 		name              string
 		pkt               *pktoken.PKToken
+		userInfoJson      string
 		principal         string
 		sshCert           string
 		keyType           string
@@ -66,9 +69,10 @@ func TestNewTokens(t *testing.T) {
 				"jti":            "abcdefg",
 				"groups":         []string{"admin", "user"},
 			}),
-			principal: "root",
-			sshCert:   b64("SSH certificate"),
-			keyType:   "ssh-rsa",
+			userInfoJson: userInfoJson,
+			principal:    "root",
+			sshCert:      b64("SSH certificate"),
+			keyType:      "ssh-rsa",
 			expectTokens: map[string]string{
 				"OPKSSH_PLUGIN_AUD":            "test_client_id",
 				"OPKSSH_PLUGIN_EMAIL":          "alice@gmail.com",
@@ -87,6 +91,7 @@ func TestNewTokens(t *testing.T) {
 				"OPKSSH_PLUGIN_T":              "ssh-rsa",
 				"OPKSSH_PLUGIN_U":              "root",
 				"OPKSSH_PLUGIN_UPK":            "-",
+				"OPKSSH_PLUGIN_USERINFO":       userInfoJson,
 			},
 		},
 		{
@@ -115,6 +120,7 @@ func TestNewTokens(t *testing.T) {
 				"OPKSSH_PLUGIN_T":              "ssh-rsa",
 				"OPKSSH_PLUGIN_U":              "root",
 				"OPKSSH_PLUGIN_UPK":            "-",
+				"OPKSSH_PLUGIN_USERINFO":       "",
 			},
 		},
 		{
@@ -144,6 +150,7 @@ func TestNewTokens(t *testing.T) {
 				"OPKSSH_PLUGIN_T":              "ssh-rsa",
 				"OPKSSH_PLUGIN_U":              "root",
 				"OPKSSH_PLUGIN_UPK":            "-",
+				"OPKSSH_PLUGIN_USERINFO":       "",
 			},
 		},
 		{
@@ -160,7 +167,7 @@ func TestNewTokens(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens, err := PopulatePluginEnvVars(tt.pkt, tt.principal, tt.sshCert, tt.keyType)
+			tokens, err := PopulatePluginEnvVars(tt.pkt, tt.userInfoJson, tt.principal, tt.sshCert, tt.keyType)
 			if tt.expectErrorString != "" {
 				require.Error(t, err)
 				require.ErrorContains(t, err, tt.expectErrorString)

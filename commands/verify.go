@@ -33,7 +33,7 @@ import (
 
 // PolicyEnforcerFunc returns nil if the supplied PK token is permitted to login as
 // username. Otherwise, an error is returned indicating the reason for rejection
-type PolicyEnforcerFunc func(username string, pkt *pktoken.PKToken, sshCert string, keyType string) error
+type PolicyEnforcerFunc func(username string, pkt *pktoken.PKToken, userinfo string, sshCert string, keyType string) error
 
 // VerifyCmd provides functionality to verify OPK tokens contained in SSH
 // certificates and authorize requests to SSH as a specific username using a
@@ -108,16 +108,16 @@ func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, t
 	} else {
 		userInfo := ""
 		if accessToken := cert.GetAccessToken(); accessToken != "" {
-			if userInfoJson, err := v.UserInfoLookup(pkt, accessToken); err != nil {
+			if userInfoRet, err := v.UserInfoLookup(pkt, accessToken); err != nil {
 				// userInfo is option so we should not fail if we can't access it
-				userInfo = userInfoJson
+				userInfo = userInfoRet
 			}
 		}
 
 		// TODO: plug this into CheckPolicy
 		fmt.Println("UserInfo: ", userInfo)
 
-		if err := v.CheckPolicy(userArg, pkt, certB64Arg, typArg); err != nil {
+		if err := v.CheckPolicy(userArg, pkt, userInfo, certB64Arg, typArg); err != nil {
 			return "", err
 		} else { // Success!
 			// sshd expects the public key in the cert, not the cert itself. This
