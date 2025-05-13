@@ -126,6 +126,12 @@ func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, us
 			return nil
 		}
 
+		// The underlying library checks idT.sub == userInfo.sub when we call the userinfo endpoint.
+		// We want to be extra sure, so we also check it.
+		if userInfoClaims != nil && claims.Sub != userInfoClaims.Sub {
+			return fmt.Errorf("userInfo sub claim (%s) does not match user policy sub claim (%s)", claims.Sub, userInfoClaims.Sub)
+		}
+
 		// check each entry to see if the user matches the userInfoClaims
 		if userInfoClaims != nil && validateClaim(userInfoClaims, &user) {
 			// access granted
