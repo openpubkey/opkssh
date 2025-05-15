@@ -304,8 +304,12 @@ if command -v $INSTALL_DIR/$BINARY_NAME &> /dev/null; then
     AUTH_KEY_USER="AuthorizedKeysCommandUser ${AUTH_CMD_USER}"
 
     # Add the directives in the correct configuration, taking priorities into account
-    if ! grep -q '^Include /etc/ssh/sshd_config\.d/\*\.conf' /etc/ssh/sshd_config \
-    || ! grep -q '^AuthorizedKeysCommand\|^AuthorizedKeysCommandUser' /etc/ssh/sshd_config.d/*.conf ; then
+    if [[ -f /etc/ssh/sshd_config ]] && \
+    { ! grep -Fxq 'Include /etc/ssh/sshd_config.d/*.conf' /etc/ssh/sshd_config || \
+      { grep -Eq '^AuthorizedKeysCommand|^AuthorizedKeysCommandUser' /etc/ssh/sshd_config && \
+       ! grep -Eq '^AuthorizedKeysCommand|^AuthorizedKeysCommandUser' /etc/ssh/sshd_config.d/*.conf 2>/dev/null; \
+      }; \
+    }; then
         # The directives in 'sshd_config' are active
         sed -i '/^AuthorizedKeysCommand /s/^/#/' /etc/ssh/sshd_config
         sed -i '/^AuthorizedKeysCommandUser /s/^/#/' /etc/ssh/sshd_config
@@ -328,11 +332,15 @@ if command -v $INSTALL_DIR/$BINARY_NAME &> /dev/null; then
             echo "  Cannot create configuration with higher priority. Remove $active_config or rerun the script with the --overwrite-config flag to overwrite"
             exit 1
         else
-            # Create a new config file with higher priority
-            prefix=$(basename "$active_config" | grep -o '^[0-9]*')
-            new_prefix=$((prefix - 1))
+            if [[ -z "$active_config" ]]; then
+                # No active configuration found, let's set a default prefix
+                new_prefix=60
+            else
+                # Create a new config file with higher priority
+                prefix=$(basename "$active_config" | grep -o '^[0-9]*')
+                new_prefix=$((prefix - 1))
+            fi
             new_config="/etc/ssh/sshd_config.d/${new_prefix}-$opk_config_suffix"
-
             echo "$AUTH_KEY_CMD" > "$new_config"
             echo "$AUTH_KEY_USER" >> "$new_config"
         fi
