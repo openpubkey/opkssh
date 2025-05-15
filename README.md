@@ -501,5 +501,14 @@ For integration tests run:
 
 ## More information
 
-- [docs/putty.md](docs/putty.md)  provides instructions on using PuTTY with opkssh.
-- [scripts/installing.md](scripts/installing.md) documents our install script and how to manually install opkssh on a server.
+### Documentation
+- [docs/config.md](docs/config.md) Documentation of opkssh configuration files.
+- [docs/policyplugins.md](docs/policyplugins.md) Documentation of opkssh policy plugins and how to use them to implement complex policies.
+- [scripts/installing.md](scripts/installing.md) Documentation of the server install script that opkssh uses to configure an SSH server to accept opkssh SSH certificates. Explains how to manually install opkssh on a server.
+
+### Guides
+- [CONTRIBUTING.md](https://github.com/openpubkey/opkssh/blob/main/CONTRIBUTING.md) Guide to contributing to opkssh (includes developer help).
+- [docs/gitlab-selfhosted.md](docs/gitlab-selfhosted.md) Guide on configuring and using a self hosted GitLab instance with opkssh.
+- [docs/paramiko.md](docs/paramiko.md) Guide to using the python SSH paramiko library with opkssh.
+- [docs/putty.md](docs/putty.md) Guide to using PuTTY with opkssh.
+
