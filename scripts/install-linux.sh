@@ -9,6 +9,8 @@ elif [ -f /etc/debian_version ]; then
     OS_TYPE="debian"
 elif [ -f /etc/arch-release ]; then
     OS_TYPE="arch"
+elif [ -f /etc/os-release ] && grep -q '^ID_LIKE=.*suse' /etc/os-release; then
+    OS_TYPE="suse"
 else
     echo "Unsupported OS type."
     exit 1
@@ -104,6 +106,8 @@ if ! command -v wget &> /dev/null; then
         fi
     elif [ "$OS_TYPE" == "arch" ]; then
         echo "sudo pacman -S wget"
+    elif [ "$OS_TYPE" == "suse" ]; then
+        echo "sudo zypper install wget"
     else
         echo "Unsupported OS type."
     fi
@@ -296,12 +300,16 @@ if command -v $INSTALL_DIR/$BINARY_NAME &> /dev/null; then
         echo "$PROVIDER_GITLAB" >> /etc/opk/providers
     fi
 
-    AUTH_KEY_CMD="AuthorizedKeysCommand /usr/local/bin/opkssh verify %u %k %t"
+    AUTH_KEY_CMD="AuthorizedKeysCommand ${INSTALL_DIR}/opkssh verify %u %k %t"
     AUTH_KEY_USER="AuthorizedKeysCommandUser ${AUTH_CMD_USER}"
 
     # Add the directives in the correct configuration, taking priorities into account
-    if ! grep -q '^Include /etc/ssh/sshd_config\.d/\*\.conf' /etc/ssh/sshd_config \
-    || ! grep -q '^AuthorizedKeysCommand\|^AuthorizedKeysCommandUser' /etc/ssh/sshd_config.d/*.conf ; then
+    if [[ -f /etc/ssh/sshd_config ]] && \
+    { ! grep -Fxq 'Include /etc/ssh/sshd_config.d/*.conf' /etc/ssh/sshd_config || \
+      { grep -Eq '^AuthorizedKeysCommand|^AuthorizedKeysCommandUser' /etc/ssh/sshd_config && \
+       ! grep -Eq '^AuthorizedKeysCommand|^AuthorizedKeysCommandUser' /etc/ssh/sshd_config.d/*.conf 2>/dev/null; \
+      }; \
+    }; then
         # The directives in 'sshd_config' are active
         sed -i '/^AuthorizedKeysCommand /s/^/#/' /etc/ssh/sshd_config
         sed -i '/^AuthorizedKeysCommandUser /s/^/#/' /etc/ssh/sshd_config
@@ -324,11 +332,15 @@ if command -v $INSTALL_DIR/$BINARY_NAME &> /dev/null; then
             echo "  Cannot create configuration with higher priority. Remove $active_config or rerun the script with the --overwrite-config flag to overwrite"
             exit 1
         else
-            # Create a new config file with higher priority
-            prefix=$(basename "$active_config" | grep -o '^[0-9]*')
-            new_prefix=$((prefix - 1))
+            if [[ -z "$active_config" ]]; then
+                # No active configuration found, let's set a default prefix
+                new_prefix=60
+            else
+                # Create a new config file with higher priority
+                prefix=$(basename "$active_config" | grep -o '^[0-9]*')
+                new_prefix=$((prefix - 1))
+            fi
             new_config="/etc/ssh/sshd_config.d/${new_prefix}-$opk_config_suffix"
-
             echo "$AUTH_KEY_CMD" > "$new_config"
             echo "$AUTH_KEY_USER" >> "$new_config"
         fi
@@ -337,7 +349,7 @@ if command -v $INSTALL_DIR/$BINARY_NAME &> /dev/null; then
     if [ "$RESTART_SSH" = true ]; then
         if [ "$OS_TYPE" == "debian" ]; then
             systemctl restart ssh
-        elif [ "$OS_TYPE" == "redhat" ] || [ "$OS_TYPE" == "arch" ]; then
+        elif [ "$OS_TYPE" == "redhat" ] || [ "$OS_TYPE" == "arch" ] || [ "$OS_TYPE" == "suse" ]; then
             systemctl restart sshd
         else
             echo "  Unsupported OS type."
@@ -353,7 +365,7 @@ if command -v $INSTALL_DIR/$BINARY_NAME &> /dev/null; then
             touch "$SUDOERS_PATH"
             chmod 440 "$SUDOERS_PATH"
         fi
-        SUDOERS_RULE_READ_HOME="$AUTH_CMD_USER ALL=(ALL) NOPASSWD: /usr/local/bin/opkssh readhome *"
+        SUDOERS_RULE_READ_HOME="$AUTH_CMD_USER ALL=(ALL) NOPASSWD: ${INSTALL_DIR}/opkssh readhome *"
         if ! grep -qxF "$SUDOERS_RULE_READ_HOME" "$SUDOERS_PATH"; then
             echo "  Adding sudoers rule for $AUTH_CMD_USER..."
             echo "# This allows opkssh to call opkssh readhome <username> to read the user's policy file in /home/<username>/auth_id" >> "$SUDOERS_PATH"
