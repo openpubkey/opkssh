@@ -296,7 +296,7 @@ if command -v $INSTALL_DIR/$BINARY_NAME &> /dev/null; then
         echo "$PROVIDER_GITLAB" >> /etc/opk/providers
     fi
 
-    AUTH_KEY_CMD="AuthorizedKeysCommand /usr/local/bin/opkssh verify %u %k %t"
+    AUTH_KEY_CMD="AuthorizedKeysCommand ${INSTALL_DIR}/opkssh verify %u %k %t"
     AUTH_KEY_USER="AuthorizedKeysCommandUser ${AUTH_CMD_USER}"
 
     # Add the directives in the correct configuration, taking priorities into account
@@ -353,7 +353,7 @@ if command -v $INSTALL_DIR/$BINARY_NAME &> /dev/null; then
             touch "$SUDOERS_PATH"
             chmod 440 "$SUDOERS_PATH"
         fi
-        SUDOERS_RULE_READ_HOME="$AUTH_CMD_USER ALL=(ALL) NOPASSWD: /usr/local/bin/opkssh readhome *"
+        SUDOERS_RULE_READ_HOME="$AUTH_CMD_USER ALL=(ALL) NOPASSWD: ${INSTALL_DIR}/opkssh readhome *"
         if ! grep -qxF "$SUDOERS_RULE_READ_HOME" "$SUDOERS_PATH"; then
             echo "  Adding sudoers rule for $AUTH_CMD_USER..."
             echo "# This allows opkssh to call opkssh readhome <username> to read the user's policy file in /home/<username>/auth_id" >> "$SUDOERS_PATH"
