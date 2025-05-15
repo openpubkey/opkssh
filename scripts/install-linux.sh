@@ -9,6 +9,8 @@ elif [ -f /etc/debian_version ]; then
     OS_TYPE="debian"
 elif [ -f /etc/arch-release ]; then
     OS_TYPE="arch"
+elif [ -f /etc/os-release ] && grep -q '^ID_LIKE=.*suse' /etc/os-release; then
+    OS_TYPE="suse"
 else
     echo "Unsupported OS type."
     exit 1
@@ -104,6 +106,8 @@ if ! command -v wget &> /dev/null; then
         fi
     elif [ "$OS_TYPE" == "arch" ]; then
         echo "sudo pacman -S wget"
+    elif [ "$OS_TYPE" == "suse" ]; then
+        echo "sudo zypper install wget"
     else
         echo "Unsupported OS type."
     fi
@@ -337,7 +341,7 @@ if command -v $INSTALL_DIR/$BINARY_NAME &> /dev/null; then
     if [ "$RESTART_SSH" = true ]; then
         if [ "$OS_TYPE" == "debian" ]; then
             systemctl restart ssh
-        elif [ "$OS_TYPE" == "redhat" ] || [ "$OS_TYPE" == "arch" ]; then
+        elif [ "$OS_TYPE" == "redhat" ] || [ "$OS_TYPE" == "arch" ] || [ "$OS_TYPE" == "suse" ]; then
             systemctl restart sshd
         else
             echo "  Unsupported OS type."
