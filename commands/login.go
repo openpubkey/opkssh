@@ -116,33 +116,20 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		l.configPathArg = filepath.Join(dir, ".opk", "config.yml")
 	}
 
-	var configBytes []byte
 	if _, err := l.Fs.Stat(l.configPathArg); err == nil {
 		if l.createConfigArg {
 			log.Printf("--create-config=true but config file already exists at %s", l.configPathArg)
 		}
 
 		// Load the file from the filesystem
-		afs := &afero.Afero{Fs: l.Fs}
-		configBytes, err = afs.ReadFile(l.configPathArg)
-		if err != nil {
-			return fmt.Errorf("failed to read config file: %w", err)
-		}
-		l.config, err = config.NewClientConfig(configBytes)
-		if err != nil {
-			return fmt.Errorf("failed to parse config file: %w", err)
+		if client_config, err := config.GetClientConfigFromFile((l.configPathArg), l.Fs); err != nil {
+			return err
+		} else {
+			l.config = client_config
 		}
 	} else {
 		if l.createConfigArg {
-			afs := &afero.Afero{Fs: l.Fs}
-			if err := l.Fs.MkdirAll(filepath.Dir(l.configPathArg), 0755); err != nil {
-				return fmt.Errorf("failed to create config directory: %w", err)
-			}
-			if err := afs.WriteFile(l.configPathArg, config.DefaultClientConfig, 0644); err != nil {
-				return fmt.Errorf("failed to write default config file: %w", err)
-			}
-			log.Printf("created client config file at %s", l.configPathArg)
-			return nil
+			return config.CreateDefaultClientConfig(l.configPathArg, l.Fs)
 		} else {
 			log.Printf("failed to find client config file to generate a default config, run `opkssh login --create-config` to create a default config file")
 		}

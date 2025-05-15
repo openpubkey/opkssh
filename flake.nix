@@ -26,7 +26,7 @@
         opkssh = pkgs.buildGoModule {
           name = "opkssh";
           src = self;
-          vendorHash = "sha256-6nTRiybsNtP/BiDaNrFEGEGM41BAjGpOyQ0AlQimSE4=";
+          vendorHash = "sha256-8q/jEWZMGeHAOTy3RD7sW9SY3b4QxQ3ZhLtt5Li1hDs=";
           goSum = ./go.sum;
           meta.mainProgram = "opkssh";
         };
