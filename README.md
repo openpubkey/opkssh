@@ -404,7 +404,7 @@ Paths are always relative to your home directory.
 Also setting `use_identity_config` to true will add an `Include` directive to your `~/.ssh/config` file pointing to `~/.opk/config`.
 This allows opkssh to add new `IdentityFile` entries for all generated keys.
 
-When pruning keys make sure to remove their `IdentityFile` entry from the `~/.opk/config` file, too.
+When removing keys make sure to remove their `IdentityFile` entry in `~/.opk/config`, too.
 
 ### Environment Variables
 

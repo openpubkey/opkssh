@@ -46,33 +46,28 @@ func (c *ClientConfig) GetProvidersMap() (map[string]ProviderConfig, error) {
 	return CreateProvidersMap(c.Providers)
 }
 
-func (c *ClientConfig) CheckKeyDir() (err error) {
-
-	var (
-		keyDir   string
-		fileInfo os.FileInfo
-	)
+func (c *ClientConfig) CheckKeyDir() error {
 
 	// if default key dir is not set we use the default logic
 	if c.KeyManagement.DefaultKeyDir == "" {
-		return
+		return nil
 	}
 
-	keyDir, err = c.KeyManagement.GetKeyDir()
+	keyDir, err := c.KeyManagement.GetKeyDir()
 	if err != nil {
-		return
+		return err
 	}
 
-	fileInfo, err = os.Stat(keyDir)
+	fileInfo, err := os.Stat(keyDir)
 	if err != nil {
 		err = fmt.Errorf("could not get stats of key directory: %w", err)
-		return
+		return err
 	}
 
 	if !fileInfo.IsDir() {
 		err = fmt.Errorf("key directory is not a directory")
-		return
+		return err
 	}
 
-	return
+	return nil
 }
