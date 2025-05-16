@@ -66,7 +66,7 @@ func (l *FileLoader) LoadFileAtPath(path string) ([]byte, error) {
 	}
 
 	// Validate that file has correct permission bits set
-	if err := NewPermsChecker(l.Fs).CheckPerm(path, l.RequiredPerm, "", ""); err != nil {
+	if err := NewPermsChecker(l.Fs).CheckPerm(path, []fs.FileMode{l.RequiredPerm}, "", ""); err != nil {
 		return nil, fmt.Errorf("policy file has insecure permissions: %w", err)
 	}
 

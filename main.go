@@ -197,6 +197,7 @@ You should not call this command directly. It is called by the opkssh verify com
 	}
 	rootCmd.AddCommand(readhomeCmd)
 
+	var serverConfigPathArg string
 	verifyCmd := &cobra.Command{
 		SilenceUsage: true,
 		Use:          "verify <PRINCIPAL> <CERT> <KEY_TYPE>",
@@ -269,10 +270,11 @@ Arguments:
 				return err
 			}
 
-			v := commands.VerifyCmd{
-				PktVerifier: *pktVerifier,
-				CheckPolicy: commands.OpkPolicyEnforcerFunc(userArg),
+			v := commands.NewVerifyCmd(*pktVerifier, commands.OpkPolicyEnforcerFunc(userArg), serverConfigPathArg)
+			if err := v.SetEnvVarInConfig(); err != nil {
+				log.Println("Failed to set environment variables in config:", err)
 			}
+
 			if authKey, err := v.AuthorizedKeysCommand(ctx, userArg, typArg, certB64Arg); err != nil {
 				log.Println("failed to verify:", err)
 				return err
@@ -284,6 +286,7 @@ Arguments:
 			}
 		},
 	}
+	verifyCmd.Flags().StringVar(&serverConfigPathArg, "config-path", "/etc/opk/config.yml", "Path to the server config file. Default: /etc/opk/config.yml.")
 	rootCmd.AddCommand(verifyCmd)
 
 	err := rootCmd.Execute()

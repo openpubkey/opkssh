@@ -9,7 +9,7 @@ EXPOSE $PORT
 
 WORKDIR /app
 
-RUN git clone --branch test https://github.com/bastionzero/oidc.git
+RUN git clone --branch test https://github.com/openpubkey/oidc.git
 
 WORKDIR /app/oidc/
 

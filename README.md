@@ -44,6 +44,14 @@ To install with winget run:
 winget install openpubkey.opkssh
 ```
 
+### Chocolatey Install (Windows)
+
+To install with [Chocolatey](https://chocolatey.org/install) run:
+
+```powershell
+choco install opkssh -y
+```
+
 ### Manual Install (Windows, Linux, OSX)
 
 To install manually, download the opkssh binary and run it:
@@ -74,6 +82,8 @@ To install on linux, run:
 curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64 -o opkssh; chmod +x opkssh
 
 or for ARM
+
+```bash
 curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-arm64 -o opkssh; chmod +x opkssh
 ```
 
@@ -176,6 +186,7 @@ Second, we use the `AuthorizedKeysCommand` configuration option in `sshd_config`
 ## Server Configuration
 
 All opkssh configuration files are space delimited and live on the server.
+Below we discuss our basic policy system, to read how to configure complex policies rules see our [documentation on our policy plugin system](policyplugins.md). Using the policy plugin system you can enforce any policy rule that be computed on a [Turing Machine](https://en.wikipedia.org/wiki/Turing_machine).
 
 ### `/etc/opk/providers`
 
@@ -504,4 +515,14 @@ For integration tests run:
 
 ## More information
 
-We document how to manually install opkssh on a server [here](scripts/installing.md).
+### Documentation
+- [docs/config.md](docs/config.md) Documentation of opkssh configuration files.
+- [docs/policyplugins.md](docs/policyplugins.md) Documentation of opkssh policy plugins and how to use them to implement complex policies.
+- [scripts/installing.md](scripts/installing.md) Documentation of the server install script that opkssh uses to configure an SSH server to accept opkssh SSH certificates. Explains how to manually install opkssh on a server.
+
+### Guides
+- [CONTRIBUTING.md](https://github.com/openpubkey/opkssh/blob/main/CONTRIBUTING.md) Guide to contributing to opkssh (includes developer help).
+- [docs/gitlab-selfhosted.md](docs/gitlab-selfhosted.md) Guide on configuring and using a self hosted GitLab instance with opkssh.
+- [docs/paramiko.md](docs/paramiko.md) Guide to using the python SSH paramiko library with opkssh.
+- [docs/putty.md](docs/putty.md) Guide to using PuTTY with opkssh.
+

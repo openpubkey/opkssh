@@ -34,12 +34,12 @@ type ClientConfig struct {
 }
 
 func NewClientConfig(c []byte) (*ClientConfig, error) {
-	var config ClientConfig
-	if err := yaml.Unmarshal(c, &config); err != nil {
+	var clientConfig ClientConfig
+	if err := yaml.Unmarshal(c, &clientConfig); err != nil {
 		return nil, err
 	}
 
-	return &config, nil
+	return &clientConfig, nil
 }
 
 func (c *ClientConfig) GetProvidersMap() (map[string]ProviderConfig, error) {

@@ -1,0 +1,2 @@
+name: integration test policy plugin
+command: /tmp/plugin-cmd.sh

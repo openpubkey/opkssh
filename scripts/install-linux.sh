@@ -257,14 +257,36 @@ echo "Installed $BINARY_NAME to $INSTALL_DIR/$BINARY_NAME"
 if command -v $INSTALL_DIR/$BINARY_NAME &> /dev/null; then
     # Setup configuration
     echo "Configuring opkssh:"
-    mkdir -p /etc/opk
-    touch /etc/opk/auth_id
-    chown root:${AUTH_CMD_GROUP} /etc/opk/auth_id
-    chmod 640 /etc/opk/auth_id
 
-    touch /etc/opk/providers
-    chown root:${AUTH_CMD_GROUP} /etc/opk/providers
-    chmod 640 /etc/opk/providers
+    if [ ! -e "/etc/opk" ]; then
+        mkdir -p /etc/opk
+        chown root:${AUTH_CMD_GROUP} /etc/opk
+        chmod 750 /etc/opk
+    fi
+
+    if [ ! -e "/etc/opk/policy.d" ]; then
+        mkdir -p /etc/opk/policy.d
+        chown root:${AUTH_CMD_GROUP} /etc/opk/policy.d
+        chmod 750 /etc/opk/policy.d
+    fi
+
+    if [ ! -e "/etc/opk/auth_id" ]; then
+        touch /etc/opk/auth_id
+        chown root:${AUTH_CMD_GROUP} /etc/opk/auth_id
+        chmod 640 /etc/opk/auth_id
+    fi
+
+    if [ ! -e "/etc/opk/config.yml" ]; then
+        touch /etc/opk/config.yml
+        chown root:${AUTH_CMD_GROUP} /etc/opk/config.yml
+        chmod 640 /etc/opk/config.yml
+    fi
+
+    if [ ! -e "/etc/opk/providers" ]; then
+        touch /etc/opk/providers
+        chown root:${AUTH_CMD_GROUP} /etc/opk/providers
+        chmod 640 /etc/opk/providers
+    fi
 
     if [ -s /etc/opk/providers ]; then
         echo "  The providers policy file (/etc/opk/providers) is not empty. Keeping existing values"
@@ -340,7 +362,6 @@ if command -v $INSTALL_DIR/$BINARY_NAME &> /dev/null; then
     else
         echo "  Skipping sudoers configuration as it is only needed for home policy (--no-home-policy option supplied)"
     fi
-
 
     touch /var/log/opkssh.log
     chown root:${AUTH_CMD_GROUP} /var/log/opkssh.log

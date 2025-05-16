@@ -27,6 +27,7 @@ import (
 	"io"
 	"log"
 	"os"
+
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -40,11 +41,10 @@ import (
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/openpubkey/util"
+	"github.com/openpubkey/opkssh/commands/config"
+	"github.com/openpubkey/opkssh/sshcert"
 	"github.com/spf13/afero"
 	"golang.org/x/crypto/ssh"
-
-	config "github.com/openpubkey/opkssh/commands/client-config"
-	"github.com/openpubkey/opkssh/sshcert"
 )
 
 const (

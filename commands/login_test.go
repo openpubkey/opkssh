@@ -29,7 +29,7 @@ import (
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/openpubkey/util"
-	config "github.com/openpubkey/opkssh/commands/client-config"
+	"github.com/openpubkey/opkssh/commands/config"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh"

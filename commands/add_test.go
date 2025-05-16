@@ -96,7 +96,7 @@ func TestAddErrors(t *testing.T) {
 	addCmd = MockAddCmd(mockFs)
 
 	policyPath, err = addCmd.Run(principal, userEmail, issuer)
-	require.ErrorContains(t, err, "file has insecure permissions: expected permissions (640), got (0)")
+	require.ErrorContains(t, err, "file has insecure permissions: expected one of the following permissions [640], got (0)")
 	require.Empty(t, policyPath)
 
 	err = mockFs.Chmod(policy.SystemDefaultPolicyPath, 0640)

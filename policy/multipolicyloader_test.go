@@ -17,6 +17,7 @@
 package policy_test
 
 import (
+	"fmt"
 	"path"
 	"strings"
 	"testing"
@@ -181,6 +182,7 @@ func TestLoad(t *testing.T) {
 			multiFileLoader := &policy.MultiPolicyLoader{
 				HomePolicyLoader:   NewTestHomePolicyLoader(mockFs, &MockUserLookup{User: ValidUser}),
 				SystemPolicyLoader: NewTestSystemPolicyLoader(mockFs, &MockUserLookup{User: ValidUser}),
+				LoaderScript:       MockTestSudoScript,
 				Username:           ValidUser.Username,
 			}
 
@@ -235,4 +237,8 @@ func TestLoad(t *testing.T) {
 			}
 		})
 	}
+}
+
+func MockTestSudoScript(_ *policy.HomePolicyLoader, username string) ([]byte, error) {
+	return []byte{}, fmt.Errorf("mock error")
 }
