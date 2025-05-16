@@ -53,6 +53,7 @@ type LoginCmd struct {
 	configPathArg         string
 	createConfigArg       bool
 	logDirArg             string
+	sendAccessTokenArg    bool
 	disableBrowserOpenArg bool
 	printIdTokenArg       bool
 	keyPathArg            string
@@ -72,7 +73,8 @@ type LoginCmd struct {
 	principals []string
 }
 
-func NewLogin(autoRefreshArg bool, configPathArg string, createConfigArg bool, logDirArg string, disableBrowserOpenArg bool, printIdTokenArg bool,
+func NewLogin(autoRefreshArg bool, configPathArg string, createConfigArg bool, logDirArg string,
+	sendAccessTokenArg bool, disableBrowserOpenArg bool, printIdTokenArg bool,
 	providerArg string, keyPathArg string, providerAliasArg string) *LoginCmd {
 
 	return &LoginCmd{
@@ -81,6 +83,7 @@ func NewLogin(autoRefreshArg bool, configPathArg string, createConfigArg bool, l
 		configPathArg:         configPathArg,
 		createConfigArg:       createConfigArg,
 		logDirArg:             logDirArg,
+		sendAccessTokenArg:    sendAccessTokenArg,
 		disableBrowserOpenArg: disableBrowserOpenArg,
 		printIdTokenArg:       printIdTokenArg,
 		keyPathArg:            keyPathArg,
@@ -170,6 +173,12 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		} else {
 			return fmt.Errorf("no provider found") // Either the provider or the chooser must be set. If this occurs we have a bug in the code.
 		}
+	}
+
+	if l.sendAccessTokenArg == false {
+		// This arg is true if set, so it if it false it hasn't ben set and
+		// we should use the config value. If it is true we ignore the config
+		l.sendAccessTokenArg = l.config.SendAccessToken
 	}
 
 	// Execute login command
@@ -288,10 +297,18 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 		return nil, err
 	}
 
+	var accessToken []byte
+	if l.sendAccessTokenArg {
+		accessToken = opkClient.GetAccessToken()
+		if accessToken == nil {
+			return nil, fmt.Errorf("access token required but provider (%s) did not set access-token: %w", opkClient.Op.Issuer(), err)
+		}
+	}
+
 	// If principals is empty the server does not enforce any principal. The OPK
 	// verifier should use policy to make this decision.
 	principals := []string{}
-	certBytes, seckeySshPem, err := createSSHCert(pkt, signer, principals)
+	certBytes, seckeySshPem, err := createSSHCertWithAccessToken(pkt, accessToken, signer, principals)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate SSH cert: %w", err)
 	}
@@ -375,7 +392,15 @@ func (l *LoginCmd) LoginWithRefresh(ctx context.Context, provider providers.Refr
 			}
 			loginResult.pkt = refreshedPkt
 
-			certBytes, seckeySshPem, err := createSSHCert(loginResult.pkt, loginResult.signer, loginResult.principals)
+			var accessToken []byte
+			if l.sendAccessTokenArg {
+				accessToken = loginResult.client.GetAccessToken()
+				if accessToken == nil {
+					return fmt.Errorf("access token required but provider (%s) did not set access-token on refresh: %w", loginResult.client.Op.Issuer(), err)
+				}
+			}
+
+			certBytes, seckeySshPem, err := createSSHCertWithAccessToken(loginResult.pkt, accessToken, loginResult.signer, loginResult.principals)
 			if err != nil {
 				return fmt.Errorf("failed to generate SSH cert: %w", err)
 			}
@@ -413,9 +438,12 @@ func (l *LoginCmd) LoginWithRefresh(ctx context.Context, provider providers.Refr
 		}
 	}
 }
-
 func createSSHCert(pkt *pktoken.PKToken, signer crypto.Signer, principals []string) ([]byte, []byte, error) {
-	cert, err := sshcert.New(pkt, principals)
+	return createSSHCertWithAccessToken(pkt, nil, signer, principals)
+}
+
+func createSSHCertWithAccessToken(pkt *pktoken.PKToken, accessToken []byte, signer crypto.Signer, principals []string) ([]byte, []byte, error) {
+	cert, err := sshcert.New(pkt, accessToken, principals)
 	if err != nil {
 		return nil, nil, err
 	}

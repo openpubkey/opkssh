@@ -174,8 +174,8 @@ func (p *PolicyPluginEnforcer) loadPlugins(dir string) (pluginResults PluginResu
 // enable admins to do a test rollout of a new policy plugin without needing to
 // disable the old policy plugin until they are sure the new policy plugin is
 // working correctly.
-func (p *PolicyPluginEnforcer) CheckPolicies(dir string, pkt *pktoken.PKToken, principal string, sshCert string, keyType string) (PluginResults, error) {
-	tokens, err := PopulatePluginEnvVars(pkt, principal, sshCert, keyType)
+func (p *PolicyPluginEnforcer) CheckPolicies(dir string, pkt *pktoken.PKToken, userInfoJson string, principal string, sshCert string, keyType string) (PluginResults, error) {
+	tokens, err := PopulatePluginEnvVars(pkt, userInfoJson, principal, sshCert, keyType)
 	if err != nil {
 		return nil, err
 	}

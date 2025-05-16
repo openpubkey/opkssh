@@ -37,7 +37,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func AllowAllPolicyEnforcer(userDesired string, pkt *pktoken.PKToken, certB64 string, typArg string) error {
+func AllowAllPolicyEnforcer(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string) error {
 	return nil
 }
 
@@ -63,7 +63,7 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 	require.NoError(t, err)
 
 	principals := []string{"guest", "dev"}
-	cert, err := sshcert.New(pkt, principals)
+	cert, err := sshcert.New(pkt, nil, principals)
 	require.NoError(t, err)
 
 	sshSigner, err := ssh.NewSignerFromSigner(signer)
