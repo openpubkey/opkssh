@@ -175,6 +175,12 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		}
 	}
 
+	if !l.sendAccessTokenArg == false {
+		// This arg is true if set, so it if it false it hasn't ben set and
+		// we should use the config value. If it is true we ignore the config
+		l.sendAccessTokenArg = l.config.SendAccessToken
+	}
+
 	// Execute login command
 	if l.autoRefreshArg {
 		if providerRefreshable, ok := provider.(providers.RefreshableOpenIdProvider); ok {
