@@ -4,25 +4,28 @@ on:
   release:
     types: [published]
 
-permissions:
-  contents: write
-  # id-token: write  # Enable for cosign: https://github.com/sigstore/cosign
+permissions: {}
 
 jobs:
   goreleaser-release:
     name: Build and release opkssh with GoReleaser
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      # id-token: write  # Enable for cosign: https://github.com/sigstore/cosign
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
         with:
           go-version-file: 'go.mod'
+          cache: false
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@9c156ee8a17a598857849441385a2041ef570552 # v6
         with:
           distribution: goreleaser
           version: "~> v2"
