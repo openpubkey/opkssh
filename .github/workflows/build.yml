@@ -6,6 +6,8 @@ on:
     branches:
       - main
 
+permissions: {}
+
 jobs:
   goreleaser-build:
     name: Build opkssh with GoReleaser

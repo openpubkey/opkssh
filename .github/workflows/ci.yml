@@ -9,6 +9,8 @@ on:
   # schedule:
   #   - cron: 0 14 * * MON-FRI # Every weekday at 14:00 UTC
 
+permissions: {}
+
 jobs:
   # Check that binary can be built
   build:

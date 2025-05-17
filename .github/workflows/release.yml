@@ -4,14 +4,15 @@ on:
   release:
     types: [published]
 
-permissions:
-  contents: write
-  # id-token: write  # Enable for cosign: https://github.com/sigstore/cosign
+permissions: {}
 
 jobs:
   goreleaser-release:
     name: Build and release opkssh with GoReleaser
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      # id-token: write  # Enable for cosign: https://github.com/sigstore/cosign
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4

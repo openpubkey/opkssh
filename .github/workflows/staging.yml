@@ -4,15 +4,16 @@ on:
   push:
     branches: [ "main" ]
 
-permissions:
-  contents: write
-  pages: write
+permissions: {}
 
 jobs:
 
   codecov:
     name: Push to main test
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
     steps:
     - name: Checkout code
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4

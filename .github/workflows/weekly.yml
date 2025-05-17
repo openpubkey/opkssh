@@ -5,9 +5,14 @@ on:
   schedule:
     - cron: '0 0 * * 0' # runs weekly on Sunday at 00:00
 
+permissions: {}
+
 jobs:
   lockfile:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
