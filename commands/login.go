@@ -175,7 +175,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		}
 	}
 
-	if l.sendAccessTokenArg == false {
+	if l.sendAccessTokenArg {
 		// This arg is true if set, so it if it false it hasn't ben set and
 		// we should use the config value. If it is true we ignore the config
 		l.sendAccessTokenArg = l.config.SendAccessToken
