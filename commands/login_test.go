@@ -30,6 +30,7 @@ import (
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/openpubkey/util"
 	"github.com/openpubkey/opkssh/commands/config"
+	"github.com/openpubkey/opkssh/sshcert"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh"
@@ -75,37 +76,98 @@ func Mocks(t *testing.T) (*pktoken.PKToken, crypto.Signer, providers.OpenIdProvi
 }
 
 func TestLoginCmd(t *testing.T) {
-	_, _, mockOp := Mocks(t)
-
 	logDir := "./logs"
 	logPath := filepath.Join(logDir, "opkssh.log")
 
-	mockFs := afero.NewMemMapFs()
-	loginCmd := LoginCmd{
-		Fs:                    mockFs,
-		verbosity:             2,
-		printIdTokenArg:       true,
-		logDirArg:             logDir,
-		disableBrowserOpenArg: true,
-		overrideProvider:      &mockOp,
+	defaultConfig, err := config.NewClientConfig(config.DefaultClientConfig)
+	require.NoError(t, err, "Failed to get default client config")
+
+	tests := []struct {
+		name         string
+		envVars      map[string]string
+		loginCmd     LoginCmd
+		ClientConfig *config.ClientConfig
+		wantError    bool
+		errorString  string
+	}{
+		{
+			name:    "Good path with no vars",
+			envVars: map[string]string{},
+			loginCmd: LoginCmd{
+				verbosity:       2,
+				printIdTokenArg: true,
+				logDirArg:       logDir,
+				config:          defaultConfig,
+			},
+			wantError: false,
+		},
+		{
+			name:    "Good path with SendAccessToken Arg",
+			envVars: map[string]string{},
+			loginCmd: LoginCmd{
+				verbosity:          2,
+				logDirArg:          logDir,
+				config:             defaultConfig,
+				sendAccessTokenArg: true,
+			},
+			wantError: false,
+		},
 	}
-	require.NotNil(t, loginCmd)
-	err := loginCmd.Run(context.Background())
-	require.NoError(t, err)
 
-	homePath, err := os.UserHomeDir()
-	require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for k, v := range tt.envVars {
+				err := os.Setenv(k, v)
+				require.NoError(t, err, "Failed to set env var")
+				defer func(key string) {
+					_ = os.Unsetenv(key)
+				}(k)
+			}
 
-	sshPath := filepath.Join(homePath, ".ssh", "id_ecdsa")
-	secKeyBytes, err := afero.ReadFile(mockFs, sshPath)
-	require.NoError(t, err)
-	require.NotNil(t, secKeyBytes)
-	require.Contains(t, string(secKeyBytes), "-----BEGIN OPENSSH PRIVATE KEY-----")
+			_, _, mockOp := Mocks(t)
+			mockFs := afero.NewMemMapFs()
 
-	logBytes, err := afero.ReadFile(mockFs, logPath)
-	require.NoError(t, err)
-	require.NotNil(t, logBytes)
-	require.Contains(t, string(logBytes), "running login command with args:")
+			tt.loginCmd.overrideProvider = &mockOp
+			tt.loginCmd.Fs = mockFs
+
+			err = tt.loginCmd.Run(context.Background())
+			if tt.wantError {
+				require.Error(t, err, "Expected error but got none")
+				if tt.errorString != "" {
+					require.ErrorContains(t, err, tt.errorString, "Got a wrong error message")
+				}
+			} else {
+				require.NoError(t, err, "Unexpected error")
+
+				homePath, err := os.UserHomeDir()
+				require.NoError(t, err)
+
+				sshPath := filepath.Join(homePath, ".ssh", "id_ecdsa")
+				secKeyBytes, err := afero.ReadFile(mockFs, sshPath)
+				require.NoError(t, err)
+				require.NotNil(t, secKeyBytes)
+				require.Contains(t, string(secKeyBytes), "-----BEGIN OPENSSH PRIVATE KEY-----")
+
+				logBytes, err := afero.ReadFile(mockFs, logPath)
+				require.NoError(t, err)
+				require.NotNil(t, logBytes)
+				require.Contains(t, string(logBytes), "running login command with args:")
+
+				sshPubPath := filepath.Join(homePath, ".ssh", "id_ecdsa.pub")
+				pubKeyBytes, err := afero.ReadFile(mockFs, sshPubPath)
+				require.NoError(t, err)
+
+				certSmug, err := sshcert.NewFromAuthorizedKey("fake-cert-type", string(pubKeyBytes))
+				require.NoError(t, err)
+
+				accToken := certSmug.GetAccessToken()
+
+				if tt.loginCmd.sendAccessTokenArg {
+					require.NotEmpty(t, accToken)
+				}
+			}
+		})
+	}
 }
 
 func TestDetermineProvider(t *testing.T) {
