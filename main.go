@@ -302,14 +302,14 @@ Arguments:
 	providerCmd := &cobra.Command{
 		Use:     "provider [subcommand]",
 		Short:   "Interact with provider configuration",
-		Example: `  opkssh provider list`,
+		Example: `  opkssh client provider list`,
 		Args:    cobra.ExactArgs(0),
 	}
 
 	providerListCmd := &cobra.Command{
 		Use:     "list",
 		Short:   "List configured providers",
-		Example: `  opkssh provider list`,
+		Example: `  opkssh client provider list`,
 		Args:    cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client_config, err := config.GetClientConfigFromFile(configPathArg, afero.NewOsFs())
@@ -342,10 +342,12 @@ Arguments:
 
 	providerCmd.AddCommand(providerListCmd)
 
-	providerInitCmd := &cobra.Command{
-		Use:     "init",
+	clientCmd.AddCommand(providerCmd)
+
+	initConfigCmd := &cobra.Command{
+		Use:     "init-config",
 		Short:   "Initialize client provider configuration",
-		Example: `  opkssh provider init`,
+		Example: `  opkssh client init-config`,
 		Args:    cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			err := config.CreateDefaultClientConfig(configPathArg, afero.NewOsFs())
@@ -357,11 +359,9 @@ Arguments:
 		},
 	}
 
-	providerInitCmd.Flags().StringVar(&configPathArg, "config-path", "", "Path to the client config file. Default: ~/.opk/config.yml on linux and %APPDATA%\\.opk\\config.yml on windows.")
+	initConfigCmd.Flags().StringVar(&configPathArg, "config-path", "", "Path to the client config file. Default: ~/.opk/config.yml on linux and %APPDATA%\\.opk\\config.yml on windows.")
 
-	providerCmd.AddCommand(providerInitCmd)
-
-	clientCmd.AddCommand(providerCmd)
+	clientCmd.AddCommand(initConfigCmd)
 
 	rootCmd.AddCommand(clientCmd)
 
