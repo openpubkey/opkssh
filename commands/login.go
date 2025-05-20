@@ -319,7 +319,7 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 			return nil, fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
 		}
 	} else if l.config != nil &&
-		(l.config.KeyManagement.UseIdentityConfig == true ||
+		(l.config.KeyManagement.UseIdentityConfig ||
 			l.config.KeyManagement.DefaultKeyDir != "~/.ssh") {
 		// If keyPath isn't set then write it to the configured or default location
 		err = l.writeKeysToConfiguredKeyDir(seckeySshPem, certBytes)

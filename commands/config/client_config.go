@@ -52,8 +52,8 @@ func (c *ClientConfig) CheckKeyDir() error {
 
 	// if default key dir is not set we use the default logic
 	if km.DefaultKeyDir == "" ||
-		// if default value is used and identity management is off we do the same
-		km.DefaultKeyDir == "~/.ssh" && km.UseIdentityConfig == false {
+		// if identity management is off and default value is used we do the same
+		!km.UseIdentityConfig && km.DefaultKeyDir == "~/.ssh" {
 		return nil
 	}
 
