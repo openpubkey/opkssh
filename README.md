@@ -124,6 +124,12 @@ Tell opkssh to name the key-pair `opkssh_server_group1`
 opkssh login -i opkssh_server_group1
 ```
 
+When providing relative paths the keys will be placed relative to the value of `KeyManagement.DefaultKeyDir`.
+If no value is set the path will be relative to your current working directory.
+No `IdentityFile` entry will be added even if enabled.
+
+#### Using the key with SSH
+
 Tell ssh to use the generated key pair.
 
 ```bash

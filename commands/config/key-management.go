@@ -27,16 +27,25 @@ type KeyManagementConfig struct {
 	UseIdentityConfig bool   `yaml:"use_identity_config"`
 }
 
-func (k *KeyManagementConfig) GetKeyDir() (configKeyDir string, err error) {
+func (k *KeyManagementConfig) GetKeyDir() (string, error) {
 
-	if !strings.HasPrefix(k.DefaultKeyDir, "/") {
-		configKeyDir, err = os.UserHomeDir()
+	var err error
+
+	keyDir := ""
+	configuredKeyDir := k.DefaultKeyDir
+
+	// if the path is not absolute we will assume the users home directory
+	if !strings.HasPrefix(configuredKeyDir, "/") {
+		keyDir, err = os.UserHomeDir()
 		if err != nil {
-			return
+			return "", err
 		}
+
+		// trim ~ prefix
+		configuredKeyDir = strings.TrimPrefix(configuredKeyDir, "~/")
 	}
 
-	configKeyDir = filepath.Join(configKeyDir, k.DefaultKeyDir)
+	keyDir = filepath.Join(keyDir, configuredKeyDir)
 
-	return
+	return filepath.Clean(keyDir), nil
 }

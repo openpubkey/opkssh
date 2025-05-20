@@ -48,12 +48,16 @@ func (c *ClientConfig) GetProvidersMap() (map[string]ProviderConfig, error) {
 
 func (c *ClientConfig) CheckKeyDir() error {
 
+	km := c.KeyManagement
+
 	// if default key dir is not set we use the default logic
-	if c.KeyManagement.DefaultKeyDir == "" {
+	if km.DefaultKeyDir == "" ||
+		// if default value is used and identity management is off we do the same
+		km.DefaultKeyDir == "~/.ssh" && km.UseIdentityConfig == false {
 		return nil
 	}
 
-	keyDir, err := c.KeyManagement.GetKeyDir()
+	keyDir, err := km.GetKeyDir()
 	if err != nil {
 		return err
 	}

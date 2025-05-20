@@ -2,7 +2,7 @@
 default_provider: webchooser
 
 key_management:
-  default_key_dir:
+  default_key_dir: ~/.ssh
   use_identity_config: false
 
 providers:
