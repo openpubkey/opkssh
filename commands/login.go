@@ -162,6 +162,10 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		}
 	}
 
+	if len(l.config.Providers) > 6 {
+		fmt.Println("WARNING: More than 6 providers have been configured.\nIdentity amount could exhaust MaxAuthTries!")
+	}
+
 	var provider providers.OpenIdProvider
 	if l.overrideProvider != nil {
 		provider = *l.overrideProvider
