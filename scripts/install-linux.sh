@@ -114,6 +114,45 @@ if ! command -v wget &> /dev/null; then
     exit 1
 fi
 
+# Ensure openSSH server is installed
+case "$OS_TYPE" in
+    redhat)
+        if ! rpm -q openssh-server &>/dev/null; then
+            echo "OpenSSH server is NOT installed." >&2
+            echo "To install it, run: sudo dnf install openssh-server" >&2
+            exit 1
+        fi
+        ;;
+    debian)
+        if ! dpkg -l | grep -q '^ii.*openssh-server'; then
+            echo "OpenSSH server is NOT installed." >&2
+            echo "To install it, run: sudo apt install openssh-server" >&2
+            exit 1
+        fi
+        ;;
+    arch)
+        if ! pacman -Q openssh &>/dev/null; then
+            echo "OpenSSH server is NOT installed." >&2
+            echo "To install it, run: sudo pacman -S openssh" >&2
+            exit 1
+        fi
+        ;;
+    suse)
+        if ! rpm -q openssh-server &>/dev/null; then
+            echo "OpenSSH server is NOT installed." >&2
+            echo "To install it, run: sudo zypper install openssh-server" >&2
+            exit 1
+        fi
+        ;;
+esac
+
+# Ensure openSSH configration targets exists
+if [[ ! -f /etc/ssh/sshd_config && ! -d /etc/ssh/sshd_config.d ]]; then
+    echo "Neither /etc/ssh/sshd_config nor /etc/ssh/sshd_config.d exists." >&2
+    exit 1
+fi
+
+
 # Checks if the group and user used by the AuthorizedKeysCommand exists if not creates it
 if ! getent group "$AUTH_CMD_GROUP" >/dev/null; then
     groupadd --system "$AUTH_CMD_GROUP"
