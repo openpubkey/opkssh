@@ -146,7 +146,7 @@ case "$OS_TYPE" in
         ;;
 esac
 
-# Ensure openSSH configration targets exists
+# Ensure OpenSSH server configuration targets exists
 if [[ ! -f /etc/ssh/sshd_config && ! -d /etc/ssh/sshd_config.d ]]; then
     echo "Neither /etc/ssh/sshd_config nor /etc/ssh/sshd_config.d exists." >&2
     exit 1
