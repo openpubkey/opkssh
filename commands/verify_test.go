@@ -56,47 +56,72 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 		"email": mockEmail,
 	}
 
-	client, err := client.New(op, client.WithSigner(signer, alg))
-	require.NoError(t, err)
-
-	pkt, err := client.Auth(context.Background())
-	require.NoError(t, err)
-
-	principals := []string{"guest", "dev"}
-	cert, err := sshcert.New(pkt, nil, principals)
-	require.NoError(t, err)
-
-	sshSigner, err := ssh.NewSignerFromSigner(signer)
-	require.NoError(t, err)
-
-	signerMas, err := ssh.NewSignerWithAlgorithms(sshSigner.(ssh.AlgorithmSigner),
-		[]string{ssh.KeyAlgoECDSA256})
-	require.NoError(t, err)
-
-	sshCert, err := cert.SignCert(signerMas)
-	require.NoError(t, err)
-
-	certTypeAndCertB64 := ssh.MarshalAuthorizedKey(sshCert)
-	typeArg := strings.Split(string(certTypeAndCertB64), " ")[0]
-	certB64Arg := strings.Split(string(certTypeAndCertB64), " ")[1]
-
-	verPkt, err := verifier.New(
-		op,
-		verifier.WithExpirationPolicy(verifier.ExpirationPolicies.NEVER_EXPIRE),
-	)
-	require.NoError(t, err)
-
-	userArg := "user"
-	ver := VerifyCmd{
-		PktVerifier: *verPkt,
-		CheckPolicy: AllowAllPolicyEnforcer,
+	tests := []struct {
+		name        string
+		authToken   string
+		errorString string
+	}{
+		{
+			name: "Happy Path",
+		},
+		{
+			name:      "Happy Path (with auth token)",
+			authToken: "fake-auth-token",
+		},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, err := client.New(op, client.WithSigner(signer, alg))
+			require.NoError(t, err)
 
-	pubkeyList, err := ver.AuthorizedKeysCommand(context.Background(), userArg, typeArg, certB64Arg)
-	require.NoError(t, err)
+			pkt, err := client.Auth(context.Background())
+			require.NoError(t, err)
 
-	expectedPubkeyList := "cert-authority ecdsa-sha2-nistp256"
-	require.Contains(t, pubkeyList, expectedPubkeyList)
+			var accessToken []byte
+			if tt.authToken != "" {
+				accessToken = []byte(tt.authToken)
+			} else {
+				accessToken = nil
+			}
+
+			principals := []string{"guest", "dev"}
+			cert, err := sshcert.New(pkt, accessToken, principals)
+			require.NoError(t, err)
+
+			sshSigner, err := ssh.NewSignerFromSigner(signer)
+			require.NoError(t, err)
+
+			signerMas, err := ssh.NewSignerWithAlgorithms(sshSigner.(ssh.AlgorithmSigner),
+				[]string{ssh.KeyAlgoECDSA256})
+			require.NoError(t, err)
+
+			sshCert, err := cert.SignCert(signerMas)
+			require.NoError(t, err)
+
+			certTypeAndCertB64 := ssh.MarshalAuthorizedKey(sshCert)
+			typeArg := strings.Split(string(certTypeAndCertB64), " ")[0]
+			certB64Arg := strings.Split(string(certTypeAndCertB64), " ")[1]
+
+			verPkt, err := verifier.New(
+				op,
+				verifier.WithExpirationPolicy(verifier.ExpirationPolicies.NEVER_EXPIRE),
+			)
+			require.NoError(t, err)
+
+			userArg := "user"
+			ver := VerifyCmd{
+				PktVerifier: *verPkt,
+				CheckPolicy: AllowAllPolicyEnforcer,
+			}
+
+			pubkeyList, err := ver.AuthorizedKeysCommand(context.Background(), userArg, typeArg, certB64Arg)
+			require.NoError(t, err)
+
+			expectedPubkeyList := "cert-authority ecdsa-sha2-nistp256"
+			require.Contains(t, pubkeyList, expectedPubkeyList)
+		})
+
+	}
 }
 
 func TestEnvFromConfig(t *testing.T) {

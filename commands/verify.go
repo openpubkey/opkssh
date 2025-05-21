@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"net/http"
 
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/openpubkey/verifier"
@@ -51,6 +52,8 @@ type VerifyCmd struct {
 	ConfigPathArg string
 	// filePermChecker is used to check the file permissions of the config file
 	filePermChecker files.PermsChecker
+	// HTTPClient can be mocked using a roundtripper in tests
+	HttpClient *http.Client
 }
 
 func NewVerifyCmd(pktVerifier verifier.Verifier, checkPolicy PolicyEnforcerFunc, configPathArg string) *VerifyCmd {
@@ -108,7 +111,7 @@ func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, t
 	} else {
 		userInfo := ""
 		if accessToken := cert.GetAccessToken(); accessToken != "" {
-			if userInfoRet, err := v.UserInfoLookup(pkt, accessToken); err != nil {
+			if userInfoRet, err := v.UserInfoLookup(ctx, pkt, accessToken); err != nil {
 				// userInfo is option so we should not fail if we can't access it
 				userInfo = userInfoRet
 			}
@@ -152,9 +155,13 @@ func (v *VerifyCmd) SetEnvVarInConfig() error {
 	return serverConfig.SetEnvVars()
 }
 
-func (v *VerifyCmd) UserInfoLookup(pkt *pktoken.PKToken, accessToken string) (string, error) {
-	// TODO: Implement user info lookup
-	return "", nil
+func (v *VerifyCmd) UserInfoLookup(ctx context.Context, pkt *pktoken.PKToken, accessToken string) (string, error) {
+	ui, err := verifier.NewUserInfoRequester(pkt, accessToken)
+	if err != nil {
+		return "", err
+	}
+	ui.HttpClient = v.HttpClient
+	return ui.Request(ctx)
 }
 
 // OpkPolicyEnforcerAuthFunc returns an opkssh policy.Enforcer that can be
