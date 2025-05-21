@@ -35,6 +35,14 @@ func NewMockOpenIdProvider() (providers.OpenIdProvider, error) {
 	return op, err
 }
 
+func NewMockOpenIdSubProvider(sub string) (providers.OpenIdProvider, error) {
+	providerOpts := providers.DefaultMockProviderOpts()
+	op, _, idTokenTemplate, err := providers.NewMockProvider(providerOpts)
+	idTokenTemplate.ExtraClaims = map[string]any{"sub": sub}
+
+	return op, err
+}
+
 func NewMockOpenIdProviderGroups(groups []string) (providers.OpenIdProvider, error) {
 	providerOpts := providers.DefaultMockProviderOpts()
 	op, _, idTokenTemplate, err := providers.NewMockProvider(providerOpts)
@@ -171,7 +179,7 @@ func TestPolicyEmailDifferentCase(t *testing.T) {
 	pkt, err := opkClient.Auth(context.Background())
 	require.NoError(t, err)
 
-	var policyWithDiffCapitalizationThanEmail = &policy.Policy{
+	policyWithDiffCapitalizationThanEmail := &policy.Policy{
 		Users: []policy.User{
 			{
 				IdentityAttribute: "ArThuR.AArdVARK@Example.COM",
@@ -187,6 +195,35 @@ func TestPolicyEmailDifferentCase(t *testing.T) {
 
 	err = policyEnforcer.CheckPolicy("test", pkt, "example-base64Cert", "ssh-rsa")
 	require.NoError(t, err, "user should have access despite email capitalization differences")
+}
+
+func TestPolicySub(t *testing.T) {
+	t.Parallel()
+
+	op, err := NewMockOpenIdSubProvider("repo:organization/repository:ref:refs/heads/main")
+	require.NoError(t, err)
+
+	opkClient, err := client.New(op)
+	require.NoError(t, err)
+	pkt, err := opkClient.Auth(context.Background())
+	require.NoError(t, err)
+
+	policyWithDiffCapitalizationThanEmail := &policy.Policy{
+		Users: []policy.User{
+			{
+				IdentityAttribute: "repo:organization/repository:ref:refs/heads/main",
+				Principals:        []string{"test"},
+				Issuer:            "https://accounts.example.com",
+			},
+		},
+	}
+
+	policyEnforcer := &policy.Enforcer{
+		PolicyLoader: &MockPolicyLoader{Policy: policyWithDiffCapitalizationThanEmail},
+	}
+
+	err = policyEnforcer.CheckPolicy("test", pkt, "example-base64Cert", "ssh-rsa")
+	require.NoError(t, err, "user should have access on main branch")
 }
 
 func TestPolicyDeniedBadUser(t *testing.T) {
@@ -238,7 +275,7 @@ func TestPolicyDeniedWrongIssuer(t *testing.T) {
 	pkt, err := opkClient.Auth(context.Background())
 	require.NoError(t, err)
 
-	var policyWithDiffCapitalizationThanEmail = &policy.Policy{
+	policyWithDiffCapitalizationThanEmail := &policy.Policy{
 		Users: []policy.User{
 			{
 				IdentityAttribute: "arthur.aardvark@example.com",
