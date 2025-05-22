@@ -124,22 +124,23 @@ check_bash_version() {
 # Determine the linux type the script is executed in
 #
 # Arguments:
-#   $1 - (Optional) Path to system-wide configurations. Defaults to /etc
+#   $1 - Path to system-wide configurations (e.g: /etc )
 #
 # Outputs:
 #   Writes the current Linux type detected
 #
 # Returns:
-#  0 if successful, 1 if it's an unsupported OS
+#   0 if successful, 1 if it's an unsupported OS
 determine_linux_typ() {
+    local config_path="$1"
     local os_type
-    if [[ -f /etc/redhat-release ]]; then
+    if [[ -f "$config_path/redhat-release" ]]; then
         os_type="redhat"
-    elif [[ -f /etc/debian_version ]]; then
+    elif [[ -f "$config_path/debian_version" ]]; then
         os_type="debian"
-    elif [[ -f /etc/arch-release ]]; then
+    elif [[ -f "$config_path/arch-release" ]]; then
         os_type="arch"
-    elif [[ -f /etc/os-release ]] && grep -q '^ID_LIKE=.*suse' /etc/os-release; then
+    elif [[ -f "$config_path/os-release" ]] && grep -q '^ID_LIKE=.*suse' /etc/os-release; then
         os_type="suse"
     else
         echo "Unsupported OS type."
@@ -156,8 +157,6 @@ determine_linux_typ() {
 #
 # Returns:
 #   0 if running on supported architectur, 1 otherwise
-#
-# Check CPU architecture
 check_cpu_architecture() {
     local cpu_arch
     cpu_arch="$(uname -m)"
@@ -222,8 +221,7 @@ display_help_message() {
 #   $3 - OS Type the script is running on, output from function determine_linux_type (optional, default so OS_TYPE)
 #
 # Outputs:
-#   Writes an error message to stderr if the command is missing
-#   and how to install the command on supported OS types.
+#   Writes an error message to stderr if the command is missing and how to install the command on supported OS types.
 #
 # Returns:
 #   0 if the command is found, 1 otherwise.
@@ -268,7 +266,7 @@ ensure_command() {
 #   Writes error if it could verify target configuration files for opkssh
 #
 # Returns:
-#  0 if openSSH is installed with package manager and configuration files exists, 1 otherwise.
+#   0 if openSSH is installed with package manager and configuration files exists, 1 otherwise.
 ensure_openssh_server() {
     local os_type="$1"
     case "$os_type" in
@@ -346,8 +344,7 @@ ensure_opkssh_user_and_group() {
 #   $@ - Command-line arguments
 #
 # Outputs:
-#   Sets global variables: HOME_POLICY, RESTART_SSH, OVERWRITE_ACTIVE_CONFIG,
-#   LOCAL_INSTALL_FILE, INSTALL_VERSION.
+#   Sets global variables: HOME_POLICY, RESTART_SSH, OVERWRITE_ACTIVE_CONFIG,LOCAL_INSTALL_FILE, INSTALL_VERSION.
 #
 # Returns:
 #   0 on success, 1 if help is in arguments
@@ -423,7 +420,7 @@ install_opkssh_binary() {
 }
 
 # check_selinux
-# Checks if SELinux is enabled and if so, ensures the context is set correctly
+#   Checks if SELinux is enabled and if so, ensures the context is set correctly
 #
 # Outputs:
 #   Progress of SELinux context installation/configuration or message that SELinux is disabled
@@ -593,7 +590,7 @@ configure_opkssh() {
 #   Writes to stdout the progress of configuration
 #
 # Returns:
-#  0 if succeeded, otherwise 1
+#   0 if succeeded, otherwise 1
 configure_openssh_server() {
     local auth_key_cmd="AuthorizedKeysCommand ${INSTALL_DIR}/${BINARY_NAME} verify %u %k %t"
     local auth_key_user="AuthorizedKeysCommandUser ${AUTH_CMD_USER}"
@@ -676,7 +673,7 @@ restart_openssh_server() {
 #   Writes to stdout that sudo is not configured if HOME_POLICY=false
 #
 # Returns:
-#  0
+#   0
 configure_sudo() {
     if [[ "$HOME_POLICY" == true ]]; then
         if [[ ! -f "$SUDOERS_PATH" ]]; then
@@ -719,7 +716,7 @@ log_opkssh_installation() {
     echo "Installation successful! Run '$BINARY_NAME' to use it."
 }
 
-# install-linux.sh
+# main
 # Running main function only if executed, not sourced
 #
 # Arguments:
