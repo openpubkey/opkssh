@@ -1,19 +1,89 @@
 #!/bin/bash
+# ==============================================================================
+# Usage: install-linux.sh [OPTIONS]
+#
+# Options:
+#   --no-home-policy
+#       Disables configuration that allows opkssh to see policy files in user's
+#       home directory (/home/<username>/auth_id). Greatly simplifies install.
+#
+#   --no-sshd-restart
+#       Do not restart SSH after installation.
+#
+#   --overwrite-config
+#       Overwrite the currently active sshd configuration for
+#       AuthorizedKeysCommand and AuthorizedKeysCommandUser directives.
+#
+#   --install-from=FILEPATH
+#       Install using a local file instead of downloading from GitHub.
+#
+#   --install-version=VERSION
+#       Install a specific version from GitHub instead of "latest".
+#
+#   --help
+#       Display this help message.
+# ==============================================================================
 
 set -e  # Exit if any command fails
 
 # Setting global variables
-AUTH_CMD_USER="opksshuser"
-AUTH_CMD_GROUP="opksshuser"
-SUDOERS_PATH="/etc/sudoers.d/opkssh"
-HOME_POLICY=true
-RESTART_SSH=true
-OVERWRITE_ACTIVE_CONFIG=false
-LOCAL_INSTALL_FILE=""
-INSTALL_VERSION="latest"
-INSTALL_DIR="/usr/local/bin"
-BINARY_NAME="opkssh"
-GITHUB_REPO="openpubkey/opkssh"
+
+# OPKSSH_AUTH_CMD_USER
+# Default: opksshuser
+# Description: The system user responsible for executing the AuthorizedKeysCommand
+AUTH_CMD_USER="${OPKSSH_AUTH_CMD_USER:-opksshuser}"
+
+# OPKSSH_AUTH_CMD_GROUP
+# Default: opksshuser
+# Description: Group ownership for installed files and directories
+AUTH_CMD_GROUP="${OPKSSH_AUTH_CMD_GROUP:-opksshuser}"
+
+# OPKSSH_SUDOERS_PATH
+# Default: /etc/sudoers.d/opkssh
+# Description: Path to the sudoers file for opkssh
+SUDOERS_PATH="${OPKSSH_SUDOERS_PATH:-/etc/sudoers.d/opkssh}"
+
+# OPKSSH_HOME_POLICY
+# Default: true
+# Description: Whether to use the home directory policy feature
+HOME_POLICY="${OPKSSH_HOME_POLICY:-true}"
+
+# OPKSSH_RESTART_SSH
+# Default: true
+# Description: Whether to restart SSH after installation
+RESTART_SSH="${OPKSSH_RESTART_SSH:-true}"
+
+# OPKSSH_OVERWRITE_ACTIVE_CONFIG
+# Default: false
+# Description: Overwrite any existing active opkssh config
+OVERWRITE_ACTIVE_CONFIG="${OPKSSH_OVERWRITE_ACTIVE_CONFIG:-false}"
+
+# OPKSSH_LOCAL_INSTALL_FILE
+# Default: (empty)
+# Description: Path to local install file, used instead of downloading from GitHub
+LOCAL_INSTALL_FILE="${OPKSSH_LOCAL_INSTALL_FILE:-}"
+
+# OPKSSH_INSTALL_VERSION
+# Default: latest
+# Description: Which version of opkssh to install from GitHub
+INSTALL_VERSION="${OPKSSH_INSTALL_VERSION:-latest}"
+
+# OPKSSH_INSTALL_DIR
+# Default: /usr/local/bin
+# Description: Where to install the opkssh binary
+INSTALL_DIR="${OPKSSH_INSTALL_DIR:-/usr/local/bin}"
+
+# OPKSSH_BINARY_NAME
+# Default: opkssh
+# Description: Name of the installed binary
+BINARY_NAME="${OPKSSH_BINARY_NAME:-opkssh}"
+
+# OPKSSH_GITHUB_REPO
+# Default: openpubkey/opkssh
+# Description: GitHub repository to download the opkssh binary from
+GITHUB_REPO="${OPKSSH_GITHUB_REPO:-openpubkey/opkssh}"
+
+# Global variables used by several functions
 OS_TYPE=""
 CPU_ARCH=""
 
