@@ -407,11 +407,11 @@ install_opkssh_binary() {
 
     # Make the binary executable, correct permissions/ownership
     chmod +x "$INSTALL_DIR/$BINARY_NAME"
-    chown root:${AUTH_CMD_GROUP} "$INSTALL_DIR/$BINARY_NAME"
+    chown root:"${AUTH_CMD_GROUP}" "$INSTALL_DIR/$BINARY_NAME"
     chmod 755 "$INSTALL_DIR/$BINARY_NAME"
 
 
-    if command -v $INSTALL_DIR/$BINARY_NAME &> /dev/null; then
+    if command -v "$INSTALL_DIR"/"$BINARY_NAME" &> /dev/null; then
         echo "Installed $BINARY_NAME to $INSTALL_DIR/$BINARY_NAME"
     else
         echo "Installation failed." >&2
@@ -543,31 +543,31 @@ configure_opkssh() {
 
     if [[ ! -e "/etc/opk" ]]; then
         mkdir -p /etc/opk
-        chown root:${AUTH_CMD_GROUP} /etc/opk
+        chown root:"${AUTH_CMD_GROUP}" /etc/opk
         chmod 750 /etc/opk
     fi
 
     if [[ ! -e "/etc/opk/policy.d" ]]; then
         mkdir -p /etc/opk/policy.d
-        chown root:${AUTH_CMD_GROUP} /etc/opk/policy.d
+        chown root:"${AUTH_CMD_GROUP}" /etc/opk/policy.d
         chmod 750 /etc/opk/policy.d
     fi
 
     if [[ ! -e "/etc/opk/auth_id" ]]; then
         touch /etc/opk/auth_id
-        chown root:${AUTH_CMD_GROUP} /etc/opk/auth_id
+        chown root:"${AUTH_CMD_GROUP}" /etc/opk/auth_id
         chmod 640 /etc/opk/auth_id
     fi
 
     if [[ ! -e "/etc/opk/config.yml" ]]; then
         touch /etc/opk/config.yml
-        chown root:${AUTH_CMD_GROUP} /etc/opk/config.yml
+        chown root:"${AUTH_CMD_GROUP}" /etc/opk/config.yml
         chmod 640 /etc/opk/config.yml
     fi
 
     if [[ ! -e "/etc/opk/providers" ]]; then
         touch /etc/opk/providers
-        chown root:${AUTH_CMD_GROUP} /etc/opk/providers
+        chown root:"${AUTH_CMD_GROUP}" /etc/opk/providers
         chmod 640 /etc/opk/providers
     fi
 
@@ -705,10 +705,10 @@ configure_sudo() {
 #   0
 log_opkssh_installation() {
     touch /var/log/opkssh.log
-    chown root:${AUTH_CMD_GROUP} /var/log/opkssh.log
+    chown root:"${AUTH_CMD_GROUP}" /var/log/opkssh.log
     chmod 660 /var/log/opkssh.log
 
-    VERSION_INSTALLED=$($INSTALL_DIR/$BINARY_NAME --version)
+    VERSION_INSTALLED=$("$INSTALL_DIR"/"$BINARY_NAME" --version)
     INSTALLED_ON=$(date)
     # Log the installation details to /var/log/opkssh.log to help with debugging
     echo "Successfully installed opkssh (INSTALLED_ON: $INSTALLED_ON, VERSION_INSTALLED: $VERSION_INSTALLED, INSTALL_VERSION: $INSTALL_VERSION, LOCAL_INSTALL_FILE: $LOCAL_INSTALL_FILE, HOME_POLICY: $HOME_POLICY, RESTART_SSH: $RESTART_SSH)" >> /var/log/opkssh.log
