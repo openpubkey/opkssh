@@ -725,10 +725,10 @@ log_opkssh_installation() {
 # Returns:
 #   0 if opkssh installs successfully, 1 if installation failed
 main(){
+    parse_args "$@" || exit 0
     check_bash_version "${BASH_VERSINFO[@]}" || exit 1
     running_as_root "$EUID" || exit 1
-    parse_args "$@" || exit 0
-    OS_TYPE=$(determine_linux_typ) || exit 1
+    OS_TYPE=$(determine_linux_typ "/etc") || exit 1
     CPU_ARCH=$(check_cpu_architecture) || exit 1
     ensure_command "wget" || exit 1
     if [[ "$HOME_POLICY" == true ]]; then
