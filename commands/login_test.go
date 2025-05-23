@@ -94,10 +94,10 @@ func TestLoginCmd(t *testing.T) {
 			name:    "Good path with no vars",
 			envVars: map[string]string{},
 			loginCmd: LoginCmd{
-				verbosity:       2,
-				printIdTokenArg: true,
-				logDirArg:       logDir,
-				config:          defaultConfig,
+				Verbosity:       2,
+				PrintIdTokenArg: true,
+				LogDirArg:       logDir,
+				Config:          defaultConfig,
 			},
 			wantError: false,
 		},
@@ -105,10 +105,10 @@ func TestLoginCmd(t *testing.T) {
 			name:    "Good path with SendAccessToken Arg",
 			envVars: map[string]string{},
 			loginCmd: LoginCmd{
-				verbosity:          2,
-				logDirArg:          logDir,
-				config:             defaultConfig,
-				sendAccessTokenArg: true,
+				Verbosity:          2,
+				LogDirArg:          logDir,
+				Config:             defaultConfig,
+				SendAccessTokenArg: true,
 			},
 			wantError: false,
 		},
@@ -162,7 +162,7 @@ func TestLoginCmd(t *testing.T) {
 
 				accToken := certSmug.GetAccessToken()
 
-				if tt.loginCmd.sendAccessTokenArg {
+				if tt.loginCmd.SendAccessTokenArg {
 					require.NotEmpty(t, accToken)
 				}
 			}
@@ -256,11 +256,11 @@ func TestDetermineProvider(t *testing.T) {
 			require.NoError(t, err, "Failed to get default client config")
 
 			loginCmd := LoginCmd{
-				disableBrowserOpenArg: true,
-				providerArg:           tt.providerArg,
-				providerAliasArg:      tt.providerAlias,
-				printIdTokenArg:       true,
-				config:                defaultConfig,
+				DisableBrowserOpenArg: true,
+				ProviderArg:           tt.providerArg,
+				ProviderAliasArg:      tt.providerAlias,
+				PrintIdTokenArg:       true,
+				Config:                defaultConfig,
 			}
 
 			provider, chooser, err := loginCmd.determineProvider()

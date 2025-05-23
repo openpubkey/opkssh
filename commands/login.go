@@ -49,21 +49,21 @@ import (
 type LoginCmd struct {
 	// Inputs
 	Fs                    afero.Fs
-	autoRefreshArg        bool
-	configPathArg         string
-	createConfigArg       bool
-	logDirArg             string
-	sendAccessTokenArg    bool
-	disableBrowserOpenArg bool
-	printIdTokenArg       bool
-	keyPathArg            string
-	providerArg           string
-	providerAliasArg      string
-	verbosity             int                       // Default verbosity is 0, 1 is verbose, 2 is debug
+	AutoRefreshArg        bool
+	ConfigPathArg         string
+	CreateConfigArg       bool
+	LogDirArg             string
+	SendAccessTokenArg    bool
+	DisableBrowserOpenArg bool
+	PrintIdTokenArg       bool
+	KeyPathArg            string
+	ProviderArg           string
+	ProviderAliasArg      string
+	Verbosity             int                       // Default verbosity is 0, 1 is verbose, 2 is debug
 	overrideProvider      *providers.OpenIdProvider // Used in tests to override the provider to inject a mock provider
 
 	// State
-	config *config.ClientConfig
+	Config *config.ClientConfig
 
 	// Outputs
 	pkt        *pktoken.PKToken
@@ -79,23 +79,23 @@ func NewLogin(autoRefreshArg bool, configPathArg string, createConfigArg bool, l
 
 	return &LoginCmd{
 		Fs:                    afero.NewOsFs(),
-		autoRefreshArg:        autoRefreshArg,
-		configPathArg:         configPathArg,
-		createConfigArg:       createConfigArg,
-		logDirArg:             logDirArg,
-		sendAccessTokenArg:    sendAccessTokenArg,
-		disableBrowserOpenArg: disableBrowserOpenArg,
-		printIdTokenArg:       printIdTokenArg,
-		keyPathArg:            keyPathArg,
-		providerArg:           providerArg,
-		providerAliasArg:      providerAliasArg,
+		AutoRefreshArg:        autoRefreshArg,
+		ConfigPathArg:         configPathArg,
+		CreateConfigArg:       createConfigArg,
+		LogDirArg:             logDirArg,
+		SendAccessTokenArg:    sendAccessTokenArg,
+		DisableBrowserOpenArg: disableBrowserOpenArg,
+		PrintIdTokenArg:       printIdTokenArg,
+		KeyPathArg:            keyPathArg,
+		ProviderArg:           providerArg,
+		ProviderAliasArg:      providerAliasArg,
 	}
 }
 
 func (l *LoginCmd) Run(ctx context.Context) error {
 	// If a log directory was provided, write any logs to a file in that directory AND stdout
-	if l.logDirArg != "" {
-		logFilePath := filepath.Join(l.logDirArg, "opkssh.log")
+	if l.LogDirArg != "" {
+		logFilePath := filepath.Join(l.LogDirArg, "opkssh.log")
 		logFile, err := l.Fs.OpenFile(logFilePath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0660)
 		if err != nil {
 			log.Printf("Failed to open log for writing: %v \n", err)
@@ -107,49 +107,49 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		log.SetOutput(os.Stdout)
 	}
 
-	if l.verbosity >= 2 {
+	if l.Verbosity >= 2 {
 		log.Printf("DEBUG: running login command with args: %+v", *l)
 	}
 
-	if l.configPathArg == "" {
+	if l.ConfigPathArg == "" {
 		dir, dirErr := os.UserHomeDir()
 		if dirErr != nil {
 			return fmt.Errorf("failed to get user config dir: %w", dirErr)
 		}
-		l.configPathArg = filepath.Join(dir, ".opk", "config.yml")
+		l.ConfigPathArg = filepath.Join(dir, ".opk", "config.yml")
 	}
 
 	var configBytes []byte
-	if _, err := l.Fs.Stat(l.configPathArg); err == nil {
-		if l.createConfigArg {
-			log.Printf("--create-config=true but config file already exists at %s", l.configPathArg)
+	if _, err := l.Fs.Stat(l.ConfigPathArg); err == nil {
+		if l.CreateConfigArg {
+			log.Printf("--create-config=true but config file already exists at %s", l.ConfigPathArg)
 		}
 
 		// Load the file from the filesystem
 		afs := &afero.Afero{Fs: l.Fs}
-		configBytes, err = afs.ReadFile(l.configPathArg)
+		configBytes, err = afs.ReadFile(l.ConfigPathArg)
 		if err != nil {
 			return fmt.Errorf("failed to read config file: %w", err)
 		}
-		l.config, err = config.NewClientConfig(configBytes)
+		l.Config, err = config.NewClientConfig(configBytes)
 		if err != nil {
 			return fmt.Errorf("failed to parse config file: %w", err)
 		}
 	} else {
-		if l.createConfigArg {
+		if l.CreateConfigArg {
 			afs := &afero.Afero{Fs: l.Fs}
-			if err := l.Fs.MkdirAll(filepath.Dir(l.configPathArg), 0755); err != nil {
+			if err := l.Fs.MkdirAll(filepath.Dir(l.ConfigPathArg), 0755); err != nil {
 				return fmt.Errorf("failed to create config directory: %w", err)
 			}
-			if err := afs.WriteFile(l.configPathArg, config.DefaultClientConfig, 0644); err != nil {
+			if err := afs.WriteFile(l.ConfigPathArg, config.DefaultClientConfig, 0644); err != nil {
 				return fmt.Errorf("failed to write default config file: %w", err)
 			}
-			log.Printf("created client config file at %s", l.configPathArg)
+			log.Printf("created client config file at %s", l.ConfigPathArg)
 			return nil
 		} else {
 			log.Printf("failed to find client config file to generate a default config, run `opkssh login --create-config` to create a default config file")
 		}
-		l.config, err = config.NewClientConfig(config.DefaultClientConfig)
+		l.Config, err = config.NewClientConfig(config.DefaultClientConfig)
 		if err != nil {
 			return fmt.Errorf("failed to parse default config file: %w", err)
 		}
@@ -175,16 +175,16 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		}
 	}
 
-	if !l.sendAccessTokenArg {
+	if !l.SendAccessTokenArg {
 		// This arg is true if set, so it if it false it hasn't ben set and
 		// we should use the config value. If it is true we ignore the config
-		l.sendAccessTokenArg = l.config.SendAccessToken
+		l.SendAccessTokenArg = l.Config.SendAccessToken
 	}
 
 	// Execute login command
-	if l.autoRefreshArg {
+	if l.AutoRefreshArg {
 		if providerRefreshable, ok := provider.(providers.RefreshableOpenIdProvider); ok {
-			err := l.LoginWithRefresh(ctx, providerRefreshable, l.printIdTokenArg, l.keyPathArg)
+			err := l.LoginWithRefresh(ctx, providerRefreshable, l.PrintIdTokenArg, l.KeyPathArg)
 			if err != nil {
 				return fmt.Errorf("error logging in: %w", err)
 			}
@@ -192,7 +192,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 			return fmt.Errorf("supplied OpenID Provider (%v) does not support auto-refresh and auto-refresh argument set to true", provider.Issuer())
 		}
 	} else {
-		err := l.Login(ctx, provider, l.printIdTokenArg, l.keyPathArg)
+		err := l.Login(ctx, provider, l.PrintIdTokenArg, l.KeyPathArg)
 		if err != nil {
 			return fmt.Errorf("error logging in: %w", err)
 		}
@@ -201,7 +201,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 }
 
 func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebChooser, error) {
-	openBrowser := !l.disableBrowserOpenArg
+	openBrowser := !l.DisableBrowserOpenArg
 
 	var defaultProviderAlias string
 	var providerConfigs []config.ProviderConfig
@@ -209,8 +209,8 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 	var err error
 
 	// If the user has supplied commandline arguments for the provider, short circuit and use providerArg
-	if l.providerArg != "" {
-		providerConfig, err := config.NewProviderConfigFromString(l.providerArg, false)
+	if l.ProviderArg != "" {
+		providerConfig, err := config.NewProviderConfigFromString(l.ProviderArg, false)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error parsing provider argument: %w", err)
 		}
@@ -229,20 +229,20 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 		return nil, nil, fmt.Errorf("error getting provider config from env: %w", err)
 	}
 
-	if l.providerAliasArg != "" {
-		defaultProviderAlias = l.providerAliasArg
+	if l.ProviderAliasArg != "" {
+		defaultProviderAlias = l.ProviderAliasArg
 	} else if defaultProviderEnv != "" {
 		defaultProviderAlias = defaultProviderEnv
-	} else if l.config.DefaultProvider != "" {
-		defaultProviderAlias = l.config.DefaultProvider
+	} else if l.Config.DefaultProvider != "" {
+		defaultProviderAlias = l.Config.DefaultProvider
 	} else {
 		defaultProviderAlias = config.WEBCHOOSER_ALIAS
 	}
 
 	if providerConfigsEnv != nil {
 		providerConfigs = providerConfigsEnv
-	} else if len(l.config.Providers) > 0 {
-		providerConfigs = l.config.Providers
+	} else if len(l.Config.Providers) > 0 {
+		providerConfigs = l.Config.Providers
 	} else {
 		return nil, nil, fmt.Errorf("no providers specified")
 	}
@@ -298,7 +298,7 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 	}
 
 	var accessToken []byte
-	if l.sendAccessTokenArg {
+	if l.SendAccessTokenArg {
 		accessToken = opkClient.GetAccessToken()
 		if accessToken == nil {
 			return nil, fmt.Errorf("access token required but provider (%s) did not set access-token: %w", opkClient.Op.Issuer(), err)
@@ -393,7 +393,7 @@ func (l *LoginCmd) LoginWithRefresh(ctx context.Context, provider providers.Refr
 			loginResult.pkt = refreshedPkt
 
 			var accessToken []byte
-			if l.sendAccessTokenArg {
+			if l.SendAccessTokenArg {
 				accessToken = loginResult.client.GetAccessToken()
 				if accessToken == nil {
 					return fmt.Errorf("access token required but provider (%s) did not set access-token on refresh: %w", loginResult.client.Op.Issuer(), err)
