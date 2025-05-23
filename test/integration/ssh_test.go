@@ -438,7 +438,7 @@ func TestEndToEndSSHUserInfo(t *testing.T) {
 	// Do OIDC login. Use custom transport that adds the expected Host
 	// header--if not specified, then the zitadel server will say it is an
 	// unexpected issuer
-	DoOidcInteractiveLogin(t, customTransport, fmt.Sprintf("http://localhost:%d/login", authCallbackRedirectPort), "test-user@oidc.local", "verysecure")
+	DoOidcInteractiveLogin(t, customTransport, fmt.Sprintf("http://localhost:%d/login", authCallbackRedirectPort), "test-user2", "verysecure")
 
 	// Wait for interactive login to complete and assert no error occurred
 	timeoutCtx, cancel := context.WithTimeout(TestCtx, 3*time.Second)
