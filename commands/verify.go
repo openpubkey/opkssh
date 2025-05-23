@@ -123,6 +123,8 @@ func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, t
 			return "", fmt.Errorf("userinfo is empty")
 		} else if userInfo != "error" {
 			return "", fmt.Errorf("userinfo request failed: %s", userInfo)
+		} else {
+			fmt.Println("UserInfo succeeded: ", userInfo)
 		}
 
 		if err := v.CheckPolicy(userArg, pkt, userInfo, certB64Arg, typArg); err != nil {

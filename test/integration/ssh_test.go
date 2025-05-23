@@ -424,6 +424,7 @@ func TestEndToEndSSHUserInfo(t *testing.T) {
 		loginCmd := commands.LoginCmd{
 			Fs:                 afero.NewOsFs(),
 			SendAccessTokenArg: true,
+			Verbosity:          2,
 		}
 		err := loginCmd.Login(TestCtx, zitadelOp, false, "")
 		errCh <- err
@@ -452,12 +453,14 @@ func TestEndToEndSSHUserInfo(t *testing.T) {
 	// Expect to find OPK SSH key is written to disk
 	pubKey, secKeyFilePath, err := GetOPKSshKey("")
 	require.NoError(t, err, "expected to find OPK ssh key written to disk")
+	println("pubKey", pubKey) // TODO: Delete me
 
 	// Create OPK SSH signer using the found OPK SSH key on disk
 	certSigner, _ := createOpkSshSigner(t, pubKey, secKeyFilePath)
 
 	// Start new ssh connection using the OPK ssh cert key
 	authKey := goph.Auth{ssh.PublicKeys(certSigner)}
+
 	opkSshClient, err := goph.NewConn(&goph.Config{
 		User:     serverContainer.User,
 		Addr:     serverContainer.Host,
