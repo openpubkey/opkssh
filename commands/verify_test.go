@@ -28,6 +28,7 @@ import (
 	"github.com/openpubkey/openpubkey/client"
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/openpubkey/providers"
+	"github.com/openpubkey/openpubkey/providers/mocks"
 	"github.com/openpubkey/openpubkey/util"
 	"github.com/openpubkey/openpubkey/verifier"
 	"github.com/openpubkey/opkssh/policy/files"
@@ -37,12 +38,21 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+const userInfoResponse = `{
+	"sub": "me",
+	"email": "alice@example.com",
+	"name": "Alice Example",
+	"groups": ["group1", "group2"]
+}`
+
 func AllowAllPolicyEnforcer(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string) error {
 	return nil
 }
 
 func TestAuthorizedKeysCommand(t *testing.T) {
 	t.Parallel()
+	expectedAccessToken := "fake-auth-token"
+
 	alg := jwa.ES256
 	signer, err := util.GenKeyPair(alg)
 	require.NoError(t, err)
@@ -58,15 +68,18 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		authToken   string
+		accessToken string
 		errorString string
+		policyFunc  func(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string) error
 	}{
 		{
-			name: "Happy Path",
+			name:       "Happy Path",
+			policyFunc: AllowAllPolicyEnforcer,
 		},
 		{
-			name:      "Happy Path (with auth token)",
-			authToken: "fake-auth-token",
+			name:        "Happy Path (with auth token)",
+			accessToken: "fake-auth-token2",
+			policyFunc:  AllowAllPolicyEnforcer,
 		},
 	}
 	for _, tt := range tests {
@@ -78,8 +91,8 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 			require.NoError(t, err)
 
 			var accessToken []byte
-			if tt.authToken != "" {
-				accessToken = []byte(tt.authToken)
+			if tt.accessToken != "" {
+				accessToken = []byte(tt.accessToken)
 			} else {
 				accessToken = nil
 			}
@@ -112,6 +125,7 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 			ver := VerifyCmd{
 				PktVerifier: *verPkt,
 				CheckPolicy: AllowAllPolicyEnforcer,
+				HttpClient:  mocks.NewMockGoogleUserInfoHTTPClient(userInfoResponse, expectedAccessToken),
 			}
 
 			pubkeyList, err := ver.AuthorizedKeysCommand(context.Background(), userArg, typeArg, certB64Arg)

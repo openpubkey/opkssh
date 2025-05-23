@@ -117,7 +117,7 @@ func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, t
 			}
 		}
 
-		// TODO: plug this into CheckPolicy
+		// TODO: Delete this
 		fmt.Println("UserInfo: ", userInfo)
 
 		if err := v.CheckPolicy(userArg, pkt, userInfo, certB64Arg, typArg); err != nil {

@@ -2,7 +2,7 @@ module github.com/openpubkey/opkssh
 
 go 1.23.7
 
-replace github.com/openpubkey/openpubkey => github.com/ethanheilman/openpubkey v0.0.0-20250521001912-ef53da79e1d9
+replace github.com/openpubkey/openpubkey => github.com/ethanheilman/openpubkey v0.0.0-20250523013215-c215e53ad809
 
 require (
 	github.com/docker/go-connections v0.5.0
