@@ -22,6 +22,7 @@ go.work
 
 configs/
 .vscode/
+.idea/
 
 # For policy files that exist while testing
 auth_id
@@ -42,3 +43,6 @@ test/integration/testfile.txt
 # Direnv files, because these should be opt-in by the developer.
 .direnv
 .envrc
+
+# Go build artifacts
+opkssh

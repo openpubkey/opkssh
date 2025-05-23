@@ -1,6 +1,10 @@
 ---
 default_provider: webchooser
 
+key_management:
+  default_key_dir: ~/.ssh
+  use_identity_config: false
+
 providers:
   - alias: google
     issuer: https://accounts.google.com
