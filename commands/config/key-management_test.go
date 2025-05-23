@@ -2,7 +2,7 @@ package config
 
 import (
 	"os"
-	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -10,19 +10,17 @@ import (
 
 func TestGetKeyDir(t *testing.T) {
 
-	const (
-		absoluteKeyDir = "/opt/opk"
-	)
+	homeDir, err := os.UserHomeDir()
+	require.NoError(t, err)
+
+	absPath := filepath.Join(homeDir, ".opk")
 
 	relativeConfig := KeyManagementConfig{
 		DefaultKeyDir: ".opk",
 	}
 	absoluteConfig := KeyManagementConfig{
-		DefaultKeyDir: absoluteKeyDir,
+		DefaultKeyDir: absPath,
 	}
-
-	homeDir, err := os.UserHomeDir()
-	require.NoError(t, err)
 
 	tests := []struct {
 		name         string
@@ -32,12 +30,12 @@ func TestGetKeyDir(t *testing.T) {
 		{
 			name:         "Testing relative config directory",
 			config:       &relativeConfig,
-			exprectedDir: path.Join(homeDir, ".opk"),
+			exprectedDir: absPath,
 		},
 		{
 			name:         "testing absolute config directory",
 			config:       &absoluteConfig,
-			exprectedDir: absoluteKeyDir,
+			exprectedDir: absPath,
 		},
 	}
 

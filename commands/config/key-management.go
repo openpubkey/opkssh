@@ -17,6 +17,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,7 +36,7 @@ func (k *KeyManagementConfig) GetKeyDir() (string, error) {
 	configuredKeyDir := k.DefaultKeyDir
 
 	// if the path is not absolute we will assume the users home directory
-	if !strings.HasPrefix(configuredKeyDir, "/") {
+	if !filepath.IsAbs(configuredKeyDir) {
 		keyDir, err = os.UserHomeDir()
 		if err != nil {
 			return "", err
@@ -48,4 +49,29 @@ func (k *KeyManagementConfig) GetKeyDir() (string, error) {
 	keyDir = filepath.Join(keyDir, configuredKeyDir)
 
 	return filepath.Clean(keyDir), nil
+}
+
+// IsConfiguredToNameKeys
+//
+// Returns true if config requires key naming.
+// Forced true if UseIdentityConfig is true.
+func (k *KeyManagementConfig) IsConfiguredToNameKeys() bool {
+
+	// can not be used if no path is set
+	if k.DefaultKeyDir == "" {
+		fmt.Println("KeyManagement disabled: no default key directory set")
+		return false
+	}
+
+	// non-default path
+	if k.DefaultKeyDir != "~/.ssh" {
+		return true
+	}
+
+	// identity management via SSH config
+	if k.UseIdentityConfig {
+		return true
+	}
+
+	return false
 }

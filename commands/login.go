@@ -318,9 +318,7 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 		if err := l.writeKeys(seckeyPath, seckeyPath+".pub", seckeySshPem, certBytes); err != nil {
 			return nil, fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
 		}
-	} else if l.config != nil &&
-		(l.config.KeyManagement.UseIdentityConfig ||
-			l.config.KeyManagement.DefaultKeyDir != "~/.ssh") {
+	} else if l.config != nil && l.config.KeyManagement.IsConfiguredToNameKeys() {
 		// If keyPath isn't set then write it to the configured or default location
 		err = l.writeKeysToConfiguredKeyDir(seckeySshPem, certBytes)
 		if err != nil {
@@ -664,8 +662,8 @@ func (l *LoginCmd) writeKeys(seckeyPath string, pubkeyPath string, seckeySshPem 
 
 	// move relative paths to configured DefaultKeyDir
 	if l.config != nil && l.config.KeyManagement.DefaultKeyDir != "" {
-		if !strings.HasPrefix(seckeyPath, "/") &&
-			!strings.HasPrefix(pubkeyPath, "~/") {
+		if !filepath.IsAbs(seckeyPath) &&
+			!strings.HasPrefix(seckeyPath, "~/") {
 
 			dir, err := l.config.KeyManagement.GetKeyDir()
 			if err != nil {
