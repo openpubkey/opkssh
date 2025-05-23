@@ -48,3 +48,4 @@ providers:
       - http://localhost:11110/login-callback
 
 send_access_token: false
+

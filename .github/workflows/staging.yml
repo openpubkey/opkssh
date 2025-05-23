@@ -4,21 +4,24 @@ on:
   push:
     branches: [ "main" ]
 
-permissions:
-  contents: write
-  pages: write
+permissions: {}
 
 jobs:
 
   codecov:
     name: Push to main test
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      with:
+        persist-credentials: false
 
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
       with:
         go-version-file: 'go.mod'
 
@@ -26,7 +29,7 @@ jobs:
       run: go test ./...
 
     - name: Update coverage report
-      uses: ncruces/go-coverage-report@v0
+      uses: ncruces/go-coverage-report@494b2847891f4dd3b10f6704ca533367dbb7493d # v0
       with:
         report: true
         chart: true

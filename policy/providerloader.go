@@ -89,6 +89,8 @@ func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
 			opts.Issuer = row.Issuer
 			opts.ClientID = row.ClientID
 			provider = providers.NewGitlabOpWithOptions(opts)
+		} else if row.Issuer == "https://token.actions.githubusercontent.com" {
+			provider = providers.NewGithubOp(row.Issuer, "")
 		} else {
 			opts := providers.GetDefaultGoogleOpOptions()
 			opts.Issuer = row.Issuer
@@ -183,7 +185,7 @@ func (o *ProvidersFileLoader) FromTable(input []byte, path string) *ProviderPoli
 		policyRow := ProvidersRow{
 			Issuer:           row[0],
 			ClientID:         row[1],
-			ExpirationPolicy: row[2], //TODO: Validate this so that we can determine the line number that has the error
+			ExpirationPolicy: row[2], // TODO: Validate this so that we can determine the line number that has the error
 		}
 		policy.AddRow(policyRow)
 	}
