@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
-	"log"
 	"net/http"
 
 	"github.com/openpubkey/openpubkey/pktoken"
@@ -112,23 +111,10 @@ func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, t
 	} else {
 		userInfo := ""
 		if accessToken := cert.GetAccessToken(); accessToken != "" {
-			if userInfoRet, err := v.UserInfoLookup(ctx, pkt, accessToken); err != nil {
-				// userInfo is option so we should not fail if we can't access it
+			if userInfoRet, err := v.UserInfoLookup(ctx, pkt, accessToken); err == nil {
+				// userInfo is optional so we should not fail if we can't access it
 				userInfo = userInfoRet
-			} else {
-				log.Println("userInfoRet: ", userInfoRet)
-				log.Println("UserInfoLookup err: ", err)
 			}
-		}
-
-		// TODO: Delete this
-		log.Println("AccessToken: ", cert.GetAccessToken())
-		if userInfo == "" {
-			return "", fmt.Errorf("userinfo is empty")
-		} else if userInfo != "error" {
-			return "", fmt.Errorf("userinfo request failed: %s", userInfo)
-		} else {
-			log.Println("UserInfo succeeded: ", userInfo)
 		}
 
 		if err := v.CheckPolicy(userArg, pkt, userInfo, certB64Arg, typArg); err != nil {

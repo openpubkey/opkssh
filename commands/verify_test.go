@@ -18,6 +18,7 @@ package commands
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -49,6 +50,16 @@ func AllowAllPolicyEnforcer(userDesired string, pkt *pktoken.PKToken, userInfo s
 	return nil
 }
 
+func AllowIfExpectedUserInfo(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string) error {
+	if userInfo == "" {
+		return fmt.Errorf("userInfo is required")
+	} else if len(userInfo) != 93 {
+		// Smoke test that something is returned
+		return fmt.Errorf("userInfo is not valid, %d", len(userInfo))
+	}
+	return nil
+}
+
 func TestAuthorizedKeysCommand(t *testing.T) {
 	t.Parallel()
 	expectedAccessToken := "fake-auth-token"
@@ -58,6 +69,7 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 	require.NoError(t, err)
 
 	providerOpts := providers.DefaultMockProviderOpts()
+	providerOpts.Issuer = "https://accounts.google.com"
 	op, _, idtTemplate, err := providers.NewMockProvider(providerOpts)
 	require.NoError(t, err)
 
@@ -78,8 +90,14 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 		},
 		{
 			name:        "Happy Path (with auth token)",
-			accessToken: "fake-auth-token2",
-			policyFunc:  AllowAllPolicyEnforcer,
+			accessToken: expectedAccessToken,
+			policyFunc:  AllowIfExpectedUserInfo,
+		},
+		{
+			name:        "Wrong auth token",
+			accessToken: "Bad-auth-token",
+			policyFunc:  AllowIfExpectedUserInfo,
+			errorString: "userInfo is required",
 		},
 	}
 	for _, tt := range tests {
@@ -124,15 +142,21 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 			userArg := "user"
 			ver := VerifyCmd{
 				PktVerifier: *verPkt,
-				CheckPolicy: AllowAllPolicyEnforcer,
+				CheckPolicy: tt.policyFunc,
 				HttpClient:  mocks.NewMockGoogleUserInfoHTTPClient(userInfoResponse, expectedAccessToken),
 			}
 
 			pubkeyList, err := ver.AuthorizedKeysCommand(context.Background(), userArg, typeArg, certB64Arg)
-			require.NoError(t, err)
 
-			expectedPubkeyList := "cert-authority ecdsa-sha2-nistp256"
-			require.Contains(t, pubkeyList, expectedPubkeyList)
+			if tt.errorString != "" {
+				require.ErrorContains(t, err, tt.errorString)
+				require.Empty(t, pubkeyList)
+			} else {
+				require.NoError(t, err)
+
+				expectedPubkeyList := "cert-authority ecdsa-sha2-nistp256"
+				require.Contains(t, pubkeyList, expectedPubkeyList)
+			}
 		})
 
 	}
