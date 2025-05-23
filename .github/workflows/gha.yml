@@ -1,0 +1,65 @@
+name: Test GitHub Provider
+
+on:
+  push:
+    branches:
+      - main
+
+permissions: {}
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    timeout-minutes: 5
+    steps:
+    - name: Checkout
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      with:
+        persist-credentials: false
+    - name: Install Go
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+      with:
+        go-version-file: 'go.mod'
+    - name: Install dependencies
+      run: go mod download
+    - name: Build
+      run: go build -v -o /dev/null
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3
+    - name: Build and export to Docker
+      uses: docker/build-push-action@1dc73863535b631f98b2378be8619f83b136f4a0 # v6
+      with:
+        build-args: |
+          AUTHORIZED_REPOSITORY=${{ github.repository }}
+          AUTHORIZED_REF=${{ github.ref }}
+        load: true
+        tags: sshserver:latest
+        file: .github/workflows/gha_opkssh.Dockerfile
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Run SSH Container
+      run: docker run -d -p 2222:22 sshserver:latest
+
+    - name: Login
+      run: go run main.go login github --print-id-token
+
+    - name: SSH into Container with opkssh
+      run: |
+        ssh -o StrictHostKeyChecking=no -p 2222 test@localhost ls -la
+
+    - name: Debug - dump opkssh config
+      run: |
+        sshpass -p test ssh -o StrictHostKeyChecking=no -p 2222 test@localhost ls -la /etc/opk || true
+        sshpass -p test ssh -o StrictHostKeyChecking=no -p 2222 test@localhost sudo cat /etc/opk/providers || true
+        sshpass -p test ssh -o StrictHostKeyChecking=no -p 2222 test@localhost sudo cat /etc/opk/auth_id || true
+      if: always()
+
+    - name: Debug - dump logs
+      run: |
+        sshpass -p test ssh -o StrictHostKeyChecking=no -p 2222 test@localhost sudo cat /var/log/opkssh.log
+      if: always()

@@ -25,9 +25,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const WEBCHOOSER_ALIAS = "WEBCHOOSER"
-const OPKSSH_DEFAULT_ENVVAR = "OPKSSH_DEFAULT"
-const OPKSSH_PROVIDERS_ENVVAR = "OPKSSH_PROVIDERS"
+const (
+	WEBCHOOSER_ALIAS        = "WEBCHOOSER"
+	OPKSSH_DEFAULT_ENVVAR   = "OPKSSH_DEFAULT"
+	OPKSSH_PROVIDERS_ENVVAR = "OPKSSH_PROVIDERS"
+)
 
 type ProviderConfig struct {
 	AliasList    []string `yaml:"alias"`
@@ -96,6 +98,15 @@ func DefaultProviderConfig() ProviderConfig {
 	}
 }
 
+func GitHubProviderConfig() ProviderConfig {
+	return ProviderConfig{
+		AliasList: []string{"github"},
+		Issuer:    "https://token.actions.githubusercontent.com",
+		// This is required, but is not used for this provider.
+		ClientID: "unused",
+	}
+}
+
 // NewProviderConfigFromString is a function to create the provider config from a string of the format
 // {alias},{provider_url},{client_id},{client_secret},{scopes}
 func NewProviderConfigFromString(configStr string, hasAlias bool) (ProviderConfig, error) {
@@ -150,7 +161,6 @@ func NewProviderConfigFromString(configStr string, hasAlias bool) (ProviderConfi
 
 // NewProviderFromConfig is a function to create the provider from the config
 func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider, error) {
-
 	if p.Issuer == "" {
 		return nil, fmt.Errorf("invalid provider issuer value got (%s)", p.Issuer)
 	}
@@ -217,6 +227,12 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 		opts.RedirectURIs = p.RedirectURIs
 		opts.OpenBrowser = openBrowser
 		provider = providers.NewHelloOpWithOptions(opts)
+	} else if strings.HasPrefix(p.Issuer, "https://token.actions.githubusercontent.com") {
+		githubOp, err := providers.NewGithubOpFromEnvironment()
+		if err != nil {
+			return nil, fmt.Errorf("error creating github op: %w", err)
+		}
+		provider = githubOp
 	} else {
 		// Generic provider
 		opts := providers.GetDefaultStandardOpOptions(p.Issuer, p.ClientID)

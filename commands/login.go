@@ -27,7 +27,6 @@ import (
 	"io"
 	"log"
 	"os"
-
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -161,6 +160,8 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 			return fmt.Errorf("failed to parse default config file: %w", err)
 		}
 	}
+
+	l.config.Providers = append(l.config.Providers, config.GitHubProviderConfig())
 
 	if len(l.config.Providers) > 6 {
 		fmt.Println("WARNING: More than 6 providers have been configured.\nIdentity amount could exhaust MaxAuthTries!")
@@ -333,7 +334,6 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 
 	if printIdToken {
 		idTokenStr, err := PrettyIdToken(*pkt)
-
 		if err != nil {
 			return nil, fmt.Errorf("failed to format ID Token: %w", err)
 		}
@@ -722,7 +722,6 @@ func PrettyIdToken(pkt pktoken.PKToken) (string, error) {
 		return "", err
 	}
 	idtJson, err := json.MarshalIndent(idt.GetClaims(), "", "    ")
-
 	if err != nil {
 		return "", err
 	}

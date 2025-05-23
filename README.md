@@ -80,6 +80,7 @@ To install on linux, run:
 
 ```bash
 curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64 -o opkssh; chmod +x opkssh
+```
 
 or for ARM
 
@@ -186,13 +187,14 @@ Second, we use the `AuthorizedKeysCommand` configuration option in `sshd_config`
 | Linux            | ✅        | ✅     |  Ubuntu 24.04.1 LTS    | -                       |
 | Linux            | ✅        | ✅     |  Centos 9              | -                       |
 | Linux            | ✅        | ✅     |  Arch Linux            | -                       |
+| Linux            | ✅        | ✅     |  openSUSE Tumbleweed   | -                       |
 | OSX              | ❌        | ❌     |  -                     | Likely                  |
 | Windows11        | ❌        | ❌     |  -                     | Likely                  |
 
 ## Server Configuration
 
 All opkssh configuration files are space delimited and live on the server.
-Below we discuss our basic policy system, to read how to configure complex policies rules see our [documentation on our policy plugin system](policyplugins.md). Using the policy plugin system you can enforce any policy rule that be computed on a [Turing Machine](https://en.wikipedia.org/wiki/Turing_machine).
+Below we discuss our basic policy system, to read how to configure complex policies rules see our [documentation on our policy plugin system](docs/policyplugins.md). Using the policy plugin system you can enforce any policy rule that be computed on a [Turing Machine](https://en.wikipedia.org/wiki/Turing_machine).
 
 ### `/etc/opk/providers`
 
