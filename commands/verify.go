@@ -114,11 +114,14 @@ func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, t
 			if userInfoRet, err := v.UserInfoLookup(ctx, pkt, accessToken); err != nil {
 				// userInfo is option so we should not fail if we can't access it
 				userInfo = userInfoRet
+			} else {
+				fmt.Println("userInfoRet: ", userInfoRet)
+				fmt.Println("UserInfoLookup err: ", err)
 			}
 		}
 
 		// TODO: Delete this
-		fmt.Println("UserInfo: ", userInfo)
+		fmt.Println("AccessToken: ", cert.GetAccessToken())
 		if userInfo == "" {
 			return "", fmt.Errorf("userinfo is empty")
 		} else if userInfo != "error" {
