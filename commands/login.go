@@ -151,7 +151,9 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		}
 	}
 
-	l.config.Providers = append(l.config.Providers, config.GitHubProviderConfig())
+	if isGitHubEnvironment() {
+		l.config.Providers = append(l.config.Providers, config.GitHubProviderConfig())
+	}
 
 	var provider providers.OpenIdProvider
 	if l.overrideProvider != nil {
@@ -539,4 +541,9 @@ func PrettyIdToken(pkt pktoken.PKToken) (string, error) {
 		return "", err
 	}
 	return string(idtJson[:]), nil
+}
+
+func isGitHubEnvironment() bool {
+	return os.Getenv("ACTIONS_ID_TOKEN_REQUEST_URL") != "" &&
+		os.Getenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN") != ""
 }
