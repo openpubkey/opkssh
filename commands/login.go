@@ -154,7 +154,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		}
 	}
 
-	l.config.Providers = append(l.config.Providers, config.GitHubProviderConfig())
+	l.Config.Providers = append(l.Config.Providers, config.GitHubProviderConfig())
 
 	var provider providers.OpenIdProvider
 	if l.overrideProvider != nil {

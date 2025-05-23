@@ -222,7 +222,7 @@ func TestPolicySub(t *testing.T) {
 		PolicyLoader: &MockPolicyLoader{Policy: policyWithDiffCapitalizationThanEmail},
 	}
 
-	err = policyEnforcer.CheckPolicy("test", pkt, "example-base64Cert", "ssh-rsa")
+	err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa")
 	require.NoError(t, err, "user should have access on main branch")
 }
 
