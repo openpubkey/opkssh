@@ -18,6 +18,7 @@ package commands
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -28,6 +29,7 @@ import (
 	"github.com/openpubkey/openpubkey/client"
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/openpubkey/providers"
+	"github.com/openpubkey/openpubkey/providers/mocks"
 	"github.com/openpubkey/openpubkey/util"
 	"github.com/openpubkey/openpubkey/verifier"
 	"github.com/openpubkey/opkssh/policy/files"
@@ -37,17 +39,37 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func AllowAllPolicyEnforcer(userDesired string, pkt *pktoken.PKToken, certB64 string, typArg string) error {
+const userInfoResponse = `{
+	"sub": "me",
+	"email": "alice@example.com",
+	"name": "Alice Example",
+	"groups": ["group1", "group2"]
+}`
+
+func AllowAllPolicyEnforcer(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string) error {
+	return nil
+}
+
+func AllowIfExpectedUserInfo(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string) error {
+	if userInfo == "" {
+		return fmt.Errorf("userInfo is required")
+	} else if len(userInfo) != 93 {
+		// Smoke test that something is returned
+		return fmt.Errorf("userInfo is not valid, %d", len(userInfo))
+	}
 	return nil
 }
 
 func TestAuthorizedKeysCommand(t *testing.T) {
 	t.Parallel()
+	expectedAccessToken := "fake-auth-token"
+
 	alg := jwa.ES256
 	signer, err := util.GenKeyPair(alg)
 	require.NoError(t, err)
 
 	providerOpts := providers.DefaultMockProviderOpts()
+	providerOpts.Issuer = "https://accounts.google.com"
 	op, _, idtTemplate, err := providers.NewMockProvider(providerOpts)
 	require.NoError(t, err)
 
@@ -56,47 +78,88 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 		"email": mockEmail,
 	}
 
-	client, err := client.New(op, client.WithSigner(signer, alg))
-	require.NoError(t, err)
-
-	pkt, err := client.Auth(context.Background())
-	require.NoError(t, err)
-
-	principals := []string{"guest", "dev"}
-	cert, err := sshcert.New(pkt, principals)
-	require.NoError(t, err)
-
-	sshSigner, err := ssh.NewSignerFromSigner(signer)
-	require.NoError(t, err)
-
-	signerMas, err := ssh.NewSignerWithAlgorithms(sshSigner.(ssh.AlgorithmSigner),
-		[]string{ssh.KeyAlgoECDSA256})
-	require.NoError(t, err)
-
-	sshCert, err := cert.SignCert(signerMas)
-	require.NoError(t, err)
-
-	certTypeAndCertB64 := ssh.MarshalAuthorizedKey(sshCert)
-	typeArg := strings.Split(string(certTypeAndCertB64), " ")[0]
-	certB64Arg := strings.Split(string(certTypeAndCertB64), " ")[1]
-
-	verPkt, err := verifier.New(
-		op,
-		verifier.WithExpirationPolicy(verifier.ExpirationPolicies.NEVER_EXPIRE),
-	)
-	require.NoError(t, err)
-
-	userArg := "user"
-	ver := VerifyCmd{
-		PktVerifier: *verPkt,
-		CheckPolicy: AllowAllPolicyEnforcer,
+	tests := []struct {
+		name        string
+		accessToken string
+		errorString string
+		policyFunc  func(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string) error
+	}{
+		{
+			name:       "Happy Path",
+			policyFunc: AllowAllPolicyEnforcer,
+		},
+		{
+			name:        "Happy Path (with auth token)",
+			accessToken: expectedAccessToken,
+			policyFunc:  AllowIfExpectedUserInfo,
+		},
+		{
+			name:        "Wrong auth token",
+			accessToken: "Bad-auth-token",
+			policyFunc:  AllowIfExpectedUserInfo,
+			errorString: "userInfo is required",
+		},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, err := client.New(op, client.WithSigner(signer, alg))
+			require.NoError(t, err)
 
-	pubkeyList, err := ver.AuthorizedKeysCommand(context.Background(), userArg, typeArg, certB64Arg)
-	require.NoError(t, err)
+			pkt, err := client.Auth(context.Background())
+			require.NoError(t, err)
 
-	expectedPubkeyList := "cert-authority ecdsa-sha2-nistp256"
-	require.Contains(t, pubkeyList, expectedPubkeyList)
+			var accessToken []byte
+			if tt.accessToken != "" {
+				accessToken = []byte(tt.accessToken)
+			} else {
+				accessToken = nil
+			}
+
+			principals := []string{"guest", "dev"}
+			cert, err := sshcert.New(pkt, accessToken, principals)
+			require.NoError(t, err)
+
+			sshSigner, err := ssh.NewSignerFromSigner(signer)
+			require.NoError(t, err)
+
+			signerMas, err := ssh.NewSignerWithAlgorithms(sshSigner.(ssh.AlgorithmSigner),
+				[]string{ssh.KeyAlgoECDSA256})
+			require.NoError(t, err)
+
+			sshCert, err := cert.SignCert(signerMas)
+			require.NoError(t, err)
+
+			certTypeAndCertB64 := ssh.MarshalAuthorizedKey(sshCert)
+			typeArg := strings.Split(string(certTypeAndCertB64), " ")[0]
+			certB64Arg := strings.Split(string(certTypeAndCertB64), " ")[1]
+
+			verPkt, err := verifier.New(
+				op,
+				verifier.WithExpirationPolicy(verifier.ExpirationPolicies.NEVER_EXPIRE),
+			)
+			require.NoError(t, err)
+
+			userArg := "user"
+			ver := VerifyCmd{
+				PktVerifier: *verPkt,
+				CheckPolicy: tt.policyFunc,
+				HttpClient:  mocks.NewMockGoogleUserInfoHTTPClient(userInfoResponse, expectedAccessToken),
+			}
+
+			pubkeyList, err := ver.AuthorizedKeysCommand(context.Background(), userArg, typeArg, certB64Arg)
+
+			if tt.errorString != "" {
+				require.ErrorContains(t, err, tt.errorString)
+				require.Empty(t, pubkeyList)
+			} else {
+				require.NoError(t, err)
+
+				expectedPubkeyList := "cert-authority ecdsa-sha2-nistp256"
+				require.Contains(t, pubkeyList, expectedPubkeyList)
+			}
+		})
+
+	}
 }
 
 func TestEnvFromConfig(t *testing.T) {

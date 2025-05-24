@@ -28,6 +28,7 @@ var DefaultClientConfig []byte
 type ClientConfig struct {
 	DefaultProvider string           `yaml:"default_provider"`
 	Providers       []ProviderConfig `yaml:"providers"`
+	SendAccessToken bool             `yaml:"send_access_token"`
 }
 
 func NewClientConfig(c []byte) (*ClientConfig, error) {

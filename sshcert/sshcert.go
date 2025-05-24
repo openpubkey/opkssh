@@ -33,7 +33,7 @@ type SshCertSmuggler struct {
 	SshCert *ssh.Certificate
 }
 
-func New(pkt *pktoken.PKToken, principals []string) (*SshCertSmuggler, error) {
+func New(pkt *pktoken.PKToken, accessToken []byte, principals []string) (*SshCertSmuggler, error) {
 
 	// TODO: assumes email exists in ID Token,
 	// this will break for OPs like Azure that do not have email as a claim
@@ -52,6 +52,20 @@ func New(pkt *pktoken.PKToken, principals []string) (*SshCertSmuggler, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	extensions := map[string]string{
+		"permit-X11-forwarding":   "",
+		"permit-agent-forwarding": "",
+		"permit-port-forwarding":  "",
+		"permit-pty":              "",
+		"permit-user-rc":          "",
+		"openpubkey-pkt":          string(pktCom),
+	}
+
+	if accessToken != nil {
+		extensions["openpubkey-act"] = string(accessToken)
+	}
+
 	sshSmuggler := SshCertSmuggler{
 		SshCert: &ssh.Certificate{
 			Key:             pubkeySsh,
@@ -60,14 +74,7 @@ func New(pkt *pktoken.PKToken, principals []string) (*SshCertSmuggler, error) {
 			ValidPrincipals: principals,
 			ValidBefore:     ssh.CertTimeInfinity,
 			Permissions: ssh.Permissions{
-				Extensions: map[string]string{
-					"permit-X11-forwarding":   "",
-					"permit-agent-forwarding": "",
-					"permit-port-forwarding":  "",
-					"permit-pty":              "",
-					"permit-user-rc":          "",
-					"openpubkey-pkt":          string(pktCom),
-				},
+				Extensions: extensions,
 			},
 		},
 	}
@@ -114,6 +121,14 @@ func (s *SshCertSmuggler) GetPKToken() (*pktoken.PKToken, error) {
 		return nil, fmt.Errorf("openpubkey-pkt extension in cert failed deserialization: %w", err)
 	}
 	return pkt, nil
+}
+
+func (s *SshCertSmuggler) GetAccessToken() string {
+	// Generally we don't expect this to be set, but if it is, we return it
+	if accessToken, ok := s.SshCert.Extensions["openpubkey-act"]; ok {
+		return accessToken
+	}
+	return ""
 }
 
 func (s *SshCertSmuggler) VerifySshPktCert(ctx context.Context, pktVerifier verifier.Verifier) (*pktoken.PKToken, error) {

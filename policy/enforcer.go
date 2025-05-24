@@ -62,10 +62,10 @@ func validateClaim(claims *checkedClaims, user *User) bool {
 // It is security critical to verify the pkt first before calling this function.
 // This is because if this function is called first, a timing channel exists which
 // allows an attacker check what identities and principals are allowed by the policy.F
-func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, sshCert string, keyType string) error {
+func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, userInfoJson string, sshCert string, keyType string) error {
 	pluginPolicy := plugins.NewPolicyPluginEnforcer()
 
-	results, err := pluginPolicy.CheckPolicies("/etc/opk/policy.d", pkt, principalDesired, sshCert, keyType)
+	results, err := pluginPolicy.CheckPolicies("/etc/opk/policy.d", pkt, userInfoJson, principalDesired, sshCert, keyType)
 	if err != nil {
 		log.Printf("Error checking policy plugins: %v \n", err)
 		// Despite the error, we don't fail here because we still want to check
@@ -101,18 +101,43 @@ func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, ss
 	if err != nil {
 		return fmt.Errorf("error getting issuer from pk token: %w", err)
 	}
+
+	var userInfoClaims *checkedClaims
+	if userInfoJson != "" {
+		userInfoClaims = new(checkedClaims)
+		if err := json.Unmarshal([]byte(userInfoJson), &userInfoClaims); err != nil {
+			return fmt.Errorf("error unmarshalling claims from userinfo endpoint: %w", err)
+		}
+	}
+
 	for _, user := range policy.Users {
+		if issuer != user.Issuer {
+			continue
+		}
+
+		// if they are, then check if the desired principal is allowed
+		if !slices.Contains(user.Principals, principalDesired) {
+			continue
+		}
+
 		// check each entry to see if the user in the checkedClaims is included
 		if validateClaim(&claims, &user) {
-			if issuer != user.Issuer {
-				continue
-			}
-			// if they are, then check if the desired principal is allowed
-			if slices.Contains(user.Principals, principalDesired) {
-				// access granted
-				return nil
-			}
+			// access granted
+			return nil
 		}
+
+		// The underlying library checks idT.sub == userInfo.sub when we call the userinfo endpoint.
+		// We want to be extra sure, so we also check it.
+		if userInfoClaims != nil && claims.Sub != userInfoClaims.Sub {
+			return fmt.Errorf("userInfo sub claim (%s) does not match user policy sub claim (%s)", claims.Sub, userInfoClaims.Sub)
+		}
+
+		// check each entry to see if the user matches the userInfoClaims
+		if userInfoClaims != nil && validateClaim(userInfoClaims, &user) {
+			// access granted
+			return nil
+		}
+
 	}
 
 	return fmt.Errorf("no policy to allow %s with (issuer=%s) to assume %s, check policy config at %s", claims.Email, issuer, principalDesired, sourceStr)

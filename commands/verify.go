@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"net/http"
 
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/openpubkey/verifier"
@@ -33,7 +34,7 @@ import (
 
 // PolicyEnforcerFunc returns nil if the supplied PK token is permitted to login as
 // username. Otherwise, an error is returned indicating the reason for rejection
-type PolicyEnforcerFunc func(username string, pkt *pktoken.PKToken, sshCert string, keyType string) error
+type PolicyEnforcerFunc func(username string, pkt *pktoken.PKToken, userinfo string, sshCert string, keyType string) error
 
 // VerifyCmd provides functionality to verify OPK tokens contained in SSH
 // certificates and authorize requests to SSH as a specific username using a
@@ -51,6 +52,8 @@ type VerifyCmd struct {
 	ConfigPathArg string
 	// filePermChecker is used to check the file permissions of the config file
 	filePermChecker files.PermsChecker
+	// HTTPClient can be mocked using a roundtripper in tests
+	HttpClient *http.Client
 }
 
 func NewVerifyCmd(pktVerifier verifier.Verifier, checkPolicy PolicyEnforcerFunc, configPathArg string) *VerifyCmd {
@@ -100,16 +103,29 @@ func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, t
 	if err != nil {
 		return "", err
 	}
+
+	// TODO: pass this to Check Policy
+
 	if pkt, err := cert.VerifySshPktCert(ctx, v.PktVerifier); err != nil { // Verify the PKT contained in the cert
 		return "", err
-	} else if err := v.CheckPolicy(userArg, pkt, certB64Arg, typArg); err != nil { // Check if username is authorized
-		return "", err
-	} else { // Success!
-		// sshd expects the public key in the cert, not the cert itself. This
-		// public key is key of the CA that signs the cert, in our setting there
-		// is no CA.
-		pubkeyBytes := ssh.MarshalAuthorizedKey(cert.SshCert.SignatureKey)
-		return "cert-authority " + string(pubkeyBytes), nil
+	} else {
+		userInfo := ""
+		if accessToken := cert.GetAccessToken(); accessToken != "" {
+			if userInfoRet, err := v.UserInfoLookup(ctx, pkt, accessToken); err == nil {
+				// userInfo is optional so we should not fail if we can't access it
+				userInfo = userInfoRet
+			}
+		}
+
+		if err := v.CheckPolicy(userArg, pkt, userInfo, certB64Arg, typArg); err != nil {
+			return "", err
+		} else { // Success!
+			// sshd expects the public key in the cert, not the cert itself. This
+			// public key is key of the CA that signs the cert, in our setting there
+			// is no CA.
+			pubkeyBytes := ssh.MarshalAuthorizedKey(cert.SshCert.SignatureKey)
+			return "cert-authority " + string(pubkeyBytes), nil
+		}
 	}
 }
 
@@ -134,6 +150,15 @@ func (v *VerifyCmd) SetEnvVarInConfig() error {
 		return fmt.Errorf("failed to parse config file: %w", err)
 	}
 	return serverConfig.SetEnvVars()
+}
+
+func (v *VerifyCmd) UserInfoLookup(ctx context.Context, pkt *pktoken.PKToken, accessToken string) (string, error) {
+	ui, err := verifier.NewUserInfoRequester(pkt, accessToken)
+	if err != nil {
+		return "", err
+	}
+	ui.HttpClient = v.HttpClient
+	return ui.Request(ctx)
 }
 
 // OpkPolicyEnforcerAuthFunc returns an opkssh policy.Enforcer that can be

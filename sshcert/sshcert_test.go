@@ -134,7 +134,7 @@ func TestSshCertCreation(t *testing.T) {
 	require.NoError(t, err)
 
 	principals := []string{"guest", "dev"}
-	cert, err := New(pkt, principals)
+	cert, err := New(pkt, nil, principals)
 	require.NoError(t, err)
 
 	caSigner, err := newSshSignerFromPem(caSecretKey)

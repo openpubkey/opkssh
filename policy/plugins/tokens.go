@@ -25,7 +25,7 @@ import (
 	"github.com/openpubkey/openpubkey/pktoken"
 )
 
-func PopulatePluginEnvVars(pkt *pktoken.PKToken, principal string, sshCert string, keyType string) (map[string]string, error) {
+func PopulatePluginEnvVars(pkt *pktoken.PKToken, userInfoJson string, principal string, sshCert string, keyType string) (map[string]string, error) {
 	pktCom, err := pkt.Compact()
 	if err != nil {
 		return nil, err
@@ -100,10 +100,11 @@ func PopulatePluginEnvVars(pkt *pktoken.PKToken, principal string, sshCert strin
 		"OPKSSH_PLUGIN_JTI":            claims.Jti,
 		"OPKSSH_PLUGIN_GROUPS":         groupsStr,
 
-		"OPKSSH_PLUGIN_PAYLOAD": string(b64(string(pkt.Payload))), // base64-encoded ID Token payload
-		"OPKSSH_PLUGIN_UPK":     string(upkB64),                   // base64-encoded JWK of the user's public key
-		"OPKSSH_PLUGIN_PKT":     string(pktCom),                   // compact-encoded PK Token
-		"OPKSSH_PLUGIN_IDT":     string(pkt.OpToken),              // base64-encoded ID Token
+		"OPKSSH_PLUGIN_PAYLOAD":  string(b64(string(pkt.Payload))), // base64-encoded ID Token payload
+		"OPKSSH_PLUGIN_UPK":      string(upkB64),                   // base64-encoded JWK of the user's public key
+		"OPKSSH_PLUGIN_PKT":      string(pktCom),                   // compact-encoded PK Token
+		"OPKSSH_PLUGIN_IDT":      string(pkt.OpToken),              // base64-encoded ID Token
+		"OPKSSH_PLUGIN_USERINFO": userInfoJson,                     // what the userinfo endpoint returned if an access token was supplied (by default this the empty string)
 	}
 
 	return tokens, nil

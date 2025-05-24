@@ -46,3 +46,6 @@ providers:
       - http://localhost:3000/login-callback
       - http://localhost:10001/login-callback
       - http://localhost:11110/login-callback
+
+send_access_token: false
+
