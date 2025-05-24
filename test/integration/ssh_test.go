@@ -413,10 +413,13 @@ func TestEndToEndSSH(t *testing.T) {
 }
 
 func TestEndToEndSSHUserInfo(t *testing.T) {
-	// Test opkssh e2e by performing an SSH connection to a linux container.
+	// Test opkssh e2e  (with userinfo) by performing an SSH connection to a linux container.
 	//
 	// Tests login, policy, and verify against an example OIDC server and
 	// container configured with opkssh in the "AuthorizedKeysCommand"
+	// Currently the test OP doesn't give us any userinfo that isn't in the ID token.
+	// Thus, the policy check does not use the userinfo information.
+	// TODO: Improve this test so include a policy check that depends on userinfo claims.
 	var err error
 
 	// Spawn test containers to run these tests
@@ -446,7 +449,7 @@ func TestEndToEndSSHUserInfo(t *testing.T) {
 	// Do OIDC login. Use custom transport that adds the expected Host
 	// header--if not specified, then the zitadel server will say it is an
 	// unexpected issuer
-	DoOidcInteractiveLogin(t, customTransport, fmt.Sprintf("http://localhost:%d/login", authCallbackRedirectPort), "test-user2", "verysecure")
+	DoOidcInteractiveLogin(t, customTransport, fmt.Sprintf("http://localhost:%d/login", authCallbackRedirectPort), "test-user@oidc.local", "verysecure")
 
 	// Wait for interactive login to complete and assert no error occurred
 	timeoutCtx, cancel := context.WithTimeout(TestCtx, 3*time.Second)
