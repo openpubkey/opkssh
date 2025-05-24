@@ -28,6 +28,11 @@ Options:
 - `GITHUB_REPO`: defaults to `openpubkey/opkssh`, overridable by system env `OPKSSH_GITHUB_REPO`
 # Function Documentation
 
+## `file_exists`
+
+Default helpers that wrap real commands (can be overridden in tests)
+
+
 ## `check_bash_version`
 
 check_bash_version
@@ -53,13 +58,10 @@ Checks if a bash version is >= 3.2
 ```
 
 
-## `determine_linux_typ`
+## `determine_linux_type`
 
 determine_linux_type
 Determine the linux type the script is executed in
-
-**Arguments:**
--   $1 - Path to system-wide configurations (e.g: /etc )
 
 
 **Outputs:**

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # ==============================================================================
 # Usage: install-linux.sh [OPTIONS]
 #
@@ -24,7 +24,10 @@
 #       Display this help message.
 # ==============================================================================
 
-set -e  # Exit if any command fails
+if [[ "$SHUNIT_RUNNIN" != "1" ]]; then
+     # Exit if any command fails, unless running tests
+    set -e
+fi
 
 # Setting global variables
 
@@ -87,6 +90,12 @@ GITHUB_REPO="${OPKSSH_GITHUB_REPO:-openpubkey/opkssh}"
 OS_TYPE=""
 CPU_ARCH=""
 
+# Default helpers that wrap real commands (can be overridden in tests)
+# TODO: Create shUnit2 tests for these
+file_exists() { [[ -f "$1" ]]; }
+grep_suse() { grep -q '^ID_LIKE=.*suse' "$1"; }
+get_uname_arch() { uname -m; }
+
 # check_bash_version
 # Checks if a bash version is >= 3.2
 #
@@ -120,27 +129,25 @@ check_bash_version() {
   fi
 }
 
+
+
 # determine_linux_type
 # Determine the linux type the script is executed in
-#
-# Arguments:
-#   $1 - Path to system-wide configurations (e.g: /etc )
 #
 # Outputs:
 #   Writes the current Linux type detected
 #
 # Returns:
 #   0 if successful, 1 if it's an unsupported OS
-determine_linux_typ() {
-    local config_path="$1"
+determine_linux_type() {
     local os_type
-    if [[ -f "$config_path/redhat-release" ]]; then
+    if file_exists "/etc/redhat-release" ; then
         os_type="redhat"
-    elif [[ -f "$config_path/debian_version" ]]; then
+    elif file_exists "/etc/debian_version" ; then
         os_type="debian"
-    elif [[ -f "$config_path/arch-release" ]]; then
+    elif file_exists "/etc/arch-release"; then
         os_type="arch"
-    elif [[ -f "$config_path/os-release" ]] && grep -q '^ID_LIKE=.*suse' /etc/os-release; then
+    elif file_exists "/etc/os-release" && grep_suse /etc/os-release; then
         os_type="suse"
     else
         echo "Unsupported OS type."
@@ -159,7 +166,7 @@ determine_linux_typ() {
 #   0 if running on supported architectur, 1 otherwise
 check_cpu_architecture() {
     local cpu_arch
-    cpu_arch="$(uname -m)"
+    cpu_arch="$(get_uname_arch)"
     case "$cpu_arch" in
         x86_64)
             cpu_arch="amd64"
@@ -728,7 +735,7 @@ main(){
     parse_args "$@" || exit 0
     check_bash_version "${BASH_VERSINFO[@]}" || exit 1
     running_as_root "$EUID" || exit 1
-    OS_TYPE=$(determine_linux_typ "/etc") || exit 1
+    OS_TYPE=$(determine_linux_type) || exit 1
     CPU_ARCH=$(check_cpu_architecture) || exit 1
     ensure_command "wget" || exit 1
     if [[ "$HOME_POLICY" == true ]]; then
