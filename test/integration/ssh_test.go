@@ -43,6 +43,7 @@ import (
 	"github.com/openpubkey/openpubkey/pktoken/clientinstance"
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/opkssh/commands"
+	"github.com/openpubkey/opkssh/sshcert"
 	testprovider "github.com/openpubkey/opkssh/test/integration/provider"
 	"github.com/openpubkey/opkssh/test/integration/ssh_server"
 	"github.com/spf13/afero"
@@ -360,6 +361,12 @@ func TestEndToEndSSH(t *testing.T) {
 	pubKey, secKeyFilePath, err := GetOPKSshKey("")
 	require.NoError(t, err, "expected to find OPK ssh key written to disk")
 
+	pubkeyBytes := pubKey.Marshal()
+	certSmug, err := sshcert.NewFromAuthorizedKey("cert-type", string(pubkeyBytes))
+	require.NoError(t, err)
+	accToken := certSmug.GetAccessToken()
+	require.Empty(t, accToken, "expected access token to be empty since we did not request adding access token to SSH cert")
+
 	// Create OPK SSH signer using the found OPK SSH key on disk
 	certSigner, _ := createOpkSshSigner(t, pubKey, secKeyFilePath)
 
@@ -453,7 +460,11 @@ func TestEndToEndSSHUserInfo(t *testing.T) {
 	// Expect to find OPK SSH key is written to disk
 	pubKey, secKeyFilePath, err := GetOPKSshKey("")
 	require.NoError(t, err, "expected to find OPK ssh key written to disk")
-	println("pubKey", pubKey) // TODO: Delete me
+	pubkeyBytes := pubKey.Marshal()
+	certSmug, err := sshcert.NewFromAuthorizedKey("cert-type", string(pubkeyBytes))
+	require.NoError(t, err)
+	accToken := certSmug.GetAccessToken()
+	require.NotEmpty(t, accToken, "expected access token to not be since we requested access token on SSH cert")
 
 	// Create OPK SSH signer using the found OPK SSH key on disk
 	certSigner, _ := createOpkSshSigner(t, pubKey, secKeyFilePath)
