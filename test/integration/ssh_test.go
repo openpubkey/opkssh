@@ -23,6 +23,7 @@ import (
 
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -361,7 +362,7 @@ func TestEndToEndSSH(t *testing.T) {
 	pubKey, secKeyFilePath, err := GetOPKSshKey("")
 	require.NoError(t, err, "expected to find OPK ssh key written to disk")
 
-	pubkeyBytes := pubKey.Marshal()
+	pubkeyBytes := base64.StdEncoding.EncodeToString(pubKey.Marshal())
 	certSmug, err := sshcert.NewFromAuthorizedKey("cert-type", string(pubkeyBytes))
 	require.NoError(t, err)
 	accToken := certSmug.GetAccessToken()
@@ -460,7 +461,7 @@ func TestEndToEndSSHUserInfo(t *testing.T) {
 	// Expect to find OPK SSH key is written to disk
 	pubKey, secKeyFilePath, err := GetOPKSshKey("")
 	require.NoError(t, err, "expected to find OPK ssh key written to disk")
-	pubkeyBytes := pubKey.Marshal()
+	pubkeyBytes := base64.StdEncoding.EncodeToString(pubKey.Marshal())
 	certSmug, err := sshcert.NewFromAuthorizedKey("cert-type", string(pubkeyBytes))
 	require.NoError(t, err)
 	accToken := certSmug.GetAccessToken()
