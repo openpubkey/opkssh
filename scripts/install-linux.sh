@@ -93,8 +93,7 @@ CPU_ARCH=""
 # Default helpers that wrap real commands (can be overridden in tests)
 # TODO: Create shUnit2 tests for these
 file_exists() { [[ -f "$1" ]]; }
-grep_suse() { grep -q '^ID_LIKE=.*suse' "$1"; }
-get_uname_arch() { uname -m; }
+dir_exists() { [[ -d "$1" ]]; }
 
 # check_bash_version
 # Checks if a bash version is >= 3.2
@@ -147,7 +146,7 @@ determine_linux_type() {
         os_type="debian"
     elif file_exists "/etc/arch-release"; then
         os_type="arch"
-    elif file_exists "/etc/os-release" && grep_suse /etc/os-release; then
+    elif file_exists "/etc/os-release" && grep -q '^ID_LIKE=.*suse' /etc/os-release; then
         os_type="suse"
     else
         echo "Unsupported OS type."
@@ -166,7 +165,7 @@ determine_linux_type() {
 #   0 if running on supported architectur, 1 otherwise
 check_cpu_architecture() {
     local cpu_arch
-    cpu_arch="$(get_uname_arch)"
+    cpu_arch="$(uname -m)"
     case "$cpu_arch" in
         x86_64)
             cpu_arch="amd64"
@@ -307,7 +306,7 @@ ensure_openssh_server() {
             ;;
     esac
     # Ensure OpenSSH server configuration targets exists
-    if [[ ! -f /etc/ssh/sshd_config && ! -d /etc/ssh/sshd_config.d ]]; then
+    if ! file_exists /etc/ssh/sshd_config && ! dir_exists /etc/ssh/sshd_config.d; then
         echo "Neither /etc/ssh/sshd_config nor /etc/ssh/sshd_config.d exists." >&2
         return 1
     fi
