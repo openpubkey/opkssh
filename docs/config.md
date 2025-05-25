@@ -10,6 +10,55 @@ We have the follow syntax rules:
 
 Our goal is to have an distinct meaning for each column. This way if we want to extend the rules we can add additional columns.
 
+## Client config `~/.opk/config.yml`
+
+The config file for the client is saved in `~/.opk/config.yml`.
+It configures OpenID Providers that the user can log in with and only details of the client.
+It is not required to exist to use opkssh and it is not created by default.
+To create it, simple run `~/opkssh login --create-config`
+
+The default client config can be found in [../commands/config/default-client-config.yml](../commands/config/default-client-config.yml).
+
+The client config can be used to configure the following values:
+
+
+- **default_provider** By default this is set to the webchooser, which opens a webpage and allows the user to select the OpenID Provider they want by clicking. However if you wish to always connect to one particular OpenID Provider you can set this to the alias of that OpenID Provider and it will skip the web chooser and automatically just open a browser window to that provider.
+- **providers** This allows you to configure all the OpenID Providers you wish to use. See example below.
+- **send_access_token** Determines if opkssh should put the user's access token into the SSH public key (SSH Certificate). This is useful for allowing the opkssh verifier to read claims not available in the ID Token that can only be read from the OpenID Provider's userinfo endpoint. The opkssh verify on the SSH server will use the access token to make a call to the OpenID Provider's userinfo endpoint. Configuration option false by default as SSH will send SSH Public Keys to any host you are attempting to SSH into. Before setting this to true carefully consider the security implications of including the access token in the SSH Public key.
+
+```yaml
+---
+
+default_provider: webchooser
+
+providers:
+  - alias: google
+    issuer: https://accounts.google.com
+    client_id: 206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com
+    client_secret: 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
+    scopes: openid email profile
+    access_type: offline
+    prompt: consent
+    redirect_uris:
+      - http://localhost:3000/login-callback
+      - http://localhost:10001/login-callback
+      - http://localhost:11110/login-callback
+
+  - alias: azure microsoft
+    issuer: https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
+    client_id: 096ce0a3-5e72-4da8-9c86-12924b294a01
+    scopes: openid profile email offline_access
+    access_type: offline
+    prompt: consent
+    redirect_uris:
+      - http://localhost:3000/login-callback
+      - http://localhost:10001/login-callback
+      - http://localhost:11110/login-callback
+
+send_access_token: false
+```
+
+
 ## Server config `/etc/opk/config.yml`
 
 This is the config file for opkssh when used on the SSH server.
