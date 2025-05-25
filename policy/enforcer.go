@@ -87,11 +87,6 @@ func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, us
 		return fmt.Errorf("error loading policy: %w", err)
 	}
 
-	sourceStr := source.Source()
-	if sourceStr == "" {
-		sourceStr = "<policy source unknown>"
-	}
-
 	var claims checkedClaims
 
 	if err := json.Unmarshal(pkt.Payload, &claims); err != nil {
@@ -111,6 +106,12 @@ func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, us
 	}
 
 	for _, user := range policy.Users {
+		// The underlying library checks idT.sub == userInfo.sub when we call the userinfo endpoint.
+		// We want to be extra sure so we also check it here as well.
+		if userInfoClaims != nil && claims.Sub != userInfoClaims.Sub {
+			return fmt.Errorf("userInfo sub claim (%s) does not match user policy sub claim (%s)", userInfoClaims.Sub, claims.Sub)
+		}
+
 		if issuer != user.Issuer {
 			continue
 		}
@@ -126,12 +127,6 @@ func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, us
 			return nil
 		}
 
-		// The underlying library checks idT.sub == userInfo.sub when we call the userinfo endpoint.
-		// We want to be extra sure, so we also check it.
-		if userInfoClaims != nil && claims.Sub != userInfoClaims.Sub {
-			return fmt.Errorf("userInfo sub claim (%s) does not match user policy sub claim (%s)", claims.Sub, userInfoClaims.Sub)
-		}
-
 		// check each entry to see if the user matches the userInfoClaims
 		if userInfoClaims != nil && validateClaim(userInfoClaims, &user) {
 			// access granted
@@ -140,5 +135,5 @@ func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, us
 
 	}
 
-	return fmt.Errorf("no policy to allow %s with (issuer=%s) to assume %s, check policy config at %s", claims.Email, issuer, principalDesired, sourceStr)
+	return fmt.Errorf("no policy to allow %s with (issuer=%s) to assume %s, check policy config at %s", claims.Email, issuer, principalDesired, source.Source())
 }

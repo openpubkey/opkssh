@@ -18,6 +18,7 @@ package policy_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/openpubkey/openpubkey/client"
@@ -27,28 +28,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func NewMockOpenIdProvider() (providers.OpenIdProvider, error) {
+func NewMockOpenIdProvider(t *testing.T) providers.OpenIdProvider {
 	providerOpts := providers.DefaultMockProviderOpts()
 	op, _, idTokenTemplate, err := providers.NewMockProvider(providerOpts)
+	require.NoError(t, err)
 	idTokenTemplate.ExtraClaims = map[string]any{"email": "arthur.aardvark@example.com"}
-
-	return op, err
+	return op
 }
 
-func NewMockOpenIdSubProvider(sub string) (providers.OpenIdProvider, error) {
+func NewMockOpenIdSubProvider(t *testing.T, sub string) providers.OpenIdProvider {
 	providerOpts := providers.DefaultMockProviderOpts()
 	op, _, idTokenTemplate, err := providers.NewMockProvider(providerOpts)
+	require.NoError(t, err)
 	idTokenTemplate.ExtraClaims = map[string]any{"sub": sub}
-
-	return op, err
+	return op
 }
 
-func NewMockOpenIdProviderGroups(groups []string) (providers.OpenIdProvider, error) {
+func NewMockOpenIdProviderGroups(t *testing.T, groups []string) providers.OpenIdProvider {
 	providerOpts := providers.DefaultMockProviderOpts()
 	op, _, idTokenTemplate, err := providers.NewMockProvider(providerOpts)
+	require.NoError(t, err)
 	idTokenTemplate.ExtraClaims = map[string]any{"email": "arthur.aardvark@example.com", "groups": groups}
-
-	return op, err
+	return op
 }
 
 func NewMockOpenIdProvider2(gqSign bool, issuer string, clientID string, extraClaims map[string]any) (providers.OpenIdProvider, *mocks.MockProviderBackend, error) {
@@ -142,17 +143,23 @@ var _ policy.Loader = &MockPolicyLoader{}
 // Load implements policy.Loader.
 func (m *MockPolicyLoader) Load() (*policy.Policy, policy.Source, error) {
 	if m.Error == nil {
-		return m.Policy, policy.EmptySource{}, nil
+		return m.Policy, MockSource{}, nil
 	} else {
 		return nil, nil, m.Error
 	}
 }
 
+var _ policy.Source = &MockSource{}
+
+// MockSource is used to signal that a source if from a mock.
+type MockSource struct{}
+
+func (MockSource) Source() string { return "<mock data>" }
+
 func TestPolicyApproved(t *testing.T) {
 	t.Parallel()
 
-	op, err := NewMockOpenIdProvider()
-	require.NoError(t, err)
+	op := NewMockOpenIdProvider(t)
 
 	opkClient, err := client.New(op)
 	require.NoError(t, err)
@@ -171,8 +178,7 @@ func TestPolicyApproved(t *testing.T) {
 func TestPolicyEmailDifferentCase(t *testing.T) {
 	t.Parallel()
 
-	op, err := NewMockOpenIdProvider()
-	require.NoError(t, err)
+	op := NewMockOpenIdProvider(t)
 
 	opkClient, err := client.New(op)
 	require.NoError(t, err)
@@ -200,9 +206,7 @@ func TestPolicyEmailDifferentCase(t *testing.T) {
 func TestPolicySub(t *testing.T) {
 	t.Parallel()
 
-	op, err := NewMockOpenIdSubProvider("repo:organization/repository:ref:refs/heads/main")
-	require.NoError(t, err)
-
+	op := NewMockOpenIdSubProvider(t, "repo:organization/repository:ref:refs/heads/main")
 	opkClient, err := client.New(op)
 	require.NoError(t, err)
 	pkt, err := opkClient.Auth(context.Background())
@@ -229,8 +233,7 @@ func TestPolicySub(t *testing.T) {
 func TestPolicyDeniedBadUser(t *testing.T) {
 	t.Parallel()
 
-	op, err := NewMockOpenIdProvider()
-	require.NoError(t, err)
+	op := NewMockOpenIdProvider(t)
 
 	opkClient, err := client.New(op)
 	require.NoError(t, err)
@@ -248,8 +251,7 @@ func TestPolicyDeniedBadUser(t *testing.T) {
 func TestPolicyDeniedNoUserEntry(t *testing.T) {
 	t.Parallel()
 
-	op, err := NewMockOpenIdProvider()
-	require.NoError(t, err)
+	op := NewMockOpenIdProvider(t)
 
 	opkClient, err := client.New(op)
 	require.NoError(t, err)
@@ -267,8 +269,7 @@ func TestPolicyDeniedNoUserEntry(t *testing.T) {
 func TestPolicyDeniedWrongIssuer(t *testing.T) {
 	t.Parallel()
 
-	op, err := NewMockOpenIdProvider()
-	require.NoError(t, err)
+	op := NewMockOpenIdProvider(t)
 
 	opkClient, err := client.New(op)
 	require.NoError(t, err)
@@ -296,9 +297,7 @@ func TestPolicyDeniedWrongIssuer(t *testing.T) {
 func TestPolicyApprovedOidcGroups(t *testing.T) {
 	t.Parallel()
 
-	op, err := NewMockOpenIdProviderGroups([]string{"a", "b", "c"})
-
-	require.NoError(t, err)
+	op := NewMockOpenIdProviderGroups(t, []string{"a", "b", "c"})
 
 	opkClient, err := client.New(op)
 	require.NoError(t, err)
@@ -316,7 +315,7 @@ func TestPolicyApprovedOidcGroups(t *testing.T) {
 func TestPolicyApprovedOidcGroupWithAtSign(t *testing.T) {
 	t.Parallel()
 
-	op, err := NewMockOpenIdProviderGroups([]string{"it.infra@my_domain.com"})
+	op := NewMockOpenIdProviderGroups(t, []string{"it.infra@my_domain.com"})
 
 	policyLine := &policy.Policy{
 		Users: []policy.User{
@@ -327,8 +326,6 @@ func TestPolicyApprovedOidcGroupWithAtSign(t *testing.T) {
 			},
 		},
 	}
-
-	require.NoError(t, err)
 
 	opkClient, err := client.New(op)
 	require.NoError(t, err)
@@ -346,9 +343,7 @@ func TestPolicyApprovedOidcGroupWithAtSign(t *testing.T) {
 func TestPolicyDeniedOidcGroups(t *testing.T) {
 	t.Parallel()
 
-	op, err := NewMockOpenIdProviderGroups([]string{"z"})
-
-	require.NoError(t, err)
+	op := NewMockOpenIdProviderGroups(t, []string{"z"})
 
 	opkClient, err := client.New(op)
 	require.NoError(t, err)
@@ -366,9 +361,7 @@ func TestPolicyDeniedOidcGroups(t *testing.T) {
 func TestPolicyDeniedMissingOidcGroupsClaim(t *testing.T) {
 	t.Parallel()
 
-	op, err := NewMockOpenIdProvider()
-
-	require.NoError(t, err)
+	op := NewMockOpenIdProvider(t)
 
 	opkClient, err := client.New(op)
 	require.NoError(t, err)
@@ -381,4 +374,102 @@ func TestPolicyDeniedMissingOidcGroupsClaim(t *testing.T) {
 
 	err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa")
 	require.Error(t, err, "user should not as the token is missing the groups claim")
+}
+
+func TestEnforceTableTest(t *testing.T) {
+	t.Parallel()
+
+	policyWithOidcGroup := &policy.Policy{
+		Users: []policy.User{
+			{
+				IdentityAttribute: "oidc:groups:group2",
+				Principals:        []string{"test"},
+				Issuer:            "https://accounts.example.com",
+			},
+		},
+	}
+	tests := []struct {
+		name          string
+		op            providers.OpenIdProvider
+		policyLoader  policy.Loader
+		userInfoJson  string
+		expectedError string
+	}{
+		{
+			name:         "Happy path (No userinfo supplied but ID Token has groups claim)",
+			op:           NewMockOpenIdProviderGroups(t, []string{"group1", "group2"}),
+			policyLoader: &MockPolicyLoader{Policy: policyWithOidcGroup},
+		},
+		{
+			name:          "No groups claim in ID Token",
+			op:            NewMockOpenIdProvider(t),
+			policyLoader:  &MockPolicyLoader{Policy: policyWithOidcGroup},
+			expectedError: "no policy to allow",
+		},
+		{
+			name: "Happy path (Valid user info)",
+			// We set an email that does not match the email claim in the ID Token, as emails do not need to match, only subs
+			op:           NewMockOpenIdProvider(t),
+			userInfoJson: `{"sub": "me", "email": "non-matching-email@example.com", "name": "Alice Example", "groups": ["group1", "group2"]}`,
+			policyLoader: &MockPolicyLoader{Policy: policyWithOidcGroup},
+		},
+		{
+			name:          "Missing groups claim in userinfo",
+			op:            NewMockOpenIdProvider(t),
+			userInfoJson:  `{"sub": "me", "email": "non-matching-email@example.com", "name": "Alice Example"}`,
+			policyLoader:  &MockPolicyLoader{Policy: policyWithOidcGroup},
+			expectedError: "no policy to allow",
+		},
+		{
+			name:          "Wrong groups claim in userinfo",
+			op:            NewMockOpenIdProvider(t),
+			userInfoJson:  `{"sub": "me", "email": "non-matching-email@example.com", "name": "Alice Example", "groups": ["wrongGroup1", "wrongGroup2"]}`,
+			policyLoader:  &MockPolicyLoader{Policy: policyWithOidcGroup},
+			expectedError: "no policy to allow",
+		},
+		{
+			name:          "sub in userinfo does not match sub in ID Token does not match",
+			op:            NewMockOpenIdProvider(t),
+			userInfoJson:  `{"sub": "not-me", "email": "non-matching-email@example.com", "name": "Alice Example", "groups": ["group1", "group2"]}`,
+			policyLoader:  &MockPolicyLoader{Policy: policyWithOidcGroup},
+			expectedError: "userInfo sub claim (not-me) does not match user policy sub claim (me)",
+		},
+		{
+			name:          "corrupted userinfo",
+			op:            NewMockOpenIdProvider(t),
+			userInfoJson:  `{"sub": "me`,
+			policyLoader:  &MockPolicyLoader{Policy: policyWithOidcGroup},
+			expectedError: "error unmarshalling claims from userinfo endpoint",
+		},
+		{
+			name:          "policy loader failure",
+			op:            NewMockOpenIdProvider(t),
+			userInfoJson:  `{"sub": "me`,
+			policyLoader:  &MockPolicyLoader{Error: fmt.Errorf("error loading policy")},
+			expectedError: "error loading policy",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			opkClient, err := client.New(tt.op)
+			require.NoError(t, err)
+			pkt, err := opkClient.Auth(context.Background())
+			require.NoError(t, err)
+
+			policyEnforcer := &policy.Enforcer{
+				PolicyLoader: tt.policyLoader,
+			}
+
+			err = policyEnforcer.CheckPolicy("test", pkt, tt.userInfoJson, "example-base64Cert", "ssh-rsa")
+			if tt.expectedError != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.expectedError)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }
