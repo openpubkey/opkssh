@@ -100,7 +100,7 @@ func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, us
 	var userInfoClaims *checkedClaims
 	if userInfoJson != "" {
 		userInfoClaims = new(checkedClaims)
-		if err := json.Unmarshal([]byte(userInfoJson), &userInfoClaims); err != nil {
+		if err := json.Unmarshal([]byte(userInfoJson), userInfoClaims); err != nil {
 			return fmt.Errorf("error unmarshalling claims from userinfo endpoint: %w", err)
 		}
 	}
