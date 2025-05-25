@@ -155,30 +155,32 @@ func TestSshCertCreation(t *testing.T) {
 			require.NoError(t, err)
 
 			principals := []string{"guest", "dev"}
-			cert, err := New(pkt, tt.accessToken, principals)
+			certSmug, err := New(pkt, tt.accessToken, principals)
 			require.NoError(t, err)
 
-			pktSet, err := cert.GetPKToken()
+			pktSet, err := certSmug.GetPKToken()
 			require.NotNil(t, pktSet)
 			require.NoError(t, err)
 
-			accessToken := cert.GetAccessToken()
+			accessToken := certSmug.GetAccessToken()
 			require.Equal(t, string(tt.accessToken), accessToken)
 
 			pktVerifier, err := verifier.New(
 				op,
 			)
 			require.NoError(t, err)
-			cert.VerifySshPktCert(context.Background(), *pktVerifier)
+			pktRet, err := certSmug.VerifySshPktCert(context.Background(), *pktVerifier)
 			require.NoError(t, err)
+			require.NotNil(t, pktRet)
+			require.Equal(t, pktSet, pktRet, "expected pktSet to be equal to pktRet")
 
 			caSigner, err := newSshSignerFromPem(caSecretKey)
 			require.NoError(t, err)
 
-			sshCert, err := cert.SignCert(caSigner)
+			sshCert, err := certSmug.SignCert(caSigner)
 			require.NoError(t, err)
 
-			err = cert.VerifyCaSig(caPubkey)
+			err = certSmug.VerifyCaSig(caPubkey)
 			require.NoError(t, err)
 
 			checker := ssh.CertChecker{}
