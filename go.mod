@@ -2,15 +2,13 @@ module github.com/openpubkey/opkssh
 
 go 1.23.7
 
-replace github.com/openpubkey/openpubkey => github.com/ethanheilman/openpubkey v0.0.0-20250523013215-c215e53ad809
-
 require (
 	github.com/docker/go-connections v0.5.0
 	github.com/jeremija/gosubmit v0.2.7
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/lestrrat-go/jwx/v2 v2.0.21
 	github.com/melbahja/goph v1.4.0
-	github.com/openpubkey/openpubkey v0.15.0
+	github.com/openpubkey/openpubkey v0.16.0
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
 	github.com/testcontainers/testcontainers-go v0.35.0
