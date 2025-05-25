@@ -28,6 +28,7 @@ import (
 	"github.com/openpubkey/openpubkey/client"
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/openpubkey/providers"
+	"github.com/openpubkey/openpubkey/verifier"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh"
 )
@@ -120,52 +121,98 @@ func TestInvalidSshPublicKey(t *testing.T) {
 func TestSshCertCreation(t *testing.T) {
 	t.Parallel()
 
-	providerOpts := providers.DefaultMockProviderOpts()
-	op, _, idtTemplate, err := providers.NewMockProvider(providerOpts)
-	require.NoError(t, err)
+	tests := []struct {
+		name        string
+		mockEmail   string
+		accessToken []byte
+	}{
+		{
+			name:        "Happy Path (no access token)",
+			mockEmail:   "arthur.aardvark@example.com",
+			accessToken: nil,
+		},
+		{
+			name:        "Happy Path (with access token)",
+			mockEmail:   "arthur.aardvark@example.com",
+			accessToken: []byte("expected-access-token"),
+		},
+	}
 
-	mockEmail := "arthur.aardvark@example.com"
-	idtTemplate.ExtraClaims = map[string]any{"email": mockEmail}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockEmail := "arthur.aardvark@example.com"
 
-	client, err := client.New(op)
-	require.NoError(t, err)
+			providerOpts := providers.DefaultMockProviderOpts()
+			op, _, idtTemplate, err := providers.NewMockProvider(providerOpts)
+			require.NoError(t, err)
 
-	pkt, err := client.Auth(context.Background())
-	require.NoError(t, err)
+			idtTemplate.ExtraClaims = map[string]any{"email": mockEmail}
 
-	principals := []string{"guest", "dev"}
-	cert, err := New(pkt, nil, principals)
-	require.NoError(t, err)
+			client, err := client.New(op)
+			require.NoError(t, err)
 
-	caSigner, err := newSshSignerFromPem(caSecretKey)
-	require.NoError(t, err)
+			pkt, err := client.Auth(context.Background())
+			require.NoError(t, err)
 
-	sshCert, err := cert.SignCert(caSigner)
-	require.NoError(t, err)
+			principals := []string{"guest", "dev"}
+			cert, err := New(pkt, tt.accessToken, principals)
+			require.NoError(t, err)
 
-	err = cert.VerifyCaSig(caPubkey)
-	require.NoError(t, err)
+			pktSet, err := cert.GetPKToken()
+			require.NotNil(t, pktSet)
+			require.NoError(t, err)
 
-	checker := ssh.CertChecker{}
-	err = checker.CheckCert("guest", sshCert)
-	require.NoError(t, err)
+			accessToken := cert.GetAccessToken()
+			require.Equal(t, string(tt.accessToken), accessToken)
 
-	require.Equal(t, sshCert.KeyId, mockEmail, "expected KeyId to be (%s) but was (%s)", mockEmail, sshCert.KeyId)
+			pktVerifier, err := verifier.New(
+				op,
+			)
+			require.NoError(t, err)
+			cert.VerifySshPktCert(context.Background(), *pktVerifier)
+			require.NoError(t, err)
 
-	pktCom, ok := sshCert.Extensions["openpubkey-pkt"]
-	require.True(t, ok, "expected to find openpubkey-pkt extension in sshCert")
+			caSigner, err := newSshSignerFromPem(caSecretKey)
+			require.NoError(t, err)
 
-	pktExt, err := pktoken.NewFromCompact([]byte(pktCom))
-	require.NoError(t, err)
+			sshCert, err := cert.SignCert(caSigner)
+			require.NoError(t, err)
 
-	cic, err := pktExt.GetCicValues()
-	require.NoError(t, err)
-	upk := cic.PublicKey()
+			err = cert.VerifyCaSig(caPubkey)
+			require.NoError(t, err)
 
-	cryptoCertKey := (sshCert.Key.(ssh.CryptoPublicKey)).CryptoPublicKey()
-	jwkCertKey, err := jwk.FromRaw(cryptoCertKey)
-	require.NoError(t, err)
-	if !jwk.Equal(upk, jwkCertKey) {
-		t.Error(fmt.Errorf("expected upk to be equal to the value in sshCert.Key"))
+			checker := ssh.CertChecker{}
+			err = checker.CheckCert("guest", sshCert)
+			require.NoError(t, err)
+
+			require.Equal(t, sshCert.KeyId, mockEmail, "expected KeyId to be (%s) but was (%s)", mockEmail, sshCert.KeyId)
+
+			pktCom, ok := sshCert.Extensions["openpubkey-pkt"]
+			require.True(t, ok, "expected to find openpubkey-pkt extension in sshCert")
+
+			accessTokenInCert, ok := sshCert.Extensions["openpubkey-act"]
+			if tt.accessToken != nil {
+				require.True(t, ok, "expected to find openpubkey-act extension in sshCert")
+				// Verify that the access token we set is in the cert
+				require.Equal(t, string(tt.accessToken), accessTokenInCert, "expected openpubkey-act to match the one we set")
+
+			} else {
+				require.False(t, ok, "expected openpubkey-act (access token) extension to not be set in sshCert")
+			}
+
+			pktExt, err := pktoken.NewFromCompact([]byte(pktCom))
+			require.NoError(t, err)
+
+			cic, err := pktExt.GetCicValues()
+			require.NoError(t, err)
+			upk := cic.PublicKey()
+
+			cryptoCertKey := (sshCert.Key.(ssh.CryptoPublicKey)).CryptoPublicKey()
+			jwkCertKey, err := jwk.FromRaw(cryptoCertKey)
+			require.NoError(t, err)
+			if !jwk.Equal(upk, jwkCertKey) {
+				t.Error(fmt.Errorf("expected upk to be equal to the value in sshCert.Key"))
+			}
+		})
 	}
 }
