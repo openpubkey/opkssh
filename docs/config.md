@@ -21,10 +21,9 @@ The default client config can be found in [../commands/config/default-client-con
 
 The client config can be used to configure the following values:
 
-
 - **default_provider** By default this is set to the webchooser, which opens a webpage and allows the user to select the OpenID Provider they want by clicking. However if you wish to always connect to one particular OpenID Provider you can set this to the alias of that OpenID Provider and it will skip the web chooser and automatically just open a browser window to that provider.
 - **providers** This allows you to configure all the OpenID Providers you wish to use. See example below.
-- **send_access_token** Determines if opkssh should put the user's access token into the SSH public key (SSH Certificate). This is useful for allowing the opkssh verifier to read claims not available in the ID Token that can only be read from the OpenID Provider's userinfo endpoint. The opkssh verify on the SSH server will use the access token to make a call to the OpenID Provider's userinfo endpoint. Configuration option false by default as SSH will send SSH Public Keys to any host you are attempting to SSH into. Before setting this to true carefully consider the security implications of including the access token in the SSH Public key.
+- **send_access_token** Determines if opkssh should put the user's access token into the SSH public key (SSH Certificate). This is useful for allowing the opkssh verifier to read claims not available in the ID Token that can only be read from the OpenID Provider's [userinfo endpoint](https://openid.net/specs/openid-connect-core-1_0.html#UserInfo). The opkssh verify on the SSH server will use the access token to make a call to the OpenID Provider's userinfo endpoint. Configuration option false by default as SSH will send SSH Public Keys to any host you are attempting to SSH into. Before setting this to true carefully consider the security implications of including the access token in the SSH Public key.
 
 ```yaml
 ---
@@ -57,7 +56,6 @@ providers:
 
 send_access_token: false
 ```
-
 
 ## Server config `/etc/opk/config.yml`
 

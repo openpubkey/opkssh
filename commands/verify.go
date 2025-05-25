@@ -104,8 +104,6 @@ func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, t
 		return "", err
 	}
 
-	// TODO: pass this to Check Policy
-
 	if pkt, err := cert.VerifySshPktCert(ctx, v.PktVerifier); err != nil { // Verify the PKT contained in the cert
 		return "", err
 	} else {
