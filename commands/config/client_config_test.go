@@ -39,8 +39,17 @@ func TestParseConfig(t *testing.T) {
 		require.False(t, provider.SendAccessToken, "SendAccessToken should be false by default")
 	}
 
+	provider, found := clientConfigDefault.GetByIssuer("https://accounts.google.com")
+	require.NotEmpty(t, provider, "Provider should found since it exists in the config")
+	require.True(t, found)
+
+	provider, found = clientConfigDefault.GetByIssuer("https://not-a-real-provider.example.com")
+	require.Nil(t, provider, "Provider should not found since it does not exist in the config")
+	require.False(t, found)
+
 	// Test failure
 	clientConfigDefault, err = NewClientConfig([]byte("invalid yaml"))
 	require.ErrorContains(t, err, "yaml: unmarshal errors")
 	require.Nil(t, clientConfigDefault)
+
 }
