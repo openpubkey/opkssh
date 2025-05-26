@@ -312,7 +312,7 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 	if l.SendAccessTokenArg {
 		accessToken = opkClient.GetAccessToken()
 		if accessToken == nil {
-			return nil, fmt.Errorf("access token required but provider (%s) did not set access-token: %w", opkClient.Op.Issuer(), err)
+			return nil, fmt.Errorf("access token required but provider (%s) did not set access-token", opkClient.Op.Issuer())
 		}
 	}
 
