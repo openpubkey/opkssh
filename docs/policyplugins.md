@@ -103,7 +103,7 @@ We provide the following values specified by [OpenSSHd AuthorizedKeysCommand TOK
 - OPKSSH_PLUGIN_PKT Compact-encoded PK Token
 - OPKSSH_PLUGIN_CONFIG Base64 encoded bytes of the plugin config used in this call. Useful for debugging.
 - OPKSSH_PLUGIN_GROUPS Groups claim (if present) of the identity.
-- OPKSSH_PLUGIN_USERINFO the results of userinfo endpoint. This is set to the empty string if no access token was provided in the SSH certificate. See send_access_token in [config.md](config.md) to see how to setting an access token.
+- OPKSSH_PLUGIN_USERINFO the results of userinfo endpoint. This is set to the empty string if no access token was provided in the SSH certificate. See send_access_token in [config.md](config.md) to see how to set an access token.
 
 ### Handling missing or empty claims
 
