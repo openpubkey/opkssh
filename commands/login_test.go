@@ -82,13 +82,26 @@ func TestLoginCmd(t *testing.T) {
 	defaultConfig, err := config.NewClientConfig(config.DefaultClientConfig)
 	require.NoError(t, err, "Failed to get default client config")
 
+	_, _, mockOp := Mocks(t)
+	configWithAccessToken := &config.ClientConfig{
+		Providers: []config.ProviderConfig{
+			{
+				AliasList:       []string{"mockOp"},
+				Issuer:          mockOp.Issuer(),
+				SendAccessToken: true,
+			},
+		},
+		DefaultProvider: "mockOp",
+	}
+
 	tests := []struct {
-		name         string
-		envVars      map[string]string
-		loginCmd     LoginCmd
-		ClientConfig *config.ClientConfig
-		wantError    bool
-		errorString  string
+		name            string
+		envVars         map[string]string
+		loginCmd        LoginCmd
+		ClientConfig    *config.ClientConfig
+		wantAccessToken bool
+		wantError       bool
+		errorString     string
 	}{
 		{
 			name:    "Good path with no vars",
@@ -102,7 +115,41 @@ func TestLoginCmd(t *testing.T) {
 			wantError: false,
 		},
 		{
-			name:    "Good path with SendAccessToken Arg",
+			name:    "Good path (load config)",
+			envVars: map[string]string{},
+			loginCmd: LoginCmd{
+				Verbosity:       2,
+				PrintIdTokenArg: true,
+				LogDirArg:       logDir,
+			},
+			wantError: false,
+		},
+		{
+			name:    "Good path with SendAccessToken set in arg and config",
+			envVars: map[string]string{},
+			loginCmd: LoginCmd{
+				Verbosity:          2,
+				LogDirArg:          logDir,
+				Config:             configWithAccessToken,
+				SendAccessTokenArg: true,
+			},
+			wantAccessToken: true,
+			wantError:       false,
+		},
+		{
+			name:    "Good path with SendAccessToken set in config but not in arg",
+			envVars: map[string]string{},
+			loginCmd: LoginCmd{
+				Verbosity:          2,
+				LogDirArg:          logDir,
+				Config:             configWithAccessToken,
+				SendAccessTokenArg: false,
+			},
+			wantAccessToken: true,
+			wantError:       false,
+		},
+		{
+			name:    "Good path with SendAccessToken Arg (issuer not found in config)",
 			envVars: map[string]string{},
 			loginCmd: LoginCmd{
 				Verbosity:          2,
@@ -110,7 +157,8 @@ func TestLoginCmd(t *testing.T) {
 				Config:             defaultConfig,
 				SendAccessTokenArg: true,
 			},
-			wantError: false,
+			wantAccessToken: true,
+			wantError:       false,
 		},
 	}
 
@@ -162,8 +210,10 @@ func TestLoginCmd(t *testing.T) {
 
 				accToken := certSmug.GetAccessToken()
 
-				if tt.loginCmd.SendAccessTokenArg {
-					require.NotEmpty(t, accToken)
+				if tt.wantAccessToken {
+					require.NotEmpty(t, accToken, "expected access token to be set in SSH cert")
+				} else {
+					require.Empty(t, accToken, "expected access token to not be set in SSH cert")
 				}
 			}
 		})

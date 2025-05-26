@@ -110,47 +110,49 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		log.Printf("DEBUG: running login command with args: %+v", *l)
 	}
 
-	if l.ConfigPathArg == "" {
-		dir, dirErr := os.UserHomeDir()
-		if dirErr != nil {
-			return fmt.Errorf("failed to get user config dir: %w", dirErr)
+	// If the Config has been set in the struct don't replace it. This is useful for testing
+	if l.Config == nil {
+		if l.ConfigPathArg == "" {
+			dir, dirErr := os.UserHomeDir()
+			if dirErr != nil {
+				return fmt.Errorf("failed to get user config dir: %w", dirErr)
+			}
+			l.ConfigPathArg = filepath.Join(dir, ".opk", "config.yml")
 		}
-		l.ConfigPathArg = filepath.Join(dir, ".opk", "config.yml")
-	}
+		var configBytes []byte
+		if _, err := l.Fs.Stat(l.ConfigPathArg); err == nil {
+			if l.CreateConfigArg {
+				log.Printf("--create-config=true but config file already exists at %s", l.ConfigPathArg)
+			}
 
-	var configBytes []byte
-	if _, err := l.Fs.Stat(l.ConfigPathArg); err == nil {
-		if l.CreateConfigArg {
-			log.Printf("--create-config=true but config file already exists at %s", l.ConfigPathArg)
-		}
-
-		// Load the file from the filesystem
-		afs := &afero.Afero{Fs: l.Fs}
-		configBytes, err = afs.ReadFile(l.ConfigPathArg)
-		if err != nil {
-			return fmt.Errorf("failed to read config file: %w", err)
-		}
-		l.Config, err = config.NewClientConfig(configBytes)
-		if err != nil {
-			return fmt.Errorf("failed to parse config file: %w", err)
-		}
-	} else {
-		if l.CreateConfigArg {
+			// Load the file from the filesystem
 			afs := &afero.Afero{Fs: l.Fs}
-			if err := l.Fs.MkdirAll(filepath.Dir(l.ConfigPathArg), 0755); err != nil {
-				return fmt.Errorf("failed to create config directory: %w", err)
+			configBytes, err = afs.ReadFile(l.ConfigPathArg)
+			if err != nil {
+				return fmt.Errorf("failed to read config file: %w", err)
 			}
-			if err := afs.WriteFile(l.ConfigPathArg, config.DefaultClientConfig, 0644); err != nil {
-				return fmt.Errorf("failed to write default config file: %w", err)
+			l.Config, err = config.NewClientConfig(configBytes)
+			if err != nil {
+				return fmt.Errorf("failed to parse config file: %w", err)
 			}
-			log.Printf("created client config file at %s", l.ConfigPathArg)
-			return nil
 		} else {
-			log.Printf("failed to find client config file to generate a default config, run `opkssh login --create-config` to create a default config file")
-		}
-		l.Config, err = config.NewClientConfig(config.DefaultClientConfig)
-		if err != nil {
-			return fmt.Errorf("failed to parse default config file: %w", err)
+			if l.CreateConfigArg {
+				afs := &afero.Afero{Fs: l.Fs}
+				if err := l.Fs.MkdirAll(filepath.Dir(l.ConfigPathArg), 0755); err != nil {
+					return fmt.Errorf("failed to create config directory: %w", err)
+				}
+				if err := afs.WriteFile(l.ConfigPathArg, config.DefaultClientConfig, 0644); err != nil {
+					return fmt.Errorf("failed to write default config file: %w", err)
+				}
+				log.Printf("created client config file at %s", l.ConfigPathArg)
+				return nil
+			} else {
+				log.Printf("failed to find client config file to generate a default config, run `opkssh login --create-config` to create a default config file")
+			}
+			l.Config, err = config.NewClientConfig(config.DefaultClientConfig)
+			if err != nil {
+				return fmt.Errorf("failed to parse default config file: %w", err)
+			}
 		}
 	}
 
@@ -178,10 +180,16 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		}
 	}
 
+	// This arg is true if set, so if it false it hasn't been set and
+	// we should use the config value for the matching providing.
+	// If it is true we ignore the config
 	if !l.SendAccessTokenArg {
-		// This arg is true if set, so it if it false it hasn't ben set and
-		// we should use the config value. If it is true we ignore the config
-		l.SendAccessTokenArg = l.Config.SendAccessToken
+		if opConfig, ok := l.Config.GetByIssuer(provider.Issuer()); !ok {
+			// This can happen if the provider is supplied via the command line or environment variables and thus not in the config
+			log.Printf("Warning: could not find issuer %s in client config providers\n", provider.Issuer())
+		} else {
+			l.SendAccessTokenArg = opConfig.SendAccessToken
+		}
 	}
 
 	// Execute login command

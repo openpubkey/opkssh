@@ -32,14 +32,15 @@ const (
 )
 
 type ProviderConfig struct {
-	AliasList    []string `yaml:"alias"`
-	Issuer       string   `yaml:"issuer"`
-	ClientID     string   `yaml:"client_id"`
-	ClientSecret string   `yaml:"client_secret,omitempty"`
-	Scopes       []string `yaml:"scopes"`
-	AccessType   string   `yaml:"access_type,omitempty"`
-	Prompt       string   `yaml:"prompt,omitempty"`
-	RedirectURIs []string `yaml:"redirect_uris"`
+	AliasList       []string `yaml:"alias"`
+	Issuer          string   `yaml:"issuer"`
+	ClientID        string   `yaml:"client_id"`
+	ClientSecret    string   `yaml:"client_secret,omitempty"`
+	Scopes          []string `yaml:"scopes"`
+	AccessType      string   `yaml:"access_type,omitempty"`
+	Prompt          string   `yaml:"prompt,omitempty"`
+	RedirectURIs    []string `yaml:"redirect_uris"`
+	SendAccessToken bool     `yaml:"send_access_token,omitempty"`
 }
 
 func (p *ProviderConfig) UnmarshalYAML(value *yaml.Node) error {

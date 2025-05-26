@@ -34,6 +34,11 @@ func TestParseConfig(t *testing.T) {
 	// This is 5 rather than 4 because one of the providers has 2 aliases
 	require.Equal(t, 5, len(providerMap))
 
+	for _, provider := range clientConfigDefault.Providers {
+		require.NotEmpty(t, provider.Issuer, "Provider issuer should not be empty")
+		require.False(t, provider.SendAccessToken, "SendAccessToken should be false by default")
+	}
+
 	// Test failure
 	clientConfigDefault, err = NewClientConfig([]byte("invalid yaml"))
 	require.ErrorContains(t, err, "yaml: unmarshal errors")

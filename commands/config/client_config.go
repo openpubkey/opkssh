@@ -28,7 +28,6 @@ var DefaultClientConfig []byte
 type ClientConfig struct {
 	DefaultProvider string           `yaml:"default_provider"`
 	Providers       []ProviderConfig `yaml:"providers"`
-	SendAccessToken bool             `yaml:"send_access_token"`
 }
 
 func NewClientConfig(c []byte) (*ClientConfig, error) {
@@ -42,4 +41,15 @@ func NewClientConfig(c []byte) (*ClientConfig, error) {
 
 func (c *ClientConfig) GetProvidersMap() (map[string]ProviderConfig, error) {
 	return CreateProvidersMap(c.Providers)
+}
+
+// GetByIssuer looks up an OpenID Provider by its issuer URL. If there are
+// multiple providers with the same issuer, it returns the first one found.
+func (c *ClientConfig) GetByIssuer(issuer string) (*ProviderConfig, bool) {
+	for _, provider := range c.Providers {
+		if provider.Issuer == issuer {
+			return &provider, true
+		}
+	}
+	return nil, false
 }
