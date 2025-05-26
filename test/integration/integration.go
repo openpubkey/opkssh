@@ -144,7 +144,7 @@ func GetOPKSshKey(seckeyPath string) (ssh.PublicKey, string, error) {
 		}
 
 		// Check if it's an OPK ssh key
-		if comment == "openpubkey" {
+		if strings.HasPrefix(comment, "openpubkey") {
 			pubKey = parsedPubKey
 			break
 		}

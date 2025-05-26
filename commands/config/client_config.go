@@ -18,6 +18,9 @@ package config
 
 import (
 	_ "embed"
+	"fmt"
+	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -26,8 +29,9 @@ import (
 var DefaultClientConfig []byte
 
 type ClientConfig struct {
-	DefaultProvider string           `yaml:"default_provider"`
-	Providers       []ProviderConfig `yaml:"providers"`
+	DefaultProvider string              `yaml:"default_provider"`
+	KeyManagement   KeyManagementConfig `yaml:"key_management"`
+	Providers       []ProviderConfig    `yaml:"providers"`
 }
 
 func NewClientConfig(c []byte) (*ClientConfig, error) {
@@ -41,4 +45,51 @@ func NewClientConfig(c []byte) (*ClientConfig, error) {
 
 func (c *ClientConfig) GetProvidersMap() (map[string]ProviderConfig, error) {
 	return CreateProvidersMap(c.Providers)
+}
+
+func (c *ClientConfig) CheckKeyDir() error {
+
+	km := c.KeyManagement
+
+	// do a simple sanity check on key dirs
+	if strings.Contains(km.DefaultKeyDir, ".ssh/config") || strings.Contains(km.DefaultKeyDir, ".opk/config") {
+		fmt.Println("WARNING: You might be using a config file name as a directory path. Make sure your path does not use .ssh/config or .opk/config")
+	}
+
+	// if default key dir is not set we use the default logic
+	if km.DefaultKeyDir == "" ||
+		// if identity management is off and default value is used we do the same
+		(!km.UseIdentityConfig && km.DefaultKeyDir == "~/.ssh") {
+		return nil
+	}
+
+	// if identity management is off and default value is not used we inform the user that the SSH client will not
+	// use the key automatically
+	if !km.UseIdentityConfig && km.DefaultKeyDir != "~/.ssh" {
+		fmt.Println("Not using default key name and directory. SSH client will not automatically find the key pair!")
+	}
+
+	keyDir, err := km.GetKeyDir()
+	if err != nil {
+		return err
+	}
+
+	err = os.MkdirAll(keyDir, 0700)
+	if err != nil {
+		err = fmt.Errorf("failed to create key directory: %w", err)
+		return err
+	}
+
+	fileInfo, err := os.Stat(keyDir)
+	if err != nil {
+		err = fmt.Errorf("could not get stats of key directory: %w", err)
+		return err
+	}
+
+	if !fileInfo.IsDir() {
+		err = fmt.Errorf("key directory is not a directory")
+		return err
+	}
+
+	return nil
 }
