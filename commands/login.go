@@ -568,8 +568,8 @@ func (l *LoginCmd) handleIdentityConfig(keyFileName string) error {
 	sshConfig := filepath.Join(userHomeDir, ".ssh", "config")
 	opkSSHConfig := filepath.Join(userHomeDir, ".opk", "config")
 
-	// build configured ssh key dir
-	opkKeyDir, err := l.config.KeyManagement.GetKeyDir()
+	// create SSH config directory if needed
+	err = afs.MkdirAll(filepath.Dir(sshConfig), sshDirPerm)
 	if err != nil {
 		return err
 	}
@@ -580,6 +580,7 @@ func (l *LoginCmd) handleIdentityConfig(keyFileName string) error {
 		return err
 	}
 
+	// add opkssh SSH config to users SSH config
 	includeString := "Include " + opkSSHConfig
 	hasNewConfig := false
 	if !strings.Contains(string(fileBytes), includeString) {
@@ -594,13 +595,6 @@ func (l *LoginCmd) handleIdentityConfig(keyFileName string) error {
 			err = fmt.Errorf("failed to write user ssh config: %w", err)
 			return err
 		}
-	}
-
-	// make sure the user specified directory exists
-	err = afs.MkdirAll(opkKeyDir, sshDirPerm)
-	if err != nil {
-		err = fmt.Errorf("failed to create opk key directory: %w", err)
-		return err
 	}
 
 	// write identity to config
