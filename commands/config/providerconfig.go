@@ -45,14 +45,15 @@ type ProviderConfig struct {
 
 func (p *ProviderConfig) UnmarshalYAML(value *yaml.Node) error {
 	var tmp struct {
-		AliasList    string   `yaml:"alias"`
-		Issuer       string   `yaml:"issuer"`
-		ClientID     string   `yaml:"client_id"`
-		ClientSecret string   `yaml:"client_secret"`
-		Scopes       string   `yaml:"scopes"`
-		AccessType   string   `yaml:"access_type"`
-		Prompt       string   `yaml:"prompt"`
-		RedirectURIs []string `yaml:"redirect_uris"`
+		AliasList       string   `yaml:"alias"`
+		Issuer          string   `yaml:"issuer"`
+		ClientID        string   `yaml:"client_id"`
+		ClientSecret    string   `yaml:"client_secret"`
+		Scopes          string   `yaml:"scopes"`
+		AccessType      string   `yaml:"access_type"`
+		Prompt          string   `yaml:"prompt"`
+		RedirectURIs    []string `yaml:"redirect_uris"`
+		SendAccessToken bool     `yaml:"send_access_token,omitempty"`
 	}
 
 	// Set default values
@@ -69,14 +70,15 @@ func (p *ProviderConfig) UnmarshalYAML(value *yaml.Node) error {
 		return err
 	}
 	*p = ProviderConfig{
-		AliasList:    strings.Fields(tmp.AliasList),
-		Issuer:       tmp.Issuer,
-		ClientID:     tmp.ClientID,
-		ClientSecret: tmp.ClientSecret,
-		Scopes:       strings.Fields(tmp.Scopes),
-		AccessType:   tmp.AccessType,
-		Prompt:       tmp.Prompt,
-		RedirectURIs: tmp.RedirectURIs,
+		AliasList:       strings.Fields(tmp.AliasList),
+		Issuer:          tmp.Issuer,
+		ClientID:        tmp.ClientID,
+		ClientSecret:    tmp.ClientSecret,
+		Scopes:          strings.Fields(tmp.Scopes),
+		AccessType:      tmp.AccessType,
+		Prompt:          tmp.Prompt,
+		RedirectURIs:    tmp.RedirectURIs,
+		SendAccessToken: tmp.SendAccessToken,
 	}
 	return nil
 }

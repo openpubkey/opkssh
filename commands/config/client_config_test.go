@@ -51,5 +51,28 @@ func TestParseConfig(t *testing.T) {
 	clientConfigDefault, err = NewClientConfig([]byte("invalid yaml"))
 	require.ErrorContains(t, err, "yaml: unmarshal errors")
 	require.Nil(t, clientConfigDefault)
+}
 
+func TestParseConfigWithSendAccessToken(t *testing.T) {
+	c := `---
+default_provider: webchooser
+
+providers:
+  - alias: google
+    issuer: https://accounts.google.com
+    client_id: 206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com
+    client_secret: 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
+    scopes: openid email profile
+    access_type: offline
+    send_access_token: true
+    prompt: consent
+    redirect_uris:
+      - http://localhost:3000/login-callback
+      - http://localhost:10001/login-callback
+      - http://localhost:11110/login-callback`
+
+	clientConfig, err := NewClientConfig([]byte(c))
+	require.NoError(t, err)
+	require.NotNil(t, clientConfig)
+	require.Equal(t, clientConfig.Providers[0].SendAccessToken, true)
 }
