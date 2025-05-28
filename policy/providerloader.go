@@ -18,8 +18,11 @@ package policy
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
+	"github.com/go-playground/validator/v10"
+	"github.com/goccy/go-yaml"
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/openpubkey/verifier"
 	"github.com/openpubkey/opkssh/policy/files"
@@ -27,9 +30,9 @@ import (
 )
 
 type ProvidersRow struct {
-	Issuer           string
-	ClientID         string
-	ExpirationPolicy string
+	Issuer           string `yaml:"issuer" validate:"required"`
+	ClientID         string `yaml:"client_id" validate:"required"`
+	ExpirationPolicy string `yaml:"expiration_policy" validate:"required"`
 }
 
 func (p ProvidersRow) GetExpirationPolicy() (verifier.ExpirationPolicy, error) {
@@ -61,6 +64,10 @@ type ProviderPolicy struct {
 
 func (p *ProviderPolicy) AddRow(row ProvidersRow) {
 	p.rows = append(p.rows, row)
+}
+
+func (p *ProviderPolicy) Append(n ProviderPolicy) {
+	p.rows = append(p.rows, n.rows...)
 }
 
 func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
@@ -149,7 +156,15 @@ func (o *ProvidersFileLoader) LoadProviderPolicy(path string) (*ProviderPolicy, 
 	if err != nil {
 		return nil, err
 	}
-	policy := o.FromTable(content, path)
+
+	var policy *ProviderPolicy
+
+	if filepath.Ext(path) == ".yml" {
+		policy = o.FromYaml(content, path)
+	} else {
+		policy = o.FromTable(content, path)
+	}
+
 	return policy, nil
 }
 
@@ -189,5 +204,34 @@ func (o *ProvidersFileLoader) FromTable(input []byte, path string) *ProviderPoli
 		}
 		policy.AddRow(policyRow)
 	}
+	return policy
+}
+
+// FromYaml decodes yaml input into policy.Policy
+func (o *ProvidersFileLoader) FromYaml(yml []byte, path string) *ProviderPolicy {
+
+	var yml_policies map[string]ProvidersRow
+
+	policy := &ProviderPolicy{
+		rows: []ProvidersRow{},
+	}
+
+	if err := yaml.Unmarshal([]byte(yml), &yml_policies); err != nil {
+		fmt.Printf("Failed to load provider from %v.\n", path)
+	} else {
+
+		validate := validator.New(validator.WithRequiredStructEnabled())
+
+		for alias, p := range yml_policies {
+			fmt.Printf("Loaded provider %v: %v\n", alias, p.ToString())
+
+			if err := validate.Struct(p); err != nil {
+				fmt.Println(err)
+			} else {
+				policy.AddRow(p)
+			}
+		}
+	}
+
 	return policy
 }
