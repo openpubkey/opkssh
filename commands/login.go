@@ -17,6 +17,7 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 	"crypto"
 	"encoding/base64"
@@ -32,7 +33,6 @@ import (
 	"time"
 
 	"github.com/lestrrat-go/jwx/v2/jwa"
-	"github.com/lestrrat-go/jwx/v2/jws"
 	"github.com/openpubkey/openpubkey/client"
 	"github.com/openpubkey/openpubkey/client/choosers"
 	"github.com/openpubkey/openpubkey/oidc"
@@ -433,10 +433,7 @@ func (l *LoginCmd) LoginWithRefresh(ctx context.Context, provider providers.Refr
 				return err
 			}
 
-			_, payloadB64, _, err := jws.SplitCompactString(string(comPkt))
-			if err != nil {
-				return fmt.Errorf("malformed ID token: %w", err)
-			}
+			payloadB64 := payloadFromCompactPkt(comPkt)
 			payload, err := base64.RawURLEncoding.DecodeString(string(payloadB64))
 			if err != nil {
 				return fmt.Errorf("refreshed ID token payload is not base64 encoded: %w", err)
@@ -582,4 +579,11 @@ func PrettyIdToken(pkt pktoken.PKToken) (string, error) {
 func isGitHubEnvironment() bool {
 	return os.Getenv("ACTIONS_ID_TOKEN_REQUEST_URL") != "" &&
 		os.Getenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN") != ""
+}
+
+// payloadFromCompactPkt extracts the payload from a compact PK Token which
+// is always the second part of the '.' separated string.
+func payloadFromCompactPkt(compactPkt []byte) []byte {
+	parts := bytes.SplitN(compactPkt, []byte("."), -1)
+	return parts[1]
 }
