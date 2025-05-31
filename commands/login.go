@@ -17,6 +17,7 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 	"crypto"
 	"encoding/base64"
@@ -32,7 +33,6 @@ import (
 	"time"
 
 	"github.com/lestrrat-go/jwx/v2/jwa"
-	"github.com/lestrrat-go/jwx/v2/jws"
 	"github.com/openpubkey/openpubkey/client"
 	"github.com/openpubkey/openpubkey/client/choosers"
 	"github.com/openpubkey/openpubkey/oidc"
@@ -74,8 +74,8 @@ type LoginCmd struct {
 
 func NewLogin(autoRefreshArg bool, configPathArg string, createConfigArg bool, logDirArg string,
 	sendAccessTokenArg bool, disableBrowserOpenArg bool, printIdTokenArg bool,
-	providerArg string, keyPathArg string, providerAliasArg string) *LoginCmd {
-
+	providerArg string, keyPathArg string, providerAliasArg string,
+) *LoginCmd {
 	return &LoginCmd{
 		Fs:                    afero.NewOsFs(),
 		AutoRefreshArg:        autoRefreshArg,
@@ -95,7 +95,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 	// If a log directory was provided, write any logs to a file in that directory AND stdout
 	if l.LogDirArg != "" {
 		logFilePath := filepath.Join(l.LogDirArg, "opkssh.log")
-		logFile, err := l.Fs.OpenFile(logFilePath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0660)
+		logFile, err := l.Fs.OpenFile(logFilePath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o660)
 		if err != nil {
 			log.Printf("Failed to open log for writing: %v \n", err)
 		}
@@ -138,10 +138,10 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		} else {
 			if l.CreateConfigArg {
 				afs := &afero.Afero{Fs: l.Fs}
-				if err := l.Fs.MkdirAll(filepath.Dir(l.ConfigPathArg), 0755); err != nil {
+				if err := l.Fs.MkdirAll(filepath.Dir(l.ConfigPathArg), 0o755); err != nil {
 					return fmt.Errorf("failed to create config directory: %w", err)
 				}
-				if err := afs.WriteFile(l.ConfigPathArg, config.DefaultClientConfig, 0644); err != nil {
+				if err := afs.WriteFile(l.ConfigPathArg, config.DefaultClientConfig, 0o644); err != nil {
 					return fmt.Errorf("failed to write default config file: %w", err)
 				}
 				log.Printf("created client config file at %s", l.ConfigPathArg)
@@ -433,10 +433,7 @@ func (l *LoginCmd) LoginWithRefresh(ctx context.Context, provider providers.Refr
 				return err
 			}
 
-			_, payloadB64, _, err := jws.SplitCompactString(string(comPkt))
-			if err != nil {
-				return fmt.Errorf("malformed ID token: %w", err)
-			}
+			payloadB64 := payloadFromCompactPkt(comPkt)
 			payload, err := base64.RawURLEncoding.DecodeString(string(payloadB64))
 			if err != nil {
 				return fmt.Errorf("refreshed ID token payload is not base64 encoded: %w", err)
@@ -448,6 +445,7 @@ func (l *LoginCmd) LoginWithRefresh(ctx context.Context, provider providers.Refr
 		}
 	}
 }
+
 func createSSHCert(pkt *pktoken.PKToken, signer crypto.Signer, principals []string) ([]byte, []byte, error) {
 	return createSSHCertWithAccessToken(pkt, nil, signer, principals)
 }
@@ -538,7 +536,7 @@ func (l *LoginCmd) writeKeysToSSHDir(seckeySshPem []byte, certBytes []byte) erro
 func (l *LoginCmd) writeKeys(seckeyPath string, pubkeyPath string, seckeySshPem []byte, certBytes []byte) error {
 	// Write ssh secret key to filesystem
 	afs := &afero.Afero{Fs: l.Fs}
-	if err := afs.WriteFile(seckeyPath, seckeySshPem, 0600); err != nil {
+	if err := afs.WriteFile(seckeyPath, seckeySshPem, 0o600); err != nil {
 		return err
 	}
 
@@ -546,7 +544,7 @@ func (l *LoginCmd) writeKeys(seckeyPath string, pubkeyPath string, seckeySshPem 
 
 	certBytes = append(certBytes, []byte(" openpubkey")...)
 	// Write ssh public key (certificate) to filesystem
-	return afs.WriteFile(pubkeyPath, certBytes, 0644)
+	return afs.WriteFile(pubkeyPath, certBytes, 0o644)
 }
 
 func (l *LoginCmd) fileExists(fPath string) bool {
@@ -582,4 +580,11 @@ func PrettyIdToken(pkt pktoken.PKToken) (string, error) {
 func isGitHubEnvironment() bool {
 	return os.Getenv("ACTIONS_ID_TOKEN_REQUEST_URL") != "" &&
 		os.Getenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN") != ""
+}
+
+// payloadFromCompactPkt extracts the payload from a compact PK Token which
+// is always the second part of the '.' separated string.
+func payloadFromCompactPkt(compactPkt []byte) []byte {
+	parts := bytes.SplitN(compactPkt, []byte("."), -1)
+	return parts[1]
 }
