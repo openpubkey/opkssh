@@ -32,7 +32,7 @@ command() {
 }
 
 wget() {
-    printf "#!/bin/bash\necho Mock opkssh binary from wget\n" > "$4"  # Simulate binary
+    printf "#!/bin/bash\necho Mock opkssh binary from wget\necho wget %s" "$*" > "$4"  # Simulate binary
 }
 
 mv() {
@@ -82,10 +82,14 @@ test_install_opkssh_binary_from_remote_latest() {
 
     output=$(install_opkssh_binary 2>&1)
     result=$?
+    wget_parameters=$("$INSTALL_DIR/$BINARY_NAME")
 
     assertEquals "Expected success for latest install" 0 "$result"
-    assertContains "$output" "Downloading version latest of opkssh from https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64"
+    assertContains "Expected Download message when downloading" \
+        "$output" "Downloading version latest of opkssh from https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64"
     assertTrue "Binary should be installed" "[ -x \"$INSTALL_DIR/$BINARY_NAME\" ]"
+    assertContains "Expected wget to be called with correct parameters" \
+        "$wget_parameters" "wget -q --show-progress -O opkssh https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64"
 }
 
 test_install_opkssh_binary_from_remote_specific_version() {
@@ -94,10 +98,14 @@ test_install_opkssh_binary_from_remote_specific_version() {
 
     output=$(install_opkssh_binary 2>&1)
     result=$?
+    wget_parameters=$("$INSTALL_DIR/$BINARY_NAME")
 
     assertEquals "Expected success for latest install" 0 "$result"
-    assertContains "$output" "Downloading version v1.2.3 of opkssh from https://github.com/openpubkey/opkssh/releases/download/v1.2.3/opkssh-linux-amd64"
+    assertContains "Expected Download message when downloading" \
+        "$output" "Downloading version v1.2.3 of opkssh from https://github.com/openpubkey/opkssh/releases/download/v1.2.3/opkssh-linux-amd64"
     assertTrue "Binary should be installed" "[ -x \"$INSTALL_DIR/$BINARY_NAME\" ]"
+    assertContains "Expected wget to be called with correct parameters" \
+        "$wget_parameters" "wget -q --show-progress -O opkssh https://github.com/openpubkey/opkssh/releases/download/v1.2.3/opkssh-linux-amd64"
 }
 
 test_install_opkssh_binary_command_not_found_after_install() {
