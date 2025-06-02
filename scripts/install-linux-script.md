@@ -31,6 +31,7 @@ Options:
 ## `file_exists`
 
 Default helpers that wrap real commands (can be overridden in tests)
+TODO: Create shUnit2 tests for these
 
 
 ## `check_bash_version`
