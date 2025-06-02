@@ -91,7 +91,6 @@ OS_TYPE=""
 CPU_ARCH=""
 
 # Default helpers that wrap real commands (can be overridden in tests)
-# TODO: Create shUnit2 tests for these
 file_exists() { [[ -f "$1" ]]; }
 dir_exists() { [[ -d "$1" ]]; }
 
