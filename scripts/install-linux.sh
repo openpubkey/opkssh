@@ -532,12 +532,17 @@ EOF
 # configure_opkssh
 # Creates/checks the opskssh configuration
 #
+# Arguments:
+#   $1 - Path to etc directory (Optional, default /etc)
+#
 # Outputs:
 #   Writes to stdout the configration progress
 #
 # Returns:
 #   0
+# shellcheck disable=SC2120
 configure_opkssh() {
+    local etc_path="${1:-/etc}"
     # Define the default OpenID Providers
     local provider_google="https://accounts.google.com 206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com 24h"
     local provider_microsoft="https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0 096ce0a3-5e72-4da8-9c86-12924b294a01 24h"
@@ -546,37 +551,37 @@ configure_opkssh() {
 
     echo "Configuring opkssh:"
 
-    if [[ ! -e "/etc/opk" ]]; then
-        mkdir -p /etc/opk
-        chown root:"${AUTH_CMD_GROUP}" /etc/opk
-        chmod 750 /etc/opk
+    if [[ ! -e "$etc_path/opk" ]]; then
+        mkdir -p "$etc_path/opk"
+        chown root:"${AUTH_CMD_GROUP}" "$etc_path/opk"
+        chmod 750 "$etc_path/opk"
     fi
 
-    if [[ ! -e "/etc/opk/policy.d" ]]; then
-        mkdir -p /etc/opk/policy.d
-        chown root:"${AUTH_CMD_GROUP}" /etc/opk/policy.d
-        chmod 750 /etc/opk/policy.d
+    if [[ ! -e "$etc_path/opk/policy.d" ]]; then
+        mkdir -p "$etc_path/opk/policy.d"
+        chown root:"${AUTH_CMD_GROUP}" "$etc_path/opk/policy.d"
+        chmod 750 "$etc_path/opk/policy.d"
     fi
 
-    if [[ ! -e "/etc/opk/auth_id" ]]; then
-        touch /etc/opk/auth_id
-        chown root:"${AUTH_CMD_GROUP}" /etc/opk/auth_id
-        chmod 640 /etc/opk/auth_id
+    if [[ ! -e "$etc_path/opk/auth_id" ]]; then
+        touch "$etc_path/opk/auth_id"
+        chown root:"${AUTH_CMD_GROUP}" "$etc_path/opk/auth_id"
+        chmod 640 "$etc_path/opk/auth_id"
     fi
 
-    if [[ ! -e "/etc/opk/config.yml" ]]; then
-        touch /etc/opk/config.yml
-        chown root:"${AUTH_CMD_GROUP}" /etc/opk/config.yml
-        chmod 640 /etc/opk/config.yml
+    if [[ ! -e "$etc_path/opk/config.yml" ]]; then
+        touch "$etc_path/opk/config.yml"
+        chown root:"${AUTH_CMD_GROUP}" "$etc_path/opk/config.yml"
+        chmod 640 "$etc_path/opk/config.yml"
     fi
 
-    if [[ ! -e "/etc/opk/providers" ]]; then
-        touch /etc/opk/providers
-        chown root:"${AUTH_CMD_GROUP}" /etc/opk/providers
-        chmod 640 /etc/opk/providers
+    if [[ ! -e "$etc_path/opk/providers" ]]; then
+        touch "$etc_path/opk/providers"
+        chown root:"${AUTH_CMD_GROUP}" "$etc_path/opk/providers"
+        chmod 640 "$etc_path/opk/providers"
     fi
 
-    if [[ -s /etc/opk/providers ]]; then
+    if [[ -s "$etc_path/opk/providers" ]]; then
         echo "  The providers policy file (/etc/opk/providers) is not empty. Keeping existing values"
     else
         {
@@ -584,40 +589,39 @@ configure_opkssh() {
             echo "$provider_microsoft"
             echo "$provider_gitlab"
             echo "$provider_hello"
-        } >> /etc/opk/providers
+        } >> "$etc_path/opk/providers"
     fi
 }
 
 # configure_openssh_server
 # Configure openSSH-server to use opkssh using AuthorizedKeysCommand
 #
+# Arguments:
+#   $1 - Path to ssh root configuratino directory (Optional, default /etc/ssh)
+#
 # Output:
 #   Writes to stdout the progress of configuration
 #
 # Returns:
 #   0 if succeeded, otherwise 1
+# shellcheck disable=SC2120
 configure_openssh_server() {
+    local ssh_root="${1:-/etc/ssh}"
+    local sshd_config="$ssh_root/sshd_config"
+    local sshd_config_d="$ssh_root/sshd_config.d"
     local auth_key_cmd="AuthorizedKeysCommand ${INSTALL_DIR}/${BINARY_NAME} verify %u %k %t"
     local auth_key_user="AuthorizedKeysCommandUser ${AUTH_CMD_USER}"
     local opk_config_suffix="opk-ssh.conf"
-    local new_prefix
-    local active_config
+    local new_prefix=""
+    local active_config=""
 
-    # Add the directives in the correct configuration, taking priorities into account
-    if [[ -f /etc/ssh/sshd_config ]] && \
-    { ! grep -Fxq 'Include /etc/ssh/sshd_config.d/*.conf' /etc/ssh/sshd_config || \
-      { grep -Eq '^AuthorizedKeysCommand|^AuthorizedKeysCommandUser' /etc/ssh/sshd_config && \
-       ! grep -Eq '^AuthorizedKeysCommand|^AuthorizedKeysCommandUser' /etc/ssh/sshd_config.d/*.conf 2>/dev/null; \
-      }; \
-    }; then
-        # The directives in 'sshd_config' are active
-        sed -i '/^AuthorizedKeysCommand /s/^/#/' /etc/ssh/sshd_config
-        sed -i '/^AuthorizedKeysCommandUser /s/^/#/' /etc/ssh/sshd_config
-        echo "$auth_key_cmd" >> /etc/ssh/sshd_config
-        echo "$auth_key_user" >> /etc/ssh/sshd_config
-    else
+    if [[ ! -f "$sshd_config" ]] || \
+       ( grep -Fxq 'Include /etc/ssh/sshd_config.d/*.conf' "$sshd_config" && \
+         { ! grep -Eq '^AuthorizedKeysCommand|^AuthorizedKeysCommandUser' "$sshd_config" || \
+           ! grep -Eq '^AuthorizedKeysCommand|^AuthorizedKeysCommandUser' "$sshd_config_d"/*.conf 2>/dev/null; } ); then
+        # Configuration should be put in /etc/ssh/sshd_config.d director
         # Find active configuration file with the directives we're interested in (sorted numerically)
-        active_config=$(find /etc/ssh/sshd_config.d/*.conf -exec grep -l '^AuthorizedKeysCommand\|^AuthorizedKeysCommandUser' {} \; 2>/dev/null | sort -V | head -n 1)
+        active_config=$(find "$sshd_config_d"/*.conf -exec grep -l '^AuthorizedKeysCommand\|^AuthorizedKeysCommandUser' {} \; 2>/dev/null | sort -V | head -n 1)
 
         if [[ "$active_config" == *"$opk_config_suffix" ]] || [[ "$OVERWRITE_ACTIVE_CONFIG" == true ]]; then
             # Overwrite the configuration, either from a previous run of this script or because user request it for the currently active config
@@ -639,10 +643,16 @@ configure_openssh_server() {
                 prefix=$(basename "$active_config" | grep -o '^[0-9]*')
                 new_prefix=$((prefix - 1))
             fi
-            new_config="/etc/ssh/sshd_config.d/${new_prefix}-$opk_config_suffix"
+            new_config="${sshd_config_d}/${new_prefix}-$opk_config_suffix"
             echo "$auth_key_cmd" > "$new_config"
             echo "$auth_key_user" >> "$new_config"
         fi
+    else
+        # The directives in 'sshd_config' are active
+        sed -i '/^AuthorizedKeysCommand /s/^/#/' "$sshd_config"
+        sed -i '/^AuthorizedKeysCommandUser /s/^/#/' "$sshd_config"
+        echo "$auth_key_cmd" >> "$sshd_config"
+        echo "$auth_key_user" >> "$sshd_config"
     fi
 }
 
@@ -663,7 +673,7 @@ restart_openssh_server() {
             systemctl restart sshd
         else
             echo "  Unsupported OS type."
-            exit 1
+            return 1
         fi
     else
         echo "  RESTART_SSH is not true, skipping SSH restart."
@@ -702,21 +712,26 @@ configure_sudo() {
 # log_opkssh_installation
 # Log the installation details to /var/log/opkssh.log to help with debugging
 #
+# Arguments:
+#   $1 - Path to opkssh log file (Optional, default /var/log/opkssh.log)
+#
 # Output:
 #   Writes to stdout that installation is successful
 #   Writes installation debug information to /var/log/opkssh.log
 #
 # Returns:
 #   0
+# shellcheck disable=SC2120
 log_opkssh_installation() {
-    touch /var/log/opkssh.log
-    chown root:"${AUTH_CMD_GROUP}" /var/log/opkssh.log
-    chmod 660 /var/log/opkssh.log
+    local log_file="${1:-/var/log/opkssh.log}"
+    touch "$log_file"
+    chown root:"${AUTH_CMD_GROUP}" "$log_file"
+    chmod 660 "$log_file"
 
     VERSION_INSTALLED=$("$INSTALL_DIR"/"$BINARY_NAME" --version)
     INSTALLED_ON=$(date)
     # Log the installation details to /var/log/opkssh.log to help with debugging
-    echo "Successfully installed opkssh (INSTALLED_ON: $INSTALLED_ON, VERSION_INSTALLED: $VERSION_INSTALLED, INSTALL_VERSION: $INSTALL_VERSION, LOCAL_INSTALL_FILE: $LOCAL_INSTALL_FILE, HOME_POLICY: $HOME_POLICY, RESTART_SSH: $RESTART_SSH)" >> /var/log/opkssh.log
+    echo "Successfully installed opkssh (INSTALLED_ON: $INSTALLED_ON, VERSION_INSTALLED: $VERSION_INSTALLED, INSTALL_VERSION: $INSTALL_VERSION, LOCAL_INSTALL_FILE: $LOCAL_INSTALL_FILE, HOME_POLICY: $HOME_POLICY, RESTART_SSH: $RESTART_SSH)" >> "$log_file"
 
     echo "Installation successful! Run '$BINARY_NAME' to use it."
 }
@@ -730,21 +745,22 @@ log_opkssh_installation() {
 # Returns:
 #   0 if opkssh installs successfully, 1 if installation failed
 main(){
-    parse_args "$@" || exit 0
-    check_bash_version "${BASH_VERSINFO[@]}" || exit 1
-    running_as_root "$EUID" || exit 1
-    OS_TYPE=$(determine_linux_type) || exit 1
-    CPU_ARCH=$(check_cpu_architecture) || exit 1
-    ensure_command "wget" || exit 1
+    parse_args "$@" || return 0
+    check_bash_version "${BASH_VERSINFO[@]}" || return 1
+    running_as_root "$EUID" || return 1
+    OS_TYPE=$(determine_linux_type) || return 1
+    CPU_ARCH=$(check_cpu_architecture) || return 1
+    ensure_command "wget" || return 1
     if [[ "$HOME_POLICY" == true ]]; then
-        ensure_command "sudo" || exit 1
+        ensure_command "sudo" || return 1
     fi
-    ensure_opkssh_user_and_group "$AUTH_CMD_USER" "$AUTH_CMD_GROUP" || exit 1
-    ensure_openssh_server "$OS_TYPE" || exit 1
-    install_opkssh_binary || exit 1
+    ensure_opkssh_user_and_group "$AUTH_CMD_USER" "$AUTH_CMD_GROUP" || return 1
+    ensure_openssh_server "$OS_TYPE" || return 1
+    install_opkssh_binary || return 1
     check_selinux
     configure_opkssh
-    configure_openssh_server || exit 1
+    configure_openssh_server || return 1
+    restart_openssh_server || return 1
     if [[ "$HOME_POLICY" == true ]]; then
         configure_sudo
     fi
@@ -752,4 +768,7 @@ main(){
 }
 
 # Only run main if this file is executed, not sourced (like during testing)
-[[ "${BASH_SOURCE[0]}" == "${0}" ]] && main "$@"
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+    exit $?
+fi

@@ -4,6 +4,7 @@ export SHUNIT_RUNNIN=1
 echo "Running tests: ${0##*/}"
 
 # Source install-linux.sh
+# shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/../install-linux.sh"
 
 setUp() {
@@ -145,4 +146,5 @@ test_install_opkssh_binary_command_not_found_after_install() {
     assertContains "$output" "Installation failed"
 }
 
+# shellcheck disable=SC1091
 source shunit2

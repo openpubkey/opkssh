@@ -4,6 +4,7 @@ export SHUNIT_RUNNIN=1
 echo "Running tests: ${0##*/}"
 
 # Source install-linux.sh
+# shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/../install-linux.sh"
 
 #
@@ -164,4 +165,5 @@ test_ensure_openssh_server_installed_suse_config_missing() {
     assertContains "Expected output missing config error" "$output" "Neither /etc/ssh/sshd_config nor /etc/ssh/sshd_config.d exists"
 }
 
+# shellcheck disable=SC1091
 source shunit2

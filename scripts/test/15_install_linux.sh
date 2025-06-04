@@ -4,6 +4,7 @@ export SHUNIT_RUNNIN=1
 echo "Running tests: ${0##*/}"
 
 # Source install-linux.sh
+# shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/../install-linux.sh"
 
 setUp() {
@@ -49,4 +50,5 @@ test_dir_exists_returns_false_for_missing_path() {
     assertFalse "Expected dir_exists to return false for non-existent path" $?
 }
 
+# shellcheck disable=SC1091
 source shunit2

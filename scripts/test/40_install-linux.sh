@@ -4,6 +4,7 @@ export SHUNIT_RUNNIN=1
 echo "Running tests: ${0##*/}"
 
 # Source install-linux.sh
+# shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/../install-linux.sh"
 
 # Setup for each test
@@ -140,4 +141,5 @@ test_parse_args_help_flag() {
     assertContains "Expected help message in output" "$output" "Help message shown"
 }
 
+# shellcheck disable=SC1091
 source shunit2

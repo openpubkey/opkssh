@@ -17,6 +17,7 @@ test_global_variables() {
     unset OPKSSH_GITHUB_REPO
 
     # Source the script again to reinitialize variables
+    # shellcheck disable=SC1091
     source "$(dirname "${BASH_SOURCE[0]}")/../install-linux.sh"
 
     assertEquals "Default AUTH_CMD_USER should be 'opksshuser'" "opksshuser" "$AUTH_CMD_USER"
@@ -48,6 +49,7 @@ test_global_variables_env_override() {
     export OPKSSH_GITHUB_REPO="custom/repo"
 
     # Source the script again to reinitialize variables
+    # shellcheck disable=SC1091
     source "$(dirname "${BASH_SOURCE[0]}")/../install-linux.sh"
 
     assertEquals "AUTH_CMD_USER should be overridden to 'testuser'" "testuser" "$AUTH_CMD_USER"
@@ -64,5 +66,5 @@ test_global_variables_env_override() {
     assertEquals "OS_TYPE should default to empty string" "" "$OS_TYPE"
     assertEquals "CPU_ARCH should default to empty string" "" "$CPU_ARCH"
 }
-
+# shellcheck disable=SC1091
 source shunit2

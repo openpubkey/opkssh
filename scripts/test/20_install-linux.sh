@@ -4,6 +4,7 @@ export SHUNIT_RUNNIN=1
 echo "Running tests: ${0##*/}"
 
 # Source install-linux.sh
+# shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/../install-linux.sh"
 
 #
@@ -302,4 +303,5 @@ test_ensure_command_unsupported_os() {
     assertContains "Expected ensure_command_exists to warn about unsupported OS" "$output" "Unsupported OS type."
 }
 
+# shellcheck disable=SC1091
 source shunit2
