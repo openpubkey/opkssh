@@ -90,8 +90,26 @@ GITHUB_REPO="${OPKSSH_GITHUB_REPO:-openpubkey/opkssh}"
 OS_TYPE=""
 CPU_ARCH=""
 
-# Default helpers that wrap real commands (can be overridden in tests)
+# file_exists
+# check is file exists, helpers that wrap real commands so it can be
+# overridden in tests
+#
+# Arguments:
+#   $1 - Path to file
+#
+# Returns:
+#  0 if the file exists, otherwise
 file_exists() { [[ -f "$1" ]]; }
+
+# dir_exists
+# check is directory exists, helpers that wrap real commands so it can be
+# overridden in tests
+#
+# Arguments:
+#   $1 - Path to directory
+#
+# Returns:
+#  0 if the directory exists, otherwise
 dir_exists() { [[ -d "$1" ]]; }
 
 # check_bash_version
@@ -696,7 +714,7 @@ configure_sudo() {
             touch "$SUDOERS_PATH"
             chmod 440 "$SUDOERS_PATH"
         fi
-        SUDOERS_RULE_READ_HOME="$AUTH_CMD_USER ALL=(ALL) NOPASSWD: ${INSTALL_DIR}/opkssh readhome *"
+        SUDOERS_RULE_READ_HOME="$AUTH_CMD_USER ALL=(ALL) NOPASSWD: ${INSTALL_DIR}/${BINARY_NAME} readhome *"
         if ! grep -qxF "$SUDOERS_RULE_READ_HOME" "$SUDOERS_PATH"; then
             echo "  Adding sudoers rule for $AUTH_CMD_USER..."
             echo "# This allows opkssh to call opkssh readhome <username> to read the user's policy file in /home/<username>/auth_id" >> "$SUDOERS_PATH"

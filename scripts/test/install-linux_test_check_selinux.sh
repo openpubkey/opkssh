@@ -118,7 +118,7 @@ END
     [[ "$mock_log" == *"$expected_te_tmp"* ]]
     te_tmp_result=$?
     assertEquals "Expected to return 0 when SELinux is active and home policy is used" 0 "$result"
-    assertContains "Expected restorecon to use correct arguments" "$mock_log" "restorecon /usr/local/bin/opkssh"
+    assertContains "Expected restorecon to use correct arguments" "$mock_log" "restorecon ${INSTALL_DIR}/${BINARY_NAME}"
     assertContains "Expected checkmodule to use correct arguments" "$mock_log" "checkmodule -M -m -o /tmp/opkssh.mod /tmp/opkssh.te"
     assertContains "Expected semodule_package to use correct arguments" "$mock_log" "semodule_package -o /tmp/opkssh.pp -m /tmp/opkssh.mod"
     assertContains "Expected semodule to use correct arguments" "$mock_log" "semodule -i /tmp/opkssh.pp"
@@ -165,7 +165,7 @@ END
     [[ "$mock_log" == *"$expected_te_tmp"* ]]
     te_tmp_result=$?
     assertEquals "Expected to return 0 when SELinux is active and home policy is NOT used" 0 "$result"
-    assertContains "Expected restorecon to use correct arguments" "$mock_log" "restorecon /usr/local/bin/opkssh"
+    assertContains "Expected restorecon to use correct arguments" "$mock_log" "restorecon ${INSTALL_DIR}/${BINARY_NAME}"
     assertContains "Expected checkmodule to use correct arguments" "$mock_log" "checkmodule -M -m -o /tmp/opkssh-no-home.mod /tmp/opkssh-no-home.te"
     assertContains "Expected semodule_package to use correct arguments" "$mock_log" "semodule_package -o /tmp/opkssh-no-home.pp -m /tmp/opkssh-no-home.mod"
     assertContains "Expected semodule to use correct arguments" "$mock_log" "semodule -i /tmp/opkssh-no-home.pp"

@@ -14,7 +14,6 @@ setUp() {
     MOCK_LOG="$TEST_TEMP_DIR/mock.log"
     mkdir -p "$INSTALL_DIR"
     # Default values
-    INSTALL_VERSION="latest"
     LOCAL_INSTALL_FILE=""
     CPU_ARCH="amd64"
     export CPU_ARCH INSTALL_DIR INSTALL_VERSION LOCAL_INSTALL_FILE
@@ -96,17 +95,17 @@ test_install_opkssh_binary_from_remote_latest() {
     result=$?
     readarray -t mock_log < "$MOCK_LOG"
 
-    assertEquals "Expected success for latest install" 0 "$result"
-    assertContains "Expected Download message when downloading" \
-        "$output" "Downloading version latest of opkssh from https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64"
+    assertEquals "Expected success for default version install" 0 "$result"
+    assertContains "Expected Download message to output when downloading" \
+        "$output" "Downloading version $INSTALL_VERSION of $BINARY_NAME from https://github.com/${GITHUB_REPO}/releases/$INSTALL_VERSION/download/opkssh-linux-amd64"
     assertTrue "Binary should be installed" "[ -x \"$INSTALL_DIR/$BINARY_NAME\" ]"
     assertEquals "Expected wget to be called with correct parameters" \
-        "wget -q --show-progress -O $BINARY_NAME https://github.com/${GITHUB_REPO}/releases/latest/download/opkssh-linux-${CPU_ARCH}" "${mock_log[0]}"
+        "wget -q --show-progress -O $BINARY_NAME https://github.com/${GITHUB_REPO}/releases/$INSTALL_VERSION/download/opkssh-linux-${CPU_ARCH}" "${mock_log[0]}"
     assertEquals "Expected to move downloaded install file to binary path" \
         "mv $BINARY_NAME $INSTALL_DIR/$BINARY_NAME" "${mock_log[1]}"
     assertEquals "Expected to set execution flag on opkssh binary" \
         "chmod +x $INSTALL_DIR/$BINARY_NAME" "${mock_log[2]}"
-    assertEquals "Expected to set root as owner and AUTH_CMD_GROUP ownership on ginary" \
+    assertEquals "Expected to set root as owner and AUTH_CMD_GROUP ownership on binary" \
         "chown root:$AUTH_CMD_GROUP $INSTALL_DIR/$BINARY_NAME" "${mock_log[3]}"
     assertEquals "Expected to set correct file mode bits on opkssh binary" \
         "chmod 755 $INSTALL_DIR/$BINARY_NAME" "${mock_log[4]}"
@@ -122,7 +121,7 @@ test_install_opkssh_binary_from_remote_specific_version() {
 
     assertEquals "Expected success for v.1.2.3 install" 0 "$result"
     assertContains "Expected Download message when downloading" \
-        "$output" "Downloading version v1.2.3 of $BINARY_NAME from https://github.com/openpubkey/opkssh/releases/download/v1.2.3/opkssh-linux-amd64"
+        "$output" "Downloading version v1.2.3 of $BINARY_NAME from https://github.com/${GITHUB_REPO}/releases/download/v1.2.3/opkssh-linux-amd64"
     assertTrue "Binary should be installed" "[ -x \"$INSTALL_DIR/$BINARY_NAME\" ]"
     assertEquals "Expected wget to be called with correct parameters" \
         "wget -q --show-progress -O $BINARY_NAME https://github.com/${GITHUB_REPO}/releases/download/v1.2.3/opkssh-linux-${CPU_ARCH}" "${mock_log[0]}"

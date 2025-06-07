@@ -34,8 +34,8 @@ test_configure_openssh_server_no_existing_config() {
     assertTrue "/etc/ssh/sshd_config.d/60-opk-ssh.conf should not be createad" "[ -f \"$SSHD_CONFIG_D\"/60-opk-ssh.conf ]"
 
     readarray -t conf_file < "$SSHD_CONFIG_D/60-opk-ssh.conf"
-    assertEquals "Expected AuthorizedKeysCommand to be configured correctly" "AuthorizedKeysCommand /usr/local/bin/opkssh verify %u %k %t" "${conf_file[0]}"
-    assertEquals "Expected AuthorizedKeysCommandUser to be configured correctly" "AuthorizedKeysCommandUser opksshuser" "${conf_file[1]}"
+    assertEquals "Expected AuthorizedKeysCommand to be configured correctly" "AuthorizedKeysCommand ${INSTALL_DIR}/${BINARY_NAME} verify %u %k %t" "${conf_file[0]}"
+    assertEquals "Expected AuthorizedKeysCommandUser to be configured correctly" "AuthorizedKeysCommandUser $AUTH_CMD_USER" "${conf_file[1]}"
 }
 
 
@@ -49,8 +49,8 @@ test_configure_openssh_server_sshd_config_no_include_with_no_directives() {
 
     assertEquals "Expected return value to be 0" 0 "$result"
     assertTrue "sshd_config.d/60-opk-ssh.conf should not be created" "[ ! -f \"$SSHD_CONFIG_D/60-opk-ssh.conf\" ]"
-    assertContains "Expected new AuthorizedKeysCommand to be added" "${conf_file[*]}" "AuthorizedKeysCommand /usr/local/bin/opkssh verify %u %k %t"
-    assertContains "Expected new AuthorizedKeysCommandUser to be added" "${conf_file[*]}" "AuthorizedKeysCommandUser opksshuser"
+    assertContains "Expected new AuthorizedKeysCommand to be added" "${conf_file[*]}" "AuthorizedKeysCommand ${INSTALL_DIR}/${BINARY_NAME} verify %u %k %t"
+    assertContains "Expected new AuthorizedKeysCommandUser to be added" "${conf_file[*]}" "AuthorizedKeysCommandUser $AUTH_CMD_USER"
 }
 
 test_configure_openssh_server_sshd_config_no_include_with_directive() {
@@ -65,8 +65,8 @@ test_configure_openssh_server_sshd_config_no_include_with_directive() {
     assertTrue "sshd_config.d/60-opk-ssh.conf should not be created" "[ ! -f \"$SSHD_CONFIG_D/60-opk-ssh.conf\" ]"
     assertContains "Expected existing AuthorizedKeysCommand to be commented out" "${conf_file[*]}" "#AuthorizedKeysCommand /bin/foo"
     assertContains "Expected existing AuthorizedKeysCommandUser to be commented out" "${conf_file[*]}" "#AuthorizedKeysCommandUser foo"
-    assertContains "Expected new AuthorizedKeysCommand to be added" "${conf_file[*]}" "AuthorizedKeysCommand /usr/local/bin/opkssh verify %u %k %t"
-    assertContains "Expected new AuthorizedKeysCommandUser to be added" "${conf_file[*]}" "AuthorizedKeysCommandUser opksshuser"
+    assertContains "Expected new AuthorizedKeysCommand to be added" "${conf_file[*]}" "AuthorizedKeysCommand ${INSTALL_DIR}/${BINARY_NAME} verify %u %k %t"
+    assertContains "Expected new AuthorizedKeysCommandUser to be added" "${conf_file[*]}" "AuthorizedKeysCommandUser $AUTH_CMD_USER"
 }
 
 test_configure_openssh_server_sshd_config_with_include_no_directive(){
@@ -82,8 +82,8 @@ test_configure_openssh_server_sshd_config_with_include_no_directive(){
 
     assertEquals "Expected return value to be 0" 0 "$result"
     assertTrue "Expected sshd_config.d/60-opk-ssh.conf file to be created" "[ -f \"$SSHD_CONFIG_D/60-opk-ssh.conf\" ]"
-    assertEquals "Expected AuthorizedKeysCommand to be configured correctly" "AuthorizedKeysCommand /usr/local/bin/opkssh verify %u %k %t" "${conf_file[0]}"
-    assertEquals "Expected AuthorizedKeysCommandUser to be configured correctly" "AuthorizedKeysCommandUser opksshuser" "${conf_file[1]}"
+    assertEquals "Expected AuthorizedKeysCommand to be configured correctly" "AuthorizedKeysCommand ${INSTALL_DIR}/${BINARY_NAME} verify %u %k %t" "${conf_file[0]}"
+    assertEquals "Expected AuthorizedKeysCommandUser to be configured correctly" "AuthorizedKeysCommandUser $AUTH_CMD_USER" "${conf_file[1]}"
 }
 
 test_configure_openssh_server_sshd_config_with_include_with_directive(){
@@ -101,8 +101,8 @@ test_configure_openssh_server_sshd_config_with_include_with_directive(){
 
     assertEquals "Expected return value to be 0" 0 "$result"
     assertTrue "Expected sshd_config.d/60-opk-ssh.conf file to be created" "[ -f \"$SSHD_CONFIG_D/60-opk-ssh.conf\" ]"
-    assertEquals "Expected AuthorizedKeysCommand to be configured correctly" "AuthorizedKeysCommand /usr/local/bin/opkssh verify %u %k %t" "${conf_file[0]}"
-    assertEquals "Expected AuthorizedKeysCommandUser to be configured correctly" "AuthorizedKeysCommandUser opksshuser" "${conf_file[1]}"
+    assertEquals "Expected AuthorizedKeysCommand to be configured correctly" "AuthorizedKeysCommand ${INSTALL_DIR}/${BINARY_NAME} verify %u %k %t" "${conf_file[0]}"
+    assertEquals "Expected AuthorizedKeysCommandUser to be configured correctly" "AuthorizedKeysCommandUser $AUTH_CMD_USER" "${conf_file[1]}"
 }
 
 test_configure_openssh_server_existing_sshd_d_no_overwrite() {
@@ -122,8 +122,8 @@ test_configure_openssh_server_existing_sshd_d_no_overwrite() {
     assertTrue "Expected sshd_config.d/49-opk-ssh.conf file to be created" "[ -f \"$SSHD_CONFIG_D/49-opk-ssh.conf\" ]"
     readarray -t new_conf < "$SSHD_CONFIG_D/49-opk-ssh.conf"
     assertTrue "Expected original config file sshd_config.d/50-foo.conf to be untuched" "[ \"${#original_conf[@]}\" -eq \"4\" ]"
-    assertEquals "Expected AuthorizedKeysCommand to be configured correctly" "AuthorizedKeysCommand /usr/local/bin/opkssh verify %u %k %t" "${new_conf[0]}"
-    assertEquals "Expected AuthorizedKeysCommandUser to be configured correctly"  "AuthorizedKeysCommandUser opksshuser"  "${new_conf[1]}"
+    assertEquals "Expected AuthorizedKeysCommand to be configured correctly" "AuthorizedKeysCommand ${INSTALL_DIR}/${BINARY_NAME} verify %u %k %t" "${new_conf[0]}"
+    assertEquals "Expected AuthorizedKeysCommandUser to be configured correctly"  "AuthorizedKeysCommandUser $AUTH_CMD_USER"  "${new_conf[1]}"
 }
 
 test_configure_openssh_server_existing_sshd_d_with_overwrite() {
@@ -144,8 +144,8 @@ test_configure_openssh_server_existing_sshd_d_with_overwrite() {
     assertTrue "Expected sshd_config.d/49-opk-ssh.conf file not to be created" "[ ! -f \"$SSHD_CONFIG_D/49-opk-ssh.conf\" ]"
     assertEquals "Expected the original config to be commented out" "#AuthorizedKeysCommand /bin/foo" "${original_conf[2]}"
     assertEquals "Expected the original config to be commented out" "#AuthorizedKeysCommandUser foo" "${original_conf[3]}"
-    assertEquals "Expected AuthorizedKeysCommand to be configured" "AuthorizedKeysCommand /usr/local/bin/opkssh verify %u %k %t" "${original_conf[4]}"
-    assertEquals "Expected AuthorizedKeysCommandUser to be configured" "AuthorizedKeysCommandUser opksshuser" "${original_conf[5]}"
+    assertEquals "Expected AuthorizedKeysCommand to be configured" "AuthorizedKeysCommand ${INSTALL_DIR}/${BINARY_NAME} verify %u %k %t" "${original_conf[4]}"
+    assertEquals "Expected AuthorizedKeysCommandUser to be configured" "AuthorizedKeysCommandUser $AUTH_CMD_USER" "${original_conf[5]}"
 }
 
 test_configure_openssh_server_existing_sshd_d_no_overwrite_00_config() {
