@@ -1,37 +1,74 @@
 ## Command-Line Arguments
 
-Usage: install-linux.sh [OPTIONS]
+Usage: `install-linux.sh [OPTIONS]`
+
 Options:
-- `--no-home-policy`: Disables configuration that allows opkssh to see policy files in user's home directory (/home/<username>/auth_id). Greatly simplifies install.
 
-- `--no-sshd-restart`: Do not restart SSH after installation.
+  `--no-home-policy`
 
-- `--overwrite-config`: Overwrite the currently active sshd configuration for AuthorizedKeysCommand and AuthorizedKeysCommandUser directives.
+  Disables configuration that allows opkssh to see policy files in user's       home directory (/home/&lt;username&gt;/auth_id). Greatly simplifies install.
 
-- `--install-from=FILEPATH`: Install using a local file instead of downloading from GitHub.
+  `--no-sshd-restart`
 
-- `--install-version=VERSION`: Install a specific version from GitHub instead of "latest".
+  Do not restart SSH after installation.
+
+  `--overwrite-config`
+
+  Overwrite the currently active sshd configuration for       AuthorizedKeysCommand and AuthorizedKeysCommandUser directives.
+
+  `--install-from=FILEPATH`
+
+  Install using a local file instead of downloading from GitHub.
+
+  `--install-version=VERSION`
+
+  Install a specific version from GitHub instead of "latest".
 
 - `--help`: Display this help message.
 
 ## Environment Variables
 
-- `AUTH_CMD_USER`: defaults to `opksshuser`, overridable by system env `OPKSSH_AUTH_CMD_USER`
-- `AUTH_CMD_GROUP`: defaults to `opksshuser`, overridable by system env `OPKSSH_AUTH_CMD_GROUP`
-- `SUDOERS_PATH`: defaults to `/etc/sudoers.d/opkssh`, overridable by system env `OPKSSH_SUDOERS_PATH`
-- `HOME_POLICY`: defaults to `true`, overridable by system env `OPKSSH_HOME_POLICY`
-- `RESTART_SSH`: defaults to `true`, overridable by system env `OPKSSH_RESTART_SSH`
-- `OVERWRITE_ACTIVE_CONFIG`: defaults to `false`, overridable by system env `OPKSSH_OVERWRITE_ACTIVE_CONFIG`
-- `INSTALL_VERSION`: defaults to `latest`, overridable by system env `OPKSSH_INSTALL_VERSION`
-- `INSTALL_DIR`: defaults to `/usr/local/bin`, overridable by system env `OPKSSH_INSTALL_DIR`
-- `BINARY_NAME`: defaults to `opkssh`, overridable by system env `OPKSSH_BINARY_NAME`
-- `GITHUB_REPO`: defaults to `openpubkey/opkssh`, overridable by system env `OPKSSH_GITHUB_REPO`
-# Function Documentation
+| Variable name | Default value | System env override |
+|---------------|---------------|---------------------|
+| **AUTH_CMD_USER** | `opksshuser` | OPKSSH_AUTH_CMD_USER |
+| **AUTH_CMD_GROUP** | `opksshuser` | OPKSSH_AUTH_CMD_GROUP |
+| **SUDOERS_PATH** | `/etc/sudoers.d/opkssh` | OPKSSH_SUDOERS_PATH |
+| **HOME_POLICY** | `true` | OPKSSH_HOME_POLICY |
+| **RESTART_SSH** | `true` | OPKSSH_RESTART_SSH |
+| **OVERWRITE_ACTIVE_CONFIG** | `false` | OPKSSH_OVERWRITE_ACTIVE_CONFIG |
+| **INSTALL_VERSION** | `latest` | OPKSSH_INSTALL_VERSION |
+| **INSTALL_DIR** | `/usr/local/bin` | OPKSSH_INSTALL_DIR |
+| **BINARY_NAME** | `opkssh` | OPKSSH_BINARY_NAME |
+| **GITHUB_REPO** | `openpubkey/opkssh` | OPKSSH_GITHUB_REPO |
+
+# Script Function Documentation
 
 ## `file_exists`
 
-Default helpers that wrap real commands (can be overridden in tests)
-TODO: Create shUnit2 tests for these
+file_exists
+check is file exists, helpers that wrap real commands so it can be
+overridden in tests
+
+**Arguments:**
+-   $1 - Path to file
+
+
+**Returns:**
+-  0 if the file exists, otherwise
+
+
+## `dir_exists`
+
+dir_exists
+check is directory exists, helpers that wrap real commands so it can be
+overridden in tests
+
+**Arguments:**
+-   $1 - Path to directory
+
+
+**Returns:**
+-  0 if the directory exists, otherwise
 
 
 ## `check_bash_version`
@@ -223,6 +260,9 @@ check_selinux
 configure_opkssh
 Creates/checks the opskssh configuration
 
+**Arguments:**
+-   $1 - Path to etc directory (Optional, default /etc)
+
 
 **Outputs:**
 -   Writes to stdout the configration progress
@@ -236,6 +276,9 @@ Creates/checks the opskssh configuration
 
 configure_openssh_server
 Configure openSSH-server to use opkssh using AuthorizedKeysCommand
+
+**Arguments:**
+-   $1 - Path to ssh root configuratino directory (Optional, default /etc/ssh)
 
 Output:
   Writes to stdout the progress of configuration
@@ -279,6 +322,9 @@ Configures sudo for opkssh if HOME_POLICY is set to true
 
 log_opkssh_installation
 Log the installation details to /var/log/opkssh.log to help with debugging
+
+**Arguments:**
+-   $1 - Path to opkssh log file (Optional, default /var/log/opkssh.log)
 
 Output:
   Writes to stdout that installation is successful

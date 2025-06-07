@@ -1,7 +1,6 @@
 #!/bin/bash
 export SHUNIT_RUNNIN=1
 
-echo "Running tests: ${0##*/}"
 
 # Source install-linux.sh
 # shellcheck disable=SC1091
