@@ -128,7 +128,7 @@ test_main_with_home_policy() {
 
     assertEquals "Expected result to return 0 on success" 0 "$result"
     assertEquals "Expected parse_args to be called with correct parameters" "parse_args AAA BBB" "${mock_log[0]}"
-    assertEquals "Expected check_bash_version to be called with correct parameters" "check_bash_version ${BASH_VERSINFO[*]}" "${mock_log[1]}" 
+    assertEquals "Expected check_bash_version to be called with correct parameters" "check_bash_version ${BASH_VERSINFO[*]}" "${mock_log[1]}"
     assertEquals "Expected running_as_root to be called with correct parameters" "running_as_root $EUID" "${mock_log[2]}"
     assertEquals "Expected determine_linux_type to be called with no parameters" "determine_linux_type " "${mock_log[3]}"
     assertEquals "Expected check_cpu_architecture to be called with no parameters" "check_cpu_architecture " "${mock_log[4]}"
@@ -154,7 +154,7 @@ test_main_with_no_home_policy() {
 
     assertEquals "Expected result to return 0 on success" 0 "$result"
     assertEquals "Expected parse_args to be called with correct parameters" "parse_args AAA BBB" "${mock_log[0]}"
-    assertEquals "Expected check_bash_version to be called with correct parameters" "check_bash_version ${BASH_VERSINFO[*]}" "${mock_log[1]}" 
+    assertEquals "Expected check_bash_version to be called with correct parameters" "check_bash_version ${BASH_VERSINFO[*]}" "${mock_log[1]}"
     assertEquals "Expected running_as_root to be called with correct parameters" "running_as_root $EUID" "${mock_log[2]}"
     assertEquals "Expected determine_linux_type to be called with no parameters" "determine_linux_type " "${mock_log[3]}"
     assertEquals "Expected check_cpu_architecture to be called with no parameters" "check_cpu_architecture " "${mock_log[4]}"

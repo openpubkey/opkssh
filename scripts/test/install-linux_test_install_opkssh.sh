@@ -65,13 +65,13 @@ test_install_opkssh_binary_from_local_file_success() {
     assertContains "$output" "Using binary from specified path"
     assertTrue "Binary should exist in install dir" "[ -f \"$INSTALL_DIR/$BINARY_NAME\" ]"
     assertEquals "Expected to move local install file to binary path" \
-         "mv $TEST_TEMP_DIR/mock_local_opkssh $INSTALL_DIR/$BINARY_NAME" "${mock_log[0]}"
+        "mv $TEST_TEMP_DIR/mock_local_opkssh $INSTALL_DIR/$BINARY_NAME" "${mock_log[0]}"
     assertEquals "Expected to set execution flag on opkssh binary" \
-         "chmod +x $INSTALL_DIR/$BINARY_NAME" "${mock_log[1]}"
+        "chmod +x $INSTALL_DIR/$BINARY_NAME" "${mock_log[1]}"
     assertEquals "Expected to set root as owner and AUTH_CMD_GROUP ownership on ginary" \
-         "chown root:$AUTH_CMD_GROUP $INSTALL_DIR/$BINARY_NAME" "${mock_log[2]}"
+        "chown root:$AUTH_CMD_GROUP $INSTALL_DIR/$BINARY_NAME" "${mock_log[2]}"
     assertEquals "Expected to set correct file mode bits on opkssh binary" \
-         "chmod 755 $INSTALL_DIR/$BINARY_NAME" "${mock_log[3]}"
+        "chmod 755 $INSTALL_DIR/$BINARY_NAME" "${mock_log[3]}"
 
 }
 

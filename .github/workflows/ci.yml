@@ -86,7 +86,7 @@ jobs:
     - name: Install packages
       run: |
         zypper refresh
-        zypper --non-interactive install --no-recommends git ShellCheck shunit2 findutils
+        zypper --non-interactive install --no-recommends git ShellCheck shunit2 findutils python313-bashate
     - name: Checkout
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       with:
@@ -104,4 +104,11 @@ jobs:
         find scripts/test -type f -name '*.sh' | while read -r file; do
           echo "🔍 Checking $file"
           bash "$file"
+        done
+    - name: Check scripts with bashate
+      run: |
+        echo "Running bashate on all .sh files under scripts/"
+        find scripts/ -type f -name '*.sh' | while read -r file; do
+          echo "🔍 Checking $file"
+          bashate -i E006 "$file"
         done

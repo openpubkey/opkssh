@@ -15,7 +15,7 @@ command() {
             echo "/usr/bin/$2"
             return 0
         else
-          return 1
+            return 1
         fi
     fi
     builtin command "$@"  # fall back to real command
@@ -37,7 +37,7 @@ test_ensure_command_missing_using_variables() {
     mock_command_name="foobar"
     mock_command_exists=false
     # shellcheck disable=2034  # used in ensure_command
-    OS_TYPE=suse 
+    OS_TYPE=suse
     output=$(ensure_command "foobar" 2>&1)
     result=$?
     assertEquals "Expected ensure_command_exists to return 1 when command is missing" 1 $result

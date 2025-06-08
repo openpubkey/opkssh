@@ -23,9 +23,10 @@
 #   --help
 #       Display this help message.
 # ==============================================================================
+#
 
 if [[ "$SHUNIT_RUNNIN" != "1" ]]; then
-     # Exit if any command fails, unless running tests
+    # Exit if any command fails, unless running tests
     set -e
 fi
 
@@ -130,22 +131,20 @@ dir_exists() { [[ -d "$1" ]]; }
 # Example:
 #   check_bash_version "${BASH_VERSINFO[@]}"
 check_bash_version() {
-  local major=$1
-  local minor=$2
+    local major=$1
+    local minor=$2
 
-  if (( major > 3 )); then
-    echo "Bash version: $major.$minor"
-    return 0
-  elif (( major == 3 && minor >= 2 )); then
-    echo "Bash version: $major.$minor"
-    return 0
-  else
-    echo "Error: Unsupported Bash version: $major.$minor" >&2
-    return 1
-  fi
+    if ((major > 3)); then
+        echo "Bash version: $major.$minor"
+        return 0
+    elif ((major == 3 && minor >= 2)); then
+        echo "Bash version: $major.$minor"
+        return 0
+    else
+        echo "Error: Unsupported Bash version: $major.$minor" >&2
+        return 1
+    fi
 }
-
-
 
 # determine_linux_type
 # Determine the linux type the script is executed in
@@ -163,7 +162,8 @@ determine_linux_type() {
         os_type="debian"
     elif file_exists "/etc/arch-release"; then
         os_type="arch"
-    elif file_exists "/etc/os-release" && grep -q '^ID_LIKE=.*suse' /etc/os-release; then
+    elif file_exists "/etc/os-release" && \
+        grep -q '^ID_LIKE=.*suse' /etc/os-release; then
         os_type="suse"
     else
         echo "Unsupported OS type."
@@ -209,7 +209,7 @@ check_cpu_architecture() {
 #
 # Returns:
 #   0 if running as root, 1 otherwise
-running_as_root(){
+running_as_root() {
     userid="$1"
     if [[ "$userid" -ne 0 ]]; then
         echo "Error: This script must be run as root." >&2
@@ -227,9 +227,11 @@ display_help_message() {
     echo "Usage: $0 [OPTIONS]"
     echo ""
     echo "Options:"
-    echo "  --no-home-policy         Disables configuration that allows opkssh see policy files in user's home directory (/home/<username>/auth_id). Greatly simplifies install, try this if you are having install failures."
+    echo "  --no-home-policy         Disables configuration that allows opkssh see policy files in user's home directory"
+    echo "                           (/home/<username>/auth_id). Greatly simplifies install, try this if you are having install failures."
     echo "  --no-sshd-restart        Do not restart SSH after installation"
-    echo "  --overwrite-config       Overwrite the currently active sshd configuration for AuthorizedKeysCommand and AuthorizedKeysCommandUser directives. This may be necessary if the script cannot create a configuration with higher priority in /etc/ssh/sshd_config.d/."
+    echo "  --overwrite-config       Overwrite the currently active sshd configuration for AuthorizedKeysCommand and AuthorizedKeysCommandUser"
+    echo "                           directives. This may be necessary if the script cannot create a configuration with higher priority in /etc/ssh/sshd_config.d/."
     echo "  --install-from=FILEPATH  Install using a local file"
     echo "  --install-version=VER    Install a specific version from GitHub"
     echo "  --help                   Display this help message"
@@ -253,29 +255,29 @@ display_help_message() {
 #   ensure_command "wget" || exit 1
 #   ensure_command "netstat" "net-tools-deprecated" || exit
 ensure_command() {
-  local cmd="$1"
-  local package="${2:-$cmd}"
-  local os_type="${3:-$OS_TYPE}"
-  if ! command -v "$cmd" >/dev/null 2>&1; then
-    echo "Error: $cmd is not installed. Please install it first." >&2
-    if [[ "$os_type" == "debian" ]]; then
-        echo "sudo apt install $package" >&2
-    elif [[ "$os_type" == "redhat" ]]; then
-        # dnf might not be available on older versions
-        if command -v dnf >/dev/null 2>&1; then
-            echo "sudo dnf install $package" >&2
+    local cmd="$1"
+    local package="${2:-$cmd}"
+    local os_type="${3:-$OS_TYPE}"
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        echo "Error: $cmd is not installed. Please install it first." >&2
+        if [[ "$os_type" == "debian" ]]; then
+            echo "sudo apt install $package" >&2
+        elif [[ "$os_type" == "redhat" ]]; then
+            # dnf might not be available on older versions
+            if command -v dnf >/dev/null 2>&1; then
+                echo "sudo dnf install $package" >&2
+            else
+                echo "sudo yum install $package" >&2
+            fi
+        elif [[ "$os_type" == "arch" ]]; then
+            echo "sudo pacman -S $package" >&2
+        elif [[ "$os_type" == "suse" ]]; then
+            echo "sudo zypper install $package" >&2
         else
-            echo "sudo yum install $package" >&2
+            echo "Unsupported OS type." >&2
         fi
-    elif [[ "$os_type" == "arch" ]]; then
-        echo "sudo pacman -S $package" >&2
-    elif [[ "$os_type" == "suse" ]]; then
-        echo "sudo zypper install $package" >&2
-    else
-        echo "Unsupported OS type." >&2
+        return 1
     fi
-    return 1
-  fi
 }
 
 # ensure_openssh_server
@@ -390,8 +392,6 @@ parse_args() {
     done
 }
 
-
-
 # install_opkssh_binary
 # Installs opkssh binary either from local file or downloads from repository
 #
@@ -433,8 +433,7 @@ install_opkssh_binary() {
     chown root:"${AUTH_CMD_GROUP}" "$INSTALL_DIR/$BINARY_NAME"
     chmod 755 "$INSTALL_DIR/$BINARY_NAME"
 
-
-    if command -v "$INSTALL_DIR"/"$BINARY_NAME" &> /dev/null; then
+    if command -v "$INSTALL_DIR"/"$BINARY_NAME" &>/dev/null; then
         echo "Installed $BINARY_NAME to $INSTALL_DIR/$BINARY_NAME"
     else
         echo "Installation failed." >&2
@@ -466,7 +465,7 @@ check_selinux() {
                 echo "  Using SELinux module that permits home policy"
 
                 # Pipe the TE directives into checkmodule via /dev/stdin
-                cat << 'EOF' > "$TE_TMP"
+                cat <<'EOF' >"$TE_TMP"
 module opkssh 1.0;
 
 
@@ -504,7 +503,7 @@ EOF
                 PP_TMP="/tmp/opkssh-no-home.pp"
 
                 # Pipe the TE directives into checkmodule via /dev/stdin
-                cat << 'EOF' > "$TE_TMP"
+                cat <<'EOF' >"$TE_TMP"
 module opkssh-no-home 1.0;
 
 require {
@@ -634,9 +633,9 @@ configure_openssh_server() {
     local active_config=""
 
     if [[ ! -f "$sshd_config" ]] || \
-       ( grep -Fxq 'Include /etc/ssh/sshd_config.d/*.conf' "$sshd_config" && \
-         { ! grep -Eq '^AuthorizedKeysCommand|^AuthorizedKeysCommandUser' "$sshd_config" || \
-           ! grep -Eq '^AuthorizedKeysCommand|^AuthorizedKeysCommandUser' "$sshd_config_d"/*.conf 2>/dev/null; } ); then
+        (grep -Fxq 'Include /etc/ssh/sshd_config.d/*.conf' "$sshd_config" &&
+            { ! grep -Eq '^AuthorizedKeysCommand|^AuthorizedKeysCommandUser' "$sshd_config" ||
+                ! grep -Eq '^AuthorizedKeysCommand|^AuthorizedKeysCommandUser' "$sshd_config_d"/*.conf 2>/dev/null; }); then
         # Configuration should be put in /etc/ssh/sshd_config.d director
         # Find active configuration file with the directives we're interested in (sorted numerically)
         active_config=$(find "$sshd_config_d"/*.conf -exec grep -l '^AuthorizedKeysCommand\|^AuthorizedKeysCommandUser' {} \; 2>/dev/null | sort -V | head -n 1)
@@ -762,7 +761,7 @@ log_opkssh_installation() {
 #
 # Returns:
 #   0 if opkssh installs successfully, 1 if installation failed
-main(){
+main() {
     parse_args "$@" || return 0
     check_bash_version "${BASH_VERSINFO[@]}" || return 1
     running_as_root "$EUID" || return 1
