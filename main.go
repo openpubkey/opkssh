@@ -318,18 +318,72 @@ func printConfigProblems() {
 // system running the verifier is greater than or equal to 8.1;
 // if not then prints a warning
 func checkOpenSSHVersion() {
-	// Redhat/centos does not recognize `sshd -V` but does recognize `ssh -V`
-	// Ubuntu recognizes both
-	cmd := exec.Command("ssh", "-V")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		log.Println("Warning: Error executing ssh -V:", err)
+	version := getOpenSSHVersion()
+	if version == "" {
+		log.Println("Warning: Could not determine OpenSSH version")
 		return
 	}
 
-	if ok, _ := isOpenSSHVersion8Dot1OrGreater(string(output)); !ok {
+	if ok, _ := isOpenSSHVersion8Dot1OrGreater(version); !ok {
 		log.Println("Warning: OpenPubkey SSH requires OpenSSH v. 8.1 or greater")
 	}
+}
+
+// getOpenSSHVersion attempts to get OpenSSH version using multiple fallback methods
+func getOpenSSHVersion() string {
+	// OS-specific package manager queries
+	osType := detectOS()
+	log.Printf("Attempting OS-specific version detection for: %s", osType)
+
+	switch osType {
+	case OSTypeRHEL:
+		// For RedHat-based systems (CentOS, RHEL, Fedora)
+		cmd := exec.Command("/bin/sh", "-c", "version=$(/usr/bin/rpm -q --qf \"%{VERSION}\\n\" openssh-server 2>/dev/null | /bin/sed -E 's/^([0-9]+\\.[0-9]+).*/\\1/' | head -1); if [ -n \"$version\" ]; then /bin/echo \"OpenSSH_$version\"; fi")
+		if output, err := cmd.CombinedOutput(); err == nil && len(strings.TrimSpace(string(output))) > 0 {
+			return strings.TrimSpace(string(output))
+		}
+
+	case OSTypeDebian:
+		// For Debian-based systems (Debian, Ubuntu)
+		cmd := exec.Command("/bin/sh", "-c", "version=$(/usr/bin/dpkg-query -W -f='${Version}\\n' openssh-server 2>/dev/null | /bin/sed -E 's/^[0-9]*:?([0-9]+\\.[0-9]+).*/\\1/' | head -1); if [ -n \"$version\" ]; then /bin/echo \"OpenSSH_$version\"; fi")
+		if output, err := cmd.CombinedOutput(); err == nil && len(strings.TrimSpace(string(output))) > 0 {
+			return strings.TrimSpace(string(output))
+		}
+
+	case OSTypeArch:
+		// For Arch Linux
+		cmd := exec.Command("/bin/sh", "-c", "version=$(/usr/bin/pacman -Qi openssh 2>/dev/null | /usr/bin/awk '/^Version/ {print $3}' | /bin/sed -E 's/^([0-9]+\\.[0-9]+).*/\\1/' | head -1); if [ -n \"$version\" ]; then /bin/echo \"OpenSSH_$version\"; fi")
+		if output, err := cmd.CombinedOutput(); err == nil && len(strings.TrimSpace(string(output))) > 0 {
+			return strings.TrimSpace(string(output))
+		}
+
+	case OSTypeSUSE:
+		// For SUSE-based systems
+		cmd := exec.Command("/bin/sh", "-c", "version=$(/usr/bin/rpm -q --qf \"%{VERSION}\\n\" openssh 2>/dev/null | /bin/sed -E 's/^([0-9]+\\.[0-9]+).*/\\1/' | head -1); if [ -n \"$version\" ]; then /bin/echo \"OpenSSH_$version\"; fi")
+		if output, err := cmd.CombinedOutput(); err == nil && len(strings.TrimSpace(string(output))) > 0 {
+			return strings.TrimSpace(string(output))
+		}
+	default:
+		log.Printf("Warning: Could not determine OpenSSH version using OS-specific methods for %s", osType)
+	}
+
+	// Try ssh -V (works on most systems)
+	cmd := exec.Command("ssh", "-V")
+	output, err := cmd.CombinedOutput()
+	if err == nil && len(strings.TrimSpace(string(output))) > 0 {
+		return strings.TrimSpace(string(output))
+	}
+	log.Println("Warning: Error executing ssh -V:", err)
+
+	// Try sshd -V as fallback
+	cmd = exec.Command("sshd", "-V")
+	output, err = cmd.CombinedOutput()
+	if err == nil && len(strings.TrimSpace(string(output))) > 0 {
+		return strings.TrimSpace(string(output))
+	}
+	log.Println("Warning: Error executing sshd -V:", err)
+
+	return ""
 }
 
 func isOpenSSHVersion8Dot1OrGreater(opensshVersion string) (bool, error) {
@@ -359,4 +413,66 @@ func isOpenSSHVersion8Dot1OrGreater(opensshVersion string) (bool, error) {
 	}
 
 	return false, nil
+}
+
+// OSType represents the operating system type
+type OSType string
+
+// Operating system constants
+const (
+	OSTypeGeneric OSType = "generic"
+	OSTypeRHEL    OSType = "rhel"
+	OSTypeDebian  OSType = "debian"
+	OSTypeArch    OSType = "arch"
+	OSTypeSUSE    OSType = "suse"
+)
+
+// detectOS determines the type of operating system.
+func detectOS() OSType {
+	// Check for RedHat-based systems
+	if _, err := os.Stat("/etc/redhat-release"); err == nil {
+		return OSTypeRHEL
+	}
+
+	// Check for Debian-based systems
+	if _, err := os.Stat("/etc/debian_version"); err == nil {
+		return OSTypeDebian
+	}
+
+	// Check for Arch Linux
+	if _, err := os.Stat("/etc/arch-release"); err == nil {
+		return OSTypeArch
+	}
+
+	// Check for SUSE Linux
+	if _, err := os.Stat("/etc/SuSE-release"); err == nil {
+		return OSTypeSUSE
+	}
+	if _, err := os.Stat("/etc/SUSE-brand"); err == nil {
+		return OSTypeSUSE
+	}
+
+	// Check for /etc/os-release which exists on most modern Linux systems
+	if content, err := os.ReadFile("/etc/os-release"); err == nil {
+		contentStr := string(content)
+		if strings.Contains(contentStr, "ID=rhel") ||
+			strings.Contains(contentStr, "ID=centos") ||
+			strings.Contains(contentStr, "ID=fedora") {
+			return OSTypeRHEL
+		}
+		if strings.Contains(contentStr, "ID=debian") ||
+			strings.Contains(contentStr, "ID=ubuntu") {
+			return OSTypeDebian
+		}
+		if strings.Contains(contentStr, "ID=arch") {
+			return OSTypeArch
+		}
+		if strings.Contains(contentStr, "ID=sles") ||
+			strings.Contains(contentStr, "ID=opensuse") {
+			return OSTypeSUSE
+		}
+	}
+
+	// Default to generic, if no specific OS type is detected.
+	return OSTypeGeneric
 }

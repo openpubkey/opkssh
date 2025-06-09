@@ -472,7 +472,6 @@ module opkssh 1.0;
 require {
         type sshd_t;
         type var_log_t;
-        type ssh_exec_t;
         type http_port_t;
         type sudo_exec_t;
         class file { append execute execute_no_trans open read map };
@@ -485,13 +484,10 @@ require {
 # 1. Make TCP connections to ports labeled http_port_t. This is so opkssh can download the public keys of the OpenID providers.
 allow sshd_t http_port_t:tcp_socket name_connect;
 
-# 2. Needed to allow opkssh to call `ssh -V` to determine if the version is supported by opkssh
-allow sshd_t ssh_exec_t:file { execute execute_no_trans open read map };
-
-# 3. Needed to allow opkssh to call `sudo opkssh readhome` to read the policy file in the user's home directory
+# 2. Needed to allow opkssh to call `sudo opkssh readhome` to read the policy file in the user's home directory
 allow sshd_t sudo_exec_t:file { execute execute_no_trans open read map };
 
-# 4. Needed to allow opkssh to write to its log file
+# 3. Needed to allow opkssh to write to its log file
 allow sshd_t var_log_t:file { open append };
 EOF
 
@@ -509,7 +505,6 @@ module opkssh-no-home 1.0;
 require {
         type sshd_t;
         type var_log_t;
-        type ssh_exec_t;
         type http_port_t;
         class file { append execute execute_no_trans open read map };
         class tcp_socket name_connect;
@@ -521,10 +516,7 @@ require {
 # 1. Make TCP connections to ports labeled http_port_t. This is so opkssh can download the public keys of the OpenID providers.
 allow sshd_t http_port_t:tcp_socket name_connect;
 
-# 2. Needed to allow opkssh to call `ssh -V` to determine if the version is supported by opkssh
-allow sshd_t ssh_exec_t:file { execute execute_no_trans open read map };
-
-# 3. Needed to allow opkssh to write to its log file
+# 2. Needed to allow opkssh to write to its log file
 allow sshd_t var_log_t:file { open append };
 EOF
             fi
