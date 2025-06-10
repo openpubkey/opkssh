@@ -349,6 +349,7 @@ func TestNewLogin(t *testing.T) {
 	autoRefresh := false
 	configPathArg := filepath.Join("..", "default-client-config.yml")
 	createConfig := false
+	configureArg := false
 	logDir := "./testdata"
 	sendAccessTokenArg := false
 	disableBrowserOpenArg := true
@@ -357,7 +358,7 @@ func TestNewLogin(t *testing.T) {
 	keyPathArg := ""
 	providerAlias := ""
 
-	loginCmd := NewLogin(autoRefresh, configPathArg, createConfig, logDir,
+	loginCmd := NewLogin(autoRefresh, configPathArg, createConfig, configureArg, logDir,
 		sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, keyPathArg, providerAlias)
 	require.NotNil(t, loginCmd)
 }
