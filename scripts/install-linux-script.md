@@ -30,16 +30,16 @@ Options:
 
 | Variable name | Default value | System env override |
 |---------------|---------------|---------------------|
-| **AUTH_CMD_USER** | `opksshuser` | OPKSSH_AUTH_CMD_USER |
-| **AUTH_CMD_GROUP** | `opksshuser` | OPKSSH_AUTH_CMD_GROUP |
-| **SUDOERS_PATH** | `/etc/sudoers.d/opkssh` | OPKSSH_SUDOERS_PATH |
-| **HOME_POLICY** | `true` | OPKSSH_HOME_POLICY |
-| **RESTART_SSH** | `true` | OPKSSH_RESTART_SSH |
-| **OVERWRITE_ACTIVE_CONFIG** | `false` | OPKSSH_OVERWRITE_ACTIVE_CONFIG |
+| **AUTH_CMD_USER** | `opksshuser` | OPKSSH_INSTALL_AUTH_CMD_USER |
+| **AUTH_CMD_GROUP** | `opksshuser` | OPKSSH_INSTALL_AUTH_CMD_GROUP |
+| **SUDOERS_PATH** | `/etc/sudoers.d/opkssh` | OPKSSH_INSTALL_SUDOERS_PATH |
+| **HOME_POLICY** | `true` | OPKSSH_INSTALL_HOME_POLICY |
+| **RESTART_SSH** | `true` | OPKSSH_INSTALL_RESTART_SSH |
+| **OVERWRITE_ACTIVE_CONFIG** | `false` | OPKSSH_INSTALL_OVERWRITE_ACTIVE_CONFIG |
 | **INSTALL_VERSION** | `latest` | OPKSSH_INSTALL_VERSION |
 | **INSTALL_DIR** | `/usr/local/bin` | OPKSSH_INSTALL_DIR |
-| **BINARY_NAME** | `opkssh` | OPKSSH_BINARY_NAME |
-| **GITHUB_REPO** | `openpubkey/opkssh` | OPKSSH_GITHUB_REPO |
+| **BINARY_NAME** | `opkssh` | OPKSSH_INSTALL_BINARY_NAME |
+| **GITHUB_REPO** | `openpubkey/opkssh` | OPKSSH_INSTALL_GITHUB_REPO |
 
 # Script Function Documentation
 

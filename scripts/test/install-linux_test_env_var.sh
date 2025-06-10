@@ -3,17 +3,17 @@ export SHUNIT_RUNNIN=1
 
 test_global_variables() {
     # Unset all related env vars to test default behavior
-    unset OPKSSH_AUTH_CMD_USER
-    unset OPKSSH_AUTH_CMD_GROUP
-    unset OPKSSH_SUDOERS_PATH
-    unset OPKSSH_HOME_POLICY
-    unset OPKSSH_RESTART_SSH
-    unset OPKSSH_OVERWRITE_ACTIVE_CONFIG
-    unset OPKSSH_LOCAL_INSTALL_FILE
+    unset OPKSSH_INSTALL_AUTH_CMD_USER
+    unset OPKSSH_INSTALL_AUTH_CMD_GROUP
+    unset OPKSSH_INSTALL_SUDOERS_PATH
+    unset OPKSSH_INSTALL_HOME_POLICY
+    unset OPKSSH_INSTALL_RESTART_SSH
+    unset OPKSSH_INSTALL_OVERWRITE_ACTIVE_CONFIG
+    unset OPKSSH_INSTALL_LOCAL_INSTALL_FILE
     unset OPKSSH_INSTALL_VERSION
     unset OPKSSH_INSTALL_DIR
-    unset OPKSSH_BINARY_NAME
-    unset OPKSSH_GITHUB_REPO
+    unset OPKSSH_INSTALL_BINARY_NAME
+    unset OPKSSH_INSTALL_GITHUB_REPO
 
     # Source the script again to reinitialize variables
     # shellcheck disable=SC1091
@@ -35,17 +35,17 @@ test_global_variables() {
 }
 
 test_global_variables_env_override() {
-    export OPKSSH_AUTH_CMD_USER="testuser"
-    export OPKSSH_AUTH_CMD_GROUP="testgroup"
-    export OPKSSH_SUDOERS_PATH="/tmp/sudoers"
-    export OPKSSH_HOME_POLICY="false"
-    export OPKSSH_RESTART_SSH="false"
-    export OPKSSH_OVERWRITE_ACTIVE_CONFIG="true"
-    export OPKSSH_LOCAL_INSTALL_FILE="/tmp/opkssh.tar.gz"
+    export OPKSSH_INSTALL_AUTH_CMD_USER="testuser"
+    export OPKSSH_INSTALL_AUTH_CMD_GROUP="testgroup"
+    export OPKSSH_INSTALL_SUDOERS_PATH="/tmp/sudoers"
+    export OPKSSH_INSTALL_HOME_POLICY="false"
+    export OPKSSH_INSTALL_RESTART_SSH="false"
+    export OPKSSH_INSTALL_OVERWRITE_ACTIVE_CONFIG="true"
+    export OPKSSH_INSTALL_LOCAL_INSTALL_FILE="/tmp/opkssh.tar.gz"
     export OPKSSH_INSTALL_VERSION="1.2.3"
     export OPKSSH_INSTALL_DIR="/opt/bin"
-    export OPKSSH_BINARY_NAME="custom-opkssh"
-    export OPKSSH_GITHUB_REPO="custom/repo"
+    export OPKSSH_INSTALL_BINARY_NAME="custom-opkssh"
+    export OPKSSH_INSTALL_GITHUB_REPO="custom/repo"
 
     # Source the script again to reinitialize variables
     # shellcheck disable=SC1091
