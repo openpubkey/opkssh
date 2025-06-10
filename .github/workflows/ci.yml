@@ -77,3 +77,38 @@ jobs:
       run: go mod download
     - name: Run integration tests
       run: go test -tags=integration ./test/integration -timeout=15m -count=1 -parallel=2 -v
+  lint-scripts:
+    name: Shell Scripts Lint & Test
+    runs-on: ubuntu-latest
+    container:
+      image: opensuse/tumbleweed
+    steps:
+    - name: Install packages
+      run: |
+        zypper refresh
+        zypper --non-interactive install --no-recommends git ShellCheck shunit2 findutils python313-bashate
+    - name: Checkout
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      with:
+        persist-credentials: false
+    - name: Run ShellCheck
+      run: |
+        echo "Running ShellCheck on all .sh files under scripts/"
+        find scripts/ -type f -name '*.sh' | while read -r file; do
+          echo "🔍 Checking $file"
+          shellcheck "$file"
+        done
+    - name: Run shunit2 tests
+      run: |
+        echo "Running shUnit2 on all .sh files under scripts/test"
+        find scripts/test -type f -name '*.sh' | while read -r file; do
+          echo "🔍 Checking $file"
+          bash "$file"
+        done
+    - name: Check scripts with bashate
+      run: |
+        echo "Running bashate on all .sh files under scripts/"
+        find scripts/ -type f -name '*.sh' | while read -r file; do
+          echo "🔍 Checking $file"
+          bashate -i E006 "$file"
+        done
