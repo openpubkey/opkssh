@@ -201,7 +201,7 @@ func TestLoginCmd(t *testing.T) {
 				require.NotNil(t, logBytes)
 				require.Contains(t, string(logBytes), "running login command with args:")
 
-				sshPubPath := filepath.Join(homePath, ".ssh", "id_ecdsa.pub")
+				sshPubPath := filepath.Join(homePath, ".ssh", "id_ecdsa-cert.pub")
 				pubKeyBytes, err := afero.ReadFile(mockFs, sshPubPath)
 				require.NoError(t, err)
 

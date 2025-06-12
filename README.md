@@ -128,7 +128,7 @@ opkssh login -i opkssh_server_group1
 Tell ssh to use the generated key pair.
 
 ```bash
-ssh -o "IdentitiesOnly=yes" -i ~/.ssh/opkssh_server_group1.pub -i ~/.ssh/opkssh_server_group1 root@example.com
+ssh -o "IdentitiesOnly=yes" -i ~/.ssh/opkssh_server_group1 root@example.com
 ```
 
 We recommend specifying `-o "IdentitiesOnly=yes"` as it tells ssh to only use the provided key. Otherwise ssh will cycle through other keys in `~/.ssh` first and may not get to the specified ones. Servers are configured to only allow 6 attempts by default the config key is `MaxAuthTries 6`.
