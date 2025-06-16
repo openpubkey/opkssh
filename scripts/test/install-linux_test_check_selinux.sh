@@ -14,7 +14,6 @@ setUp() {
     touch "$MOCK_LOG"
     HOME_POLICY=true
     export HOME_POLICY
-
 }
 
 
