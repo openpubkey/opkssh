@@ -68,7 +68,6 @@ test_configure_opkssh_no_previous_configuration() {
     assertEquals "Expected third provider to be GitLab" "$provider_gitlab" "${providers[2]}"
     assertEquals "Expected forth provider to be GitLab" "$provider_hello" "${providers[3]}"
     assertEquals "Expected to have four providers" 4 "${#providers[@]}"
-
 }
 
 test_configure_opkssh_existing_providers() {
