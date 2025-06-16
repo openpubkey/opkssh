@@ -188,7 +188,7 @@ test_main_check_bash_version_failes() {
 
     readarray -t mock_log < "$MOCK_LOG"
 
-    assertEquals "Expected result to return 1 when failes" 1 "$result"
+    assertEquals "Expected result to return 1 when fails" 1 "$result"
     assertEquals "Expected that only a few function are called" 2 "${#mock_log[@]}"
 }
 
