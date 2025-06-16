@@ -38,7 +38,7 @@ test_configure_sudo_no_existing_file() {
     assertContains "Expected output to inform about creating sudo file" "$output" "Creating sudoers file at"
     assertContains "Expected output to contain information about adding sudo rule" "$output" "Adding sudoers rule for"
     assertTrue "Expected sudo file to be created" "[ -f \"$SUDOERS_PATH\" ]"
-    assertContains "Excepcted sudo file to be configured with correct permissions" "chmod 440 $SUDOERS_PATH" "${mock_log[*]}"
+    assertContains "Expected sudo file to be configured with correct permissions" "chmod 440 $SUDOERS_PATH" "${mock_log[*]}"
     assertEquals "Expected sudo rule to be configured correctly" "${sudo_content[1]}" "$AUTH_CMD_USER ALL=(ALL) NOPASSWD: ${INSTALL_DIR}/${BINARY_NAME} readhome *"
     assertEquals "Expected sudo file to contain two rows" 2 "${#sudo_content[@]}"
 }
