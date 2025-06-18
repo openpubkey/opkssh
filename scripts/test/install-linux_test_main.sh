@@ -72,7 +72,7 @@ ensure_command() {
     elif [[ "$1" == "sudo" ]]; then
         return "$ensure_command_sudo_exit_code"
     else
-        echo "!!!!!! THIS SHOULD'T HAPPEN !!!!"
+        echo "!!!!!! THIS SHOULDN'T HAPPEN !!!!"
         exit 1
     fi
 }

@@ -50,7 +50,7 @@ test_ensure_openssh_server_installed_suse() {
     result=$?
 
     assertEquals "Expected ensure_openssh_server to return 0 when installed on suse" 0 $result
-    assertEquals "Expecded ensure_openssh_server output to be empty on success" "" "$output"
+    assertEquals "Expected ensure_openssh_server output to be empty on success" "" "$output"
 }
 
 test_ensure_openssh_server_not_installed_suse() {
@@ -61,7 +61,7 @@ test_ensure_openssh_server_not_installed_suse() {
     result=$?
 
     assertEquals "Expected ensure_openssh_server to return 1 when not installed on suse" 1 $result
-    assertContains "Expecded ensure_openssh_server to suggest zypper install on failure" "$output" "sudo zypper install openssh-server"
+    assertContains "Expected ensure_openssh_server to suggest zypper install on failure" "$output" "sudo zypper install openssh-server"
 }
 
 test_ensure_openssh_server_installed_redhat() {
@@ -72,7 +72,7 @@ test_ensure_openssh_server_installed_redhat() {
     result=$?
 
     assertEquals "Expected ensure_openssh_server to return 0 when installed on redhat" 0 $result
-    assertEquals "Expecded ensure_openssh_server output to be empty on success" "" "$output"
+    assertEquals "Expected ensure_openssh_server output to be empty on success" "" "$output"
 }
 
 test_ensure_openssh_server_not_installed_redhat() {
@@ -83,7 +83,7 @@ test_ensure_openssh_server_not_installed_redhat() {
     result=$?
 
     assertEquals "Expected ensure_openssh_server to return 1 when not installed on redhat" 1 $result
-    assertContains "Expecded ensure_openssh_server output to suggest dnf install failure" "$output" "sudo dnf install openssh-server"
+    assertContains "Expected ensure_openssh_server output to suggest dnf install failure" "$output" "sudo dnf install openssh-server"
 }
 
 test_ensure_openssh_server_installed_arch() {
@@ -94,7 +94,7 @@ test_ensure_openssh_server_installed_arch() {
     result=$?
 
     assertEquals "Expected ensure_openssh_server to return 0 when installed on arch" 0 $result
-    assertEquals "Expecded ensure_openssh_server output to be empty on success" "" "$output"
+    assertEquals "Expected ensure_openssh_server output to be empty on success" "" "$output"
 }
 
 test_ensure_openssh_server_not_installed_arch() {
@@ -105,7 +105,7 @@ test_ensure_openssh_server_not_installed_arch() {
     result=$?
 
     assertEquals "Expected ensure_openssh_server to return 1 when not installed on arch" 1 $result
-    assertContains "Expecded ensure_openssh_server output to suggest dnf install failure" "$output" "sudo pacman -S openssh"
+    assertContains "Expected ensure_openssh_server output to suggest dnf install failure" "$output" "sudo pacman -S openssh"
 }
 
 test_ensure_openssh_server_installed_debian() {
@@ -116,7 +116,7 @@ test_ensure_openssh_server_installed_debian() {
     result=$?
 
     assertEquals "Expected ensure_openssh_server to return 0 when installed on debian" 0 $result
-    assertEquals "Expecded ensure_openssh_server output to be empty on success" "" "$output"
+    assertEquals "Expected ensure_openssh_server output to be empty on success" "" "$output"
 }
 
 test_ensure_openssh_server_not_installed_debian() {
@@ -127,7 +127,7 @@ test_ensure_openssh_server_not_installed_debian() {
     result=$?
 
     assertEquals "Expected ensure_openssh_server to return 1 when not installed on debian" 1 $result
-    assertContains "Expecded ensure_openssh_server output to suggest dnf install failure" "$output" "sudo apt install openssh-server"
+    assertContains "Expected ensure_openssh_server output to suggest dnf install failure" "$output" "sudo apt install openssh-server"
 }
 
 test_ensure_openssh_server_installed_suse_configd_missing_config_d_exits() {
@@ -138,7 +138,7 @@ test_ensure_openssh_server_installed_suse_configd_missing_config_d_exits() {
     result=$?
 
     assertEquals "Expected ensure_openssh_server to return 0 when configd file is missing but config.d folder exists" 0 $result
-    assertEquals "Expecded ensure_openssh_server output to be empty on success" "" "$output"
+    assertEquals "Expected ensure_openssh_server output to be empty on success" "" "$output"
 }
 
 test_ensure_openssh_server_installed_suse_configd_exists_config_d_missing() {
@@ -149,7 +149,7 @@ test_ensure_openssh_server_installed_suse_configd_exists_config_d_missing() {
     result=$?
 
     assertEquals "Expected ensure_openssh_server to return 0 when configd is present but config.d folder exists" 0 $result
-    assertEquals "Expecded ensure_openssh_server output to be empty on success" "" "$output"
+    assertEquals "Expected ensure_openssh_server output to be empty on success" "" "$output"
 }
 
 test_ensure_openssh_server_installed_suse_config_missing() {
