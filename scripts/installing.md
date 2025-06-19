@@ -3,6 +3,8 @@
 
 This document provides a detailed description of how our [install-linux.sh](install-linux.sh) script works and the security protections used.
 
+Description of the install-linux.sh script and what variables that can be overridden by system environment variables can be found [here](install-linux-script.md)
+
 If you just want to install opkssh you should run:
 
 ```bash
