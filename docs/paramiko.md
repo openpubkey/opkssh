@@ -6,7 +6,7 @@ If you use the `paramiko` libary for Python, then you'll have to manually load t
 import paramiko
 
 private_key = paramiko.ECDSAKey(filename='/home/username/.ssh/opkssh_server_group1')
-private_key.load_certificate('/home/username/.ssh/opkssh_server_group1.pub')
+private_key.load_certificate('/home/username/.ssh/opkssh_server_group1-cert.pub')
 
 sshcon  = paramiko.SSHClient()
 sshcon.set_missing_host_key_policy(paramiko.AutoAddPolicy())

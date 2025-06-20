@@ -718,7 +718,7 @@ func TestEndToEndSSHWithRefresh(t *testing.T) {
 	// directory path so we're not touching the host machine's SSH keys
 	err = os.Remove(secKeyFilePath)
 	require.NoError(t, err, "failed to remove OPK SSH private key")
-	err = os.Remove(secKeyFilePath + ".pub")
+	err = os.Remove(secKeyFilePath + "-cert.pub")
 	require.NoError(t, err, "failed to remove OPK SSH public key")
 
 	// Let refresh go through

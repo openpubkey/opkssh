@@ -130,8 +130,8 @@ func GetOPKSshKey(seckeyPath string) (ssh.PublicKey, string, error) {
 	for _, secKeyFilePath = range expectedSSHSecKeyFilePaths {
 		secKeyFilePath = filepath.Join(sshPath, secKeyFilePath)
 
-		// Read public key. Expected public key has suffix ".pub"
-		pubKeyFilePath := secKeyFilePath + ".pub"
+		// Read public key. Expected public key has suffix "-cert.pub"
+		pubKeyFilePath := secKeyFilePath + "-cert.pub"
 		sshPubKey, err := os.ReadFile(pubKeyFilePath)
 		if err != nil {
 			continue
