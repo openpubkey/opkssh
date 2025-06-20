@@ -1,3 +1,5 @@
+version: "2.1"
+
 linters:
   enable:
   # golangci-lint defaults 
