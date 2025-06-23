@@ -151,7 +151,7 @@ func TestPolicyPluginsWithMock(t *testing.T) {
 		sub, _ := os.LookupEnv("OPKSSH_PLUGIN_SUB")
 		aud, _ := os.LookupEnv("OPKSSH_PLUGIN_AUD")
 
-		if "/usr/bin/local/opk/policy-cmd" == name {
+		if name == "/usr/bin/local/opk/policy-cmd" {
 
 			if len(arg) != 3 {
 				return nil, fmt.Errorf("expected 3 arguments, got %d", len(arg))

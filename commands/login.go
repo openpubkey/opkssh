@@ -585,6 +585,6 @@ func isGitHubEnvironment() bool {
 // payloadFromCompactPkt extracts the payload from a compact PK Token which
 // is always the second part of the '.' separated string.
 func payloadFromCompactPkt(compactPkt []byte) []byte {
-	parts := bytes.SplitN(compactPkt, []byte("."), -1)
+	parts := bytes.Split(compactPkt, []byte("."))
 	return parts[1]
 }
