@@ -33,6 +33,7 @@ func TestProvidersPolicyRow_GetExpirationPolicy(t *testing.T) {
 		expected  verifier.ExpirationPolicy
 		expectErr bool
 	}{
+		{"12h", verifier.ExpirationPolicies.MAX_AGE_12HOURS, false},
 		{"24h", verifier.ExpirationPolicies.MAX_AGE_24HOURS, false},
 		{"48h", verifier.ExpirationPolicies.MAX_AGE_48HOURS, false},
 		{"1week", verifier.ExpirationPolicies.MAX_AGE_1WEEK, false},
@@ -63,9 +64,10 @@ func TestProvidersPolicyRow_GetExpirationPolicy(t *testing.T) {
 // Test for ProviderPolicy.ToString.
 func TestProviderPolicy_ToString(t *testing.T) {
 	policy := ProviderPolicy{}
-	policy.AddRow(ProvidersRow{Issuer: "issuer1", ClientID: "client1", ExpirationPolicy: "24h"})
-	policy.AddRow(ProvidersRow{Issuer: "issuer2", ClientID: "client2", ExpirationPolicy: "48h"})
-	expected := "issuer1 client1 24h\nissuer2 client2 48h\n"
+	policy.AddRow(ProvidersRow{Issuer: "issuer1", ClientID: "client1", ExpirationPolicy: "12h"})
+	policy.AddRow(ProvidersRow{Issuer: "issuer2", ClientID: "client2", ExpirationPolicy: "24h"})
+	policy.AddRow(ProvidersRow{Issuer: "issuer3", ClientID: "client3", ExpirationPolicy: "48h"})
+	expected := "issuer1 client1 12h\nissuer2 client2 24h\nissuer3 client3 48h\n"
 	require.Equal(t, expected, policy.ToString())
 }
 
@@ -75,7 +77,7 @@ func TestProviderPolicy_CreateVerifier_Google(t *testing.T) {
 	policy.AddRow(ProvidersRow{
 		Issuer:           "https://accounts.google.com",
 		ClientID:         "test-google",
-		ExpirationPolicy: "24h",
+		ExpirationPolicy: "12h",
 	})
 	ver, err := policy.CreateVerifier()
 	require.NoError(t, err)
@@ -133,10 +135,11 @@ func TestProvidersFileLoader_FromTable(t *testing.T) {
 	// Input with two valid rows and one invalid row.
 	input := []byte("https://accounts.google.com test-google 24h\n" +
 		"invalid-line\n" +
-		"https://login.microsoftonline.com/tenant test-azure 48h\n")
+		"https://login.microsoftonline.com/tenant test-azure 48h\n" +
+		"https://login.microsoftonline.com/tenant-twelve test-twelve 12h\n")
 	loader := ProvidersFileLoader{}
 	policy := loader.FromTable(input, "dummy-path")
-	require.Equal(t, 2, len(policy.rows))
+	require.Equal(t, 3, len(policy.rows))
 	// Check the first row.
 	row1 := policy.rows[0]
 	if row1.Issuer != "https://accounts.google.com" || row1.ClientID != "test-google" || row1.ExpirationPolicy != "24h" {
@@ -149,6 +152,13 @@ func TestProvidersFileLoader_FromTable(t *testing.T) {
 		row2.ExpirationPolicy != "48h" {
 		t.Error("second row does not match expected values")
 	}
+	// Check the third row.
+	row3 := policy.rows[2]
+	if !strings.HasPrefix(row3.Issuer, "https://login.microsoftonline.com") ||
+		row3.ClientID != "test-twelve" ||
+		row3.ExpirationPolicy != "12h" {
+		t.Error("third row does not match expected values")
+	}
 }
 
 // Test ProvidersFileLoader.ToTable.
@@ -157,21 +167,29 @@ func TestProvidersFileLoader_ToTable(t *testing.T) {
 	policy.AddRow(ProvidersRow{
 		Issuer:           "issuer1",
 		ClientID:         "client1",
-		ExpirationPolicy: "24h",
+		ExpirationPolicy: "12h",
 	})
 	policy.AddRow(ProvidersRow{
 		Issuer:           "issuer2",
 		ClientID:         "client2",
+		ExpirationPolicy: "24h",
+	})
+	policy.AddRow(ProvidersRow{
+		Issuer:           "issuer3",
+		ClientID:         "client3",
 		ExpirationPolicy: "48h",
 	})
 	loader := ProvidersFileLoader{}
 	table := loader.ToTable(policy)
 	rows := table.GetRows()
-	require.Equal(t, 2, len(rows))
-	if rows[0][0] != "issuer1" || rows[0][1] != "client1" || rows[0][2] != "24h" {
+	require.Equal(t, 3, len(rows))
+	if rows[0][0] != "issuer1" || rows[0][1] != "client1" || rows[0][2] != "12h" {
 		t.Error("first row in table does not match expected values")
 	}
-	if rows[1][0] != "issuer2" || rows[1][1] != "client2" || rows[1][2] != "48h" {
+	if rows[1][0] != "issuer2" || rows[1][1] != "client2" || rows[1][2] != "24h" {
 		t.Error("second row in table does not match expected values")
+	}
+	if rows[2][0] != "issuer3" || rows[2][1] != "client3" || rows[2][2] != "48h" {
+		t.Error("third row in table does not match expected values")
 	}
 }

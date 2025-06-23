@@ -198,6 +198,7 @@ This file functions as an access control list that enables admins to determine t
 - Column 1: Issuer URI of the OP
 - Column 2: Client-ID, the audience claim in the ID Token
 - Column 3: Expiration policy, options are:
+  - `12h` - user's ssh public key expires after 12 hours,
   - `24h` - user's ssh public key expires after 24 hours,
   - `48h` - user's ssh public key expires after 48 hours,
   - `1week` - user's ssh public key expires after 1 week,

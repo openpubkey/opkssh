@@ -34,6 +34,8 @@ type ProvidersRow struct {
 
 func (p ProvidersRow) GetExpirationPolicy() (verifier.ExpirationPolicy, error) {
 	switch p.ExpirationPolicy {
+	case "12h":
+		return verifier.ExpirationPolicies.MAX_AGE_12HOURS, nil
 	case "24h":
 		return verifier.ExpirationPolicies.MAX_AGE_24HOURS, nil
 	case "48h":

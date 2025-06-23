@@ -88,7 +88,7 @@ The client ID must match the aud (audience) claim in the PK Token.
 
 - Column 1: Issuer
 - Column 2: Client-ID a.k.a. what to match on the aud claim in the ID Token
-- Column 3: Expiration policy, options are: `24h`, `48h`, `1week`, `oidc`, `oidc-refreshed`
+- Column 3: Expiration policy, options are: `12h`, `24h`, `48h`, `1week`, `oidc`, `oidc-refreshed`
 
 ### Examples
 
