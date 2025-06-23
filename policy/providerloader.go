@@ -145,7 +145,7 @@ func NewProviderFileLoader() *ProvidersFileLoader {
 }
 
 func (o *ProvidersFileLoader) LoadProviderPolicy(path string) (*ProviderPolicy, error) {
-	content, err := o.FileLoader.LoadFileAtPath(path)
+	content, err := o.LoadFileAtPath(path)
 	if err != nil {
 		return nil, err
 	}

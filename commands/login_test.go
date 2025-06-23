@@ -322,7 +322,7 @@ func TestDetermineProvider(t *testing.T) {
 			} else {
 				require.NoError(t, err, "Unexpected error")
 				require.True(t, provider != nil || chooser != nil, "Provider or chooser should never both be nil")
-				require.True(t, !(provider != nil && chooser != nil), "Provider or chooser should never both be non-nil")
+				require.False(t, provider != nil && chooser != nil, "Provider or chooser should never both be non-nil")
 
 				if tt.wantIssuer != "" {
 					require.NotNil(t, provider)
