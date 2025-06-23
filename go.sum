@@ -128,6 +128,8 @@ github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJw
 github.com/opencontainers/image-spec v1.1.1/go.mod h1:qpqAh3Dmcf36wStyyWU+kCeDgrGnAve2nCC8+7h8Q0M=
 github.com/openpubkey/openpubkey v0.16.0 h1:yR/9zuBfecANkrkNcE7teAEyPOg/XbHs61AQmsMhieY=
 github.com/openpubkey/openpubkey v0.16.0/go.mod h1:TnLOp59RU6DoaBSI5H4ssh60xigm/nVXqg+2pO8btDg=
+github.com/openpubkey/openpubkey v0.16.1-0.20250623163936-e05477a58234 h1:zQenkeGB/lVhlN0ErqXPZLeWHWVbPQeuKLM/legX3Zk=
+github.com/openpubkey/openpubkey v0.16.1-0.20250623163936-e05477a58234/go.mod h1:TnLOp59RU6DoaBSI5H4ssh60xigm/nVXqg+2pO8btDg=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/sftp v1.13.5/go.mod h1:wHDZ0IZX6JcBYRK1TH9bcVq8G7TLpVHYIGJRFnmPfxg=
