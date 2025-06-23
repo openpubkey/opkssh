@@ -230,7 +230,7 @@ func (l *LoginCmd) configureSSH() error {
 
 	userhomeDir, err := os.UserHomeDir()
 	if err != nil {
-		return fmt.Errorf("Failed to get user config dir: %v", err)
+		return fmt.Errorf("failed to get user config dir: %v", err)
 	}
 
 	const includeDirective = "Include ~/.ssh/opkssh/config"
@@ -319,7 +319,6 @@ func (l *LoginCmd) checkSSHConfigured() {
 	fmt.Println("OPK SSH identity directory is configured")
 
 	l.SSHConfigured = true
-	return
 }
 
 func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebChooser, error) {
