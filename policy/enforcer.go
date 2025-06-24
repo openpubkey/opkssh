@@ -42,7 +42,7 @@ type checkedClaims struct {
 	Groups []string `json:"groups"`
 }
 
-// The default location for policy polugins
+// The default location for policy plugins
 const pluginPolicyDir = "/etc/opk/policy.d"
 
 // Validates that the server defined identity attribute matches the
