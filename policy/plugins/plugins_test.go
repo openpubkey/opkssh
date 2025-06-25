@@ -40,6 +40,23 @@ type mockFile struct {
 	Content    string
 }
 
+func TestLoadPolicyPluginsMissing(t *testing.T) {
+	mockFs := afero.NewMemMapFs()
+	enforcer := &PolicyPluginEnforcer{
+		Fs: mockFs,
+		permChecker: files.PermsChecker{
+			Fs: mockFs,
+			CmdRunner: func(name string, arg ...string) ([]byte, error) {
+				return []byte("root" + " " + "group"), nil
+			},
+		},
+	}
+
+	// Load policy commands
+	_, err := enforcer.loadPlugins("/should/not/exist")
+	require.ErrorIs(t, err, os.ErrNotExist)
+}
+
 func TestLoadPolicyPlugins(t *testing.T) {
 	tests := []struct {
 		name             string
@@ -151,7 +168,7 @@ func TestPolicyPluginsWithMock(t *testing.T) {
 		sub, _ := os.LookupEnv("OPKSSH_PLUGIN_SUB")
 		aud, _ := os.LookupEnv("OPKSSH_PLUGIN_AUD")
 
-		if "/usr/bin/local/opk/policy-cmd" == name {
+		if name == "/usr/bin/local/opk/policy-cmd" {
 
 			if len(arg) != 3 {
 				return nil, fmt.Errorf("expected 3 arguments, got %d", len(arg))

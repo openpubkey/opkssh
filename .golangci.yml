@@ -1,16 +1,24 @@
+version: "2"
 linters:
   enable:
-  # golangci-lint defaults 
-  # ref: https://golangci-lint.run/usage/linters/#enabled-by-default
-  - errcheck
-  - gosimple
-  - govet
-  - ineffassign
-  - staticcheck
-  - unused
-  # additional
-  - misspell
-  - gofmt
-  fast: true
-run:
-  timeout: 5m
+    - misspell
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

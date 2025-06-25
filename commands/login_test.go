@@ -322,7 +322,7 @@ func TestDetermineProvider(t *testing.T) {
 			} else {
 				require.NoError(t, err, "Unexpected error")
 				require.True(t, provider != nil || chooser != nil, "Provider or chooser should never both be nil")
-				require.True(t, !(provider != nil && chooser != nil), "Provider or chooser should never both be non-nil")
+				require.False(t, provider != nil && chooser != nil, "Provider or chooser should never both be non-nil")
 
 				if tt.wantIssuer != "" {
 					require.NotNil(t, provider)
@@ -349,6 +349,7 @@ func TestNewLogin(t *testing.T) {
 	autoRefresh := false
 	configPathArg := filepath.Join("..", "default-client-config.yml")
 	createConfig := false
+	configureArg := false
 	logDir := "./testdata"
 	sendAccessTokenArg := false
 	disableBrowserOpenArg := true
@@ -357,7 +358,7 @@ func TestNewLogin(t *testing.T) {
 	keyPathArg := ""
 	providerAlias := ""
 
-	loginCmd := NewLogin(autoRefresh, configPathArg, createConfig, logDir,
+	loginCmd := NewLogin(autoRefresh, configPathArg, createConfig, configureArg, logDir,
 		sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, keyPathArg, providerAlias)
 	require.NotNil(t, loginCmd)
 }
