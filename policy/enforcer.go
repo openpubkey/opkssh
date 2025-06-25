@@ -18,8 +18,10 @@ package policy
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 
 	"github.com/openpubkey/openpubkey/pktoken"
@@ -39,6 +41,9 @@ type checkedClaims struct {
 	Sub    string   `json:"sub"`
 	Groups []string `json:"groups"`
 }
+
+// The default location for policy plugins
+const pluginPolicyDir = "/etc/opk/policy.d"
 
 // Validates that the server defined identity attribute matches the
 // respective claim from the identity token
@@ -65,9 +70,13 @@ func validateClaim(claims *checkedClaims, user *User) bool {
 func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, userInfoJson string, sshCert string, keyType string) error {
 	pluginPolicy := plugins.NewPolicyPluginEnforcer()
 
-	results, err := pluginPolicy.CheckPolicies("/etc/opk/policy.d", pkt, userInfoJson, principalDesired, sshCert, keyType)
+	results, err := pluginPolicy.CheckPolicies(pluginPolicyDir, pkt, userInfoJson, principalDesired, sshCert, keyType)
 	if err != nil {
-		log.Printf("Error checking policy plugins: %v \n", err)
+		if errors.Is(err, os.ErrNotExist) {
+			log.Println("Skipping policy plugins: no plugins found at " + pluginPolicyDir)
+		} else {
+			log.Printf("Error checking policy plugins: %v \n", err)
+		}
 		// Despite the error, we don't fail here because we still want to check
 		// the standard policy below. Policy plugins can only expand the set of
 		// allow set, not shrink it.
