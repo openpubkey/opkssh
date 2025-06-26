@@ -1,5 +1,5 @@
 #!/bin/bash
-export SHUNIT_RUNNIN=1
+export SHUNIT_RUNNING=1
 
 test_global_variables() {
     # Unset all related env vars to test default behavior

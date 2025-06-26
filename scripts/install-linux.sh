@@ -25,7 +25,7 @@
 # ==============================================================================
 #
 
-if [[ "$SHUNIT_RUNNIN" != "1" ]]; then
+if [[ "$SHUNIT_RUNNING" != "1" ]]; then
     # Exit if any command fails, unless running tests
     set -e
 fi
@@ -784,8 +784,8 @@ main() {
     log_opkssh_installation
 }
 
-# Only run main if this file is executed, not sourced (like during testing)
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+# Don't run main during testing (SH unit tests source this script)
+if [[ -z "$SHUNIT_RUNNING" ]]; then
     main "$@"
     exit $?
 fi

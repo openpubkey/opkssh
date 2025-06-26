@@ -439,7 +439,7 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 	// Write ssh secret key and public key to filesystem
 	if seckeyPath != "" {
 		// If we have set seckeyPath then write it there
-		if err := l.writeKeys(seckeyPath, seckeyPath+".pub", seckeySshPem, certBytes); err != nil {
+		if err := l.writeKeys(seckeyPath, seckeyPath+"-cert.pub", seckeySshPem, certBytes); err != nil {
 			return nil, fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
 		}
 	} else if l.SSHConfigured {
@@ -534,7 +534,7 @@ func (l *LoginCmd) LoginWithRefresh(ctx context.Context, provider providers.Refr
 			// Write ssh secret key and public key to filesystem
 			if seckeyPath != "" {
 				// If we have set seckeyPath then write it there
-				if err := l.writeKeys(seckeyPath, seckeyPath+".pub", seckeySshPem, certBytes); err != nil {
+				if err := l.writeKeys(seckeyPath, seckeyPath+"-cert.pub", seckeySshPem, certBytes); err != nil {
 					return fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
 				}
 			} else {
@@ -616,7 +616,7 @@ func (l *LoginCmd) writeKeysToOpkSSHDir(secKeyPem []byte, certBytes []byte) erro
 	sshKeyName := l.makeSSHKeyFileName(l.pkt)
 
 	privKeyPath := filepath.Join(opkSshUserPath, sshKeyName)
-	pubKeyPath := filepath.Join(privKeyPath + ".pub")
+	pubKeyPath := filepath.Join(privKeyPath + "-cert.pub")
 
 	// get key comment
 	issuer, err := l.pkt.Issuer()
@@ -675,7 +675,7 @@ func (l *LoginCmd) writeKeysToSSHDir(seckeySshPem []byte, certBytes []byte) erro
 	// with a new key.
 	for _, keyFilename := range []string{"id_ecdsa", "id_ed25519"} {
 		seckeyPath := filepath.Join(sshPath, keyFilename)
-		pubkeyPath := seckeyPath + ".pub"
+		pubkeyPath := seckeyPath + "-cert.pub"
 
 		if !l.fileExists(seckeyPath) {
 			// If ssh key file does not currently exist, we don't have to worry about overwriting it

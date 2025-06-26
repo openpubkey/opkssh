@@ -32,7 +32,7 @@ In the following steps we provide a walkthrough on how to import the regular SSH
 Generate your OPKSSH ssh key by running `opkssh.exe login`.
 The output of this command will tell you the location opkssh wrote the key on your machine. Make note of this, we will need it in the next step. Typically these files are written to:
 
-- `C:\Users\{USERNAME}\.ssh\id_ecdsa.pub` for the SSH certificate
+- `C:\Users\{USERNAME}\.ssh\id_ecdsa-cert.pub` for the SSH certificate
 - `C:\Users\{USERNAME}\.ssh\id_ecdsa` for the SSH private key
 
 ![Shows terminal output of running opkssh and location of ssh public key and ssh private key](https://github.com/user-attachments/assets/c1101d5e-8e6a-4a7e-82c8-d139b911efb6)
