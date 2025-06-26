@@ -25,7 +25,7 @@
 # ==============================================================================
 #
 
-if [[ "$SHUNIT_RUNNIN" != "1" ]]; then
+if [[ "$SHUNIT_RUNNING" != "1" ]]; then
     # Exit if any command fails, unless running tests
     set -e
 fi

@@ -1,5 +1,5 @@
 #!/bin/bash
-export SHUNIT_RUNNIN=1
+export SHUNIT_RUNNING=1
 
 
 # Source install-linux.sh
