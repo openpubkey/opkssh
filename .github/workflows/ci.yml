@@ -117,6 +117,9 @@ jobs:
         set -euo pipefail
         useradd -m testuser
 
+        # Let Git trust the Actions workspace directory for the test user
+        sudo -u testuser git config --global --add safe.directory /__w/opkssh/opkssh
+
         COMMIT_SHA=$(git rev-parse HEAD)
         REMOTE_URL=$(git remote get-url origin)
 
