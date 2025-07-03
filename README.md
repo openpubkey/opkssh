@@ -462,6 +462,7 @@ opkssh add root alice@example.com https://authentik.local/application/o/opkssh/
 |-------------------------------------------|--------|-------------------------------------------------------------------------------------------------------------|
 | [Authelia](https://www.authelia.com/)     | ✅      | [Authelia Integration Guide](https://www.authelia.com/integration/openid-connect/opkssh/)                   |
 | [Authentik](https://goauthentik.io/)      | ✅      | Do not add a certificate in the encryption section of the provider                                          |
+| [Azure](https://www.azure.com/)           | ✅      | [Entra ID (Azure) Integration Guide](docs/providers/azure.md)             ßßß      |
 | [Gitlab Self-hosted](https://gitlab.com/) | ✅      | [Configuration guide](docs/gitlab-selfhosted.md)                                                            |
 | [Kanidm](https://kanidm.com/)             | ✅      | [Kanidm Integration Guide](https://kanidm.github.io/kanidm/master/integrations/oauth2/examples.html#opkssh) |
 | [PocketID](https://pocket-id.org/)        | ✅      | Create a new OIDC Client and inside the new client, check "Public client" on OIDC Client Settings           |
@@ -504,10 +505,14 @@ For integration tests run:
 
 ## More information
 
+
+
 ### Documentation
 - [docs/config.md](docs/config.md) Documentation of opkssh configuration files.
 - [docs/policyplugins.md](docs/policyplugins.md) Documentation of opkssh policy plugins and how to use them to implement complex policies.
 - [scripts/installing.md](scripts/installing.md) Documentation of the server install script that opkssh uses to configure an SSH server to accept opkssh SSH certificates. Explains how to manually install opkssh on a server.
+
+#### Configuring OpenID Providers (IDP)
 
 ### Guides
 - [CONTRIBUTING.md](https://github.com/openpubkey/opkssh/blob/main/CONTRIBUTING.md) Guide to contributing to opkssh (includes developer help).
