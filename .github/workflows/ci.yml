@@ -86,7 +86,7 @@ jobs:
     - name: Install packages
       run: |
         zypper refresh
-        zypper --non-interactive install --no-recommends git ShellCheck shunit2 findutils python313-bashate
+        zypper --non-interactive install --no-recommends git wget sudo ShellCheck shunit2 findutils python313-bashate
     - name: Checkout
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       with:
@@ -112,3 +112,39 @@ jobs:
           echo "🔍 Checking $file"
           bashate -i E006 "$file"
         done
+    - name: Check wget url pipe
+      run: |
+        set -euo pipefail
+        useradd -m testuser
+
+        COMMIT_SHA=$(git rev-parse HEAD)
+        REMOTE_URL=$(git remote get-url origin)
+
+        if [[ "$REMOTE_URL" =~ ^git@github\.com:(.+)/(.+)\.git$ ]]; then
+            OWNER="${BASH_REMATCH[1]}"
+            REPO="${BASH_REMATCH[2]}"
+        elif [[ "$REMOTE_URL" =~ ^https://github\.com/(.+)/(.+)\.git$ ]]; then
+            OWNER="${BASH_REMATCH[1]}"
+            REPO="${BASH_REMATCH[2]}"
+        else
+            echo "Unsupported remote URL: $REMOTE_URL"
+            exit 1
+        fi
+        RAW_URL="https://raw.githubusercontent.com/${OWNER}/${REPO}/${COMMIT_SHA}/scripts/install-linux.sh"
+        echo "Testing URL: $RAW_URL"
+        set +e
+        output=$(sudo -u testuser bash -c "wget -qO- $RAW_URL | bash" 2>&1)
+        result=$?
+        set -e
+
+        if [[ "$result" -ne 1 ]]; then
+          echo "❌ Expected exit code 1 but got $result"
+          exit 1
+        fi
+
+        if ! grep -q "Error: This script must be run as root" <<< "$output"; then
+          echo "❌ Expected error message not found in output"
+          exit 1
+        fi
+
+        echo "✅ Script behaved as expected when piping to bash"
