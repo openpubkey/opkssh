@@ -505,14 +505,10 @@ For integration tests run:
 
 ## More information
 
-
-
 ### Documentation
 - [docs/config.md](docs/config.md) Documentation of opkssh configuration files.
 - [docs/policyplugins.md](docs/policyplugins.md) Documentation of opkssh policy plugins and how to use them to implement complex policies.
 - [scripts/installing.md](scripts/installing.md) Documentation of the server install script that opkssh uses to configure an SSH server to accept opkssh SSH certificates. Explains how to manually install opkssh on a server.
-
-#### Configuring OpenID Providers (IDP)
 
 ### Guides
 - [CONTRIBUTING.md](https://github.com/openpubkey/opkssh/blob/main/CONTRIBUTING.md) Guide to contributing to opkssh (includes developer help).
