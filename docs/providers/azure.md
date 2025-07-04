@@ -2,7 +2,7 @@
 
 Setting up Azure with OPKSSH is simple and should not take more than 10 minutes.
 However Azure is very poorly organized and this leads to wasted time and misconfigurations.
-This guide to make it as easy as it should by proving a walkthrough.
+To make this process as straightforward as possible we provide this guide.
 
 **Note:** If you just want to use Azure with OPKSSH for personal email accounts, you can use default Azure client ID that comes with OPKSSH.
 
@@ -10,7 +10,7 @@ This guide to make it as easy as it should by proving a walkthrough.
 
 ## Setup
 
-We are going to register a new app in Entry ID in Azure and then configure it to use our three redirect URIs:
+We are going to register a new app in Entra ID in Azure and then configure it to use our three redirect URIs:
 
 ```
 http://localhost:3000/login-callback
@@ -61,7 +61,7 @@ Then click yes for "Allow Public Client Flow".
 ![alt text](azure_figs/allowpublic.png)
 
 Then click "Save".
-After the chances save successfully, click "Overview" on the bar on the left.
+After the changes save successfully, click "Overview" on the bar on the left.
 It should look like it does here with Redirect URIs showing "3 public client".
 
 ![alt text](azure_figs/overview.png)
@@ -81,7 +81,7 @@ If this works then server has been setup correctly.
 
 On the client check to see if you have already created a config at `~/.opk/config.yml`. If no config if found, create a config by running `opkssh login --create-config`.
 
-Then edit `~/.opk/config.yaml` and change the entry for azure to use the client ID and tenant ID from the App Registration.
+Then edit `~/.opk/config.yml` and change the entry for azure to use the client ID and tenant ID from the App Registration.
 
 ```yaml
   - alias: azure microsoft
@@ -121,7 +121,7 @@ unauthorized_client: The client does not exist or is not enabled for consumers. 
 
 This message can mean one of three things: wrong tenant ID in client config, wrong client ID in client config or you attempted to log in with a consumer email account, e.g. a hotmail account.
 
-If you want to use consumer accounts with Azure you need to select the option "Accounts in any organizational directory (Any Microsoft Entra ID tenant - Multitenant)" in Entry ID.
+If you want to use consumer accounts with Azure you need to select the option "Accounts in any organizational directory (Any Microsoft Entra ID tenant - Multitenant)" in Entra ID.
 
 ![select the correct account type](azure_figs/accounttypes.png)
 
