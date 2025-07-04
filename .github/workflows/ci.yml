@@ -86,7 +86,7 @@ jobs:
     - name: Install packages
       run: |
         zypper refresh
-        zypper --non-interactive install --no-recommends git ShellCheck shunit2 findutils python313-bashate
+        zypper --non-interactive install --no-recommends git wget ShellCheck shunit2 findutils python313-bashate
     - name: Checkout
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       with:
@@ -112,3 +112,25 @@ jobs:
           echo "🔍 Checking $file"
           bashate -i E006 "$file"
         done
+    - name: Check wget url pipe
+      run: |
+        set -euo pipefail
+
+        RAW_URL="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/scripts/install-linux.sh"
+        echo "Testing URL: $RAW_URL"
+        set +e
+        output=$(wget -qO- "$RAW_URL" | bash 2>&1)
+        result=$?
+        set -e
+
+        if [[ "$result" -ne 1 ]]; then
+          echo "❌ Expected exit code 1 but got $result"
+          exit 1
+        fi
+
+        if ! grep -q "Error: sudo is not installed. Please install it first" <<< "$output"; then
+          echo "❌ Expected error message not found in output"
+          exit 1
+        fi
+
+        echo "✅ Script behaved as expected when piping to bash"
