@@ -90,7 +90,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       with:
-        persist-credentials: true
+        persist-credentials: false
     - name: Run ShellCheck
       run: |
         echo "Running ShellCheck on all .sh files under scripts/"
@@ -116,20 +116,7 @@ jobs:
       run: |
         set -euo pipefail
 
-        COMMIT_SHA=$(git rev-parse HEAD)
-        REMOTE_URL=$(git remote get-url origin)
-
-        if [[ "$REMOTE_URL" =~ ^git@github\.com:(.+)/(.+)\.git$ ]]; then
-            OWNER="${BASH_REMATCH[1]}"
-            REPO="${BASH_REMATCH[2]}"
-        elif [[ "$REMOTE_URL" =~ ^https://github\.com/(.+)/(.+)\.git$ ]]; then
-            OWNER="${BASH_REMATCH[1]}"
-            REPO="${BASH_REMATCH[2]}"
-        else
-            echo "Unsupported remote URL: $REMOTE_URL"
-            exit 1
-        fi
-        RAW_URL="https://raw.githubusercontent.com/${OWNER}/${REPO}/${COMMIT_SHA}/scripts/install-linux.sh"
+        RAW_URL="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/scripts/install-linux.sh"
         echo "Testing URL: $RAW_URL"
         set +e
         output=$(wget -qO- "$RAW_URL" | bash 2>&1)
