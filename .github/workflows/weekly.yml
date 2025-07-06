@@ -9,6 +9,7 @@ permissions: {}
 
 jobs:
   lockfile:
+    name: Update flake.lock
     runs-on: ubuntu-latest
     permissions:
       contents: write
