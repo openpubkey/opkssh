@@ -84,19 +84,19 @@ func FromTable(input []byte, path string) *Policy {
 // principal. No changes are made if the principal is already allowed for this
 // user.
 func (p *Policy) AddAllowedPrincipal(principal string, userEmail string, issuer string) {
-	// search to see if the current user already has an entry in the policy
-	// file
-	var firstMatchingEntry *User
+	var firstMatchingEntry *User // First entry that matches on userEmail AND issuer
 	for i := range p.Users {
+		// Search to see if the current user already has an entry that matches on userEmail AND issuer
 		user := &p.Users[i]
 		if user.IdentityAttribute == userEmail && user.Issuer == issuer {
+			if firstMatchingEntry == nil {
+				firstMatchingEntry = user
+			}
 			for _, p := range user.Principals {
-				// if the principal, identity and issuer already exists as an entry
 				if p == principal {
+					// If we find an entry that matches on userEmail AND issuer AND principal, nothing to add
 					log.Printf("User with email %s already has access under the principal %s, skipping...\n", userEmail, principal)
-					return // return early, duplicate principal, nothing to add
-				} else if firstMatchingEntry == nil {
-					firstMatchingEntry = user
+					return // return early, attempting to add a duplicate policy, a policy which already exists
 				}
 			}
 		}
