@@ -114,3 +114,55 @@ func TestAddErrors(t *testing.T) {
 	expectedPolicyContent := principal + " " + userEmail + " " + issuer + "\n"
 	require.Equal(t, expectedPolicyContent, string(policyContent))
 }
+
+func TestAddUniqueness(t *testing.T) {
+
+	mockFs := afero.NewMemMapFs()
+	_, err := mockFs.Create(policy.SystemDefaultPolicyPath)
+	require.NoError(t, err)
+	err = mockFs.Chmod(policy.SystemDefaultPolicyPath, 0640)
+	require.NoError(t, err)
+	addCmd := MockAddCmd(mockFs)
+
+	policyPath, err := addCmd.Run("user1", "alice@example.com", "google")
+	require.NoError(t, err)
+	require.Equal(t, policy.SystemDefaultPolicyPath, policyPath)
+
+	systemPolicyFile, err := mockFs.Open(policyPath)
+	require.NoError(t, err)
+	policyContent, err := afero.ReadAll(systemPolicyFile)
+	require.NoError(t, err)
+	require.Equal(t, "user1 alice@example.com google\n", string(policyContent)) // Should only have one entry
+
+	policyPath, err = addCmd.Run("user1", "alice@example.com", "google")
+	require.NoError(t, err)
+
+	systemPolicyFile, err = mockFs.Open(policyPath)
+	require.NoError(t, err)
+	policyContent, err = afero.ReadAll(systemPolicyFile)
+	require.NoError(t, err)
+	require.Equal(t, "user1 alice@example.com google\n", string(policyContent)) // Should still have only one entry
+
+	policyPath, err = addCmd.Run("user2", "alice@example.com", "google")
+	require.NoError(t, err)
+
+	systemPolicyFile, err = mockFs.Open(policyPath)
+	require.NoError(t, err)
+	policyContent, err = afero.ReadAll(systemPolicyFile)
+	require.NoError(t, err)
+
+	// Should have only two entries
+	require.Equal(t, "user1 alice@example.com google\nuser2 alice@example.com google\n", string(policyContent))
+
+	// Duplicate entry for user2 should be skipped
+	policyPath, err = addCmd.Run("user2", "alice@example.com", "google")
+	require.NoError(t, err)
+
+	systemPolicyFile, err = mockFs.Open(policyPath)
+	require.NoError(t, err)
+	policyContent, err = afero.ReadAll(systemPolicyFile)
+	require.NoError(t, err)
+
+	// Should still have only two entries
+	require.Equal(t, "user1 alice@example.com google\nuser2 alice@example.com google\n", string(policyContent))
+}

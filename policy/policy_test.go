@@ -122,6 +122,141 @@ func TestAddAllowedPrincipal(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:      "policy has duplicate entries, then add a duplicate entry",
+			principal: "test",
+			userEmail: "alice@example.com",
+			initialPolicy: &policy.Policy{
+				Users: []policy.User{
+					{
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{"test"},
+						Issuer:            "https://example.com",
+					},
+					{
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{"test"},
+						Issuer:            "https://example.com",
+					},
+				}},
+			expectedPolicy: &policy.Policy{
+				Users: []policy.User{
+					{
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{"test"},
+						Issuer:            "https://example.com",
+					},
+					{
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{"test"},
+						Issuer:            "https://example.com",
+					},
+				},
+			},
+		}, {
+			name:      "add the same user but new principal",
+			principal: "test2",
+			userEmail: "alice@example.com",
+			initialPolicy: &policy.Policy{
+				Users: []policy.User{
+					{
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{"test1"},
+						Issuer:            "https://example.com",
+					},
+				}},
+			expectedPolicy: &policy.Policy{
+				Users: []policy.User{
+					{
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{"test1", "test2"},
+						Issuer:            "https://example.com",
+					},
+				},
+			},
+		}, {
+			name:      "add duplicate entry with complex policy",
+			principal: "test2",
+			userEmail: "alice@example.com",
+			initialPolicy: &policy.Policy{
+				Users: []policy.User{
+					{
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{"test1"},
+						Issuer:            "https://example.com",
+					},
+					{
+						IdentityAttribute: "bob@example.com",
+						Principals:        []string{"test2"},
+						Issuer:            "https://example.com",
+					},
+					{
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{"test1", "test2", "test3"},
+						Issuer:            "https://example.com",
+					},
+				}},
+			expectedPolicy: &policy.Policy{
+				Users: []policy.User{
+					{
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{"test1"},
+						Issuer:            "https://example.com",
+					},
+					{
+						IdentityAttribute: "bob@example.com",
+						Principals:        []string{"test2"},
+						Issuer:            "https://example.com",
+					},
+					{
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{"test1", "test2", "test3"},
+						Issuer:            "https://example.com",
+					},
+				},
+			},
+		}, {
+			name:      "add matching user but new principal with complex policy",
+			principal: "test4",
+			userEmail: "alice@example.com",
+			initialPolicy: &policy.Policy{
+				Users: []policy.User{
+					{
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{"test1"},
+						Issuer:            "https://example.com",
+					},
+					{
+						IdentityAttribute: "bob@example.com",
+						Principals:        []string{"test2"},
+						Issuer:            "https://example.com",
+					},
+					{
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{"test1", "test2", "test3"},
+						Issuer:            "https://example.com",
+					},
+				}},
+			expectedPolicy: &policy.Policy{
+				Users: []policy.User{
+					{
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{"test1", "test4"},
+						Issuer:            "https://example.com",
+					},
+					{
+						IdentityAttribute: "bob@example.com",
+						Principals:        []string{"test2"},
+						Issuer:            "https://example.com",
+					},
+					{
+						IdentityAttribute: "alice@example.com",
+						Principals:        []string{"test1", "test2", "test3"},
+						Issuer:            "https://example.com",
+					},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

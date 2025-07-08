@@ -84,43 +84,42 @@ func FromTable(input []byte, path string) *Policy {
 // principal. No changes are made if the principal is already allowed for this
 // user.
 func (p *Policy) AddAllowedPrincipal(principal string, userEmail string, issuer string) {
-	userExists := false
-	if len(p.Users) != 0 {
-		// search to see if the current user already has an entry in the policy
-		// file
-		for i := range p.Users {
-			user := &p.Users[i]
-			if user.IdentityAttribute == userEmail && user.Issuer == issuer {
-				principalExists := false
-				for _, p := range user.Principals {
-					// if the principal already exists for this user, then skip
-					if p == principal {
-						log.Printf("User with email %s already has access under the principal %s, skipping...\n", userEmail, principal)
-						principalExists = true
-					}
+	// search to see if the current user already has an entry in the policy
+	// file
+	var firstMatchingEntry *User
+	for i := range p.Users {
+		user := &p.Users[i]
+		if user.IdentityAttribute == userEmail && user.Issuer == issuer {
+			for _, p := range user.Principals {
+				// if the principal, identity and issuer already exists as an entry
+				if p == principal {
+					log.Printf("User with email %s already has access under the principal %s, skipping...\n", userEmail, principal)
+					return // return early, duplicate principal, nothing to add
+				} else if firstMatchingEntry == nil {
+					firstMatchingEntry = user
 				}
-
-				if !principalExists {
-					user.Principals = append(user.Principals, principal)
-					user.Issuer = issuer
-					log.Printf("Successfully added user with email %s with principal %s to the policy file\n", userEmail, principal)
-				}
-				userExists = true
 			}
 		}
 	}
 
-	// if the policy is empty or if no user found with userEmail, then create a
-	// new entry
-	if len(p.Users) == 0 || !userExists {
-		newUser := User{
-			IdentityAttribute: userEmail,
-			Principals:        []string{principal},
-			Issuer:            issuer,
-		}
-		// add the new user to the list of users in the policy
-		p.Users = append(p.Users, newUser)
+	if firstMatchingEntry != nil {
+		// If we are here, then we found an entry where userEmail and user.Issuer match, but not the principal.
+		// Add the principal to that entries list of principals
+		firstMatchingEntry.Principals = append(firstMatchingEntry.Principals, principal)
+		log.Printf("Successfully added user with email %s with principal %s to the policy file\n", userEmail, principal)
+		return // Done, we added the principal to the existing user
 	}
+
+	// If we are here, then there is no row in the policy file that matches
+	// the userEmail and issuer.
+	newUser := User{
+		IdentityAttribute: userEmail,
+		Principals:        []string{principal},
+		Issuer:            issuer,
+	}
+	// Add the new user to the list of users in the policy
+	p.Users = append(p.Users, newUser)
+	log.Printf("Successfully added user with email %s with principal %s to the policy file\n", userEmail, principal)
 }
 
 // ToTable encodes the policy into a whitespace delimited table
