@@ -154,4 +154,3 @@ Edit `~/.opk/config.yml` and for the azure provider change `prompt: consent` to 
 ``
 
 See Issue: [Workaround for error message when using EntraID](https://github.com/openpubkey/opkssh/issues/253).
-
