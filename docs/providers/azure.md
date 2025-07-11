@@ -138,7 +138,7 @@ Message: AADSTS900561: The endpoint only accepts POST requests. Received a GET r
 
 On the client check to see if you have already created a config at `~/.opk/config.yml`. If no config is found, create a config by running `opkssh login --create-config`.
 
-Edit `~/.opk/config.yml` and for the azure provider change `prompt: consent` to `prompt: none` an shown below.
+Edit `~/.opk/config.yml` and for the azure provider change `prompt: consent` to `prompt: none` as shown below.
 
 ```yaml
   - alias: azure microsoft
