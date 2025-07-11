@@ -136,7 +136,7 @@ To add it follow the instructions here: [Configure group claims for applications
 Message: AADSTS900561: The endpoint only accepts POST requests. Received a GET request.
 ```
 
-On the client check to see if you have already created a config at `~/.opk/config.yml`. If no config if found, create a config by running `opkssh login --create-config`.
+On the client check to see if you have already created a config at `~/.opk/config.yml`. If no config is found, create a config by running `opkssh login --create-config`.
 
 Edit `~/.opk/config.yml` and for the azure provider change `prompt: consent` to `prompt: none` an shown below.
 
