@@ -15,18 +15,18 @@ jobs:
   # Check that binary can be built
   build:
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     strategy:
       matrix:
         go-version: [1.23.x]
     steps:
     - name: Checkout
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         persist-credentials: false
     - name: Install Go
-      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
       with:
         go-version: ${{ matrix.go-version }}
     - name: Install dependencies
@@ -35,10 +35,10 @@ jobs:
       run: go build -v -o /dev/null
   nix-build:
     name: Nix Build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
       - name: Check Nix flake inputs
@@ -55,7 +55,7 @@ jobs:
     timeout-minutes: 8
     strategy:
       matrix:
-        runs_on: [ubuntu-latest, ubuntu-24.04-arm]
+        runs_on: [ubuntu-24.04, ubuntu-24.04-arm]
         os: [ubuntu, centos, arch, opensuse]
         exclude:
           - runs_on: ubuntu-24.04-arm
@@ -64,31 +64,31 @@ jobs:
       OS_TYPE: ${{ matrix.os }}
     steps:
     - name: Checkout
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         persist-credentials: false
     - name: Install Go
-      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
       with:
         go-version-file: 'go.mod'
     - name: Install Docker
-      uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
+      uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
     - name: Install dependencies
       run: go mod download
     - name: Run integration tests
       run: go test -tags=integration ./test/integration -timeout=15m -count=1 -parallel=2 -v
   lint-scripts:
     name: Shell Scripts Lint & Test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
-      image: opensuse/tumbleweed@sha256:0e4012a3252d314963671177d6f2a5c7a8e5b47c7b1f1ce98ed9b8d0423d7950
+      image: opensuse/tumbleweed:latest@sha256:0e4012a3252d314963671177d6f2a5c7a8e5b47c7b1f1ce98ed9b8d0423d7950
     steps:
     - name: Install packages
       run: |
         zypper refresh
         zypper --non-interactive install --no-recommends git wget ShellCheck shunit2 findutils python313-bashate
     - name: Checkout
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         persist-credentials: false
     - name: Run ShellCheck

@@ -1,4 +1,4 @@
-FROM ubuntu:latest
+FROM ubuntu:noble@sha256:440dcf6a5640b2ae5c77724e68787a906afb8ddee98bf86db94eea8528c2c076
 
 # Update/Upgrade
 RUN apt-get update -y && apt-get upgrade -y
