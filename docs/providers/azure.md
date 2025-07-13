@@ -129,3 +129,28 @@ If you want to use consumer accounts with Azure you need to select the option "A
 
 By default Azure/Entra ID does not include the group's claim in ID Token.
 To add it follow the instructions here: [Configure group claims for applications by using Microsoft Entra ID](https://learn.microsoft.com/en-us/entra/identity/hybrid/connect/how-to-connect-fed-group-claims)
+
+### Error message: The endpoint only accepts POST requests. Received a GET request
+
+```
+Message: AADSTS900561: The endpoint only accepts POST requests. Received a GET request.
+```
+
+On the client check to see if you have already created a config at `~/.opk/config.yml`. If no config is found, create a config by running `opkssh login --create-config`.
+
+Edit `~/.opk/config.yml` and for the azure provider change `prompt: consent` to `prompt: none` as shown below.
+
+```yaml
+  - alias: azure microsoft
+    issuer: https://login.microsoftonline.com/{TENANT ID}/v2.0
+    client_id: {CLIENT ID}
+    scopes: openid profile email offline_access
+    access_type: offline
+    prompt: none
+    redirect_uris:
+      - http://localhost:3000/login-callback
+      - http://localhost:10001/login-callback
+      - http://localhost:11110/login-callback
+``
+
+See Issue: [Workaround for error message when using EntraID](https://github.com/openpubkey/opkssh/issues/253).
