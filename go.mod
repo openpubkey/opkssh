@@ -6,7 +6,7 @@ require (
 	github.com/docker/go-connections v0.5.0
 	github.com/jeremija/gosubmit v0.2.8
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
-	github.com/lestrrat-go/jwx/v2 v2.1.6
+	github.com/lestrrat-go/jwx/v3 v3.0.8
 	github.com/melbahja/goph v1.4.0
 	github.com/openpubkey/openpubkey v0.17.0
 	github.com/spf13/cobra v1.9.1
@@ -43,6 +43,9 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/klauspost/compress v1.17.4 // indirect
 	github.com/kr/fs v0.1.0 // indirect
+	github.com/lestrrat-go/httprc/v3 v3.0.0 // indirect
+	github.com/lestrrat-go/jwx/v2 v2.0.21 // indirect
+	github.com/lestrrat-go/option/v2 v2.0.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/magiconair/properties v1.8.10 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
@@ -82,7 +85,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0 // indirect
 	github.com/goccy/go-json v0.10.3 // indirect
-	github.com/lestrrat-go/blackmagic v1.0.3 // indirect
+	github.com/lestrrat-go/blackmagic v1.0.4 // indirect
 	github.com/lestrrat-go/httpcc v1.0.1 // indirect
 	github.com/lestrrat-go/httprc v1.0.6 // indirect
 	github.com/lestrrat-go/iter v1.0.2 // indirect
