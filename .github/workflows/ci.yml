@@ -42,9 +42,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Check Nix flake inputs
-        uses: DeterminateSystems/flake-checker-action@f6b84c9884c22039e1fc23dadb4a0d0add56c197 # v11
+        uses: DeterminateSystems/flake-checker-action@3164002371bc90729c68af0e24d5aacf20d7c9f6 # v12
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@c723f3a885e3f1d866d91f4f0c33dd44b1fc7c60 # v18
+        uses: DeterminateSystems/nix-installer-action@90bb610b90bf290cad97484ba341453bd1cbefea # v19
       - name: Build
         run: nix build .
   # Run integration tests
@@ -81,7 +81,7 @@ jobs:
     name: Shell Scripts Lint & Test
     runs-on: ubuntu-24.04
     container:
-      image: opensuse/tumbleweed:latest@sha256:821f7b53f4d565a29967ed22f8e4617b22657ac0d01ba8ce7999b1027da4ec4f
+      image: opensuse/tumbleweed:latest@sha256:315d1af6c221ce5a5c1431afbacb8bed6373f14d576aca725bb5cb1df1a78719
     steps:
     - name: Install packages
       run: |
