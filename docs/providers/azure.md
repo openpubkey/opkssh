@@ -151,6 +151,6 @@ Edit `~/.opk/config.yml` and for the azure provider change `prompt: consent` to 
       - http://localhost:3000/login-callback
       - http://localhost:10001/login-callback
       - http://localhost:11110/login-callback
-``
+```
 
 See Issue: [Workaround for error message when using EntraID](https://github.com/openpubkey/opkssh/issues/253).
