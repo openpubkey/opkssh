@@ -35,8 +35,8 @@ command() {
 wget() {
     echo "wget $*" >> "$MOCK_LOG"
     if [[ "$1" == "-q" ]]; then
-      echo "$DUMMY_TE_CONTENT" > "$3"
-      echo "$DUMMY_TE_CONTENT" > "${TEST_TEMP_DIR}${3}"
+        echo "$DUMMY_TE_CONTENT" > "$3"
+        echo "$DUMMY_TE_CONTENT" > "${TEST_TEMP_DIR}${3}"
     fi
 }
 
