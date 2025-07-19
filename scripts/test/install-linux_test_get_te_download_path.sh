@@ -28,7 +28,7 @@ test_specific_version_equal_to_080() {
     export HOME_POLICY=false
 
     result=$(get_te_download_path)
-    expected="https://raw.githubusercontent.com/org/repo/main/te_files/opkssh-no-home.te"
+    expected="https://raw.githubusercontent.com/org/repo/main/te_files/v0.8.0_opkssh-no-home.te"
 
     assertEquals "$expected" "$result"
 }

@@ -387,7 +387,7 @@ get_te_download_path() {
 
     if [[ "$version" == "0.8.0" ]]; then
         # Version that is installed is equal to v0.8.0, fetch the file from main branch
-        te_url="https://raw.githubusercontent.com/${GITHUB_REPO}/main/te_files/opkssh"
+        te_url="https://raw.githubusercontent.com/${GITHUB_REPO}/main/te_files/v0.8.0_opkssh"
     elif [[ "$(printf '%s\n%s\n' "$version" "0.8.0" | sort -V | head -n1)" == "$version" ]]; then
         # Version that is installed is earlier than v0.8.0, fetch the file from main branch
         te_url="https://raw.githubusercontent.com/${GITHUB_REPO}/main/te_files/v0.7.0_opkssh"
