@@ -14,14 +14,15 @@ test_display_help_message() {
 Usage: $0 [OPTIONS]
 
 Options:
-  --no-home-policy         Disables configuration that allows opkssh see policy files in user's home directory
-                           (/home/<username>/auth_id). Greatly simplifies install, try this if you are having install failures.
-  --no-sshd-restart        Do not restart SSH after installation
-  --overwrite-config       Overwrite the currently active sshd configuration for AuthorizedKeysCommand and AuthorizedKeysCommandUser
-                           directives. This may be necessary if the script cannot create a configuration with higher priority in /etc/ssh/sshd_config.d/.
-  --install-from=FILEPATH  Install using a local file
-  --install-version=VER    Install a specific version from GitHub
-  --help                   Display this help message
+  --no-home-policy            Disables configuration that allows opkssh see policy files in user's home directory
+                              (/home/<username>/auth_id). Greatly simplifies install, try this if you are having install failures.
+  --no-sshd-restart           Do not restart SSH after installation
+  --overwrite-config          Overwrite the currently active sshd configuration for AuthorizedKeysCommand and AuthorizedKeysCommandUser
+                              directives. This may be necessary if the script cannot create a configuration with higher priority in /etc/ssh/sshd_config.d/.
+  --install-from=FILEPATH     Install using a local file
+  --install-te-from=FILEPATH  Install SELinux Type Enforcement using a local file
+  --install-version=VER       Install a specific version from GitHub
+  --help                      Display this help message
 EOF
 )
     assertEquals "Expected display_help_message to match expected output exactly" "$expected_output" "$output"

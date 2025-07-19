@@ -20,6 +20,10 @@ Options:
 
   Install using a local file instead of downloading from GitHub.
 
+  `--install-te-from=FILEPATH`
+
+  Use local SELinux type enforcement file instead of downloading from GitHub
+
   `--install-version=VERSION`
 
   Install a specific version from GitHub instead of "latest".
@@ -207,6 +211,16 @@ Checks if the group and user used bu AuthorizedKeysCommand exists if not creates
 
 **Returns:**
 -   0 on success
+
+
+## `get_te_download_path`
+
+get_te_download_path
+Checks the INSTALL_VERSION to determin where to download the TE file to download
+
+
+**Outputs:**
+-   The URL to download the TE file to use
 
 
 ## `parse_args`
