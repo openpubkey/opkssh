@@ -14,6 +14,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+/*
+OPKSSH is a command-line tool that allows users to authenticate with OpenID Connect providers and generate SSH keys for secure access to servers.
+*/
 package main
 
 import (
