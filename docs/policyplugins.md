@@ -38,7 +38,7 @@ fi
 
 **Important:**
 
-All policy in opkssh is additive. An access attempt it only denied if no policy returns "allow". Only one policy needs to return "allow" for the access to be allowed even if all the other plugins return "deny". The "allow" always wins. This includes standard auth_id policy as well. If all the policy plugins return "deny", but your auth_id policy returns ALLOW, the final result will be allow. Put another way policy in OPKSSH is an OR: `IF (policy plugins) || standardPolicy(/etc/opk/auth_id policy) || standardPolicy(/.opk/auth_id policy)`.
+All policy in opkssh is additive. An access attempt is only denied if no policy returns "allow". Only one policy needs to return "allow" for the access to be allowed even if all the other plugins return "deny". The "allow" always wins. This includes standard auth_id policy as well. If all the policy plugins return "deny", but your auth_id policy returns ALLOW, the final result will be allow. Put another way policy in OPKSSH is an OR: `IF (policy plugins) || standardPolicy(/etc/opk/auth_id policy) || standardPolicy(/.opk/auth_id policy)`.
 To completely turn off standard policy ensure all auth_id files are empty.
 
 The pseudocode policy is:
