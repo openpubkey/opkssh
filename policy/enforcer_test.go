@@ -533,7 +533,7 @@ func TestLocalProvider(t *testing.T) {
 	require.NoError(t, err)
 
 	policyEnforcer := &policy.Enforcer{
-		PolicyLoader: &MockPolicyLoader{Policy: policyWithOidcGroup},
+		PolicyLoader: &MockPolicyLoader{Policy: policyTest},
 	}
 
 	err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa")
