@@ -3,7 +3,7 @@
 Inspired by the power of [the OpenSSH AuthorizedKeysCommand](https://man.openbsd.org/sshd_config.5#AuthorizedKeysCommand), opkssh provides policy plugins.
 These policy plugins provide a simple way to bring your own policy which extends the default opkssh policy.
 
-To use your own policy create a policy plugin config file in `/etc/opk/policy.d`. This config files specifies what command you want to calls out to evaluate policy. If the command returns anything else other than "allowed" and exit code 0, this is viewed as a policy rejection.
+To use your own policy create a policy plugin config file in `/etc/opk/policy.d`. This config file specifies what command you want to call out to evaluate policy. To allow, the command must return "allowed" and exit code 0.
 
 The policy plugin does not bypass the providers check. This means that a policy plugin can count on the ID Token having been validated as validly signed by one of the OPs in the `/etc/opk/providers`. We do this to allow people to write policies without having to rebuild all the code in opkssh verify.
 
@@ -36,9 +36,10 @@ else
 fi
 ```
 
-**Important:** If you have multiple policy plugins only one of them needs to return "allow" for the action to be allowed.
-If you added five policy plugins and four of them say "deny" and one of them says "allow" the allow wins out. Additionally policy plugins do not disable standard policy.
-To completely turn off standard policy and only use policy plugins ensure all auth_id files are empty.
+**Important:**
+
+All policy in opkssh is additive. An access attempt is only denied if no policy returns "allow". Only one policy needs to return "allow" for the access to be allowed even if all the other plugins return "deny". The "allow" always wins. This includes standard auth_id policy as well. If all the policy plugins return "deny", but your auth_id policy returns ALLOW, the final result will be allow. Put another way policy in OPKSSH is an OR: `IF (policy plugins) || standardPolicy(/etc/opk/auth_id policy) || standardPolicy(/.opk/auth_id policy)`.
+To completely turn off standard policy ensure all auth_id files are empty.
 
 The pseudocode policy is:
 
