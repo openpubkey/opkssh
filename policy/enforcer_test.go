@@ -517,7 +517,7 @@ func TestWildcardMatchEntry(t *testing.T) {
 	}
 
 	// Check that policy file is properly parsed and checked
-	err = policyEnforcer.CheckPolicy("test", pkt)
+	err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa")
 	require.NoError(t, err)
 }
 
@@ -536,7 +536,7 @@ func TestLocalProvider(t *testing.T) {
 		PolicyLoader: &MockPolicyLoader{Policy: policyWithOidcGroup},
 	}
 
-	err = policyEnforcer.CheckPolicy("test", pkt)
+	err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa")
 	require.NoError(t, err)
 }
 
@@ -555,6 +555,6 @@ func TestLocalEmail(t *testing.T) {
 		PolicyLoader: &MockPolicyLoader{Policy: policyTest},
 	}
 	// Check that policy file is properly parsed and checked
-	err = policyEnforcer.CheckPolicy("test", pkt)
+	err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa")
 	require.NoError(t, err)
 }
