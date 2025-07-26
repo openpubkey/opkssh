@@ -556,5 +556,5 @@ func TestLocalEmail(t *testing.T) {
 	}
 	// Check that policy file is properly parsed and checked
 	err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa")
-	require.NoError(t, err)
+	require.Error(t, err, "user should not have access")
 }
