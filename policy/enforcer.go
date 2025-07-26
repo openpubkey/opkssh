@@ -29,6 +29,11 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+const (
+	OIDC_GROUPS         = "oidc:groups:"
+	OIDC_WILDCARD_EMAIL = "oidc-match-end:email:"
+)
+
 // Enforcer evaluates opkssh policy to determine if the desired principal is
 // permitted
 type Enforcer struct {
@@ -48,15 +53,24 @@ const pluginPolicyDir = "/etc/opk/policy.d"
 // Validates that the server defined identity attribute matches the
 // respective claim from the identity token
 func validateClaim(claims *checkedClaims, user *User) bool {
-	if strings.HasPrefix(user.IdentityAttribute, "oidc:groups") {
+	if strings.HasPrefix(claims.Email, OIDC_WILDCARD_EMAIL) {
+		return false
+	}
+
+	if strings.HasPrefix(user.IdentityAttribute, OIDC_GROUPS) {
 		oidcGroupSections := strings.Split(user.IdentityAttribute, ":")
 
 		return slices.Contains(claims.Groups, oidcGroupSections[len(oidcGroupSections)-1])
 	}
-
+	wildCardEmailMatch := false
+	if strings.HasPrefix(user.IdentityAttribute, OIDC_WILDCARD_EMAIL) {
+		if strings.HasSuffix(strings.ToLower(claims.Email), strings.ToLower(user.IdentityAttribute[len(OIDC_WILDCARD_EMAIL):len(user.IdentityAttribute)])) {
+			wildCardEmailMatch = true
+		}
+	}
 	// email should be a case-insensitive check
 	// sub should be a case-sensitive check
-	return strings.EqualFold(claims.Email, user.IdentityAttribute) || string(claims.Sub) == user.IdentityAttribute
+	return wildCardEmailMatch || strings.EqualFold(claims.Email, user.IdentityAttribute) || string(claims.Sub) == user.IdentityAttribute
 }
 
 // CheckPolicy loads opkssh policy and checks to see if there is a policy
