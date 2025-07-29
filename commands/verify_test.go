@@ -46,11 +46,11 @@ const userInfoResponse = `{
 	"groups": ["group1", "group2"]
 }`
 
-func AllowAllPolicyEnforcer(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string) error {
+func AllowAllPolicyEnforcer(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string, denyUsers []string) error {
 	return nil
 }
 
-func AllowIfExpectedUserInfo(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string) error {
+func AllowIfExpectedUserInfo(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string, denyUsers []string) error {
 	if userInfo == "" {
 		return fmt.Errorf("userInfo is required")
 	} else if len(userInfo) != 93 {
@@ -82,7 +82,7 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 		name        string
 		accessToken string
 		errorString string
-		policyFunc  func(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string) error
+		policyFunc  func(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string, denyUsers []string) error
 	}{
 		{
 			name:       "Happy Path",
