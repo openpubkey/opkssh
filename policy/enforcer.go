@@ -122,7 +122,7 @@ func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, us
 
 	for _, email := range denyUsers {
 		if claims.Email == email {
-			return fmt.Errorf("Denied %s", email)
+			return fmt.Errorf("denied %s", email)
 		}
 	}
 
