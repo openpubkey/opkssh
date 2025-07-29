@@ -54,6 +54,7 @@ type VerifyCmd struct {
 	filePermChecker files.PermsChecker
 	// HTTPClient can be mocked using a roundtripper in tests
 	HttpClient *http.Client
+	ServerConfig *config.ServerConfig
 }
 
 func NewVerifyCmd(pktVerifier verifier.Verifier, checkPolicy PolicyEnforcerFunc, configPathArg string) *VerifyCmd {
@@ -147,6 +148,7 @@ func (v *VerifyCmd) SetEnvVarInConfig() error {
 	if err != nil {
 		return fmt.Errorf("failed to parse config file: %w", err)
 	}
+	v.ServerConfig = serverConfig
 	return serverConfig.SetEnvVars()
 }
 
