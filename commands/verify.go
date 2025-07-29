@@ -54,7 +54,7 @@ type VerifyCmd struct {
 	filePermChecker files.PermsChecker
 	// HTTPClient can be mocked using a roundtripper in tests
 	HttpClient *http.Client
-	ServerConfig *config.ServerConfig
+	denyUsers []string
 }
 
 func NewVerifyCmd(pktVerifier verifier.Verifier, checkPolicy PolicyEnforcerFunc, configPathArg string) *VerifyCmd {
@@ -116,7 +116,7 @@ func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, t
 			}
 		}
 
-		if err := v.CheckPolicy(userArg, pkt, userInfo, certB64Arg, typArg, v.ServerConfig.DenyUsers); err != nil {
+		if err := v.CheckPolicy(userArg, pkt, userInfo, certB64Arg, typArg, v.denyUsers); err != nil {
 			return "", err
 		} else { // Success!
 			// sshd expects the public key in the cert, not the cert itself. This
@@ -148,7 +148,7 @@ func (v *VerifyCmd) SetEnvVarInConfig() error {
 	if err != nil {
 		return fmt.Errorf("failed to parse config file: %w", err)
 	}
-	v.ServerConfig = serverConfig
+	v.denyUsers = serverConfig.DenyUsers
 	return serverConfig.SetEnvVars()
 }
 
