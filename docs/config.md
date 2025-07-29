@@ -108,6 +108,10 @@ Linux user accounts are typically referred to in SSH as *principals* and we use 
 
 We support matching on email, sub (subscriber) or group.
 
+We support email "wildcard" validation using the `oidc-match-end:email:` prefix. This allows administrators to match user emails by domain or other patterns at the end of the email string.
+- This matching is **case-sensitive**.
+- Use with care, as allowing a domain grants access to all users at that domain.
+
 ### System authorized identity file `/etc/opk/auth_id`
 
 This is a server wide policy file.
@@ -121,6 +125,9 @@ dev bob@microsoft.com https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-
 
 # Group identifier 
 dev oidc:groups:developer https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
+
+# Email suffix wildcard matching all emails ending in `@example.com`
+dev oidc-match-end:email:@example.com https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
 ```
 
 These `auth_id` files can be edited by hand or you can use the add command to add new policies. The add command has the following syntax.
