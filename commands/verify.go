@@ -54,7 +54,7 @@ type VerifyCmd struct {
 	filePermChecker files.PermsChecker
 	// HTTPClient can be mocked using a roundtripper in tests
 	HttpClient *http.Client
-	denyUsers []string
+	denyUsers  []string
 }
 
 func NewVerifyCmd(pktVerifier verifier.Verifier, checkPolicy PolicyEnforcerFunc, configPathArg string) *VerifyCmd {
