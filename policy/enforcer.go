@@ -120,6 +120,12 @@ func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, us
 		return fmt.Errorf("error getting issuer from pk token: %w", err)
 	}
 
+	for _, email := range denyUsers {
+		if claims.Email == email {
+			return fmt.Errorf("Denied %s", email)
+		}
+	}
+
 	var userInfoClaims *checkedClaims
 	if userInfoJson != "" {
 		userInfoClaims = new(checkedClaims)
