@@ -519,24 +519,7 @@ func TestWildcardMatchEntry(t *testing.T) {
 	// Check that policy file is properly parsed and checked
 	err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa", nil)
 	require.NoError(t, err)
-}
 
-func TestWildcardMatchEntryButDenyUsers(t *testing.T) {
-	t.Parallel()
-
-	op, _, err := NewMockOpenIdProvider2(false, "https://accounts.example.com", "test_client_wildcard", map[string]any{"email": "some.guy@wildcard.com"})
-	require.NoError(t, err)
-
-	opkClient, err := client.New(op)
-	require.NoError(t, err)
-
-	pkt, err := opkClient.Auth(context.Background())
-	require.NoError(t, err)
-	policyEnforcer := &policy.Enforcer{
-		PolicyLoader: &MockPolicyLoader{Policy: policyTest},
-	}
-
-	// Check that policy file is properly parsed and checked
 	denyUsers := []string{"some.guy@wildcard.com", "email@corp.com"}
 	err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa", denyUsers)
 	require.Error(t, err, "user should not have access")
@@ -559,22 +542,6 @@ func TestLocalProvider(t *testing.T) {
 
 	err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa", nil)
 	require.NoError(t, err)
-}
-
-func TestLocalProviderButDenyUsers(t *testing.T) {
-	t.Parallel()
-
-	op, _, err := NewMockOpenIdProvider2(false, "http://127.0.0.1:8090/accounts", "test_client_local_op", map[string]any{"email": "email@corp.com"})
-	require.NoError(t, err)
-
-	opkClient, err := client.New(op)
-	require.NoError(t, err)
-	pkt, err := opkClient.Auth(context.Background())
-	require.NoError(t, err)
-
-	policyEnforcer := &policy.Enforcer{
-		PolicyLoader: &MockPolicyLoader{Policy: policyTest},
-	}
 
 	denyUsers := []string{"some.guy@wildcard.com", "email@corp.com"}
 	err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa", denyUsers)
