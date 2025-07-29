@@ -81,7 +81,7 @@ func validateClaim(claims *checkedClaims, user *User) bool {
 // It is security critical to verify the pkt first before calling this function.
 // This is because if this function is called first, a timing channel exists which
 // allows an attacker check what identities and principals are allowed by the policy.F
-func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, userInfoJson string, sshCert string, keyType string) error {
+func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, userInfoJson string, sshCert string, keyType string, denyUsers []string) error {
 	pluginPolicy := plugins.NewPolicyPluginEnforcer()
 
 	results, err := pluginPolicy.CheckPolicies(pluginPolicyDir, pkt, userInfoJson, principalDesired, sshCert, keyType)

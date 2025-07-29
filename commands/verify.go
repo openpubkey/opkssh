@@ -34,7 +34,7 @@ import (
 
 // PolicyEnforcerFunc returns nil if the supplied PK token is permitted to login as
 // username. Otherwise, an error is returned indicating the reason for rejection
-type PolicyEnforcerFunc func(username string, pkt *pktoken.PKToken, userInfo string, sshCert string, keyType string) error
+type PolicyEnforcerFunc func(username string, pkt *pktoken.PKToken, userInfo string, sshCert string, keyType string, denyUsers []string) error
 
 // VerifyCmd provides functionality to verify OPK tokens contained in SSH
 // certificates and authorize requests to SSH as a specific username using a
@@ -116,7 +116,7 @@ func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, t
 			}
 		}
 
-		if err := v.CheckPolicy(userArg, pkt, userInfo, certB64Arg, typArg); err != nil {
+		if err := v.CheckPolicy(userArg, pkt, userInfo, certB64Arg, typArg, v.ServerConfig.DenyUsers); err != nil {
 			return "", err
 		} else { // Success!
 			// sshd expects the public key in the cert, not the cert itself. This
