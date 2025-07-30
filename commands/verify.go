@@ -54,6 +54,7 @@ type VerifyCmd struct {
 	filePermChecker files.PermsChecker
 	// HTTPClient can be mocked using a roundtripper in tests
 	HttpClient *http.Client
+	// denyUsers is populated from ServerConfig after successful parsing
 	denyUsers  []string
 }
 
@@ -128,8 +129,9 @@ func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, t
 	}
 }
 
-// SetEnvVarInConfig sets the environment variables specified in the server config file
-func (v *VerifyCmd) SetEnvVarInConfig() error {
+// ReadFromServerConfig sets the environment variables specified in the server config file
+// and assigns DenyUsers to VerifyCmd's denyUsers
+func (v *VerifyCmd) ReadFromServerConfig() error {
 	var configBytes []byte
 
 	// Load the file from the filesystem
