@@ -55,7 +55,7 @@ type VerifyCmd struct {
 	// HTTPClient can be mocked using a roundtripper in tests
 	HttpClient *http.Client
 	// denyUsers is populated from ServerConfig after successful parsing
-	denyUsers  []string
+	denyUsers []string
 }
 
 func NewVerifyCmd(pktVerifier verifier.Verifier, checkPolicy PolicyEnforcerFunc, configPathArg string) *VerifyCmd {
