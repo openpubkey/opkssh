@@ -357,9 +357,10 @@ func TestNewLogin(t *testing.T) {
 	providerArg := ""
 	keyPathArg := ""
 	providerAlias := ""
+	keyTypeArg := ECDSA
 
 	loginCmd := NewLogin(autoRefresh, configPathArg, createConfig, configureArg, logDir,
-		sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, keyPathArg, providerAlias)
+		sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, keyPathArg, providerAlias, keyTypeArg)
 	require.NotNil(t, loginCmd)
 }
 
@@ -367,7 +368,7 @@ func TestCreateSSHCert(t *testing.T) {
 	pkt, signer, _ := Mocks(t)
 	principals := []string{"guest", "dev"}
 
-	sshCertBytes, signKeyBytes, err := createSSHCert(pkt, signer, principals)
+	sshCertBytes, signKeyBytes, err := createSSHCert(pkt, signer, principals, ECDSA)
 	require.NoError(t, err)
 	require.NotNil(t, sshCertBytes)
 	require.NotNil(t, signKeyBytes)

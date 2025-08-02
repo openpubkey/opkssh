@@ -12,6 +12,7 @@ require (
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
 	github.com/testcontainers/testcontainers-go v0.38.0
+	github.com/thediveo/enumflag/v2 v2.0.7
 	github.com/zitadel/oidc/v3 v3.41.0
 	golang.org/x/crypto v0.40.0
 )
