@@ -53,8 +53,8 @@ import (
 type KeyType enumflag.Flag
 
 const (
-	ECDSA   KeyType = iota
-	ED25519         = iota
+	ECDSA KeyType = iota
+	ED25519
 )
 
 type LoginCmd struct {
