@@ -504,7 +504,8 @@ func TestEnforceTableTest(t *testing.T) {
 func TestWildcardMatchEntry(t *testing.T) {
 	t.Parallel()
 
-	op, _, err := NewMockOpenIdProvider2(false, "https://accounts.example.com", "test_client_wildcard", map[string]any{"email": "some.guy@wildcard.com"})
+	// we use mixed case email to confirm the address still matches against the lowercase wildcard
+	op, _, err := NewMockOpenIdProvider2(false, "https://accounts.example.com", "test_client_wildcard", map[string]any{"email": "some.guy@wILdcARd.COM"})
 	require.NoError(t, err)
 
 	opkClient, err := client.New(op)
