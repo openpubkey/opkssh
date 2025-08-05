@@ -520,7 +520,8 @@ func TestWildcardMatchEntry(t *testing.T) {
 	err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa", nil)
 	require.NoError(t, err)
 
-	denyUsers := []string{"some.guy@wildcard.com", "email@corp.com"}
+	// now check we can deny that email address, case insensitive
+	denyUsers := []string{"Some.Guy@WildCarD.com", "email@corp.com"}
 	err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa", denyUsers)
 	require.Error(t, err, "user should not have access")
 }
@@ -543,7 +544,8 @@ func TestLocalProvider(t *testing.T) {
 	err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa", nil)
 	require.NoError(t, err)
 
-	denyUsers := []string{"some.guy@wildcard.com", "email@corp.com"}
+	// now check we can deny that email address, case insensitive
+	denyUsers := []string{"some.guy@wildcard.com", "eMail@Corp.com"}
 	err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa", denyUsers)
 	require.Error(t, err, "user should not have access")
 }
