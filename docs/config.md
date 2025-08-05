@@ -79,7 +79,7 @@ deny_users:
   - "user2@example.com"
 ```
 - When a user attempts to authenticate, OPKSSH checks if their email is present in the `deny_users` list.
-- If a match is found, authentication is denied, regardless of other authorization policies.
+- If a match is found (case-insensitive), authentication is denied, regardless of other authorization policies.
 
 The server config file requires the following permissions be set:
 
@@ -119,7 +119,7 @@ Linux user accounts are typically referred to in SSH as *principals* and we use 
 We support matching on email, sub (subscriber) or group.
 
 We support email "wildcard" validation using the `oidc-match-end:email:` prefix. This allows administrators to match user emails by domain or other patterns at the end of the email string.
-- This matching is **case-sensitive**.
+- This matching is **case-insensitive**.
 - Use with care, as allowing a domain grants access to all users at that domain.
 
 ### System authorized identity file `/etc/opk/auth_id`
