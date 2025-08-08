@@ -416,16 +416,14 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 	var err error
 
 	var alg jwa.SignatureAlgorithm
-	var signer crypto.Signer
 	switch l.KeyTypeArg {
 	case ECDSA:
 		alg = jwa.ES256
-		signer, err = util.GenKeyPair(alg)
 	case ED25519:
 		alg = jwa.EdDSA
-		_, signer, err = ed25519.GenerateKey(rand.Reader)
 	}
 
+	signer, err := util.GenKeyPair(alg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate keypair: %w", err)
 	}
