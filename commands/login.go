@@ -769,7 +769,7 @@ func (l *LoginCmd) fileExists(fPath string) bool {
 }
 
 // IdentityString returns a string representation of the identity from the PK Token.
-// e.g "Email, sub, issuer, audience
+// e.g "Email, sub, issuer, audience"
 func IdentityString(pkt pktoken.PKToken) (string, error) {
 	idt, err := oidc.NewJwt(pkt.OpToken)
 	if err != nil {
