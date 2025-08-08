@@ -34,7 +34,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func deleteKey(secKeyFilePath string) {
+func removeKey(secKeyFilePath string) {
 	os.Remove(secKeyFilePath)
 	os.Remove(secKeyFilePath + "-cert.pub")
 }
@@ -98,7 +98,7 @@ func TestLogin(t *testing.T) {
 			// Expect to find OPK SSH key is written to disk
 			pubKey, secKeyFilePath, err := GetOPKSshKey("")
 			require.NoError(t, err)
-			defer deleteKey(secKeyFilePath)
+			defer removeKey(secKeyFilePath)
 
 			var expectedCertAlgo string
 			switch tt.keyType {
@@ -167,7 +167,7 @@ func TestLoginCustomKeyPath(t *testing.T) {
 			require.NoError(t, err)
 
 			seckeyPath := filepath.Join(sshPath, "opkssh-key")
-			defer deleteKey(seckeyPath)
+			defer removeKey(seckeyPath)
 
 			go func() {
 				loginCmd := commands.LoginCmd{Fs: afero.NewOsFs(), KeyTypeArg: tt.keyType}
