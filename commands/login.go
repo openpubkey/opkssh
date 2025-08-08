@@ -58,7 +58,7 @@ type LoginCmd struct {
 	LogDirArg             string // Directory to write output logs
 	SendAccessTokenArg    bool   // Send the Access Token as well as the PK Token in the SSH cert. The Access Token is used to call the userinfo endpoint to get claims not included in the ID Token
 	DisableBrowserOpenArg bool   // Disable opening the browser. Useful for choosing the browser you want to use
-	PrintIdTokenArg       bool   // Print out the contents of the id_token. Useful for inspecting claims
+	PrintIdTokenArg       bool   // Print out the contents of the id_token. Useful for inspecting claims and troubleshooting
 	KeyPathArg            string // Path where private keys is written
 	ProviderArg           string // OpenID Provider specification in the format: <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes>
 	ProviderAliasArg      string
