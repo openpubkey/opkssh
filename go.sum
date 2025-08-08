@@ -143,8 +143,8 @@ github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
 github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=
 github.com/opencontainers/image-spec v1.1.1/go.mod h1:qpqAh3Dmcf36wStyyWU+kCeDgrGnAve2nCC8+7h8Q0M=
-github.com/openpubkey/openpubkey v0.17.0 h1:A0nhgSxSe2dDrzG1jgzky4gmlyNTRmeMCaZK6n3Dv3k=
-github.com/openpubkey/openpubkey v0.17.0/go.mod h1:TnLOp59RU6DoaBSI5H4ssh60xigm/nVXqg+2pO8btDg=
+github.com/openpubkey/openpubkey v0.18.0 h1:V5GcpWiVaTfXU1ojrWszzVJZNfyjTDySCATe6VFYnFw=
+github.com/openpubkey/openpubkey v0.18.0/go.mod h1:fPLc+vfRombqs+UolQq/ldmItX/5kB0JHyf548PjYe4=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/sftp v1.13.5/go.mod h1:wHDZ0IZX6JcBYRK1TH9bcVq8G7TLpVHYIGJRFnmPfxg=
