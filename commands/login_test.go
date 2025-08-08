@@ -21,10 +21,11 @@ import (
 	"crypto"
 	"crypto/rand"
 	"encoding/json"
-	"golang.org/x/crypto/ed25519"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"golang.org/x/crypto/ed25519"
 
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/openpubkey/openpubkey/client"
@@ -396,7 +397,7 @@ func TestCreateSSHCert(t *testing.T) {
 			pkt, signer, _ := Mocks(t, tt.keyType)
 			principals := []string{"guest", "dev"}
 
-			sshCertBytes, signKeyBytes, err := createSSHCert(pkt, signer, principals, tt.keyType)
+			sshCertBytes, signKeyBytes, err := createSSHCert(pkt, signer, principals)
 			require.NoError(t, err)
 			require.NotNil(t, sshCertBytes)
 			require.NotNil(t, signKeyBytes)

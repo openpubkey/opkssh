@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"context"
 	"crypto"
-	"crypto/rand"
+	"crypto/ecdsa"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
@@ -451,7 +451,7 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 	// If principals is empty the server does not enforce any principal. The OPK
 	// verifier should use policy to make this decision.
 	principals := []string{}
-	certBytes, seckeySshPem, err := createSSHCertWithAccessToken(pkt, accessToken, signer, principals, l.KeyTypeArg)
+	certBytes, seckeySshPem, err := createSSHCertWithAccessToken(pkt, accessToken, signer, principals)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate SSH cert: %w", err)
 	}
@@ -546,7 +546,7 @@ func (l *LoginCmd) LoginWithRefresh(ctx context.Context, provider providers.Refr
 				}
 			}
 
-			certBytes, seckeySshPem, err := createSSHCertWithAccessToken(loginResult.pkt, accessToken, loginResult.signer, loginResult.principals, l.KeyTypeArg)
+			certBytes, seckeySshPem, err := createSSHCertWithAccessToken(loginResult.pkt, accessToken, loginResult.signer, loginResult.principals)
 			if err != nil {
 				return fmt.Errorf("failed to generate SSH cert: %w", err)
 			}
@@ -582,11 +582,11 @@ func (l *LoginCmd) LoginWithRefresh(ctx context.Context, provider providers.Refr
 	}
 }
 
-func createSSHCert(pkt *pktoken.PKToken, signer crypto.Signer, principals []string, keyType KeyType) ([]byte, []byte, error) {
-	return createSSHCertWithAccessToken(pkt, nil, signer, principals, keyType)
+func createSSHCert(pkt *pktoken.PKToken, signer crypto.Signer, principals []string) ([]byte, []byte, error) {
+	return createSSHCertWithAccessToken(pkt, nil, signer, principals)
 }
 
-func createSSHCertWithAccessToken(pkt *pktoken.PKToken, accessToken []byte, signer crypto.Signer, principals []string, keyType KeyType) ([]byte, []byte, error) {
+func createSSHCertWithAccessToken(pkt *pktoken.PKToken, accessToken []byte, signer crypto.Signer, principals []string) ([]byte, []byte, error) {
 	cert, err := sshcert.New(pkt, accessToken, principals)
 	if err != nil {
 		return nil, nil, err
@@ -597,11 +597,13 @@ func createSSHCertWithAccessToken(pkt *pktoken.PKToken, accessToken []byte, sign
 	}
 
 	var keyAlgos []string
-	switch keyType {
-	case ECDSA:
+	switch signer.(type) {
+	case *ecdsa.PrivateKey:
 		keyAlgos = []string{ssh.KeyAlgoECDSA256}
-	case ED25519:
+	case ed25519.PrivateKey:
 		keyAlgos = []string{ssh.KeyAlgoED25519}
+	default:
+		return nil, nil, fmt.Errorf("unsupported key type: %T", signer)
 	}
 
 	signerMas, err := ssh.NewSignerWithAlgorithms(sshSigner.(ssh.AlgorithmSigner), keyAlgos)
