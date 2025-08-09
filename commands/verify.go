@@ -56,6 +56,7 @@ type VerifyCmd struct {
 	HttpClient *http.Client
 }
 
+// NewVerifyCmd creates a new VerifyCmd instance with the provided arguments.
 func NewVerifyCmd(pktVerifier verifier.Verifier, checkPolicy PolicyEnforcerFunc, configPathArg string) *VerifyCmd {
 	fs := afero.NewOsFs()
 	return &VerifyCmd{
