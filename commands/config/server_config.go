@@ -23,7 +23,8 @@ import (
 )
 
 type ServerConfig struct {
-	EnvVars map[string]string `yaml:"env_vars"`
+	EnvVars   map[string]string `yaml:"env_vars"`
+	DenyUsers []string          `yaml:"deny_users"`
 }
 
 func NewServerConfig(c []byte) (*ServerConfig, error) {
