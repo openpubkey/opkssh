@@ -16,7 +16,7 @@ ARG ISSUER_PORT="9998"
 RUN go build -v -o opksshbuild
 
 # Stage 2: Create a minimal ArchLinux-based image
-FROM quay.io/archlinux/archlinux:latest@sha256:07e654f678272fe93b50fe8ade88deaf0793979ce504bf3120fd92976e672f5d
+FROM quay.io/archlinux/archlinux:latest@sha256:d3557fb95696c98a52bef51e8dc1d66887a6e8cad06a0a3c9c3ee9c504141c91
 # Install dependencies required for runtime (e.g., SSH server)
 RUN pacman -Syu --noconfirm && \
     pacman -Sy openssh inetutils wget jq sudo --noconfirm && \
