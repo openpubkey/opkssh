@@ -47,19 +47,20 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// LoginCmd represents the login command that performs OIDC authentication and generates SSH certificates.
 type LoginCmd struct {
 	// Inputs
 	Fs                    afero.Fs
-	AutoRefreshArg        bool
-	ConfigPathArg         string
-	CreateConfigArg       bool
-	ConfigureArg          bool
-	LogDirArg             string
-	SendAccessTokenArg    bool
-	DisableBrowserOpenArg bool
-	PrintIdTokenArg       bool
-	KeyPathArg            string
-	ProviderArg           string
+	AutoRefreshArg        bool   // Automatically refresh PK token after login
+	ConfigPathArg         string // Path to the client config file.
+	CreateConfigArg       bool   // Creates a client config file if it does not exist
+	ConfigureArg          bool   // Apply changes to ssh config and create ~/.ssh/opkssh directory
+	LogDirArg             string // Directory to write output logs
+	SendAccessTokenArg    bool   // Send the Access Token as well as the PK Token in the SSH cert. The Access Token is used to call the userinfo endpoint to get claims not included in the ID Token
+	DisableBrowserOpenArg bool   // Disable opening the browser. Useful for choosing the browser you want to use
+	PrintIdTokenArg       bool   // Print out the contents of the id_token. Useful for inspecting claims and troubleshooting
+	KeyPathArg            string // Path where SSH private key is written
+	ProviderArg           string // OpenID Provider specification in the format: <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes>
 	ProviderAliasArg      string
 	SSHConfigured         bool
 	Verbosity             int                       // Default verbosity is 0, 1 is verbose, 2 is debug
@@ -76,6 +77,7 @@ type LoginCmd struct {
 	principals []string
 }
 
+// NewLogin creates a new LoginCmd instance with the provided arguments.
 func NewLogin(autoRefreshArg bool, configPathArg string, createConfigArg bool, configureArg bool, logDirArg string,
 	sendAccessTokenArg bool, disableBrowserOpenArg bool, printIdTokenArg bool,
 	providerArg string, keyPathArg string, providerAliasArg string,
@@ -766,6 +768,8 @@ func (l *LoginCmd) fileExists(fPath string) bool {
 	return !errors.Is(err, os.ErrNotExist)
 }
 
+// IdentityString returns a string representation of the identity from the PK Token.
+// e.g "Email, sub, issuer, audience"
 func IdentityString(pkt pktoken.PKToken) (string, error) {
 	idt, err := oidc.NewJwt(pkt.OpToken)
 	if err != nil {
@@ -779,6 +783,7 @@ func IdentityString(pkt pktoken.PKToken) (string, error) {
 	}
 }
 
+// PrettyIdToken returns a pretty-printed JSON representation of the ID Token claims.
 func PrettyIdToken(pkt pktoken.PKToken) (string, error) {
 	idt, err := oidc.NewJwt(pkt.OpToken)
 	if err != nil {
