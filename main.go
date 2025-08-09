@@ -23,6 +23,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/thediveo/enumflag/v2"
 	"log"
 	"os"
 	"os/exec"
@@ -128,6 +129,7 @@ Arguments:
 	var disableBrowserOpenArg bool
 	var printIdTokenArg bool
 	var keyPathArg string
+	var keyTypeArg commands.KeyType
 	loginCmd := &cobra.Command{
 		SilenceUsage: true,
 		Use:          "login [alias]",
@@ -158,7 +160,7 @@ Arguments:
 				providerAliasArg = args[0]
 			}
 
-			login := commands.NewLogin(autoRefreshArg, configPathArg, createConfigArg, configureArg, logDirArg, sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, keyPathArg, providerAliasArg)
+			login := commands.NewLogin(autoRefreshArg, configPathArg, createConfigArg, configureArg, logDirArg, sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, keyPathArg, providerAliasArg, keyTypeArg)
 			if err := login.Run(ctx); err != nil {
 				log.Println("Error executing login command:", err)
 				return err
@@ -179,6 +181,7 @@ Arguments:
 	loginCmd.Flags().BoolVar(&sendAccessTokenArg, "send-access-token", false, "Set this flag to send the Access Token as well as the PK Token in the SSH cert. The Access Token is used to call the userinfo endpoint to get claims not included in the ID Token")
 	loginCmd.Flags().StringVar(&providerArg, "provider", "", "OpenID Provider specification in the format: <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes>")
 	loginCmd.Flags().StringVarP(&keyPathArg, "private-key-file", "i", "", "Path where private keys is written")
+	loginCmd.Flags().VarP(enumflag.New(&keyTypeArg, "Key Type", map[commands.KeyType][]string{commands.ECDSA: {"ecdsa"}, commands.ED25519: {"ed25519"}}, enumflag.EnumCaseInsensitive), "key-type", "t", "Type of key to generate")
 	rootCmd.AddCommand(loginCmd)
 
 	readhomeCmd := &cobra.Command{
