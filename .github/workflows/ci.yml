@@ -22,7 +22,7 @@ jobs:
         go-version: [1.23.x]
     steps:
     - name: Checkout
-      uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       with:
         persist-credentials: false
     - name: Install Go
@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
       - name: Check Nix flake inputs
@@ -64,7 +64,7 @@ jobs:
       OS_TYPE: ${{ matrix.os }}
     steps:
     - name: Checkout
-      uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       with:
         persist-credentials: false
     - name: Install Go
@@ -88,7 +88,7 @@ jobs:
         zypper refresh
         zypper --non-interactive install --no-recommends git wget ShellCheck shunit2 findutils python313-bashate
     - name: Checkout
-      uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       with:
         persist-credentials: false
     - name: Run ShellCheck
