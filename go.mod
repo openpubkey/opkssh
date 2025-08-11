@@ -8,10 +8,11 @@ require (
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/lestrrat-go/jwx/v2 v2.1.6
 	github.com/melbahja/goph v1.4.0
-	github.com/openpubkey/openpubkey v0.17.0
+	github.com/openpubkey/openpubkey v0.18.0
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
 	github.com/testcontainers/testcontainers-go v0.38.0
+	github.com/thediveo/enumflag/v2 v2.0.7
 	github.com/zitadel/oidc/v3 v3.41.0
 	golang.org/x/crypto v0.40.0
 )
