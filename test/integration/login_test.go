@@ -34,129 +34,188 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+func removeKey(secKeyFilePath string) {
+	os.Remove(secKeyFilePath)
+	os.Remove(secKeyFilePath + "-cert.pub")
+}
+
 func TestLogin(t *testing.T) {
-	// Check that user can login and that valid openpubkey keys are written to
-	// the correct places on disk
-
-	// Setup fake OIDC server on localhost
-	t.Log("------- setup OIDC server on localhost ------")
-	opServer, err := NewFakeOpServer()
-	require.NoError(t, err, "failed to create fake OIDC server")
-	defer opServer.Close()
-	t.Logf("OP server running at %s", opServer.URL)
-
-	// Call login
-	t.Log("------- call login cmd ------")
-	errCh := make(chan error)
-	opkProvider, loginURL, err := opServer.OpkProvider()
-	require.NoError(t, err, "failed to create OPK provider")
-	go func() {
-		loginCmd := commands.LoginCmd{Fs: afero.NewOsFs()}
-		err := loginCmd.Login(TestCtx, opkProvider, false, "")
-		errCh <- err
-	}()
-
-	// Wait for auth callback server on localhost to come up. It should come up
-	// when login command is called
-	timeoutErr := WaitForServer(TestCtx, fmt.Sprintf("%s://%s", loginURL.Scheme, loginURL.Host), LoginCallbackServerTimeout)
-	require.NoError(t, timeoutErr, "login callback server took too long to startup")
-
-	// Do OIDC login
-	DoOidcInteractiveLogin(t, nil, loginURL.String(), "test-user@localhost", "verysecure")
-
-	// Wait for interactive login to complete and assert no error occurred
-	timeoutCtx, cancel := context.WithTimeout(TestCtx, 3*time.Second)
-	defer cancel()
-	select {
-	case loginErr := <-errCh:
-		require.NoError(t, loginErr, "failed login")
-	case <-timeoutCtx.Done():
-		t.Fatal(timeoutCtx.Err())
+	tests := []struct {
+		name    string
+		keyType commands.KeyType
+	}{
+		{
+			name:    "ECDSA Key",
+			keyType: commands.ECDSA,
+		},
+		{
+			name:    "ED25519 Key",
+			keyType: commands.ED25519,
+		},
 	}
 
-	// Expect to find OPK SSH key is written to disk
-	pubKey, secKeyFilePath, err := GetOPKSshKey("")
-	require.NoError(t, err)
-	require.Equal(t, ssh.CertAlgoECDSA256v01, pubKey.Type(), "expected SSH public key to be an ecdsa-sha2-nistp256 certificate")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Check that user can login and that valid openpubkey keys are written to
+			// the correct places on disk
 
-	// Parse the private key and check that it is the private key for the public
-	// key above by signing and verifying a message
-	secKeyBytes, err := os.ReadFile(secKeyFilePath)
-	require.NoErrorf(t, err, "failed to read SSH secret key at expected path %s", secKeyFilePath)
-	secKey, err := ssh.ParsePrivateKey(secKeyBytes)
-	require.NoError(t, err, "failed to parse SSH private key")
-	msg := []byte("test")
-	sig, err := secKey.Sign(rand.Reader, msg)
-	require.NoError(t, err, "failed to sign message using parsed SSH private key")
-	require.NoError(t, pubKey.Verify(msg, sig), "failed to verify message using parsed OPK SSH public key")
+			// Setup fake OIDC server on localhost
+			t.Log("------- setup OIDC server on localhost ------")
+			opServer, err := NewFakeOpServer()
+			require.NoError(t, err, "failed to create fake OIDC server")
+			defer opServer.Close()
+			t.Logf("OP server running at %s", opServer.URL)
+
+			// Call login
+			t.Log("------- call login cmd ------")
+			errCh := make(chan error)
+			opkProvider, loginURL, err := opServer.OpkProvider()
+			require.NoError(t, err, "failed to create OPK provider")
+			go func() {
+				loginCmd := commands.LoginCmd{Fs: afero.NewOsFs(), KeyTypeArg: tt.keyType}
+				err := loginCmd.Login(TestCtx, opkProvider, false, "")
+				errCh <- err
+			}()
+
+			// Wait for auth callback server on localhost to come up. It should come up
+			// when login command is called
+			timeoutErr := WaitForServer(TestCtx, fmt.Sprintf("%s://%s", loginURL.Scheme, loginURL.Host), LoginCallbackServerTimeout)
+			require.NoError(t, timeoutErr, "login callback server took too long to startup")
+
+			// Do OIDC login
+			DoOidcInteractiveLogin(t, nil, loginURL.String(), "test-user@localhost", "verysecure")
+
+			// Wait for interactive login to complete and assert no error occurred
+			timeoutCtx, cancel := context.WithTimeout(TestCtx, 3*time.Second)
+			defer cancel()
+			select {
+			case loginErr := <-errCh:
+				require.NoError(t, loginErr, "failed login")
+			case <-timeoutCtx.Done():
+				t.Fatal(timeoutCtx.Err())
+			}
+
+			// Expect to find OPK SSH key is written to disk
+			pubKey, secKeyFilePath, err := GetOPKSshKey("")
+			require.NoError(t, err)
+			defer removeKey(secKeyFilePath)
+
+			var expectedCertAlgo string
+			switch tt.keyType {
+			case commands.ECDSA:
+				expectedCertAlgo = ssh.CertAlgoECDSA256v01
+			case commands.ED25519:
+				expectedCertAlgo = ssh.CertAlgoED25519v01
+			}
+			require.Equal(t, expectedCertAlgo, pubKey.Type(), "expected SSH public key certificate type to be %s", expectedCertAlgo)
+
+			// Parse the private key and check that it is the private key for the public
+			// key above by signing and verifying a message
+			secKeyBytes, err := os.ReadFile(secKeyFilePath)
+			require.NoErrorf(t, err, "failed to read SSH secret key at expected path %s", secKeyFilePath)
+			secKey, err := ssh.ParsePrivateKey(secKeyBytes)
+			require.NoError(t, err, "failed to parse SSH private key")
+			msg := []byte("test")
+			sig, err := secKey.Sign(rand.Reader, msg)
+			require.NoError(t, err, "failed to sign message using parsed SSH private key")
+			require.NoError(t, pubKey.Verify(msg, sig), "failed to verify message using parsed OPK SSH public key")
+		})
+	}
 }
 
 func TestLoginCustomKeyPath(t *testing.T) {
-	// Check that user can login and that valid openpubkey keys are written to
-	// the correct places on disk
-
-	// Setup fake OIDC server on localhost
-	t.Log("------- setup OIDC server on localhost ------")
-	opServer, err := NewFakeOpServer()
-	require.NoError(t, err, "failed to create fake OIDC server")
-	defer opServer.Close()
-	t.Logf("OP server running at %s", opServer.URL)
-
-	// Call login
-	t.Log("------- call login cmd ------")
-	errCh := make(chan error)
-	opkProvider, loginURL, err := opServer.OpkProvider()
-	require.NoError(t, err, "failed to create OPK provider")
-
-	homePath, err := os.UserHomeDir()
-
-	require.NoError(t, err)
-
-	sshPath := filepath.Join(homePath, ".ssh")
-
-	// Make ~/.ssh if folder does not exist
-	err = os.MkdirAll(sshPath, os.ModePerm)
-	require.NoError(t, err)
-
-	seckeyPath := filepath.Join(sshPath, "opkssh-key")
-
-	go func() {
-		loginCmd := commands.LoginCmd{Fs: afero.NewOsFs()}
-		err := loginCmd.Login(TestCtx, opkProvider, false, seckeyPath)
-		errCh <- err
-	}()
-
-	// Wait for auth callback server on localhost to come up. It should come up
-	// when login command is called
-	timeoutErr := WaitForServer(TestCtx, fmt.Sprintf("%s://%s", loginURL.Scheme, loginURL.Host), LoginCallbackServerTimeout)
-	require.NoError(t, timeoutErr, "login callback server took too long to startup")
-
-	// Do OIDC login
-	DoOidcInteractiveLogin(t, nil, loginURL.String(), "test-user@localhost", "verysecure")
-
-	// Wait for interactive login to complete and assert no error occurred
-	timeoutCtx, cancel := context.WithTimeout(TestCtx, 3*time.Second)
-	defer cancel()
-	select {
-	case loginErr := <-errCh:
-		require.NoError(t, loginErr, "failed login")
-	case <-timeoutCtx.Done():
-		t.Fatal(timeoutCtx.Err())
+	tests := []struct {
+		name    string
+		keyType commands.KeyType
+	}{
+		{
+			name:    "ECDSA Key",
+			keyType: commands.ECDSA,
+		},
+		{
+			name:    "ED25519 Key",
+			keyType: commands.ED25519,
+		},
 	}
 
-	// Expect to find OPK SSH key is written to disk
-	pubKey, secKeyFilePath, err := GetOPKSshKey(seckeyPath)
-	require.NoError(t, err)
-	require.Equal(t, ssh.CertAlgoECDSA256v01, pubKey.Type(), "expected SSH public key to be an ecdsa-sha2-nistp256 certificate")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Check that user can login and that valid openpubkey keys are written to
+			// the correct places on disk
 
-	// Parse the private key and check that it is the private key for the public
-	// key above by signing and verifying a message
-	secKeyBytes, err := os.ReadFile(secKeyFilePath)
-	require.NoErrorf(t, err, "failed to read SSH secret key at expected path %s", secKeyFilePath)
-	secKey, err := ssh.ParsePrivateKey(secKeyBytes)
-	require.NoError(t, err, "failed to parse SSH private key")
-	msg := []byte("test")
-	sig, err := secKey.Sign(rand.Reader, msg)
-	require.NoError(t, err, "failed to sign message using parsed SSH private key")
-	require.NoError(t, pubKey.Verify(msg, sig), "failed to verify message using parsed OPK SSH public key")
+			// Setup fake OIDC server on localhost
+			t.Log("------- setup OIDC server on localhost ------")
+			opServer, err := NewFakeOpServer()
+			require.NoError(t, err, "failed to create fake OIDC server")
+			defer opServer.Close()
+			t.Logf("OP server running at %s", opServer.URL)
+
+			// Call login
+			t.Log("------- call login cmd ------")
+			errCh := make(chan error)
+			opkProvider, loginURL, err := opServer.OpkProvider()
+			require.NoError(t, err, "failed to create OPK provider")
+
+			homePath, err := os.UserHomeDir()
+
+			require.NoError(t, err)
+
+			sshPath := filepath.Join(homePath, ".ssh")
+
+			// Make ~/.ssh if folder does not exist
+			err = os.MkdirAll(sshPath, os.ModePerm)
+			require.NoError(t, err)
+
+			seckeyPath := filepath.Join(sshPath, "opkssh-key")
+			defer removeKey(seckeyPath)
+
+			go func() {
+				loginCmd := commands.LoginCmd{Fs: afero.NewOsFs(), KeyTypeArg: tt.keyType}
+				err := loginCmd.Login(TestCtx, opkProvider, false, seckeyPath)
+				errCh <- err
+			}()
+
+			// Wait for auth callback server on localhost to come up. It should come up
+			// when login command is called
+			timeoutErr := WaitForServer(TestCtx, fmt.Sprintf("%s://%s", loginURL.Scheme, loginURL.Host), LoginCallbackServerTimeout)
+			require.NoError(t, timeoutErr, "login callback server took too long to startup")
+
+			// Do OIDC login
+			DoOidcInteractiveLogin(t, nil, loginURL.String(), "test-user@localhost", "verysecure")
+
+			// Wait for interactive login to complete and assert no error occurred
+			timeoutCtx, cancel := context.WithTimeout(TestCtx, 3*time.Second)
+			defer cancel()
+			select {
+			case loginErr := <-errCh:
+				require.NoError(t, loginErr, "failed login")
+			case <-timeoutCtx.Done():
+				t.Fatal(timeoutCtx.Err())
+			}
+
+			// Expect to find OPK SSH key is written to disk
+			pubKey, secKeyFilePath, err := GetOPKSshKey(seckeyPath)
+			require.NoError(t, err)
+
+			var expectedCertAlgo string
+			switch tt.keyType {
+			case commands.ECDSA:
+				expectedCertAlgo = ssh.CertAlgoECDSA256v01
+			case commands.ED25519:
+				expectedCertAlgo = ssh.CertAlgoED25519v01
+			}
+			require.Equal(t, expectedCertAlgo, pubKey.Type(), "expected SSH public key certificate type to be %s", expectedCertAlgo)
+
+			// Parse the private key and check that it is the private key for the public
+			// key above by signing and verifying a message
+			secKeyBytes, err := os.ReadFile(secKeyFilePath)
+			require.NoErrorf(t, err, "failed to read SSH secret key at expected path %s", secKeyFilePath)
+			secKey, err := ssh.ParsePrivateKey(secKeyBytes)
+			require.NoError(t, err, "failed to parse SSH private key")
+			msg := []byte("test")
+			sig, err := secKey.Sign(rand.Reader, msg)
+			require.NoError(t, err, "failed to sign message using parsed SSH private key")
+			require.NoError(t, pubKey.Verify(msg, sig), "failed to verify message using parsed OPK SSH public key")
+		})
+	}
 }

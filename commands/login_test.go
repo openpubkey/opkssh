@@ -19,10 +19,14 @@ package commands
 import (
 	"context"
 	"crypto"
+	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"golang.org/x/crypto/ed25519"
 
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/openpubkey/openpubkey/client"
@@ -53,9 +57,19 @@ const providerStr3 = providerAlias3 + "," + providerArg3
 
 const allProvidersStr = providerStr1 + ";" + providerStr2 + ";" + providerStr3
 
-func Mocks(t *testing.T) (*pktoken.PKToken, crypto.Signer, providers.OpenIdProvider) {
-	alg := jwa.ES256
-	signer, err := util.GenKeyPair(alg)
+func Mocks(t *testing.T, keyType KeyType) (*pktoken.PKToken, crypto.Signer, providers.OpenIdProvider) {
+	var err error
+	var alg jwa.SignatureAlgorithm
+	var signer crypto.Signer
+
+	switch keyType {
+	case ECDSA:
+		alg = jwa.ES256
+		signer, err = util.GenKeyPair(alg)
+	case ED25519:
+		alg = jwa.EdDSA
+		_, signer, err = ed25519.GenerateKey(rand.Reader)
+	}
 	require.NoError(t, err)
 
 	providerOpts := providers.DefaultMockProviderOpts()
@@ -82,7 +96,7 @@ func TestLoginCmd(t *testing.T) {
 	defaultConfig, err := config.NewClientConfig(config.DefaultClientConfig)
 	require.NoError(t, err, "Failed to get default client config")
 
-	_, _, mockOp := Mocks(t)
+	_, _, mockOp := Mocks(t, ECDSA)
 	configWithAccessToken := &config.ClientConfig{
 		Providers: []config.ProviderConfig{
 			{
@@ -161,62 +175,65 @@ func TestLoginCmd(t *testing.T) {
 			wantError:       false,
 		},
 	}
+	keyTypes := [...]KeyType{ECDSA, ED25519}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			for k, v := range tt.envVars {
-				err := os.Setenv(k, v)
-				require.NoError(t, err, "Failed to set env var")
-				defer func(key string) {
-					_ = os.Unsetenv(key)
-				}(k)
-			}
-
-			_, _, mockOp := Mocks(t)
-			mockFs := afero.NewMemMapFs()
-
-			tt.loginCmd.overrideProvider = &mockOp
-			tt.loginCmd.Fs = mockFs
-
-			err = tt.loginCmd.Run(context.Background())
-			if tt.wantError {
-				require.Error(t, err, "Expected error but got none")
-				if tt.errorString != "" {
-					require.ErrorContains(t, err, tt.errorString, "Got a wrong error message")
+		for _, keyType := range keyTypes {
+			t.Run(fmt.Sprintf("%s %s", tt.name, keyType.String()), func(t *testing.T) {
+				for k, v := range tt.envVars {
+					err := os.Setenv(k, v)
+					require.NoError(t, err, "Failed to set env var")
+					defer func(key string) {
+						_ = os.Unsetenv(key)
+					}(k)
 				}
-			} else {
-				require.NoError(t, err, "Unexpected error")
 
-				homePath, err := os.UserHomeDir()
-				require.NoError(t, err)
+				_, _, mockOp := Mocks(t, keyType)
+				mockFs := afero.NewMemMapFs()
 
-				sshPath := filepath.Join(homePath, ".ssh", "id_ecdsa")
-				secKeyBytes, err := afero.ReadFile(mockFs, sshPath)
-				require.NoError(t, err)
-				require.NotNil(t, secKeyBytes)
-				require.Contains(t, string(secKeyBytes), "-----BEGIN OPENSSH PRIVATE KEY-----")
+				tt.loginCmd.overrideProvider = &mockOp
+				tt.loginCmd.Fs = mockFs
 
-				logBytes, err := afero.ReadFile(mockFs, logPath)
-				require.NoError(t, err)
-				require.NotNil(t, logBytes)
-				require.Contains(t, string(logBytes), "running login command with args:")
-
-				sshPubPath := filepath.Join(homePath, ".ssh", "id_ecdsa-cert.pub")
-				pubKeyBytes, err := afero.ReadFile(mockFs, sshPubPath)
-				require.NoError(t, err)
-
-				certSmug, err := sshcert.NewFromAuthorizedKey("fake-cert-type", string(pubKeyBytes))
-				require.NoError(t, err)
-
-				accToken := certSmug.GetAccessToken()
-
-				if tt.wantAccessToken {
-					require.NotEmpty(t, accToken, "expected access token to be set in SSH cert")
+				err = tt.loginCmd.Run(context.Background())
+				if tt.wantError {
+					require.Error(t, err, "Expected error but got none")
+					if tt.errorString != "" {
+						require.ErrorContains(t, err, tt.errorString, "Got a wrong error message")
+					}
 				} else {
-					require.Empty(t, accToken, "expected access token to not be set in SSH cert")
+					require.NoError(t, err, "Unexpected error")
+
+					homePath, err := os.UserHomeDir()
+					require.NoError(t, err)
+
+					sshPath := filepath.Join(homePath, ".ssh", "id_ecdsa")
+					secKeyBytes, err := afero.ReadFile(mockFs, sshPath)
+					require.NoError(t, err)
+					require.NotNil(t, secKeyBytes)
+					require.Contains(t, string(secKeyBytes), "-----BEGIN OPENSSH PRIVATE KEY-----")
+
+					logBytes, err := afero.ReadFile(mockFs, logPath)
+					require.NoError(t, err)
+					require.NotNil(t, logBytes)
+					require.Contains(t, string(logBytes), "running login command with args:")
+
+					sshPubPath := filepath.Join(homePath, ".ssh", "id_ecdsa-cert.pub")
+					pubKeyBytes, err := afero.ReadFile(mockFs, sshPubPath)
+					require.NoError(t, err)
+
+					certSmug, err := sshcert.NewFromAuthorizedKey("fake-cert-type", string(pubKeyBytes))
+					require.NoError(t, err)
+
+					accToken := certSmug.GetAccessToken()
+
+					if tt.wantAccessToken {
+						require.NotEmpty(t, accToken, "expected access token to be set in SSH cert")
+					} else {
+						require.Empty(t, accToken, "expected access token to not be set in SSH cert")
+					}
 				}
-			}
-		})
+			})
+		}
 	}
 }
 
@@ -357,29 +374,48 @@ func TestNewLogin(t *testing.T) {
 	providerArg := ""
 	keyPathArg := ""
 	providerAlias := ""
+	keyTypeArg := ECDSA
 
 	loginCmd := NewLogin(autoRefresh, configPathArg, createConfig, configureArg, logDir,
-		sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, keyPathArg, providerAlias)
+		sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, keyPathArg, providerAlias, keyTypeArg)
 	require.NotNil(t, loginCmd)
 }
 
 func TestCreateSSHCert(t *testing.T) {
-	pkt, signer, _ := Mocks(t)
-	principals := []string{"guest", "dev"}
+	tests := []struct {
+		name    string
+		keyType KeyType
+	}{
+		{
+			name:    "ECDSA Certificate",
+			keyType: ECDSA,
+		},
+		{
+			name:    "ED25519 Certificate",
+			keyType: ED25519,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 
-	sshCertBytes, signKeyBytes, err := createSSHCert(pkt, signer, principals)
-	require.NoError(t, err)
-	require.NotNil(t, sshCertBytes)
-	require.NotNil(t, signKeyBytes)
+			pkt, signer, _ := Mocks(t, tt.keyType)
+			principals := []string{"guest", "dev"}
 
-	// Simple smoke test to verify we can parse the cert
-	certPubkey, _, _, _, err := ssh.ParseAuthorizedKey([]byte("certType" + " " + string(sshCertBytes)))
-	require.NoError(t, err)
-	require.NotNil(t, certPubkey)
+			sshCertBytes, signKeyBytes, err := createSSHCert(pkt, signer, principals)
+			require.NoError(t, err)
+			require.NotNil(t, sshCertBytes)
+			require.NotNil(t, signKeyBytes)
+
+			// Simple smoke test to verify we can parse the cert
+			certPubkey, _, _, _, err := ssh.ParseAuthorizedKey([]byte("certType" + " " + string(sshCertBytes)))
+			require.NoError(t, err)
+			require.NotNil(t, certPubkey)
+		})
+	}
 }
 
 func TestIdentityString(t *testing.T) {
-	pkt, _, _ := Mocks(t)
+	pkt, _, _ := Mocks(t, ECDSA)
 	idString, err := IdentityString(*pkt)
 	require.NoError(t, err)
 	expIdString := "Email, sub, issuer, audience: \narthur.aardvark@example.com me https://accounts.example.com test_client_id"
@@ -387,7 +423,7 @@ func TestIdentityString(t *testing.T) {
 }
 
 func TestPrettyPrintIdToken(t *testing.T) {
-	pkt, _, _ := Mocks(t)
+	pkt, _, _ := Mocks(t, ECDSA)
 	iss, err := pkt.Issuer()
 	require.NoError(t, err)
 
