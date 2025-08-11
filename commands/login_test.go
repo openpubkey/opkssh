@@ -21,6 +21,7 @@ import (
 	"crypto"
 	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -174,62 +175,65 @@ func TestLoginCmd(t *testing.T) {
 			wantError:       false,
 		},
 	}
+	keyTypes := [...]KeyType{ECDSA, ED25519}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			for k, v := range tt.envVars {
-				err := os.Setenv(k, v)
-				require.NoError(t, err, "Failed to set env var")
-				defer func(key string) {
-					_ = os.Unsetenv(key)
-				}(k)
-			}
-
-			_, _, mockOp := Mocks(t, ECDSA)
-			mockFs := afero.NewMemMapFs()
-
-			tt.loginCmd.overrideProvider = &mockOp
-			tt.loginCmd.Fs = mockFs
-
-			err = tt.loginCmd.Run(context.Background())
-			if tt.wantError {
-				require.Error(t, err, "Expected error but got none")
-				if tt.errorString != "" {
-					require.ErrorContains(t, err, tt.errorString, "Got a wrong error message")
+		for _, keyType := range keyTypes {
+			t.Run(fmt.Sprintf("%s %s", tt.name, keyType.String()), func(t *testing.T) {
+				for k, v := range tt.envVars {
+					err := os.Setenv(k, v)
+					require.NoError(t, err, "Failed to set env var")
+					defer func(key string) {
+						_ = os.Unsetenv(key)
+					}(k)
 				}
-			} else {
-				require.NoError(t, err, "Unexpected error")
 
-				homePath, err := os.UserHomeDir()
-				require.NoError(t, err)
+				_, _, mockOp := Mocks(t, keyType)
+				mockFs := afero.NewMemMapFs()
 
-				sshPath := filepath.Join(homePath, ".ssh", "id_ecdsa")
-				secKeyBytes, err := afero.ReadFile(mockFs, sshPath)
-				require.NoError(t, err)
-				require.NotNil(t, secKeyBytes)
-				require.Contains(t, string(secKeyBytes), "-----BEGIN OPENSSH PRIVATE KEY-----")
+				tt.loginCmd.overrideProvider = &mockOp
+				tt.loginCmd.Fs = mockFs
 
-				logBytes, err := afero.ReadFile(mockFs, logPath)
-				require.NoError(t, err)
-				require.NotNil(t, logBytes)
-				require.Contains(t, string(logBytes), "running login command with args:")
-
-				sshPubPath := filepath.Join(homePath, ".ssh", "id_ecdsa-cert.pub")
-				pubKeyBytes, err := afero.ReadFile(mockFs, sshPubPath)
-				require.NoError(t, err)
-
-				certSmug, err := sshcert.NewFromAuthorizedKey("fake-cert-type", string(pubKeyBytes))
-				require.NoError(t, err)
-
-				accToken := certSmug.GetAccessToken()
-
-				if tt.wantAccessToken {
-					require.NotEmpty(t, accToken, "expected access token to be set in SSH cert")
+				err = tt.loginCmd.Run(context.Background())
+				if tt.wantError {
+					require.Error(t, err, "Expected error but got none")
+					if tt.errorString != "" {
+						require.ErrorContains(t, err, tt.errorString, "Got a wrong error message")
+					}
 				} else {
-					require.Empty(t, accToken, "expected access token to not be set in SSH cert")
+					require.NoError(t, err, "Unexpected error")
+
+					homePath, err := os.UserHomeDir()
+					require.NoError(t, err)
+
+					sshPath := filepath.Join(homePath, ".ssh", "id_ecdsa")
+					secKeyBytes, err := afero.ReadFile(mockFs, sshPath)
+					require.NoError(t, err)
+					require.NotNil(t, secKeyBytes)
+					require.Contains(t, string(secKeyBytes), "-----BEGIN OPENSSH PRIVATE KEY-----")
+
+					logBytes, err := afero.ReadFile(mockFs, logPath)
+					require.NoError(t, err)
+					require.NotNil(t, logBytes)
+					require.Contains(t, string(logBytes), "running login command with args:")
+
+					sshPubPath := filepath.Join(homePath, ".ssh", "id_ecdsa-cert.pub")
+					pubKeyBytes, err := afero.ReadFile(mockFs, sshPubPath)
+					require.NoError(t, err)
+
+					certSmug, err := sshcert.NewFromAuthorizedKey("fake-cert-type", string(pubKeyBytes))
+					require.NoError(t, err)
+
+					accToken := certSmug.GetAccessToken()
+
+					if tt.wantAccessToken {
+						require.NotEmpty(t, accToken, "expected access token to be set in SSH cert")
+					} else {
+						require.Empty(t, accToken, "expected access token to not be set in SSH cert")
+					}
 				}
-			}
-		})
+			})
+		}
 	}
 }
 
