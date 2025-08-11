@@ -58,6 +58,17 @@ const (
 	ED25519
 )
 
+func (k KeyType) String() string {
+	switch k {
+	case ECDSA:
+		return "ecdsa"
+	case ED25519:
+		return "ed25519"
+	default:
+		return "unknown"
+	}
+}
+
 // LoginCmd represents the login command that performs OIDC authentication and generates SSH certificates.
 type LoginCmd struct {
 	// Inputs
@@ -424,6 +435,8 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 		alg = jwa.ES256
 	case ED25519:
 		alg = jwa.EdDSA
+	default:
+		return nil, fmt.Errorf("unsupported key type (%s); use -t <%s|%s>", l.KeyTypeArg.String(), ECDSA.String(), ED25519.String())
 	}
 
 	signer, err := util.GenKeyPair(alg)
@@ -712,6 +725,8 @@ func (l *LoginCmd) writeKeysToSSHDir(seckeySshPem []byte, certBytes []byte) erro
 		keyFileNames = []string{"id_ecdsa", "id_ecdsa_sk"}
 	case ED25519:
 		keyFileNames = []string{"id_ed25519", "id_ed25519_sk"}
+	default:
+		return fmt.Errorf("key type (%s) has no default output file name; use -i <filePath>", l.KeyTypeArg.String())
 	}
 
 	for _, keyFilename := range keyFileNames {

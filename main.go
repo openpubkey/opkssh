@@ -23,7 +23,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/thediveo/enumflag/v2"
 	"log"
 	"os"
 	"os/exec"
@@ -31,6 +30,8 @@ import (
 	"regexp"
 	"strings"
 	"syscall"
+
+	"github.com/thediveo/enumflag/v2"
 
 	"github.com/openpubkey/opkssh/commands"
 	"github.com/openpubkey/opkssh/policy"
@@ -181,7 +182,7 @@ Arguments:
 	loginCmd.Flags().BoolVar(&sendAccessTokenArg, "send-access-token", false, "Set this flag to send the Access Token as well as the PK Token in the SSH cert. The Access Token is used to call the userinfo endpoint to get claims not included in the ID Token")
 	loginCmd.Flags().StringVar(&providerArg, "provider", "", "OpenID Provider specification in the format: <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes>")
 	loginCmd.Flags().StringVarP(&keyPathArg, "private-key-file", "i", "", "Path where private keys is written")
-	loginCmd.Flags().VarP(enumflag.New(&keyTypeArg, "Key Type", map[commands.KeyType][]string{commands.ECDSA: {"ecdsa"}, commands.ED25519: {"ed25519"}}, enumflag.EnumCaseInsensitive), "key-type", "t", "Type of key to generate")
+	loginCmd.Flags().VarP(enumflag.New(&keyTypeArg, "Key Type", map[commands.KeyType][]string{commands.ECDSA: {commands.ECDSA.String()}, commands.ED25519: {commands.ED25519.String()}}, enumflag.EnumCaseInsensitive), "key-type", "t", "Type of key to generate")
 	rootCmd.AddCommand(loginCmd)
 
 	readhomeCmd := &cobra.Command{
