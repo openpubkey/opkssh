@@ -71,14 +71,16 @@ env_vars:
   HTTPS_PROXY: http://yourproxy:3128
 ```
 
-It also supports a `deny_users` field. This field is a YAML array of strings, where each string is an email address you wish to deny access to.
+It also supports a `deny_emails` field. This field is a YAML array of strings, where each string is an email address you wish to deny access to.
+
 ```yml
 ---
-deny_users:
+deny_emails:
   - "user1@example.com"
   - "user2@example.com"
 ```
-- When a user attempts to authenticate, OPKSSH checks if their email is present in the `deny_users` list.
+
+- When a user attempts to authenticate, OPKSSH checks if their email is present in the `deny_emails` list.
 - If a match is found (case-insensitive), authentication is denied, regardless of other authorization policies.
 
 The server config file requires the following permissions be set:

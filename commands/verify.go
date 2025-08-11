@@ -34,7 +34,7 @@ import (
 
 // PolicyEnforcerFunc returns nil if the supplied PK token is permitted to login as
 // username. Otherwise, an error is returned indicating the reason for rejection
-type PolicyEnforcerFunc func(username string, pkt *pktoken.PKToken, userInfo string, sshCert string, keyType string, denyUsers []string) error
+type PolicyEnforcerFunc func(username string, pkt *pktoken.PKToken, userInfo string, sshCert string, keyType string, denyList policy.DenyList) error
 
 // VerifyCmd provides functionality to verify OPK tokens contained in SSH
 // certificates and authorize requests to SSH as a specific username using a
@@ -54,8 +54,8 @@ type VerifyCmd struct {
 	filePermChecker files.PermsChecker
 	// HTTPClient can be mocked using a roundtripper in tests
 	HttpClient *http.Client
-	// denyUsers is populated from ServerConfig after successful parsing
-	denyUsers []string
+	// denyList is populated from ServerConfig after successful parsing
+	denyList policy.DenyList
 }
 
 // NewVerifyCmd creates a new VerifyCmd instance with the provided arguments.
@@ -118,7 +118,7 @@ func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, t
 			}
 		}
 
-		if err := v.CheckPolicy(userArg, pkt, userInfo, certB64Arg, typArg, v.denyUsers); err != nil {
+		if err := v.CheckPolicy(userArg, pkt, userInfo, certB64Arg, typArg, v.denyList); err != nil {
 			return "", err
 		} else { // Success!
 			// sshd expects the public key in the cert, not the cert itself. This
@@ -131,7 +131,7 @@ func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, t
 }
 
 // ReadFromServerConfig sets the environment variables specified in the server config file
-// and assigns DenyUsers to VerifyCmd's denyUsers
+// and assigns configured deny lists to VerifyCmd's denyList
 func (v *VerifyCmd) ReadFromServerConfig() error {
 	var configBytes []byte
 
@@ -151,7 +151,9 @@ func (v *VerifyCmd) ReadFromServerConfig() error {
 	if err != nil {
 		return fmt.Errorf("failed to parse config file: %w", err)
 	}
-	v.denyUsers = serverConfig.DenyUsers
+	v.denyList = policy.DenyList{
+		Emails: serverConfig.DenyEmails,
+	}
 	return serverConfig.SetEnvVars()
 }
 

@@ -32,6 +32,7 @@ import (
 	"github.com/openpubkey/openpubkey/providers/mocks"
 	"github.com/openpubkey/openpubkey/util"
 	"github.com/openpubkey/openpubkey/verifier"
+	"github.com/openpubkey/opkssh/policy"
 	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/openpubkey/opkssh/sshcert"
 	"github.com/spf13/afero"
@@ -46,11 +47,11 @@ const userInfoResponse = `{
 	"groups": ["group1", "group2"]
 }`
 
-func AllowAllPolicyEnforcer(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string, denyUsers []string) error {
+func AllowAllPolicyEnforcer(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string, denyList policy.DenyList) error {
 	return nil
 }
 
-func AllowIfExpectedUserInfo(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string, denyUsers []string) error {
+func AllowIfExpectedUserInfo(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string, denyList policy.DenyList) error {
 	if userInfo == "" {
 		return fmt.Errorf("userInfo is required")
 	} else if len(userInfo) != 93 {
@@ -82,7 +83,7 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 		name        string
 		accessToken string
 		errorString string
-		policyFunc  func(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string, denyUsers []string) error
+		policyFunc  func(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string, denyList policy.DenyList) error
 	}{
 		{
 			name:       "Happy Path",
