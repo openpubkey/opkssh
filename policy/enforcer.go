@@ -29,6 +29,16 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+const (
+	OIDC_GROUPS         = "oidc:groups:"
+	OIDC_WILDCARD_EMAIL = "oidc-match-end:email:"
+)
+
+// DenyList represents the DenyLists in the server config
+type DenyList struct {
+	Emails []string
+}
+
 // Enforcer evaluates opkssh policy to determine if the desired principal is
 // permitted
 type Enforcer struct {
@@ -48,15 +58,24 @@ const pluginPolicyDir = "/etc/opk/policy.d"
 // Validates that the server defined identity attribute matches the
 // respective claim from the identity token
 func validateClaim(claims *checkedClaims, user *User) bool {
-	if strings.HasPrefix(user.IdentityAttribute, "oidc:groups") {
+	if strings.HasPrefix(claims.Email, OIDC_WILDCARD_EMAIL) {
+		return false
+	}
+
+	if strings.HasPrefix(user.IdentityAttribute, OIDC_GROUPS) {
 		oidcGroupSections := strings.Split(user.IdentityAttribute, ":")
 
 		return slices.Contains(claims.Groups, oidcGroupSections[len(oidcGroupSections)-1])
 	}
-
+	wildCardEmailMatch := false
+	if strings.HasPrefix(user.IdentityAttribute, OIDC_WILDCARD_EMAIL) {
+		if strings.HasSuffix(strings.ToLower(claims.Email), strings.ToLower(user.IdentityAttribute[len(OIDC_WILDCARD_EMAIL):len(user.IdentityAttribute)])) {
+			wildCardEmailMatch = true
+		}
+	}
 	// email should be a case-insensitive check
 	// sub should be a case-sensitive check
-	return strings.EqualFold(claims.Email, user.IdentityAttribute) || string(claims.Sub) == user.IdentityAttribute
+	return wildCardEmailMatch || strings.EqualFold(claims.Email, user.IdentityAttribute) || string(claims.Sub) == user.IdentityAttribute
 }
 
 // CheckPolicy loads opkssh policy and checks to see if there is a policy
@@ -67,7 +86,7 @@ func validateClaim(claims *checkedClaims, user *User) bool {
 // It is security critical to verify the pkt first before calling this function.
 // This is because if this function is called first, a timing channel exists which
 // allows an attacker check what identities and principals are allowed by the policy.F
-func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, userInfoJson string, sshCert string, keyType string) error {
+func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, userInfoJson string, sshCert string, keyType string, denyList DenyList) error {
 	pluginPolicy := plugins.NewPolicyPluginEnforcer()
 
 	results, err := pluginPolicy.CheckPolicies(pluginPolicyDir, pkt, userInfoJson, principalDesired, sshCert, keyType)
@@ -104,6 +123,12 @@ func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, us
 	issuer, err := pkt.Issuer()
 	if err != nil {
 		return fmt.Errorf("error getting issuer from pk token: %w", err)
+	}
+
+	for _, email := range denyList.Emails {
+		if strings.EqualFold(claims.Email, email) {
+			return fmt.Errorf("denied %s", email)
+		}
 	}
 
 	var userInfoClaims *checkedClaims
