@@ -39,6 +39,7 @@ import (
 	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 	"text/tabwriter"
 )
 
@@ -336,9 +337,18 @@ Arguments:
 
 			}
 
-			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(w, "Alias\tIssuer")
-			fmt.Fprintln(w, "-----\t------")
+			isTTY := term.IsTerminal(int(os.Stdout.Fd()))
+
+			var w *tabwriter.Writer
+			if isTTY {
+				// Nice aligned table for TTY output
+				w = tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+				fmt.Fprintln(w, "Alias\tIssuer")
+				fmt.Fprintln(w, "-----\t------")
+			} else {
+				// Simpler formatting for non-TTY (e.g., when piping to a file)
+				w = tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', tabwriter.DiscardEmptyColumns)
+			}
 
 			for alias, p := range providersMap {
 				fmt.Fprintf(w, "%s\t%s\n", alias, p.Issuer)
