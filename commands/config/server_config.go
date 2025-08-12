@@ -22,8 +22,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// ServerConfig struct to represent the /etc/opk/config.yml file that runs on the server that the user is SSHing into
 type ServerConfig struct {
-	EnvVars map[string]string `yaml:"env_vars"`
+	EnvVars    map[string]string `yaml:"env_vars"`
+	DenyEmails []string          `yaml:"deny_emails"`
 }
 
 func NewServerConfig(c []byte) (*ServerConfig, error) {

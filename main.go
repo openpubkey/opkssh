@@ -282,7 +282,7 @@ Arguments:
 			}
 
 			v := commands.NewVerifyCmd(*pktVerifier, commands.OpkPolicyEnforcerFunc(userArg), serverConfigPathArg)
-			if err := v.SetEnvVarInConfig(); err != nil {
+			if err := v.ReadFromServerConfig(); err != nil {
 				log.Println("Failed to set environment variables in config:", err)
 			}
 

@@ -62,7 +62,7 @@ providers:
 ## Server config `/etc/opk/config.yml`
 
 This is the config file for opkssh when used on the SSH server.
-The only current config field it supports is setting additional environment variables when `opkssh verify` is called.
+It supports setting additional environment variables when `opkssh verify` is called.
 For instance if you want to specify the URI of a proxy server you can pass the environment variable HTTPS_PROXY:
 
 ```yml
@@ -71,7 +71,19 @@ env_vars:
   HTTPS_PROXY: http://yourproxy:3128
 ```
 
-It requires the following permissions be set:
+It also supports a `deny_emails` field. This field is a YAML array of strings, where each string is an email address you wish to deny access to.
+
+```yml
+---
+deny_emails:
+  - "user1@example.com"
+  - "user2@example.com"
+```
+
+- When a user attempts to authenticate, OPKSSH checks if their email is present in the `deny_emails` list.
+- If a match is found (case-insensitive), authentication is denied, regardless of other authorization policies.
+
+The server config file requires the following permissions be set:
 
 ```bash
 sudo chown root:opksshuser /etc/opk/config.yml
@@ -108,6 +120,10 @@ Linux user accounts are typically referred to in SSH as *principals* and we use 
 
 We support matching on email, sub (subscriber) or group.
 
+We support email "wildcard" validation using the `oidc-match-end:email:` prefix. This allows administrators to match user emails by domain or other patterns at the end of the email string.
+- This matching is **case-insensitive**.
+- Use with care, as allowing a domain grants access to all users at that domain.
+
 ### System authorized identity file `/etc/opk/auth_id`
 
 This is a server wide policy file.
@@ -121,6 +137,9 @@ dev bob@microsoft.com https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-
 
 # Group identifier 
 dev oidc:groups:developer https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
+
+# Email suffix wildcard matching all emails ending in `@example.com`
+dev oidc-match-end:email:@example.com https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
 ```
 
 These `auth_id` files can be edited by hand or you can use the add command to add new policies. The add command has the following syntax.
