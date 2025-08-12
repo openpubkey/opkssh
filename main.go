@@ -33,13 +33,13 @@ import (
 
 	"github.com/thediveo/enumflag/v2"
 
-	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/openpubkey/opkssh/commands"
 	config "github.com/openpubkey/opkssh/commands/config"
 	"github.com/openpubkey/opkssh/policy"
 	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
+	"text/tabwriter"
 )
 
 var (
@@ -336,14 +336,14 @@ Arguments:
 
 			}
 
-			t := table.NewWriter()
-			t.SetOutputMirror(os.Stdout)
-			t.AppendHeader(table.Row{"Providers", "Issuer"})
+			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			fmt.Fprintln(w, "Alias\tIssuer")
+			fmt.Fprintln(w, "-----\t------")
 
 			for alias, p := range providersMap {
-				t.AppendRow(table.Row{alias, p.Issuer})
+				fmt.Fprintf(w, "%s\t%s\n", alias, p.Issuer)
 			}
-			t.Render()
+			w.Flush()
 
 			return nil
 		},
