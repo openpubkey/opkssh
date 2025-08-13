@@ -59,7 +59,7 @@ func (c *ClientConfig) GetByIssuer(issuer string) (*ProviderConfig, bool) {
 	return nil, false
 }
 
-func GetDefaultClientConfigPath(configPath string) (string, error) {
+func GetDefaultClientConfigPath() (string, error) {
 	dir, dirErr := os.UserHomeDir()
 	if dirErr != nil {
 		return "", fmt.Errorf("failed to get user config dir: %w", dirErr)
@@ -72,7 +72,7 @@ func GetDefaultClientConfigPath(configPath string) (string, error) {
 func GetClientConfigFromFile(configPath string, Fs afero.Fs) (*ClientConfig, error) {
 	if configPath == "" {
 		var err error
-		configPath, err = GetDefaultClientConfigPath(configPath)
+		configPath, err = GetDefaultClientConfigPath()
 
 		if err != nil {
 			return nil, err
