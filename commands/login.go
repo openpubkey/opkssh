@@ -143,12 +143,8 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 
 	// If the Config has been set in the struct don't replace it. This is useful for testing
 	if l.Config == nil {
-		if l.ConfigPathArg == "" {
-			dir, dirErr := os.UserHomeDir()
-			if dirErr != nil {
-				return fmt.Errorf("failed to get user config dir: %w", dirErr)
-			}
-			l.ConfigPathArg = filepath.Join(dir, ".opk", "config.yml")
+		if err := config.ResolveClientConfigPath(&l.ConfigPathArg); err != nil {
+			return err
 		}
 		if _, err := l.Fs.Stat(l.ConfigPathArg); err == nil {
 			if l.CreateConfigArg {
