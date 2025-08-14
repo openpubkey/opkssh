@@ -59,24 +59,22 @@ func (c *ClientConfig) GetByIssuer(issuer string) (*ProviderConfig, bool) {
 	return nil, false
 }
 
-func GetDefaultClientConfigPath() (string, error) {
-	dir, dirErr := os.UserHomeDir()
-	if dirErr != nil {
-		return "", fmt.Errorf("failed to get user config dir: %w", dirErr)
+func ResolveClientConfigPath(configPath *string) error {
+	if *configPath == "" {
+		dir, dirErr := os.UserHomeDir()
+		if dirErr != nil {
+			return fmt.Errorf("failed to get user config dir: %w", dirErr)
+		}
+		*configPath = filepath.Join(dir, ".opk", "config.yml")
 	}
-	return filepath.Join(dir, ".opk", "config.yml"), nil
+	return nil
 }
 
 // GetClientConfigFromFile retrieves the client config from the configuration file at configPath.
 // If configPath is not specified then the default configuration path is uses ~/.opk/config.yml
 func GetClientConfigFromFile(configPath string, Fs afero.Fs) (*ClientConfig, error) {
-	if configPath == "" {
-		var err error
-		configPath, err = GetDefaultClientConfigPath()
-
-		if err != nil {
-			return nil, err
-		}
+	if err := ResolveClientConfigPath(&configPath); err != nil {
+		return nil, err
 	}
 
 	var configBytes []byte
