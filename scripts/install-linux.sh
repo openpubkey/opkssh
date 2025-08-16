@@ -379,22 +379,11 @@ ensure_opkssh_user_and_group() {
 get_te_download_path() {
     local te_url version
     if [[ "$INSTALL_VERSION" == "latest" ]]; then
-        version=$(wget --server-response --max-redirect=0 -O /dev/null "https://github.com/${GITHUB_REPO}/releases/latest" 2>&1 | sed -n -E 's/^  Location: .*\/tag\/v([0-9.]+).*/\1/p')
+        version=$(wget --server-response --max-redirect=0 -O /dev/null "https://github.com/${GITHUB_REPO}/releases/latest" 2>&1 | sed -n -E 's/^  Location: .*\/tag\/(v[0-9.]+).*/\1/p')
     else
-        # Remove the 'v' prefix if present
-        version="${INSTALL_VERSION#v}"
+        version="$INSTALL_VERSION"
     fi
-
-    if [[ "$version" == "0.8.0" ]]; then
-        # Version that is installed is equal to v0.8.0, fetch the file from main branch
-        te_url="https://raw.githubusercontent.com/${GITHUB_REPO}/main/te_files/v0.8.0_opkssh"
-    elif [[ "$(printf '%s\n%s\n' "$version" "0.8.0" | sort -V | head -n1)" == "$version" ]]; then
-        # Version that is installed is earlier than v0.8.0, fetch the file from main branch
-        te_url="https://raw.githubusercontent.com/${GITHUB_REPO}/main/te_files/v0.7.0_opkssh"
-    else
-        # Version is later thatn v0.8.0, let's use the release tag
-        te_url="https://raw.githubusercontent.com/${GITHUB_REPO}/v${version}/te_files/opkssh"
-    fi
+    te_url="https://raw.githubusercontent.com/${GITHUB_REPO}/${version}/te_files/opkssh"
 
     if [[ "$HOME_POLICY" == true ]]; then
         te_url="${te_url}.te"
@@ -403,6 +392,29 @@ get_te_download_path() {
     fi
 
     echo "$te_url"
+}
+
+# check_opkssh_version
+# Checks if an earlier version that is not supported by this script is beeing installed
+# If so, exit with error code and installation instructions
+#
+# Outputs:
+#   Nothing is version is supported else outputs install instructions to stderr
+#
+# Returns:
+#  0 on success
+#  1 if INSTALL_VERSION isn't supported
+check_opkssh_version() {
+    local min_version="v0.8.1"
+
+    [[ "$INSTALL_VERSION" == "latest" ]] && return 0
+
+    if [[ ! "$(printf '%s\n' "$min_version" "$INSTALL_VERSION" | sed 's/^v//' | sort -V | head -n1)" = "${min_version#v}" ]]; then
+        echo "Installing opkssh $INSTALL_VERSION with this script isn't supported" >&2
+        echo "Use the following command to install $INSTALL_VERSION:" >&2
+        echo "wget -qO- https://raw.githubusercontent.com/$GITHUB_REPO/refs/tags/$INSTALL_VERSION/scripts/install-linux.sh | sudo bash -s -- --install-version=$INSTALL_VERSION" >&2
+        return 1
+    fi
 }
 
 # parse_args
@@ -759,6 +771,7 @@ log_opkssh_installation() {
 main() {
     parse_args "$@" || return 0
     check_bash_version "${BASH_VERSINFO[@]}" || return 1
+    check_opkssh_version || return 1
     running_as_root "$EUID" || return 1
     OS_TYPE=$(determine_linux_type) || return 1
     CPU_ARCH=$(check_cpu_architecture) || return 1

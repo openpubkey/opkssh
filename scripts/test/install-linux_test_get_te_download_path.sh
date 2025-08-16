@@ -22,29 +22,7 @@ test_get_te_download_path_latest_version_with_home_policy_true() {
     assertEquals "$expected" "$result"
 }
 
-test_specific_version_equal_to_080() {
-    export INSTALL_VERSION="v0.8.0"
-    export GITHUB_REPO="org/repo"
-    export HOME_POLICY=false
-
-    result=$(get_te_download_path)
-    expected="https://raw.githubusercontent.com/org/repo/main/te_files/v0.8.0_opkssh-no-home.te"
-
-    assertEquals "$expected" "$result"
-}
-
-test_get_te_download_path_specific_version_less_than_080() {
-    export INSTALL_VERSION="v0.6.0"
-    export GITHUB_REPO="org/repo"
-    export HOME_POLICY=true
-
-    result=$(get_te_download_path)
-    expected="https://raw.githubusercontent.com/org/repo/main/te_files/v0.7.0_opkssh.te"
-
-    assertEquals "$expected" "$result"
-}
-
-test_get_te_download_path_specific_version_greater_than_080() {
+test_specific_version_no_home() {
     export INSTALL_VERSION="v1.0.0"
     export GITHUB_REPO="org/repo"
     export HOME_POLICY=false

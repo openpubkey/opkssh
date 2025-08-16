@@ -223,6 +223,22 @@ Checks the INSTALL_VERSION to determin where to download the TE file to download
 -   The URL to download the TE file to use
 
 
+## `check_opkssh_version`
+
+check_opkssh_version
+Checks if an earlier version that is not supported by this script is beeing installed
+If so, exit with error code and installation instructions
+
+
+**Outputs:**
+-   Nothing is version is supported else outputs install instructions to stderr
+
+
+**Returns:**
+-  0 on success
+-  1 if INSTALL_VERSION isn't supported
+
+
 ## `parse_args`
 
 parse_args
@@ -292,7 +308,7 @@ configure_openssh_server
 Configure openSSH-server to use opkssh using AuthorizedKeysCommand
 
 **Arguments:**
--   $1 - Path to ssh root configuration directory (Optional, default /etc/ssh)
+-   $1 - Path to ssh root configuratino directory (Optional, default /etc/ssh)
 
 Output:
   Writes to stdout the progress of configuration
