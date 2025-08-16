@@ -18,7 +18,11 @@ package config
 
 import (
 	_ "embed"
+	"fmt"
+	"log"
+	"path/filepath"
 
+	"github.com/spf13/afero"
 	"gopkg.in/yaml.v3"
 )
 
@@ -52,4 +56,32 @@ func (c *ClientConfig) GetByIssuer(issuer string) (*ProviderConfig, bool) {
 		}
 	}
 	return nil, false
+}
+
+// GetClientConfigFromFile retrieves the client config from the configuration file at configPath.
+func GetClientConfigFromFile(configPath string, Fs afero.Fs) (*ClientConfig, error) {
+	var configBytes []byte
+	// Load the file from the filesystem
+	afs := &afero.Afero{Fs: Fs}
+	configBytes, err := afs.ReadFile(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+	config, err := NewClientConfig(configBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+	return config, nil
+}
+
+func CreateDefaultClientConfig(configPath string, Fs afero.Fs) error {
+	afs := &afero.Afero{Fs: Fs}
+	if err := afs.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+	if err := afs.WriteFile(configPath, DefaultClientConfig, 0644); err != nil {
+		return fmt.Errorf("failed to write default config file: %w", err)
+	}
+	log.Printf("created client config file at %s", configPath)
+	return nil
 }
