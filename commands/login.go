@@ -143,40 +143,22 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 
 	// If the Config has been set in the struct don't replace it. This is useful for testing
 	if l.Config == nil {
-		if l.ConfigPathArg == "" {
-			dir, dirErr := os.UserHomeDir()
-			if dirErr != nil {
-				return fmt.Errorf("failed to get user config dir: %w", dirErr)
-			}
-			l.ConfigPathArg = filepath.Join(dir, ".opk", "config.yml")
+		if err := config.ResolveClientConfigPath(&l.ConfigPathArg); err != nil {
+			return err
 		}
-		var configBytes []byte
 		if _, err := l.Fs.Stat(l.ConfigPathArg); err == nil {
 			if l.CreateConfigArg {
 				log.Printf("--create-config=true but config file already exists at %s", l.ConfigPathArg)
 			}
 
-			// Load the file from the filesystem
-			afs := &afero.Afero{Fs: l.Fs}
-			configBytes, err = afs.ReadFile(l.ConfigPathArg)
-			if err != nil {
-				return fmt.Errorf("failed to read config file: %w", err)
-			}
-			l.Config, err = config.NewClientConfig(configBytes)
-			if err != nil {
-				return fmt.Errorf("failed to parse config file: %w", err)
+			if client_config, err := config.GetClientConfigFromFile((l.ConfigPathArg), l.Fs); err != nil {
+				return err
+			} else {
+				l.Config = client_config
 			}
 		} else {
 			if l.CreateConfigArg {
-				afs := &afero.Afero{Fs: l.Fs}
-				if err := l.Fs.MkdirAll(filepath.Dir(l.ConfigPathArg), 0o755); err != nil {
-					return fmt.Errorf("failed to create config directory: %w", err)
-				}
-				if err := afs.WriteFile(l.ConfigPathArg, config.DefaultClientConfig, 0o644); err != nil {
-					return fmt.Errorf("failed to write default config file: %w", err)
-				}
-				log.Printf("created client config file at %s", l.ConfigPathArg)
-				return nil
+				return config.CreateDefaultClientConfig(l.ConfigPathArg, l.Fs)
 			} else {
 				log.Printf("failed to find client config file to generate a default config, run `opkssh login --create-config` to create a default config file")
 			}
