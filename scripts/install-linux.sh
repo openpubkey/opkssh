@@ -405,7 +405,7 @@ get_te_download_path() {
 #  0 on success
 #  1 if INSTALL_VERSION isn't supported
 check_opkssh_version() {
-    local min_version="v0.8.1"
+    local min_version="v0.9.0"
 
     [[ "$INSTALL_VERSION" == "latest" ]] && return 0
 
