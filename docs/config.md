@@ -71,7 +71,7 @@ env_vars:
   HTTPS_PROXY: http://yourproxy:3128
 ```
 
-It also supports a `deny_emails` field. This field is a YAML array of strings, where each string is an email address you wish to deny access to.
+It also supports a `deny_emails` field. This field is a YAML array of strings, where each string is an email address opkssh should never allow. An ID Token has a claim for an email on this list it will reject it.
 
 ```yml
 ---
@@ -82,6 +82,12 @@ deny_emails:
 
 - When a user attempts to authenticate, OPKSSH checks if their email is present in the `deny_emails` list.
 - If a match is found (case-insensitive), authentication is denied, regardless of other authorization policies.
+
+It also supports a `deny_users` field. This field is a YAML array of strings, where each string is a user (linux principal) that opkssh never allow. This is equivalent to the `DenyUsers` field in [sshd_config](https://man.openbsd.org/sshd_config).
+
+Both `deny_emails` and `deny_users` are evaluated before policy.
+
+### Server config permissions
 
 The server config file requires the following permissions be set:
 
@@ -121,6 +127,7 @@ Linux user accounts are typically referred to in SSH as *principals* and we use 
 We support matching on email, sub (subscriber) or group.
 
 We support email "wildcard" validation using the `oidc-match-end:email:` prefix. This allows administrators to match user emails by domain or other patterns at the end of the email string.
+
 - This matching is **case-insensitive**.
 - Use with care, as allowing a domain grants access to all users at that domain.
 
