@@ -37,6 +37,7 @@ const (
 // DenyList represents the DenyLists in the server config
 type DenyList struct {
 	Emails []string
+	Users  []string
 }
 
 // Enforcer evaluates opkssh policy to determine if the desired principal is
@@ -87,6 +88,29 @@ func validateClaim(claims *checkedClaims, user *User) bool {
 // This is because if this function is called first, a timing channel exists which
 // allows an attacker check what identities and principals are allowed by the policy.F
 func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, userInfoJson string, sshCert string, keyType string, denyList DenyList) error {
+
+	var claims checkedClaims
+
+	if err := json.Unmarshal(pkt.Payload, &claims); err != nil {
+		return fmt.Errorf("error unmarshalling pk token payload: %w", err)
+	}
+	issuer, err := pkt.Issuer()
+	if err != nil {
+		return fmt.Errorf("error getting issuer from pk token: %w", err)
+	}
+
+	// Enforce deny list first
+	for _, email := range denyList.Emails {
+		if strings.EqualFold(claims.Email, email) {
+			return fmt.Errorf("denied email %s", email)
+		}
+	}
+	for _, user := range denyList.Users {
+		if strings.EqualFold(principalDesired, user) {
+			return fmt.Errorf("denied user %s", user)
+		}
+	}
+
 	pluginPolicy := plugins.NewPolicyPluginEnforcer()
 
 	results, err := pluginPolicy.CheckPolicies(pluginPolicyDir, pkt, userInfoJson, principalDesired, sshCert, keyType)
@@ -113,22 +137,6 @@ func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, us
 	policy, source, err := p.PolicyLoader.Load()
 	if err != nil {
 		return fmt.Errorf("error loading policy: %w", err)
-	}
-
-	var claims checkedClaims
-
-	if err := json.Unmarshal(pkt.Payload, &claims); err != nil {
-		return fmt.Errorf("error unmarshalling pk token payload: %w", err)
-	}
-	issuer, err := pkt.Issuer()
-	if err != nil {
-		return fmt.Errorf("error getting issuer from pk token: %w", err)
-	}
-
-	for _, email := range denyList.Emails {
-		if strings.EqualFold(claims.Email, email) {
-			return fmt.Errorf("denied %s", email)
-		}
 	}
 
 	var userInfoClaims *checkedClaims

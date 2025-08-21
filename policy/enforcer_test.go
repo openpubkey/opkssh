@@ -403,7 +403,7 @@ func TestPolicyDeniedMissingOidcGroupsClaim(t *testing.T) {
 	require.Error(t, err, "user should not as the token is missing the groups claim")
 }
 
-func TestEnforceTableTest(t *testing.T) {
+func TestEnforcerTableTest(t *testing.T) {
 	t.Parallel()
 
 	policyWithOidcGroup := &policy.Policy{
@@ -418,14 +418,42 @@ func TestEnforceTableTest(t *testing.T) {
 	tests := []struct {
 		name          string
 		op            providers.OpenIdProvider
+		principal     string
 		policyLoader  policy.Loader
 		userInfoJson  string
 		expectedError string
+		denyList      policy.DenyList
 	}{
 		{
 			name:         "Happy path (No userinfo supplied but ID Token has groups claim)",
 			op:           NewMockOpenIdProviderGroups(t, []string{"group1", "group2"}),
 			policyLoader: &MockPolicyLoader{Policy: policyWithOidcGroup},
+		},
+		{
+			name:         "Happy path (with denyList that doesn't match)",
+			op:           NewMockOpenIdProvider(t),
+			principal:    "test",
+			userInfoJson: "",
+			policyLoader: &MockPolicyLoader{Policy: policyTest},
+			denyList:     policy.DenyList{Emails: []string{"bob@example.com"}, Users: []string{"guest"}},
+		},
+		{
+			name:          "DenyList Match (user)",
+			op:            NewMockOpenIdProvider(t),
+			principal:     "test",
+			userInfoJson:  "",
+			policyLoader:  &MockPolicyLoader{Policy: policyTest},
+			denyList:      policy.DenyList{Emails: []string{"bob@example.com"}, Users: []string{"guest", "test"}},
+			expectedError: "denied user test",
+		},
+		{
+			name:          "DenyList Match (user)",
+			op:            NewMockOpenIdProvider(t),
+			principal:     "test",
+			userInfoJson:  "",
+			policyLoader:  &MockPolicyLoader{Policy: policyTest},
+			denyList:      policy.DenyList{Emails: []string{"bob@example.com", "arthur.aardvark@example.com"}, Users: []string{"guest", "test"}},
+			expectedError: "denied email arthur.aardvark@example.com",
 		},
 		{
 			name:          "No groups claim in ID Token",
@@ -490,7 +518,11 @@ func TestEnforceTableTest(t *testing.T) {
 				PolicyLoader: tt.policyLoader,
 			}
 
-			err = policyEnforcer.CheckPolicy("test", pkt, tt.userInfoJson, "example-base64Cert", "ssh-rsa", policy.DenyList{})
+			if tt.principal == "" {
+				tt.principal = "test"
+			}
+
+			err = policyEnforcer.CheckPolicy(tt.principal, pkt, tt.userInfoJson, "example-base64Cert", "ssh-rsa", tt.denyList)
 			if tt.expectedError != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedError)

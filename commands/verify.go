@@ -153,6 +153,7 @@ func (v *VerifyCmd) ReadFromServerConfig() error {
 	}
 	v.denyList = policy.DenyList{
 		Emails: serverConfig.DenyEmails,
+		Users:  serverConfig.DenyUsers,
 	}
 	return serverConfig.SetEnvVars()
 }
