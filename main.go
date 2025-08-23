@@ -330,13 +330,6 @@ Arguments:
 				log.Fatal("Unable to load providers. ", err)
 			}
 
-			providersMap, err := config.CreateProvidersMap(client_config.Providers)
-
-			if err != nil {
-				log.Fatal("Unable to load providers. ", err)
-
-			}
-
 			isTTY := term.IsTerminal(int(os.Stdout.Fd()))
 
 			var w *tabwriter.Writer
@@ -350,8 +343,10 @@ Arguments:
 				w = tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', tabwriter.DiscardEmptyColumns)
 			}
 
-			for alias, p := range providersMap {
-				fmt.Fprintf(w, "%s\t%s\n", alias, p.Issuer)
+			for _, p := range client_config.Providers {
+				for _, alias := range p.AliasList {
+					fmt.Fprintf(w, "%s\t%s\n", alias, p.Issuer)
+				}
 			}
 			w.Flush()
 
