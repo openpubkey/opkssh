@@ -350,6 +350,11 @@ Arguments:
 			}
 			w.Flush()
 
+			// and lets check it can be loaded into a map, after we print the contents
+			if _, err = config.CreateProvidersMap(client_config.Providers); err != nil {
+				log.Fatal("Unable to parse providers. ", err)
+			}
+
 			return nil
 		},
 	}
