@@ -257,6 +257,17 @@ func TestRun(t *testing.T) {
 			wantOutput: "Error opening log file:",
 			wantExit:   1,
 		},
+		{
+			name: "Client provider list",
+			args: []string{"opkssh", "client", "provider", "list", "--config-path=commands/config/default-client-config.yml"},
+			wantOutput: "" +
+				"google    https://accounts.google.com\n" +
+				"azure     https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0\n" +
+				"microsoft https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0\n" +
+				"gitlab    https://gitlab.com\n" +
+				"hello     https://issuer.hello.coop\n",
+			wantExit: 0,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

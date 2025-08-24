@@ -34,9 +34,13 @@ import (
 	"github.com/thediveo/enumflag/v2"
 
 	"github.com/openpubkey/opkssh/commands"
+	config "github.com/openpubkey/opkssh/commands/config"
 	"github.com/openpubkey/opkssh/policy"
 	"github.com/openpubkey/opkssh/policy/files"
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
+	"text/tabwriter"
 )
 
 var (
@@ -299,6 +303,69 @@ Arguments:
 	}
 	verifyCmd.Flags().StringVar(&serverConfigPathArg, "config-path", "/etc/opk/config.yml", "Path to the server config file. Default: /etc/opk/config.yml.")
 	rootCmd.AddCommand(verifyCmd)
+
+	clientCmd := &cobra.Command{
+		Use:     "client [subcommand]",
+		Short:   "Interact with client configuration",
+		Example: `  opkssh client provider list`,
+		Args:    cobra.ExactArgs(0),
+	}
+
+	providerCmd := &cobra.Command{
+		Use:     "provider [subcommand]",
+		Short:   "Interact with provider configuration",
+		Example: `  opkssh client provider list`,
+		Args:    cobra.ExactArgs(0),
+	}
+
+	providerListCmd := &cobra.Command{
+		Use:     "list",
+		Short:   "List configured providers",
+		Example: `  opkssh client provider list`,
+		Args:    cobra.ExactArgs(0),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client_config, err := config.GetClientConfigFromFile(configPathArg, afero.NewOsFs())
+
+			if err != nil {
+				log.Fatal("Unable to load providers. ", err)
+			}
+
+			isTTY := term.IsTerminal(int(os.Stdout.Fd()))
+
+			var w *tabwriter.Writer
+			if isTTY {
+				// Nice aligned table for TTY output
+				w = tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+				fmt.Fprintln(w, "Alias\tIssuer")
+				fmt.Fprintln(w, "-----\t------")
+			} else {
+				// Simpler formatting for non-TTY (e.g., when piping to a file)
+				w = tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', tabwriter.DiscardEmptyColumns)
+			}
+
+			for _, p := range client_config.Providers {
+				for _, alias := range p.AliasList {
+					fmt.Fprintf(w, "%s\t%s\n", alias, p.Issuer)
+				}
+			}
+			w.Flush()
+
+			// and lets check it can be loaded into a map, after we print the contents
+			if _, err = config.CreateProvidersMap(client_config.Providers); err != nil {
+				log.Fatal("Unable to parse providers. ", err)
+			}
+
+			return nil
+		},
+	}
+
+	providerListCmd.Flags().StringVar(&configPathArg, "config-path", "", "Path to the client config file. Default: ~/.opk/config.yml on linux and %APPDATA%\\.opk\\config.yml on windows.")
+
+	providerCmd.AddCommand(providerListCmd)
+
+	clientCmd.AddCommand(providerCmd)
+
+	rootCmd.AddCommand(clientCmd)
 
 	err := rootCmd.Execute()
 	if err != nil {
