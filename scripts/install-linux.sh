@@ -621,7 +621,7 @@ configure_opkssh() {
 # Configure openSSH-server to use opkssh using AuthorizedKeysCommand
 #
 # Arguments:
-#   $1 - Path to ssh root configuratino directory (Optional, default /etc/ssh)
+#   $1 - Path to ssh root configuration directory (Optional, default /etc/ssh)
 #
 # Output:
 #   Writes to stdout the progress of configuration
