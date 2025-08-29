@@ -96,7 +96,7 @@ func CreateDefaultClientConfig(configPath string, Fs afero.Fs) error {
 	if err := afs.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
-	if err := afs.WriteFile(configPath, DefaultClientConfig, 0644); err != nil {
+	if err := afs.WriteFile(configPath, DefaultClientConfig, 0o644); err != nil {
 		return fmt.Errorf("failed to write default config file: %w", err)
 	}
 	log.Printf("created client config file at %s", configPath)
