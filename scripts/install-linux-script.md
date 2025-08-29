@@ -20,6 +20,10 @@ Options:
 
   Install using a local file instead of downloading from GitHub.
 
+  `--install-te-from=FILEPATH`
+
+  Use local SELinux type enforcement file instead of downloading from GitHub
+
   `--install-version=VERSION`
 
   Install a specific version from GitHub instead of "latest".
@@ -207,6 +211,32 @@ Checks if the group and user used bu AuthorizedKeysCommand exists if not creates
 
 **Returns:**
 -   0 on success
+
+
+## `get_te_download_path`
+
+get_te_download_path
+Checks the INSTALL_VERSION to determin where to download the TE file to download
+
+
+**Outputs:**
+-   The URL to download the TE file to use
+
+
+## `check_opkssh_version`
+
+check_opkssh_version
+Checks if an earlier version that is not supported by this script is beeing installed
+If so, exit with error code and installation instructions
+
+
+**Outputs:**
+-   Nothing is version is supported else outputs install instructions to stderr
+
+
+**Returns:**
+-  0 on success
+-  1 if INSTALL_VERSION isn't supported
 
 
 ## `parse_args`
