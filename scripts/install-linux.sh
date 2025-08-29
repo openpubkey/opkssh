@@ -17,6 +17,9 @@
 #   --install-from=FILEPATH
 #       Install using a local file instead of downloading from GitHub.
 #
+#   --install-te-from=FILEPATH
+#       Use local SELinux type enforcement file instead of downloading from GitHub
+#
 #   --install-version=VERSION
 #       Install a specific version from GitHub instead of "latest".
 #
@@ -66,6 +69,11 @@ OVERWRITE_ACTIVE_CONFIG="${OPKSSH_INSTALL_OVERWRITE_ACTIVE_CONFIG:-false}"
 # Default: (empty)
 # Description: Path to local install file, used instead of downloading from GitHub
 LOCAL_INSTALL_FILE="${OPKSSH_INSTALL_LOCAL_INSTALL_FILE:-}"
+
+# OPKSSH_LOCAL_TE_FILE
+# Default: (empty)
+# Descriptiopn: path to local Type Enforcement file to install on SELinux enabled systems
+LOCAL_TE_FILE="${OPKSSH_LOCAL_TE_FILE:-}"
 
 # OPKSSH_INSTALL_VERSION
 # Default: latest
@@ -227,14 +235,15 @@ display_help_message() {
     echo "Usage: $0 [OPTIONS]"
     echo ""
     echo "Options:"
-    echo "  --no-home-policy         Disables configuration that allows opkssh see policy files in user's home directory"
-    echo "                           (/home/<username>/auth_id). Greatly simplifies install, try this if you are having install failures."
-    echo "  --no-sshd-restart        Do not restart SSH after installation"
-    echo "  --overwrite-config       Overwrite the currently active sshd configuration for AuthorizedKeysCommand and AuthorizedKeysCommandUser"
-    echo "                           directives. This may be necessary if the script cannot create a configuration with higher priority in /etc/ssh/sshd_config.d/."
-    echo "  --install-from=FILEPATH  Install using a local file"
-    echo "  --install-version=VER    Install a specific version from GitHub"
-    echo "  --help                   Display this help message"
+    echo "  --no-home-policy            Disables configuration that allows opkssh see policy files in user's home directory"
+    echo "                              (/home/<username>/auth_id). Greatly simplifies install, try this if you are having install failures."
+    echo "  --no-sshd-restart           Do not restart SSH after installation"
+    echo "  --overwrite-config          Overwrite the currently active sshd configuration for AuthorizedKeysCommand and AuthorizedKeysCommandUser"
+    echo "                              directives. This may be necessary if the script cannot create a configuration with higher priority in /etc/ssh/sshd_config.d/."
+    echo "  --install-from=FILEPATH     Install using a local file"
+    echo "  --install-te-from=FILEPATH  Install SELinux Type Enforcement using a local file"
+    echo "  --install-version=VER       Install a specific version from GitHub"
+    echo "  --help                      Display this help message"
 }
 
 # ensure_command
@@ -362,6 +371,52 @@ ensure_opkssh_user_and_group() {
     fi
 }
 
+# get_te_download_path
+# Checks the INSTALL_VERSION to determin where to download the TE file to download
+#
+# Outputs:
+#   The URL to download the TE file to use
+get_te_download_path() {
+    local te_url version
+    if [[ "$INSTALL_VERSION" == "latest" ]]; then
+        version=$(wget --server-response --max-redirect=0 -O /dev/null "https://github.com/${GITHUB_REPO}/releases/latest" 2>&1 | sed -n -E 's/^  Location: .*\/tag\/(v[0-9.]+).*/\1/p')
+    else
+        version="$INSTALL_VERSION"
+    fi
+    te_url="https://raw.githubusercontent.com/${GITHUB_REPO}/${version}/te_files/opkssh"
+
+    if [[ "$HOME_POLICY" == true ]]; then
+        te_url="${te_url}.te"
+    else
+        te_url="${te_url}-no-home.te"
+    fi
+
+    echo "$te_url"
+}
+
+# check_opkssh_version
+# Checks if an earlier version that is not supported by this script is beeing installed
+# If so, exit with error code and installation instructions
+#
+# Outputs:
+#   Nothing is version is supported else outputs install instructions to stderr
+#
+# Returns:
+#  0 on success
+#  1 if INSTALL_VERSION isn't supported
+check_opkssh_version() {
+    local min_version="v0.9.0"
+
+    [[ "$INSTALL_VERSION" == "latest" ]] && return 0
+
+    if [[ ! "$(printf '%s\n' "$min_version" "$INSTALL_VERSION" | sed 's/^v//' | sort -V | head -n1)" = "${min_version#v}" ]]; then
+        echo "Installing opkssh $INSTALL_VERSION with this script isn't supported" >&2
+        echo "Use the following command to install $INSTALL_VERSION:" >&2
+        echo "wget -qO- https://raw.githubusercontent.com/$GITHUB_REPO/refs/tags/$INSTALL_VERSION/scripts/install-linux.sh | sudo bash -s -- --install-version=$INSTALL_VERSION" >&2
+        return 1
+    fi
+}
+
 # parse_args
 # Parses CLI arguments and sets configuration flags.
 #
@@ -386,6 +441,8 @@ parse_args() {
             OVERWRITE_ACTIVE_CONFIG=true
         elif [[ "$arg" == --install-from=* ]]; then
             LOCAL_INSTALL_FILE="${arg#*=}"
+        elif [[ "$arg" == --install-te-from=* ]]; then
+            LOCAL_TE_FILE="${arg#*=}"
         elif [[ "$arg" == --install-version=* ]]; then
             INSTALL_VERSION="${arg#*=}"
         fi
@@ -450,87 +507,45 @@ install_opkssh_binary() {
 # Returns:
 #   0 if SELinux is disabled or if context is correctly
 check_selinux() {
+    local te_tmp mod_tmp pp_tmp
     if command -v getenforce >/dev/null 2>&1; then
         if [[ "$(getenforce)" != "Disabled" ]]; then
             echo "SELinux detected. Configuring SELinux for opkssh"
             echo "  Restoring context for $INSTALL_DIR/$BINARY_NAME..."
             restorecon "$INSTALL_DIR/$BINARY_NAME"
 
-        # Create temporary files for the compiled module and package
-            TE_TMP="/tmp/opkssh.te"
-            MOD_TMP="/tmp/opkssh.mod" # SELinux requires that modules have the same file name as the module name
-            PP_TMP="/tmp/opkssh.pp"
-
             if [[ "$HOME_POLICY" == true ]]; then
                 echo "  Using SELinux module that permits home policy"
-
-                # Pipe the TE directives into checkmodule via /dev/stdin
-                cat <<'EOF' >"$TE_TMP"
-module opkssh 1.0;
-
-
-require {
-        type sshd_t;
-        type var_log_t;
-        type http_port_t;
-        type sudo_exec_t;
-        class file { append execute execute_no_trans open read map };
-        class tcp_socket name_connect;
-}
-
-
-# We need to allow the AuthorizedKeysCommand opkssh process launched by sshd to:
-
-# 1. Make TCP connections to ports labeled http_port_t. This is so opkssh can download the public keys of the OpenID providers.
-allow sshd_t http_port_t:tcp_socket name_connect;
-
-# 2. Needed to allow opkssh to call `sudo opkssh readhome` to read the policy file in the user's home directory
-allow sshd_t sudo_exec_t:file { execute execute_no_trans open read map };
-
-# 3. Needed to allow opkssh to write to its log file
-allow sshd_t var_log_t:file { open append };
-EOF
-
+                # Create temporary files for the compiled module and package
+                te_tmp="/tmp/opkssh.te"
+                mod_tmp="/tmp/opkssh.mod" # SELinux requires that modules have the same file name as the module name
+                pp_tmp="/tmp/opkssh.pp"
             else
                 echo "  Using SELinux module does not permits home policy (--no-home-policy option supplied)"
                 # Redefine the tmp file names since SELinux modules must have the same name as the file
-                TE_TMP="/tmp/opkssh-no-home.te"
-                MOD_TMP="/tmp/opkssh-no-home.mod" # SELinux requires that modules have the same file name as the module name
-                PP_TMP="/tmp/opkssh-no-home.pp"
+                te_tmp="/tmp/opkssh-no-home.te"
+                mod_tmp="/tmp/opkssh-no-home.mod" # SELinux requires that modules have the same file name as the module name
+                pp_tmp="/tmp/opkssh-no-home.pp"
+            fi
 
-                # Pipe the TE directives into checkmodule via /dev/stdin
-                cat <<'EOF' >"$TE_TMP"
-module opkssh-no-home 1.0;
-
-require {
-        type sshd_t;
-        type var_log_t;
-        type http_port_t;
-        class file { append execute execute_no_trans open read map };
-        class tcp_socket name_connect;
-}
-
-
-# We need to allow the AuthorizedKeysCommand opkssh process launched by sshd to:
-
-# 1. Make TCP connections to ports labeled http_port_t. This is so opkssh can download the public keys of the OpenID providers.
-allow sshd_t http_port_t:tcp_socket name_connect;
-
-# 2. Needed to allow opkssh to write to its log file
-allow sshd_t var_log_t:file { open append };
-EOF
+            if [[ -n "$LOCAL_TE_FILE" ]]; then
+                echo "  Using local TE-file"
+                cp "$LOCAL_TE_FILE" "$te_tmp"
+            else
+                echo "  Downloading TE-file"
+                wget -q -O "$te_tmp" "$(get_te_download_path)"
             fi
 
             echo "  Compiling SELinux module..."
-            checkmodule -M -m -o "$MOD_TMP" "$TE_TMP"
+            checkmodule -M -m -o "$mod_tmp" "$te_tmp"
 
             echo "  Packaging module..."
-            semodule_package -o "$PP_TMP" -m "$MOD_TMP"
+            semodule_package -o "$pp_tmp" -m "$mod_tmp"
 
             echo "  Installing module..."
-            semodule -i "$PP_TMP"
+            semodule -i "$pp_tmp"
 
-            rm -f "$TE_TMP" "$MOD_TMP" "$PP_TMP"
+            rm -f "$te_tmp" "$mod_tmp" "$pp_tmp"
             echo "SELinux module installed successfully!"
         fi
     else
@@ -606,7 +621,7 @@ configure_opkssh() {
 # Configure openSSH-server to use opkssh using AuthorizedKeysCommand
 #
 # Arguments:
-#   $1 - Path to ssh root configuratino directory (Optional, default /etc/ssh)
+#   $1 - Path to ssh root configuration directory (Optional, default /etc/ssh)
 #
 # Output:
 #   Writes to stdout the progress of configuration
@@ -756,6 +771,7 @@ log_opkssh_installation() {
 main() {
     parse_args "$@" || return 0
     check_bash_version "${BASH_VERSINFO[@]}" || return 1
+    check_opkssh_version || return 1
     running_as_root "$EUID" || return 1
     OS_TYPE=$(determine_linux_type) || return 1
     CPU_ARCH=$(check_cpu_architecture) || return 1

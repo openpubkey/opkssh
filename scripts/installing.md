@@ -23,6 +23,13 @@ Running `./install-linux.sh --help` will show you all available flags.
 This is useful if you want to install a locally built opkssh binary.
 
 `--install-version=VER` downloads and installs a particular release of opkssh. By default we download and install the latest release of opkssh.
+> [!NOTE]
+> To install versions earlier than v0.9.0, you need to run the install-linux.sh script from the specific version tag.
+> This is required because SELinux Type Enforcement files are embedded in the script for versions prior to v0.9.0.
+> Example for installing v0.7.0:
+> ```
+> wget -qO- https://raw.githubusercontent.com/openpubkey/opkssh/refs/tags/v0.7.0/scripts/install-linux.sh | sudo bash -s -- --install-version=v0.7.0
+> ```
 
 ## What the script is doing
 

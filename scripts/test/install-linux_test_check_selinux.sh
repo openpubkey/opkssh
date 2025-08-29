@@ -10,12 +10,14 @@ setUp() {
     mock_command_found=true
     mock_getenforce="Enforcing"
     TEST_TEMP_DIR=$(mktemp -d /tmp/opkssh.XXXXXX)
+    mkdir "$TEST_TEMP_DIR/tmp"
     MOCK_LOG="$TEST_TEMP_DIR/mock.log"
     touch "$MOCK_LOG"
     HOME_POLICY=true
     export HOME_POLICY
-}
 
+    DUMMY_TE_CONTENT="module dummy 1.0; require { type sshd_t; }; allow sshd_t self:process { transition };"
+}
 
 tearDown() {
     /usr/bin/rm -rf "$TEST_TEMP_DIR"
@@ -28,6 +30,14 @@ command() {
         $mock_command_found && return 0 || return 1
     fi
     builtin command "$@"
+}
+
+wget() {
+    echo "wget $*" >> "$MOCK_LOG"
+    if [[ "$1" == "-q" ]]; then
+        echo "$DUMMY_TE_CONTENT" > "$3"
+        echo "$DUMMY_TE_CONTENT" > "${TEST_TEMP_DIR}${3}"
+    fi
 }
 
 getenforce() {
@@ -83,84 +93,36 @@ test_check_selinux_home_policy() {
     output=$(check_selinux 2>&1)
     result=$?
     mock_log=$(cat "$MOCK_LOG")
-    expected_te_tmp=$(cat <<-END
-module opkssh 1.0;
+    te_path="${TEST_TEMP_DIR}/tmp/opkssh.te"
 
+    # Check that dummy content was written
+    actual_te_content=$(cat "$te_path" 2>/dev/null)
+    assertEquals "Expected downloaded TE file to contain dummy content" "$DUMMY_TE_CONTENT" "$actual_te_content"
 
-require {
-        type sshd_t;
-        type var_log_t;
-        type http_port_t;
-        type sudo_exec_t;
-        class file { append execute execute_no_trans open read map };
-        class tcp_socket name_connect;
+    assertEquals "Expected return code 0" 0 "$result"
+    assertContains "Expected restorecon called" "$mock_log" "restorecon ${INSTALL_DIR}/${BINARY_NAME}"
+    assertContains "Expected checkmodule called" "$mock_log" "checkmodule -M -m -o /tmp/opkssh.mod /tmp/opkssh.te"
+    assertContains "Expected semodule_package called" "$mock_log" "semodule_package -o /tmp/opkssh.pp -m /tmp/opkssh.mod"
+    assertContains "Expected semodule called" "$mock_log" "semodule -i /tmp/opkssh.pp"
+    assertContains "Expected rm called" "$mock_log" "rm -f /tmp/opkssh.te /tmp/opkssh.mod /tmp/opkssh.pp"
 }
-
-
-# We need to allow the AuthorizedKeysCommand opkssh process launched by sshd to:
-
-# 1. Make TCP connections to ports labeled http_port_t. This is so opkssh can download the public keys of the OpenID providers.
-allow sshd_t http_port_t:tcp_socket name_connect;
-
-# 2. Needed to allow opkssh to call \`sudo opkssh readhome\` to read the policy file in the user's home directory
-allow sshd_t sudo_exec_t:file { execute execute_no_trans open read map };
-
-# 3. Needed to allow opkssh to write to its log file
-allow sshd_t var_log_t:file { open append };
-END
-)
-    [[ "$mock_log" == *"$expected_te_tmp"* ]]
-    te_tmp_result=$?
-    assertEquals "Expected to return 0 when SELinux is active and home policy is used" 0 "$result"
-    assertContains "Expected restorecon to use correct arguments" "$mock_log" "restorecon ${INSTALL_DIR}/${BINARY_NAME}"
-    assertContains "Expected checkmodule to use correct arguments" "$mock_log" "checkmodule -M -m -o /tmp/opkssh.mod /tmp/opkssh.te"
-    assertContains "Expected semodule_package to use correct arguments" "$mock_log" "semodule_package -o /tmp/opkssh.pp -m /tmp/opkssh.mod"
-    assertContains "Expected semodule to use correct arguments" "$mock_log" "semodule -i /tmp/opkssh.pp"
-    assertContains "Expected rm to use correct arguments" "$mock_log" "rm -f /tmp/opkssh.te /tmp/opkssh.mod /tmp/opkssh.pp"
-    assertEquals "Expected TE_TMP to contain the correct information" 0 "$te_tmp_result"
-
-}
-
 
 test_check_selinux_no_home_policy() {
     HOME_POLICY=false
     output=$(check_selinux 2>&1)
     result=$?
     mock_log=$(cat "$MOCK_LOG")
-    expected_te_tmp=$(cat <<-END
-module opkssh-no-home 1.0;
+    te_path="${TEST_TEMP_DIR}/tmp/opkssh-no-home.te"
 
-require {
-        type sshd_t;
-        type var_log_t;
-        type http_port_t;
-        class file { append execute execute_no_trans open read map };
-        class tcp_socket name_connect;
-}
+    actual_te_content=$(cat "$te_path" 2>/dev/null)
+    assertEquals "Expected downloaded TE file to contain dummy content" "$DUMMY_TE_CONTENT" "$actual_te_content"
 
-
-# We need to allow the AuthorizedKeysCommand opkssh process launched by sshd to:
-
-# 1. Make TCP connections to ports labeled http_port_t. This is so opkssh can download the public keys of the OpenID providers.
-allow sshd_t http_port_t:tcp_socket name_connect;
-
-# 2. Needed to allow opkssh to write to its log file
-allow sshd_t var_log_t:file { open append };
-semodule_package -o /tmp/opkssh-no-home.pp -m /tmp/opkssh-no-home.mod
-semodule -i /tmp/opkssh-no-home.pp
-rm -f /tmp/opkssh-no-home.te /tmp/opkssh-no-home.mod /tmp/opkssh-no-home.pp
-END
-)
-
-    [[ "$mock_log" == *"$expected_te_tmp"* ]]
-    te_tmp_result=$?
-    assertEquals "Expected to return 0 when SELinux is active and home policy is NOT used" 0 "$result"
-    assertContains "Expected restorecon to use correct arguments" "$mock_log" "restorecon ${INSTALL_DIR}/${BINARY_NAME}"
-    assertContains "Expected checkmodule to use correct arguments" "$mock_log" "checkmodule -M -m -o /tmp/opkssh-no-home.mod /tmp/opkssh-no-home.te"
-    assertContains "Expected semodule_package to use correct arguments" "$mock_log" "semodule_package -o /tmp/opkssh-no-home.pp -m /tmp/opkssh-no-home.mod"
-    assertContains "Expected semodule to use correct arguments" "$mock_log" "semodule -i /tmp/opkssh-no-home.pp"
-    assertContains "Expected rm to use correct arguments" "$mock_log" "rm -f /tmp/opkssh-no-home.te /tmp/opkssh-no-home.mod /tmp/opkssh-no-home.pp"
-    assertEquals "Expected TE_TMP to contain the correct information" 0 "$te_tmp_result"
+    assertEquals "Expected return code 0" 0 "$result"
+    assertContains "Expected restorecon called" "$mock_log" "restorecon ${INSTALL_DIR}/${BINARY_NAME}"
+    assertContains "Expected checkmodule called" "$mock_log" "checkmodule -M -m -o /tmp/opkssh-no-home.mod /tmp/opkssh-no-home.te"
+    assertContains "Expected semodule_package called" "$mock_log" "semodule_package -o /tmp/opkssh-no-home.pp -m /tmp/opkssh-no-home.mod"
+    assertContains "Expected semodule called" "$mock_log" "semodule -i /tmp/opkssh-no-home.pp"
+    assertContains "Expected rm called" "$mock_log" "rm -f /tmp/opkssh-no-home.te /tmp/opkssh-no-home.mod /tmp/opkssh-no-home.pp"
 }
 
 # shellcheck disable=SC1091
