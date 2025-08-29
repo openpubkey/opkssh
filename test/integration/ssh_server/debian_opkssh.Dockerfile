@@ -24,7 +24,8 @@ RUN useradd -rm -d /home/test2 -s /bin/bash -u 1001 test2
 RUN  echo "test2:test" | chpasswd
 
 # Allow SSH access
-RUN mkdir /var/run/sshd
+# This directory is automatically created on the latest docker image
+# RUN mkdir /var/run/sshd
 
 # Expose SSH server so we can ssh in from the tests
 EXPOSE 22
