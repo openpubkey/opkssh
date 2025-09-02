@@ -19,7 +19,8 @@ RUN  echo "test:test" | chpasswd
 RUN echo "test ALL=(ALL:ALL) NOPASSWD: ALL" | tee /etc/sudoers.d/test
 
 # Allow SSH access
-RUN mkdir /var/run/sshd
+# This directory is automatically created on the latest docker image
+# RUN mkdir /var/run/sshd
 
 # Expose SSH server so we can ssh in from the tests
 EXPOSE 22
