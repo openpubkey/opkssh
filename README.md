@@ -157,6 +157,12 @@ To allow a group, `ssh-users`, to ssh to your server as `root`, run:
 sudo opkssh add root oidc:groups:ssh-users google
 ```
 
+To allow a group to be read from custom claim `https://acme.com/groups`, `ssh-users`, to ssh to your server as `root`, run:
+
+```bash
+sudo opkssh add root oidc:\"https://acme.com/groups\":ssh-users google
+```
+
 ## How it works
 
 We use two features of SSH to make this work.
@@ -234,7 +240,7 @@ Linux user accounts are typically referred to in SSH as *principals* and we cont
   - Subject ID - an unique ID for the user set by the OP. This is the `sub` claim in the ID Token.
   - Group - the name of the group that the user is part of. This uses the `groups` claim which is presumed to
     be an array. The group identifier uses a structured identifier. I.e. `oidc:groups:{groupId}`. Replace the `groupId`
-    with the id of your group.
+    with the id of your group. If your group contains a colon, escape it `oidc:"https://acme.com/groups":{groupId}`.
 - Column 3: Issuer URI
 
 ```bash
@@ -246,6 +252,7 @@ dev bob@microsoft.com https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-
 
 # Group identifier
 dev oidc:groups:developer https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
+dev oidc:"https://acme.com/groups":developer https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
 ```
 
 To add new rule run:
