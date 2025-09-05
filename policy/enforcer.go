@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	OIDC_GROUPS         = "oidc:groups:"
+	OIDC_GROUPS         = "oidc:"
 	OIDC_WILDCARD_EMAIL = "oidc-match-end:email:"
 )
 
@@ -46,28 +46,94 @@ type Enforcer struct {
 	PolicyLoader Loader
 }
 
+// type for Identity Token requiredClaims
+type requiredClaims struct {
+	Email string `json:"email"`
+	Sub   string `json:"sub"`
+}
+
 // type for Identity Token checkedClaims
 type checkedClaims struct {
-	Email  string   `json:"email"`
-	Sub    string   `json:"sub"`
-	Groups []string `json:"groups"`
+	Email             string              `json:"email"`
+	Sub               string              `json:"sub"`
+	StringArrayClaims map[string][]string `json:"stringArrayClaims,omitempty"`
+}
+
+func (s *checkedClaims) UnmarshalJSON(data []byte) error {
+	// First unmarshal the static fields
+	var claims requiredClaims
+	err := json.Unmarshal(data, &claims)
+	if err != nil {
+		return err
+	}
+
+	// Unmarshal the rest
+	var schema map[string]interface{}
+	err = json.Unmarshal([]byte(data), &schema)
+	if err != nil {
+		return err
+	}
+
+	s.Email = claims.Email
+	s.Sub = claims.Sub
+	s.StringArrayClaims = make(map[string][]string)
+	// Add all []string types as potential group claims
+	for key, value := range schema {
+		valueArray, ok := value.([]interface{})
+		if ok {
+			isStringArrayClaim := true
+			claimValues := make([]string, len(valueArray))
+			for i, v := range valueArray {
+				str, ok := v.(string)
+				if !ok {
+					isStringArrayClaim = false
+					break
+				}
+				claimValues[i] = str
+			}
+			if isStringArrayClaim {
+				s.StringArrayClaims[key] = claimValues
+			}
+		}
+	}
+
+	return nil
 }
 
 // The default location for policy plugins
 const pluginPolicyDir = "/etc/opk/policy.d"
 
+func escapedSplit(s string, sep rune) []string {
+	quoted := false
+	a := strings.FieldsFunc(s, func(r rune) bool {
+		if r == '"' {
+			quoted = !quoted
+		}
+		return !quoted && r == sep
+	})
+	return a
+}
+
 // Validates that the server defined identity attribute matches the
 // respective claim from the identity token
 func validateClaim(claims *checkedClaims, user *User) bool {
+	// Should we match on the email claim?
 	if strings.HasPrefix(claims.Email, OIDC_WILDCARD_EMAIL) {
 		return false
 	}
 
+	// Should we match on an oidc claim?
 	if strings.HasPrefix(user.IdentityAttribute, OIDC_GROUPS) {
-		oidcGroupSections := strings.Split(user.IdentityAttribute, ":")
+		oidcGroupSections := escapedSplit(user.IdentityAttribute, ':')
+		oidcGroupsName := strings.Trim(oidcGroupSections[1], "\"")
 
-		return slices.Contains(claims.Groups, oidcGroupSections[len(oidcGroupSections)-1])
+		return slices.Contains(
+			claims.StringArrayClaims[oidcGroupsName],
+			oidcGroupSections[len(oidcGroupSections)-1],
+		)
 	}
+
+	// Should we match on the email wildcard claim?
 	wildCardEmailMatch := false
 	if strings.HasPrefix(user.IdentityAttribute, OIDC_WILDCARD_EMAIL) {
 		if strings.HasSuffix(strings.ToLower(claims.Email), strings.ToLower(user.IdentityAttribute[len(OIDC_WILDCARD_EMAIL):len(user.IdentityAttribute)])) {

@@ -44,11 +44,11 @@ func NewMockOpenIdSubProvider(t *testing.T, sub string) providers.OpenIdProvider
 	return op
 }
 
-func NewMockOpenIdProviderGroups(t *testing.T, groups []string) providers.OpenIdProvider {
+func NewMockOpenIdProviderGroups(t *testing.T, claimName string, groups []string) providers.OpenIdProvider {
 	providerOpts := providers.DefaultMockProviderOpts()
 	op, _, idTokenTemplate, err := providers.NewMockProvider(providerOpts)
 	require.NoError(t, err)
-	idTokenTemplate.ExtraClaims = map[string]any{"email": "arthur.aardvark@example.com", "groups": groups}
+	idTokenTemplate.ExtraClaims = map[string]any{"email": "arthur.aardvark@example.com", claimName: groups}
 	return op
 }
 
@@ -140,6 +140,11 @@ var policyWithOidcGroup = &policy.Policy{
 	Users: []policy.User{
 		{
 			IdentityAttribute: "oidc:groups:a",
+			Principals:        []string{"test"},
+			Issuer:            "https://accounts.example.com",
+		},
+		{
+			IdentityAttribute: "oidc:\"https://acme.com/groups\":e",
 			Principals:        []string{"test"},
 			Issuer:            "https://accounts.example.com",
 		},
@@ -324,7 +329,25 @@ func TestPolicyDeniedWrongIssuer(t *testing.T) {
 func TestPolicyApprovedOidcGroups(t *testing.T) {
 	t.Parallel()
 
-	op := NewMockOpenIdProviderGroups(t, []string{"a", "b", "c"})
+	op := NewMockOpenIdProviderGroups(t, "groups", []string{"a", "b", "c"})
+
+	opkClient, err := client.New(op)
+	require.NoError(t, err)
+	pkt, err := opkClient.Auth(context.Background())
+	require.NoError(t, err)
+
+	policyEnforcer := &policy.Enforcer{
+		PolicyLoader: &MockPolicyLoader{Policy: policyWithOidcGroup},
+	}
+
+	err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa", policy.DenyList{})
+	require.NoError(t, err)
+}
+
+func TestPolicyApprovedOidcGroupsUrlClaim(t *testing.T) {
+	t.Parallel()
+
+	op := NewMockOpenIdProviderGroups(t, "https://acme.com/groups", []string{"e"})
 
 	opkClient, err := client.New(op)
 	require.NoError(t, err)
@@ -342,7 +365,7 @@ func TestPolicyApprovedOidcGroups(t *testing.T) {
 func TestPolicyApprovedOidcGroupWithAtSign(t *testing.T) {
 	t.Parallel()
 
-	op := NewMockOpenIdProviderGroups(t, []string{"it.infra@my_domain.com"})
+	op := NewMockOpenIdProviderGroups(t, "groups", []string{"it.infra@my_domain.com"})
 
 	policyLine := &policy.Policy{
 		Users: []policy.User{
@@ -370,7 +393,7 @@ func TestPolicyApprovedOidcGroupWithAtSign(t *testing.T) {
 func TestPolicyDeniedOidcGroups(t *testing.T) {
 	t.Parallel()
 
-	op := NewMockOpenIdProviderGroups(t, []string{"z"})
+	op := NewMockOpenIdProviderGroups(t, "groups", []string{"z"})
 
 	opkClient, err := client.New(op)
 	require.NoError(t, err)
@@ -426,7 +449,7 @@ func TestEnforcerTableTest(t *testing.T) {
 	}{
 		{
 			name:         "Happy path (No userinfo supplied but ID Token has groups claim)",
-			op:           NewMockOpenIdProviderGroups(t, []string{"group1", "group2"}),
+			op:           NewMockOpenIdProviderGroups(t, "groups", []string{"group1", "group2"}),
 			policyLoader: &MockPolicyLoader{Policy: policyWithOidcGroup},
 		},
 		{
