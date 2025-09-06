@@ -14,7 +14,9 @@ setUp() {
     MOCK_LOG="$TEST_TEMP_DIR/mock.log"
     touch "$MOCK_LOG"
     HOME_POLICY=true
-    export HOME_POLICY
+    SELINUX_ENABLE_SQUID=false
+    SELINUX_ENABLE_PROXY=false
+    export HOME_POLICY SELINUX_ENABLE_SQUID SELINUX_ENABLE_PROXY
 
     DUMMY_TE_CONTENT="module dummy 1.0; require { type sshd_t; }; allow sshd_t self:process { transition };"
 }
@@ -62,6 +64,10 @@ semodule() {
     echo "semodule $*" >> "$MOCK_LOG"
 }
 
+setsebool() {
+    echo "setsebool $*" >> "$MOCK_LOG"
+}
+
 rm() {
     echo "rm $*" >> "$MOCK_LOG"
     /usr/bin/rm "$@"
@@ -104,6 +110,9 @@ test_check_selinux_home_policy() {
     assertContains "Expected checkmodule called" "$mock_log" "checkmodule -M -m -o /tmp/opkssh.mod /tmp/opkssh.te"
     assertContains "Expected semodule_package called" "$mock_log" "semodule_package -o /tmp/opkssh.pp -m /tmp/opkssh.mod"
     assertContains "Expected semodule called" "$mock_log" "semodule -i /tmp/opkssh.pp"
+    assertContains "Expected opkssh_enable_home set" "$mock_log" "setsebool -P opkssh_enable_home on"
+    assertNotContains "Expected opkssh_enable_squid set" "$mock_log" "setsebool -P opkssh_enable_squid on"
+    assertNotContains "Expected opkssh_enable_proxy set" "$mock_log" "setsebool -P opkssh_enable_proxy on"
     assertContains "Expected rm called" "$mock_log" "rm -f /tmp/opkssh.te /tmp/opkssh.mod /tmp/opkssh.pp"
 }
 
@@ -112,17 +121,65 @@ test_check_selinux_no_home_policy() {
     output=$(check_selinux 2>&1)
     result=$?
     mock_log=$(cat "$MOCK_LOG")
-    te_path="${TEST_TEMP_DIR}/tmp/opkssh-no-home.te"
+    te_path="${TEST_TEMP_DIR}/tmp/opkssh.te"
 
     actual_te_content=$(cat "$te_path" 2>/dev/null)
     assertEquals "Expected downloaded TE file to contain dummy content" "$DUMMY_TE_CONTENT" "$actual_te_content"
 
     assertEquals "Expected return code 0" 0 "$result"
     assertContains "Expected restorecon called" "$mock_log" "restorecon ${INSTALL_DIR}/${BINARY_NAME}"
-    assertContains "Expected checkmodule called" "$mock_log" "checkmodule -M -m -o /tmp/opkssh-no-home.mod /tmp/opkssh-no-home.te"
-    assertContains "Expected semodule_package called" "$mock_log" "semodule_package -o /tmp/opkssh-no-home.pp -m /tmp/opkssh-no-home.mod"
-    assertContains "Expected semodule called" "$mock_log" "semodule -i /tmp/opkssh-no-home.pp"
-    assertContains "Expected rm called" "$mock_log" "rm -f /tmp/opkssh-no-home.te /tmp/opkssh-no-home.mod /tmp/opkssh-no-home.pp"
+    assertContains "Expected checkmodule called" "$mock_log" "checkmodule -M -m -o /tmp/opkssh.mod /tmp/opkssh.te"
+    assertContains "Expected semodule_package called" "$mock_log" "semodule_package -o /tmp/opkssh.pp -m /tmp/opkssh.mod"
+    assertContains "Expected semodule called" "$mock_log" "semodule -i /tmp/opkssh.pp"
+    assertNotContains "Expected opkssh_enable_home set" "$mock_log" "setsebool -P opkssh_enable_home on"
+    assertNotContains "Expected opkssh_enable_squid set" "$mock_log" "setsebool -P opkssh_enable_squid on"
+    assertNotContains "Expected opkssh_enable_proxy set" "$mock_log" "setsebool -P opkssh_enable_proxy on"
+    assertContains "Expected rm called" "$mock_log" "rm -f /tmp/opkssh.te /tmp/opkssh.mod /tmp/opkssh.pp"
+}
+
+
+test_check_selinux_enable_squid() {
+    SELINUX_ENABLE_SQUID=true
+    output=$(check_selinux 2>&1)
+    result=$?
+    mock_log=$(cat "$MOCK_LOG")
+    te_path="${TEST_TEMP_DIR}/tmp/opkssh.te"
+
+    # Check that dummy content was written
+    actual_te_content=$(cat "$te_path" 2>/dev/null)
+    assertEquals "Expected downloaded TE file to contain dummy content" "$DUMMY_TE_CONTENT" "$actual_te_content"
+
+    assertEquals "Expected return code 0" 0 "$result"
+    assertContains "Expected restorecon called" "$mock_log" "restorecon ${INSTALL_DIR}/${BINARY_NAME}"
+    assertContains "Expected checkmodule called" "$mock_log" "checkmodule -M -m -o /tmp/opkssh.mod /tmp/opkssh.te"
+    assertContains "Expected semodule_package called" "$mock_log" "semodule_package -o /tmp/opkssh.pp -m /tmp/opkssh.mod"
+    assertContains "Expected semodule called" "$mock_log" "semodule -i /tmp/opkssh.pp"
+    assertContains "Expected opkssh_enable_home set" "$mock_log" "setsebool -P opkssh_enable_home on"
+    assertContains "Expected opkssh_enable_squid set" "$mock_log" "setsebool -P opkssh_enable_squid on"
+    assertNotContains "Expected opkssh_enable_proxy set" "$mock_log" "setsebool -P opkssh_enable_proxy on"
+    assertContains "Expected rm called" "$mock_log" "rm -f /tmp/opkssh.te /tmp/opkssh.mod /tmp/opkssh.pp"
+}
+
+test_check_selinux_enable_proxy() {
+    SELINUX_ENABLE_PROXY=true
+    output=$(check_selinux 2>&1)
+    result=$?
+    mock_log=$(cat "$MOCK_LOG")
+    te_path="${TEST_TEMP_DIR}/tmp/opkssh.te"
+
+    # Check that dummy content was written
+    actual_te_content=$(cat "$te_path" 2>/dev/null)
+    assertEquals "Expected downloaded TE file to contain dummy content" "$DUMMY_TE_CONTENT" "$actual_te_content"
+
+    assertEquals "Expected return code 0" 0 "$result"
+    assertContains "Expected restorecon called" "$mock_log" "restorecon ${INSTALL_DIR}/${BINARY_NAME}"
+    assertContains "Expected checkmodule called" "$mock_log" "checkmodule -M -m -o /tmp/opkssh.mod /tmp/opkssh.te"
+    assertContains "Expected semodule_package called" "$mock_log" "semodule_package -o /tmp/opkssh.pp -m /tmp/opkssh.mod"
+    assertContains "Expected semodule called" "$mock_log" "semodule -i /tmp/opkssh.pp"
+    assertContains "Expected opkssh_enable_home set" "$mock_log" "setsebool -P opkssh_enable_home on"
+    assertNotContains "Expected opkssh_enable_squid set" "$mock_log" "setsebool -P opkssh_enable_squid on"
+    assertContains "Expected opkssh_enable_proxy set" "$mock_log" "setsebool -P opkssh_enable_proxy on"
+    assertContains "Expected rm called" "$mock_log" "rm -f /tmp/opkssh.te /tmp/opkssh.mod /tmp/opkssh.pp"
 }
 
 # shellcheck disable=SC1091

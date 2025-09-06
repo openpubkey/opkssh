@@ -1,0 +1,38 @@
+module opkssh 2.0;
+
+require {
+    type sshd_t;
+    type var_log_t;
+    type http_port_t;
+    type sudo_exec_t;
+    type squid_port_t;
+    type http_cache_port_t;
+    class file { append execute execute_no_trans open read map };
+    class tcp_socket name_connect;
+}
+
+# 1. Allow TCP connections to http_port_t (always needed)
+allow sshd_t http_port_t:tcp_socket name_connect;
+
+# 2. Allow writing to log files (always needed)
+allow sshd_t var_log_t:file { open append };
+
+# 3. Boolean: enable home access via sudo
+bool opkssh_enable_home false;
+
+if (opkssh_enable_home) {
+    allow sshd_t sudo_exec_t:file { execute execute_no_trans open read map };
+}
+
+# 4. Boolean: enable Squid proxy connections
+bool opkssh_enable_squid false;
+
+if (opkssh_enable_squid) {
+    allow sshd_t squid_port_t:tcp_socket name_connect;
+}
+
+# 5. Boolean: enable proxy support (dynamic ports via http_cache_port_t)
+bool opkssh_enable_proxy false;
+if (opkssh_enable_proxy) {
+    allow sshd_t http_cache_port_t:tcp_socket name_connect;
+}
