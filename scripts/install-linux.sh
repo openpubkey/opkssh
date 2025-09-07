@@ -383,7 +383,7 @@ get_te_download_path() {
     else
         version="$INSTALL_VERSION"
     fi
-    te_url="https://raw.githubusercontent.com/${GITHUB_REPO}/${version}/te_files/opkssh"
+    te_url="https://raw.githubusercontent.com/${GITHUB_REPO}/refs/tags/${version}/te-files/opkssh"
 
     if [[ "$HOME_POLICY" == true ]]; then
         te_url="${te_url}.te"

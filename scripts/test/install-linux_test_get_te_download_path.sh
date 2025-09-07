@@ -17,7 +17,7 @@ test_get_te_download_path_latest_version_with_home_policy_true() {
     export HOME_POLICY=true
 
     result=$(get_te_download_path)
-    expected="https://raw.githubusercontent.com/my-org/my-repo/v1.2.3/te_files/opkssh.te"
+    expected="https://raw.githubusercontent.com/my-org/my-repo/refs/tags/v1.2.3/te-files/opkssh.te"
 
     assertEquals "$expected" "$result"
 }
@@ -28,7 +28,7 @@ test_specific_version_no_home() {
     export HOME_POLICY=false
 
     result=$(get_te_download_path)
-    expected="https://raw.githubusercontent.com/org/repo/v1.0.0/te_files/opkssh-no-home.te"
+    expected="https://raw.githubusercontent.com/org/repo/refs/tags/v1.0.0/te-files/opkssh-no-home.te"
 
     assertEquals "$expected" "$result"
 }
