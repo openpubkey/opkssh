@@ -130,7 +130,7 @@ sudo useradd -r -M -s /sbin/nologin -g opksshuser opksshuser
 
 This config lives in `/etc/sudoers.d/opkssh` and must have the permissions `440` with root being the owner.
 
-If SELinux is configured we need to install an SELinux module to allow opkssh to read the policy in the user's home directory. See the section about [SELinux](#manual-seLinux-module-installation) for details.
+If SELinux is configured we need to install an SELinux module to allow opkssh to read the policy in the user's home directory. See the section about [SELinux](#manual-selinux-module-installation-and-configuration) for details.
 
 **7: Restart sshd.**
 
