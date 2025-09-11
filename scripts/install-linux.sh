@@ -403,7 +403,7 @@ ensure_opkssh_user_and_group() {
 #  0 on success
 #  1 if INSTALL_VERSION isn't supported
 check_opkssh_version() {
-    local min_version="v0.9.0"
+    local min_version="v0.10.0"
 
     [[ "$INSTALL_VERSION" == "latest" ]] && return 0
 
