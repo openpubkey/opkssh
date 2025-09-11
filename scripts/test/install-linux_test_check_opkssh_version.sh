@@ -17,8 +17,8 @@ test_check_opkssh_version_latest() {
 
 }
 
-test_check_opkssh_version_081() {
-    export INSTALL_VERSION="v0.9.0"
+test_check_opkssh_version_0_10_0() {
+    export INSTALL_VERSION="v0.10.0"
 
     output=$(check_opkssh_version)
     result=$?
