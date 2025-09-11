@@ -1,5 +1,5 @@
 # Stage 1: Build the Go binary
-FROM golang:1.25.1@sha256:76a94c4a37aaab9b1b35802af597376b8588dc54cd198f8249633b4e117d9fcc as builder
+FROM golang:1.25.1@sha256:bb979b278ffb8d31c8b07336fd187ef8fafc8766ebeaece524304483ea137e96 as builder
 
 # Set destination for COPY
 WORKDIR /app
@@ -16,7 +16,7 @@ ARG ISSUER_PORT="9998"
 RUN go build -v -o opksshbuild
 
 # Stage 2: Create a minimal openSUSE-Tumbleweed-based image
-FROM opensuse/tumbleweed:latest@sha256:4739040b45d478fb41894f720ebfd2a6b564eb73ddc68ec2973f3387e7cc4928
+FROM opensuse/tumbleweed:latest@sha256:986254198727cae8fed32f1f07d2a7c0b8b344ffa3032cf75cd6da3cb49faafd
 # Install dependencies required for runtime (e.g., SSH server)
 RUN zypper refresh && \
     zypper --non-interactive install sudo openssh-server openssh-clients telnet wget jq && \
