@@ -7,6 +7,15 @@
 #       Disables configuration that allows opkssh to see policy files in user's
 #       home directory (/home/<username>/auth_id). Greatly simplifies install.
 #
+#   --selinux-enable-squid
+#       Enables the Squid proxy ports in opkssh SELinux module. Used when system
+#       has HTTPS_PROXY set to a Squid proxy
+#
+#   --selinux-enable-proxy
+#       Enables the HTTP Cache ports in opkssh SELinux module. Used when system
+#       has set the HTTPS_PROXY to a general HTTP Proxy. Dynamicly configure ports
+#       used with SELinux http_cache_port_t port type
+#
 #   --no-sshd-restart
 #       Do not restart SSH after installation.
 #
@@ -54,6 +63,16 @@ SUDOERS_PATH="${OPKSSH_INSTALL_SUDOERS_PATH:-/etc/sudoers.d/opkssh}"
 # Default: true
 # Description: Whether to use the home directory policy feature
 HOME_POLICY="${OPKSSH_INSTALL_HOME_POLICY:-true}"
+
+# OPKSSH_INSTALL_SELINUX_ENABLE_PROXY
+# Default: false
+# Description: Whether to enable http_cache_port_t port type in SELinux module
+SELINUX_ENABLE_PROXY="${OPKSSH_INSTALL_SELINUX_ENABLE_PROXY:-false}"
+
+# OPKSSH_INSTALL_SELINUX_ENABLE_SQUID
+# Default: false
+# Description: Whether to enable squid_port_t port type in SELinux module
+SELINUX_ENABLE_SQUID="${OPKSSH_INSTALL_SELINUX_ENABLE_SQUID:-false}"
 
 # OPKSSH_RESTART_SSH
 # Default: true
@@ -243,6 +262,8 @@ display_help_message() {
     echo "  --install-from=FILEPATH     Install using a local file"
     echo "  --install-te-from=FILEPATH  Install SELinux Type Enforcement using a local file"
     echo "  --install-version=VER       Install a specific version from GitHub"
+    echo "  --selinux-enable-squid      Enables the Squid proxy ports in opkssh SELinux module"
+    echo "  --selinux-enable-proxy      Enables the HTTP Cache ports in opkssh SELinux module"
     echo "  --help                      Display this help message"
 }
 
@@ -371,29 +392,6 @@ ensure_opkssh_user_and_group() {
     fi
 }
 
-# get_te_download_path
-# Checks the INSTALL_VERSION to determin where to download the TE file to download
-#
-# Outputs:
-#   The URL to download the TE file to use
-get_te_download_path() {
-    local te_url version
-    if [[ "$INSTALL_VERSION" == "latest" ]]; then
-        version=$(wget --server-response --max-redirect=0 -O /dev/null "https://github.com/${GITHUB_REPO}/releases/latest" 2>&1 | sed -n -E 's/^  Location: .*\/tag\/(v[0-9.]+).*/\1/p')
-    else
-        version="$INSTALL_VERSION"
-    fi
-    te_url="https://raw.githubusercontent.com/${GITHUB_REPO}/refs/tags/${version}/te-files/opkssh"
-
-    if [[ "$HOME_POLICY" == true ]]; then
-        te_url="${te_url}.te"
-    else
-        te_url="${te_url}-no-home.te"
-    fi
-
-    echo "$te_url"
-}
-
 # check_opkssh_version
 # Checks if an earlier version that is not supported by this script is beeing installed
 # If so, exit with error code and installation instructions
@@ -405,7 +403,7 @@ get_te_download_path() {
 #  0 on success
 #  1 if INSTALL_VERSION isn't supported
 check_opkssh_version() {
-    local min_version="v0.9.0"
+    local min_version="v0.10.0"
 
     [[ "$INSTALL_VERSION" == "latest" ]] && return 0
 
@@ -432,6 +430,10 @@ parse_args() {
     for arg in "$@"; do
         if [[ "$arg" == "--no-home-policy" ]]; then
             HOME_POLICY=false
+        elif [[ "$arg" == "--selinux-enable-squid" ]]; then
+            SELINUX_ENABLE_SQUID=true
+        elif [[ "$arg" == "--selinux-enable-proxy" ]]; then
+            SELINUX_ENABLE_PROXY=true
         elif [[ "$arg" == "--help" ]]; then
             display_help_message
             return 1
@@ -507,33 +509,28 @@ install_opkssh_binary() {
 # Returns:
 #   0 if SELinux is disabled or if context is correctly
 check_selinux() {
-    local te_tmp mod_tmp pp_tmp
+    local te_tmp mod_tmp pp_tmp version
+    te_tmp="/tmp/opkssh.te"
+    mod_tmp="/tmp/opkssh.mod" # SELinux requires that modules have the same file name as the module name
+    pp_tmp="/tmp/opkssh.pp"
+
     if command -v getenforce >/dev/null 2>&1; then
         if [[ "$(getenforce)" != "Disabled" ]]; then
             echo "SELinux detected. Configuring SELinux for opkssh"
             echo "  Restoring context for $INSTALL_DIR/$BINARY_NAME..."
             restorecon "$INSTALL_DIR/$BINARY_NAME"
 
-            if [[ "$HOME_POLICY" == true ]]; then
-                echo "  Using SELinux module that permits home policy"
-                # Create temporary files for the compiled module and package
-                te_tmp="/tmp/opkssh.te"
-                mod_tmp="/tmp/opkssh.mod" # SELinux requires that modules have the same file name as the module name
-                pp_tmp="/tmp/opkssh.pp"
-            else
-                echo "  Using SELinux module does not permits home policy (--no-home-policy option supplied)"
-                # Redefine the tmp file names since SELinux modules must have the same name as the file
-                te_tmp="/tmp/opkssh-no-home.te"
-                mod_tmp="/tmp/opkssh-no-home.mod" # SELinux requires that modules have the same file name as the module name
-                pp_tmp="/tmp/opkssh-no-home.pp"
-            fi
-
             if [[ -n "$LOCAL_TE_FILE" ]]; then
                 echo "  Using local TE-file"
                 cp "$LOCAL_TE_FILE" "$te_tmp"
             else
+                if [[ "$INSTALL_VERSION" == "latest" ]]; then
+                    version=$(wget --server-response --max-redirect=0 -O /dev/null "https://github.com/${GITHUB_REPO}/releases/latest" 2>&1 | sed -n -E 's/^  Location: .*\/tag\/(v[0-9.]+).*/\1/p')
+                else
+                    version="$INSTALL_VERSION"
+                fi
                 echo "  Downloading TE-file"
-                wget -q -O "$te_tmp" "$(get_te_download_path)"
+                wget -q -O "$te_tmp" "https://raw.githubusercontent.com/${GITHUB_REPO}/refs/tags/${version}/opkssh.te"
             fi
 
             echo "  Compiling SELinux module..."
@@ -546,6 +543,18 @@ check_selinux() {
             semodule -i "$pp_tmp"
 
             rm -f "$te_tmp" "$mod_tmp" "$pp_tmp"
+            if [[ "$HOME_POLICY" == true ]]; then
+                echo "  Configure SELinux module to permits home policy"
+                setsebool -P opkssh_enable_home on
+            fi
+            if [[ "$SELINUX_ENABLE_SQUID" == true ]]; then
+                echo "  Configure SELinux module to permits Squid"
+                setsebool -P opkssh_enable_squid on
+            fi
+            if [[ "$SELINUX_ENABLE_PROXY" == true ]]; then
+                echo "  Configure SELinux module to permits Proxy"
+                setsebool -P opkssh_enable_proxy on
+            fi
             echo "SELinux module installed successfully!"
         fi
     else

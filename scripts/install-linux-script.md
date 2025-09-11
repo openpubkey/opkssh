@@ -8,6 +8,14 @@ Options:
 
   Disables configuration that allows opkssh to see policy files in user's       home directory (/home/&lt;username&gt;/auth_id). Greatly simplifies install.
 
+  `--selinux-enable-squid`
+
+  Enables the Squid proxy ports in opkssh SELinux module. Used when system       has HTTPS_PROXY set to a Squid proxy
+
+  `--selinux-enable-proxy`
+
+  Enables the HTTP Cache ports in opkssh SELinux module. Used when system       has set the HTTPS_PROXY to a general HTTP Proxy. Dynamicly configure ports       used with SELinux http_cache_port_t port type
+
   `--no-sshd-restart`
 
   Do not restart SSH after installation.
@@ -38,6 +46,8 @@ Options:
 | **AUTH_CMD_GROUP** | `opksshuser` | OPKSSH_INSTALL_AUTH_CMD_GROUP |
 | **SUDOERS_PATH** | `/etc/sudoers.d/opkssh` | OPKSSH_INSTALL_SUDOERS_PATH |
 | **HOME_POLICY** | `true` | OPKSSH_INSTALL_HOME_POLICY |
+| **SELINUX_ENABLE_PROXY** | `false` | OPKSSH_INSTALL_SELINUX_ENABLE_PROXY |
+| **SELINUX_ENABLE_SQUID** | `false` | OPKSSH_INSTALL_SELINUX_ENABLE_SQUID |
 | **RESTART_SSH** | `true` | OPKSSH_INSTALL_RESTART_SSH |
 | **OVERWRITE_ACTIVE_CONFIG** | `false` | OPKSSH_INSTALL_OVERWRITE_ACTIVE_CONFIG |
 | **INSTALL_VERSION** | `latest` | OPKSSH_INSTALL_VERSION |
@@ -211,16 +221,6 @@ Checks if the group and user used bu AuthorizedKeysCommand exists if not creates
 
 **Returns:**
 -   0 on success
-
-
-## `get_te_download_path`
-
-get_te_download_path
-Checks the INSTALL_VERSION to determin where to download the TE file to download
-
-
-**Outputs:**
--   The URL to download the TE file to use
 
 
 ## `check_opkssh_version`
