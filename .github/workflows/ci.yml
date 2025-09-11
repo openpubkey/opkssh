@@ -26,7 +26,7 @@ jobs:
       with:
         persist-credentials: false
     - name: Install Go
-      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
       with:
         go-version: ${{ matrix.go-version }}
     - name: Install dependencies
@@ -68,7 +68,7 @@ jobs:
       with:
         persist-credentials: false
     - name: Install Go
-      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
       with:
         go-version-file: 'go.mod'
     - name: Install Docker
@@ -81,7 +81,7 @@ jobs:
     name: Shell Scripts Lint & Test
     runs-on: ubuntu-24.04
     container:
-      image: opensuse/tumbleweed:latest@sha256:4739040b45d478fb41894f720ebfd2a6b564eb73ddc68ec2973f3387e7cc4928
+      image: opensuse/tumbleweed:latest@sha256:986254198727cae8fed32f1f07d2a7c0b8b344ffa3032cf75cd6da3cb49faafd
     steps:
     - name: Install packages
       run: |
