@@ -101,8 +101,9 @@ add a new configuration file with a lower starting number than other configurati
 
 For example, if the file `/etc/ssh/sshd_config.d/20-systemd-userdb.conf` exists,
 create `/etc/ssh/sshd_config.d/19-opk-ssh.conf` with the lines above.
+By default, the opkssh installer will create this file at `/etc/ssh/sshd_config.d/60-opk-ssh.conf`.
 
-Verify the setting is active with 
+Verify the setting is active with
 
 ```bash
 sudo sshd -T | grep authorizedkeyscommand
