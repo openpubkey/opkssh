@@ -17,10 +17,14 @@ RUN go build -v -o opksshbuild
 
 # Stage 2: Create a minimal openSUSE-Tumbleweed-based image
 FROM opensuse/tumbleweed:latest@sha256:ae4dac8e3ad155dff33f6c89a32e28bf63d26475b41bfb85ab5179691b9a7b16
+
 # Install dependencies required for runtime (e.g., SSH server)
 RUN zypper refresh && \
-    zypper --non-interactive install sudo openssh-server openssh-clients telnet wget jq && \
-    zypper clean --all && \
+    zypper -n ref && \
+    zypper -n dup --allow-vendor-change && \
+    zypper -n in --no-recommends \
+        sudo openssh-server openssh-clients openssl ca-certificates telnet wget jq && \
+    zypper -n clean --all && \
     rm /var/log/zypp/history && \
     rm /var/log/zypper.log
 
