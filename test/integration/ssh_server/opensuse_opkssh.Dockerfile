@@ -23,7 +23,7 @@ RUN zypper refresh && \
     zypper -n ref && \
     zypper -n dup --allow-vendor-change && \
     zypper -n in --no-recommends \
-    zypper --non-interactive install sudo openssh-server openssh-clients telnet wget jq openssl ca-certificates && \
+        sudo openssh-server openssh-clients openssl ca-certificates telnet wget jq && \
     zypper -n clean --all && \
     rm /var/log/zypp/history && \
     rm /var/log/zypper.log
