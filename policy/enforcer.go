@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	OIDC_GROUPS         = "oidc:"
+	OIDC_CLAIMS         = "oidc:"
 	OIDC_WILDCARD_EMAIL = "oidc-match-end:email:"
 )
 
@@ -46,54 +46,57 @@ type Enforcer struct {
 	PolicyLoader Loader
 }
 
-// type for Identity Token requiredClaims
-type requiredClaims struct {
-	Email string `json:"email"`
-	Sub   string `json:"sub"`
-}
-
 // type for Identity Token checkedClaims
 type checkedClaims struct {
-	Email             string              `json:"email"`
-	Sub               string              `json:"sub"`
-	StringArrayClaims map[string][]string `json:"stringArrayClaims,omitempty"`
+	Email       string              `json:"email"`
+	Sub         string              `json:"sub"`
+	ExtraClaims map[string][]string `json:"-"`
 }
 
 func (s *checkedClaims) UnmarshalJSON(data []byte) error {
-	// First unmarshal the static fields
-	var claims requiredClaims
-	err := json.Unmarshal(data, &claims)
-	if err != nil {
+
+	// Avoid infinite recursion
+	type checkedClaimsAlias checkedClaims
+	var a checkedClaimsAlias
+
+	// Unmarshal the required claims
+	if err := json.Unmarshal(data, &a); err != nil {
 		return err
 	}
+	*s = checkedClaims(a)
 
-	// Unmarshal the rest
+	// Unmarshal everything else
 	var schema map[string]interface{}
-	err = json.Unmarshal([]byte(data), &schema)
+	err := json.Unmarshal([]byte(data), &schema)
 	if err != nil {
 		return err
 	}
 
-	s.Email = claims.Email
-	s.Sub = claims.Sub
-	s.StringArrayClaims = make(map[string][]string)
-	// Add all []string types as potential group claims
-	for key, value := range schema {
-		valueArray, ok := value.([]interface{})
-		if ok {
-			isStringArrayClaim := true
-			claimValues := make([]string, len(valueArray))
-			for i, v := range valueArray {
-				str, ok := v.(string)
-				if !ok {
-					isStringArrayClaim = false
-					break
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	s.ExtraClaims = make(map[string][]string, len(raw))
+
+	for k, v := range raw {
+		switch t := v.(type) {
+		case string:
+			s.ExtraClaims[k] = []string{t}
+		case []any:
+			// Turn all elements in a list into a string
+			out := make([]string, 0, len(t))
+			for _, e := range t {
+				if s, ok := e.(string); ok {
+					out = append(out, s)
+				} else {
+					out = append(out, fmt.Sprint(e))
 				}
-				claimValues[i] = str
 			}
-			if isStringArrayClaim {
-				s.StringArrayClaims[key] = claimValues
-			}
+			s.ExtraClaims[k] = out
+		default:
+			// Turn numbers/bools etc into strings
+			s.ExtraClaims[k] = []string{fmt.Sprint(t)}
 		}
 	}
 
@@ -103,7 +106,10 @@ func (s *checkedClaims) UnmarshalJSON(data []byte) error {
 // The default location for policy plugins
 const pluginPolicyDir = "/etc/opk/policy.d"
 
-func escapedSplit(s string, sep rune) []string {
+// EscapedSplit splits a string by a separator while ignoring the separator in quoted sections.
+// This is useful for strings that may contain the separator character as part of the string
+// and not as a delimiter.
+func EscapedSplit(s string, sep rune) []string {
 	quoted := false
 	a := strings.FieldsFunc(s, func(r rune) bool {
 		if r == '"' {
@@ -123,12 +129,12 @@ func validateClaim(claims *checkedClaims, user *User) bool {
 	}
 
 	// Should we match on an oidc claim?
-	if strings.HasPrefix(user.IdentityAttribute, OIDC_GROUPS) {
-		oidcGroupSections := escapedSplit(user.IdentityAttribute, ':')
+	if strings.HasPrefix(user.IdentityAttribute, OIDC_CLAIMS) {
+		oidcGroupSections := EscapedSplit(user.IdentityAttribute, ':')
 		oidcGroupsName := strings.Trim(oidcGroupSections[1], "\"")
 
 		return slices.Contains(
-			claims.StringArrayClaims[oidcGroupsName],
+			claims.ExtraClaims[oidcGroupsName],
 			oidcGroupSections[len(oidcGroupSections)-1],
 		)
 	}

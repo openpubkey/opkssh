@@ -628,3 +628,20 @@ func TestLocalEmail(t *testing.T) {
 	err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa", policy.DenyList{})
 	require.Error(t, err, "user should not have access")
 }
+
+func TestEscapedSplit(t *testing.T) {
+	t.Parallel()
+
+	escaped := policy.EscapedSplit("abc:def:ghi", ':')
+	require.Equal(t, []string{"abc", "def", "ghi"}, escaped)
+
+	escaped = policy.EscapedSplit(`abc:"xxx:yyy"`, ':')
+	require.Equal(t, []string{"abc", `"xxx:yyy"`}, escaped)
+
+	escaped = policy.EscapedSplit(`aaa:"bbb:c" zzz:"qqq:www"`, ':')
+	require.Equal(t, []string{"aaa", "\"bbb:c\" zzz", "\"qqq:www\""}, escaped)
+
+	// Escaped strings which prevent the separator from being recognized
+	escaped = policy.EscapedSplit(`abc:\"def:ghi\"`, ':')
+	require.Equal(t, []string{"abc", "\\\"def:ghi\\\""}, escaped)
+}

@@ -157,11 +157,14 @@ To allow a group, `ssh-users`, to ssh to your server as `root`, run:
 sudo opkssh add root oidc:groups:ssh-users google
 ```
 
-To allow a group to be read from custom claim `https://acme.com/groups`, `ssh-users`, to ssh to your server as `root`, run:
+We can also enforce policy on custom claims.
+For instance to require that root access is only granted to users whose ID Token has a claim `https://acme.com/groups` with the value `ssh-users` run:
 
 ```bash
 sudo opkssh add root oidc:\"https://acme.com/groups\":ssh-users google
 ```
+
+which will add that line to your OPKSSH policy file.
 
 ## How it works
 
