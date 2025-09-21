@@ -1,4 +1,4 @@
-FROM golang:1.25.0@sha256:5502b0e56fca23feba76dbc5387ba59c593c02ccc2f0f7355871ea9a0852cebe
+FROM golang:1.25.1@sha256:8305f5fa8ea63c7b5bc85bd223ccc62941f852318ebfbd22f53bbd0b358c07e1
 
 # Update/Upgrade
 RUN apt-get update -y && apt-get upgrade -y
@@ -19,7 +19,8 @@ RUN  echo "test:test" | chpasswd
 RUN echo "test ALL=(ALL:ALL) NOPASSWD: ALL" | tee /etc/sudoers.d/test
 
 # Allow SSH access
-RUN mkdir /var/run/sshd
+# This directory is automatically created on the latest docker image
+# RUN mkdir /var/run/sshd
 
 # Expose SSH server so we can ssh in from the tests
 EXPOSE 22

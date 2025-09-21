@@ -75,9 +75,9 @@ func NewVerifyCmd(pktVerifier verifier.Verifier, checkPolicy PolicyEnforcerFunc,
 
 // This function is called by the SSH server as the AuthorizedKeysCommand:
 //
-// The following lines are added to /etc/ssh/sshd_config:
+// By default, the following lines are added to the sshd_config at /etc/ssh/sshd_config.d/60-opk-ssh.conf:
 //
-//	AuthorizedKeysCommand /usr/local/bin/opkssh ver %u %k %t
+//	AuthorizedKeysCommand /usr/local/bin/opkssh verify %u %k %t
 //	AuthorizedKeysCommandUser opksshuser
 //
 // The parameters specified in the config map the parameters sent to the function below.

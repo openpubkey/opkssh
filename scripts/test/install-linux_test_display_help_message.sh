@@ -22,6 +22,8 @@ Options:
   --install-from=FILEPATH     Install using a local file
   --install-te-from=FILEPATH  Install SELinux Type Enforcement using a local file
   --install-version=VER       Install a specific version from GitHub
+  --selinux-enable-squid      Enables the Squid proxy ports in opkssh SELinux module
+  --selinux-enable-proxy      Enables the HTTP Cache ports in opkssh SELinux module
   --help                      Display this help message
 EOF
 )
