@@ -27,7 +27,7 @@ For updates and announcements join the [OpenPubkey mailing list.](https://groups
 
 To ssh with opkssh, Alice first needs to install opkssh using homebrew or manually downloading the binary.
 
-### Homebrew Install (OSX)
+### Homebrew Install (macOS)
 
 To install with homebrew run:
 
@@ -52,7 +52,7 @@ To install with [Chocolatey](https://chocolatey.org/install) run:
 choco install opkssh -y
 ```
 
-### Manual Install (Windows, Linux, OSX)
+### Manual Install (Windows, Linux, macOS)
 
 To install manually, download the opkssh binary and run it:
 
@@ -60,8 +60,8 @@ To install manually, download the opkssh binary and run it:
 |-----------|--------------|
 |🐧 Linux (x86_64)   | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64) |
 |🐧 Linux (ARM64/aarch64)    | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-arm64](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-arm64) |
-|🍎 OSX (x86_64)             | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64) |
-|🍎 OSX (ARM64/aarch64)             | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-arm64](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-arm64) |
+|🍎 macOS (x86_64)             | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64) |
+|🍎 macOS (ARM64/aarch64)             | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-arm64](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-arm64) |
 | ⊞ Win              | [github.com/openpubkey/opkssh/releases/latest/download/opkssh-windows-amd64.exe](https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-windows-amd64.exe) |
 
 To install on Windows run:
@@ -70,7 +70,7 @@ To install on Windows run:
 curl https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-windows-amd64.exe -o opkssh.exe
 ```
 
-To install on OSX run:
+To install on macOS run:
 
 ```bash
 curl -L https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-osx-amd64 -o opkssh; chmod +x opkssh
@@ -177,11 +177,11 @@ Second, we use the `AuthorizedKeysCommand` configuration option in `sshd_config`
 
 ### Client support
 
-| OS        | Supported | Tested  | Version Tested        |
-| --------- | --------  | ------- | --------------------- |
-| Linux     | ✅        | ✅      |  Ubuntu 24.04.1 LTS   |
-| OSX       | ✅        | ✅      |  OSX 15.3.2 (Sequoia) |
-| Windows11 | ✅        | ✅      |  Windows 11           |
+| OS        | Supported | Tested  | Version Tested          |
+| --------- | --------  | ------- | ----------------------- |
+| Linux     | ✅        | ✅      |  Ubuntu 24.04.1 LTS     |
+| macOS     | ✅        | ✅      |  macOS 15.3.2 (Sequoia) |
+| Windows11 | ✅        | ✅      |  Windows 11             |
 
 ### Server support
 
@@ -191,7 +191,7 @@ Second, we use the `AuthorizedKeysCommand` configuration option in `sshd_config`
 | Linux            | ✅        | ✅     |  Centos 9              | -                       |
 | Linux            | ✅        | ✅     |  Arch Linux            | -                       |
 | Linux            | ✅        | ✅     |  openSUSE Tumbleweed   | -                       |
-| OSX              | ❌        | ❌     |  -                     | Likely                  |
+| macOS            | ❌        | ❌     |  -                     | Likely                  |
 | Windows11        | ❌        | ❌     |  -                     | Likely                  |
 
 ## Server Configuration
