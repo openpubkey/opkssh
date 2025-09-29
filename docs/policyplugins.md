@@ -14,7 +14,7 @@ name: Example plugin config
 command: /etc/opk/plugin-cmd.sh
 ```
 
-and then when someone runs `ssh dev alice@example.com` the opkssh will call `/tmp/plugin-cmd.sh` to determine if policy should allow `alice@gmail.com` to assume ssh access as the linux principal `dev`. [Environment variables](https://en.wikipedia.org/wiki/Environment_variable) are set to communicate the details of the ssh login attempt to the command such as:
+and then when someone runs `ssh dev alice@example.com` the opkssh will call `/etc/opk/plugin-cmd.sh` to determine if policy should allow `alice@gmail.com` to assume ssh access as the linux principal `dev`. [Environment variables](https://en.wikipedia.org/wiki/Environment_variable) are set to communicate the details of the ssh login attempt to the command such as:
 
 ```bash
 OPKSSH_PLUGIN_U=dev
@@ -60,14 +60,14 @@ The policy plugin config file must have the permission `640` with ownership set 
 
 ```bash
 chmod 640 /etc/opk/policy.d/example-plugin.yml
-chmod root:opksshuser /etc/opk/policy.d/example-plugin.yml
+chown root:opksshuser /etc/opk/policy.d/example-plugin.yml
 ```
 
 The policy plugin command file must have the permission `755` or `555` with ownership set to `root:opksshuser`.
 
 ```bash
 chmod 755 /etc/opk/plugin-cmd.sh
-chmod root:opksshuser /etc/opk/plugin-cmd.sh
+chown root:opksshuser /etc/opk/plugin-cmd.sh
 ```
 
 These rules are required so that these policy files are only write by root.
