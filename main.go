@@ -30,8 +30,7 @@ import (
 	"regexp"
 	"strings"
 	"syscall"
-
-	"github.com/thediveo/enumflag/v2"
+	"text/tabwriter"
 
 	"github.com/openpubkey/opkssh/commands"
 	config "github.com/openpubkey/opkssh/commands/config"
@@ -39,8 +38,8 @@ import (
 	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
+	"github.com/thediveo/enumflag/v2"
 	"golang.org/x/term"
-	"text/tabwriter"
 )
 
 var (
@@ -123,6 +122,24 @@ Arguments:
 		},
 	}
 	rootCmd.AddCommand(addCmd)
+
+	inspectCmd := &cobra.Command{
+		SilenceUsage: true,
+		Use:          "inspect <path>",
+		Short:        "Inspect and view details of an opkssh generated SSH key",
+		Example:      "  opkssh inspect ~/.ssh/id_ecdsa_sk-cert.pub",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			keyPathArg := args[0]
+			inspect := commands.NewInspectCmd(keyPathArg, cmd.OutOrStdout())
+			if err := inspect.Run(); err != nil {
+				log.Println("Error executing inspect command:", err)
+				return err
+			}
+			return nil
+		},
+		Args: cobra.ExactArgs(1),
+	}
+	rootCmd.AddCommand(inspectCmd)
 
 	var autoRefreshArg bool
 	var configPathArg string
