@@ -34,7 +34,46 @@ func TestInspectCmdJson(t *testing.T) {
 	require.Contains(t, output, ` "two"`)
 }
 
-func TestInspectCmd(t *testing.T) {
+func TestInspectSSHCert(t *testing.T) {
+	tests := []struct {
+		name    string
+		keyType KeyType
+	}{
+		{
+			name:    "ECDSA Certificate",
+			keyType: ECDSA,
+		},
+		{
+			name:    "ED25519 Certificate",
+			keyType: ED25519,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pkt, signer, _ := Mocks(t, tt.keyType)
+			principals := []string{"guest", "dev"}
+
+			sshCertBytes, signKeyBytes, err := createSSHCert(pkt, signer, principals)
+			require.NoError(t, err)
+			require.NotNil(t, sshCertBytes)
+			require.NotNil(t, signKeyBytes)
+
+			buf := new(bytes.Buffer)
+			inspect := NewInspectCmd(string(sshCertBytes), buf)
+
+			err = inspect.Run()
+			require.NoError(t, err, "Unexpected error")
+
+			output := buf.String()
+			require.Contains(t, output, "--- SSH Certificate Information ---")
+			require.Contains(t, output, "[guest dev]")
+			require.Contains(t, output, "Provider Signature (OP) exists\n{\n  \"alg\": \"RS256\",\n  \"kid\": \"kid-")
+			require.Contains(t, output, "Client Signature (CIC) exists\n{\n  \"alg\": \"")
+		})
+	}
+}
+
+func TestInspectKey(t *testing.T) {
 	dummyKey := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINlDR6KRBqBZ1/UL96ltcZWQC7QTgru/ckbCrA/i3RfI your_email@example.com"
 
 	f, err := os.CreateTemp("", "opkssh")

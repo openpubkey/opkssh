@@ -151,12 +151,24 @@ func (i *InspectCmd) inspectPKToken(pktStr string) {
 	i.printf("\n--- Signature Information ---\n")
 	if pkt.Op != nil {
 		i.printf("Provider Signature (OP) exists\n")
+		hdrs := pkt.Op.ProtectedHeaders()
+		if hdrs != nil {
+			i.printJSONObject(hdrs)
+		}
 	}
 	if pkt.Cic != nil {
 		i.printf("Client Signature (CIC) exists\n")
+		hdrs := pkt.Cic.ProtectedHeaders()
+		if hdrs != nil {
+			i.printJSONObject(hdrs)
+		}
 	}
 	if pkt.Cos != nil {
 		i.printf("Cosigner Signature (COS) exists\n")
+		hdrs := pkt.Cos.ProtectedHeaders()
+		if hdrs != nil {
+			i.printJSONObject(hdrs)
+		}
 	}
 
 	// Print token metadata
@@ -172,10 +184,14 @@ func (i *InspectCmd) printJSON(data []byte) {
 		return
 	}
 
+	i.printJSONObject(obj)
+}
+
+func (i *InspectCmd) printJSONObject(obj any) {
 	pretty, err := json.MarshalIndent(obj, "", "  ")
 	if err != nil {
 		i.printf("Error pretty-printing: %v\n", err)
-		i.printf("%s\n", string(data))
+		i.printf("%v\n", obj)
 		return
 	}
 
