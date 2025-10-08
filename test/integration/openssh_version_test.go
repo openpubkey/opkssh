@@ -113,9 +113,13 @@ func testOpenSSHVersionInContainer(t *testing.T, test OpenSSHVersionTest) {
 	// Run setup commands
 	for _, cmd := range test.setupCommands {
 		t.Logf("Running setup command: %s", cmd)
-		code, output, err := container.Exec(ctx, []string{"/bin/bash", "-c", cmd})
+		code, reader, err := container.Exec(ctx, []string{"/bin/bash", "-c", cmd})
+		out, err := readAllFromReader(reader)
+		success := 0
+		require.Equalf(t, success, code, "setup command failed:\n%s", string(out))
+
+		require.NoError(t, err, "failed to read setup command output")
 		require.NoError(t, err, "failed to execute setup command")
-		require.Equal(t, 0, code, "setup command failed with output: %s", output)
 	}
 
 	// Test the version detection command
