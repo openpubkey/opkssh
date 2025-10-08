@@ -71,7 +71,7 @@ func TestOpenSSHVersionDetection(t *testing.T) {
 		},
 		{
 			name:           "Arch Linux",
-			containerImage: "archlinux:latest",
+			containerImage: "archlinux:base",
 			setupCommands: []string{
 				"pacman -Sy --noconfirm archlinux-keyring || true",
 				"pacman -Syu --noconfirm",
