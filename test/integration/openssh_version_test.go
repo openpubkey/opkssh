@@ -54,7 +54,7 @@ func TestOpenSSHVersionDetection(t *testing.T) {
 			name:           "RHEL/CentOS",
 			containerImage: "rockylinux:9",
 			setupCommands: []string{
-				"dnf install -y openssh-server sed",
+				"dnf clean all && dnf makecache && dnf install -y openssh-server sed",
 			},
 			versionCommand: `version=$(/usr/bin/rpm -q --qf "%{VERSION}\n" openssh-server | /bin/sed -E 's/^([0-9]+\.[0-9]+).*/\1/'); /bin/echo "OpenSSH_$version"`,
 			expectedPrefix: "OpenSSH_",
