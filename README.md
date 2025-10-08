@@ -260,7 +260,7 @@ dev oidc:"https://acme.com/groups":developer https://login.microsoftonline.com/9
 
 To add new rule run:
 
-`sudo opkssh add {USER} {EMAIL/SUB/GROUP} {ISSUER}`
+`sudo opkssh add {user} {email/sub/group} {issuer}`
 
 These `auth_id` files can be edited by hand or you can use the add command to add new policies.
 For convenience you can use the shorthand `google` or `azure` rather than specifying the entire issuer.
@@ -320,16 +320,16 @@ AuthorizedKeysCommandUser opksshuser
 To log in using a custom OpenID Provider, run:
 
 ```bash
-opkssh login --provider="{ISSUER},{CLIENT_ID}"
+opkssh login --provider="{issuer},{client_id}"
 ```
 
 or in the rare case that a client secret is required by the OpenID Provider:
 
 ```bash
-opkssh login --provider="{ISSUER},{CLIENT_ID},{CLIENT_SECRET},{SCOPES}"
+opkssh login --provider="{issuer},{client_id},{client_secret},{scopes}"
 ```
 
-where ISSUER, CLIENT_ID and CLIENT_SECRET correspond to the issuer client ID and client secret of the custom OpenID Provider.
+where issuer, client_id and client_secret correspond to the issuer client ID and client secret of the custom OpenID Provider.
 
 For example if the issuer is `https://authentik.local/application/o/opkssh/` and the client ID was `ClientID123`:
 
