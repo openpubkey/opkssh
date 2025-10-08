@@ -71,9 +71,11 @@ func TestOpenSSHVersionDetection(t *testing.T) {
 		},
 		{
 			name:           "Arch Linux",
-			containerImage: "manjarolinux/base:latest",
+			containerImage: "archlinux:latest",
 			setupCommands: []string{
-				"pacman -Sy --noconfirm openssh sed",
+				"pacman -Sy --noconfirm archlinux-keyring || true",
+				"pacman -Syu --noconfirm",
+				"pacman -S --noconfirm --needed openssh sed",
 			},
 			versionCommand: `version=$(/usr/bin/pacman -Qi openssh | /usr/bin/awk '/^Version/ {print $3}' | /bin/sed -E 's/^([0-9]+\.[0-9]+).*/\1/'); /bin/echo "OpenSSH_$version"`,
 			expectedPrefix: "OpenSSH_",
