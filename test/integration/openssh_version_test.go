@@ -94,10 +94,11 @@ func testOpenSSHVersionInContainer(t *testing.T, test OpenSSHVersionTest) {
 
 	// Create container request
 	req := testcontainers.ContainerRequest{
-		Image:      test.containerImage,
-		Cmd:        []string{"sleep", "3600"}, // Keep container running
-		WaitingFor: wait.ForLog(""),
-		AutoRemove: true,
+		Image:           test.containerImage,
+		Cmd:             []string{"sleep", "3600"}, // Keep container running
+		WaitingFor:      wait.ForLog(""),
+		AutoRemove:      true,
+		AlwaysPullImage: true,
 	}
 
 	// Start container
