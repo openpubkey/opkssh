@@ -16,7 +16,7 @@ ARG ISSUER_PORT="9998"
 RUN go build -v -o opksshbuild
 
 # Stage 2: Create a minimal CentOS-based image
-FROM quay.io/centos/centos:stream9@sha256:90eacea1070658f2bfc6f0b521916be6b8dc643d516d1cbb84105619d256d573
+FROM quay.io/centos/centos:stream9@sha256:9b0482e3e8ddedce22b5d841d04d0a73498237d93a0c5d75b8a07cc99222591d
 # Install dependencies required for runtime (e.g., SSH server)
 RUN dnf update -y && \
     dnf install -y sudo openssh-server openssh-clients telnet wget jq && \
