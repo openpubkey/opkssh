@@ -54,7 +54,7 @@ func TestOpenSSHVersionDetection(t *testing.T) {
 			name:           "RHEL/CentOS",
 			containerImage: "rockylinux:9",
 			setupCommands: []string{
-				"dnf install -y openssh-server sed",
+				"dnf clean all && dnf makecache && dnf install -y openssh-server sed",
 			},
 			versionCommand: `version=$(/usr/bin/rpm -q --qf "%{VERSION}\n" openssh-server | /bin/sed -E 's/^([0-9]+\.[0-9]+).*/\1/'); /bin/echo "OpenSSH_$version"`,
 			expectedPrefix: "OpenSSH_",
@@ -73,7 +73,11 @@ func TestOpenSSHVersionDetection(t *testing.T) {
 			name:           "Arch Linux",
 			containerImage: "manjarolinux/base:latest",
 			setupCommands: []string{
-				"pacman -Sy --noconfirm openssh sed",
+				"pacman-key --init",
+				"pacman-key --populate archlinux manjaro",
+				"pacman -Syyu --noconfirm",
+				"pacman -S --noconfirm --needed manjaro-keyring archlinux-keyring || true",
+				"pacman -S --noconfirm --needed openssh sed",
 			},
 			versionCommand: `version=$(/usr/bin/pacman -Qi openssh | /usr/bin/awk '/^Version/ {print $3}' | /bin/sed -E 's/^([0-9]+\.[0-9]+).*/\1/'); /bin/echo "OpenSSH_$version"`,
 			expectedPrefix: "OpenSSH_",
@@ -92,10 +96,11 @@ func testOpenSSHVersionInContainer(t *testing.T, test OpenSSHVersionTest) {
 
 	// Create container request
 	req := testcontainers.ContainerRequest{
-		Image:      test.containerImage,
-		Cmd:        []string{"sleep", "3600"}, // Keep container running
-		WaitingFor: wait.ForLog(""),
-		AutoRemove: true,
+		Image:           test.containerImage,
+		Cmd:             []string{"sleep", "3600"}, // Keep container running
+		WaitingFor:      wait.ForLog(""),
+		AutoRemove:      true,
+		AlwaysPullImage: true,
 	}
 
 	// Start container
@@ -113,9 +118,13 @@ func testOpenSSHVersionInContainer(t *testing.T, test OpenSSHVersionTest) {
 	// Run setup commands
 	for _, cmd := range test.setupCommands {
 		t.Logf("Running setup command: %s", cmd)
-		code, output, err := container.Exec(ctx, []string{"/bin/bash", "-c", cmd})
+		code, reader, err := container.Exec(ctx, []string{"/bin/bash", "-c", cmd})
+		out, err := readAllFromReader(reader)
+		success := 0
+		require.Equalf(t, success, code, "setup command failed:\n%s", string(out))
+
+		require.NoError(t, err, "failed to read setup command output")
 		require.NoError(t, err, "failed to execute setup command")
-		require.Equal(t, 0, code, "setup command failed with output: %s", output)
 	}
 
 	// Test the version detection command
