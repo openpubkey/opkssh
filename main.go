@@ -38,6 +38,7 @@ import (
 	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
+	"github.com/spf13/cobra/doc"
 	"github.com/thediveo/enumflag/v2"
 	"golang.org/x/term"
 )
@@ -383,6 +384,28 @@ Arguments:
 	clientCmd.AddCommand(providerCmd)
 
 	rootCmd.AddCommand(clientCmd)
+
+	// genDocsCmd is a hidden command used as a helper for generating our
+	// command line reference documentation.
+	genDocsCmd := &cobra.Command{
+		Use:    "gendocs <output_dir>",
+		Hidden: true,
+		Args:   cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path := "./docs/cli/"
+			if len(args) > 1 {
+				path = args[1]
+			}
+
+			err := os.MkdirAll(path, 0775)
+			if err != nil {
+				return err
+			}
+
+			return doc.GenMarkdownTree(rootCmd, path)
+		},
+	}
+	rootCmd.AddCommand(genDocsCmd)
 
 	err := rootCmd.Execute()
 	if err != nil {
