@@ -1,0 +1,44 @@
+name: CLI Docs
+
+# Runs CI when code merges to the CLI on main
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "main.go"
+
+jobs:
+  check-updates:
+    name: Check for updates to the CLI docs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version-file: 'go.mod'
+      - name: Generate CLI docs
+        id: changed-files
+        run: |
+          set +e
+          go run . gendocs
+          git diff --exit-code --quiet
+          changedfiles=$?
+          echo "changedfiles=$changedfiles" >> $GITHUB_OUTPUT
+      - name: Open pull request for changes
+        if: steps.changed-files.outputs.changedfiles == '1'
+        uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7.0.8
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: cli-docs
+          commit-message: Update CLI documentation
+          title: Update CLI documentation
+          body: |
+            Auto-generated documentation update for the opkssh CLI commands.
+          labels: |
+            docs
