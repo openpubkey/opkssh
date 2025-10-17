@@ -157,6 +157,31 @@ func TestInspectFormatTime(t *testing.T) {
 			input:        uint64(now.Unix()),
 			outputString: now.Format(time.RFC3339),
 		},
+		{
+			name:         "year 2038 (int32 max)",
+			input:        2147483647,
+			outputString: "2038-01-19T03:14:07Z",
+		},
+		{
+			name:         "year 2038 (int32 max + 1)",
+			input:        2147483648,
+			outputString: "2038-01-19T03:14:08Z",
+		},
+		{
+			name:         "max int64 boundary",
+			input:        9223372036854775807, // MaxInt64
+			outputString: "292277026596-12-04T15:30:07Z",
+		},
+		{
+			name:         "beyond max int64",
+			input:        9223372036854775808, // MaxInt64 + 1
+			outputString: "Beyond year 2262",
+		},
+		{
+			name:         "large timestamp before forever",
+			input:        18446744073709551614, // MaxUint64 - 1
+			outputString: "Beyond year 2262",
+		},
 	}
 
 	for _, tt := range tests {

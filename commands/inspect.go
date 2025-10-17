@@ -107,6 +107,12 @@ func formatTime(timestamp uint64) string {
 	if timestamp == 1<<64-1 {
 		return "Forever"
 	}
+	// Check if timestamp exceeds MaxInt64 to avoid overflow when converting to int64
+	// MaxInt64 corresponds to year ~2262, which is far beyond realistic certificate validity
+	const maxInt64 = 1<<63 - 1
+	if timestamp > maxInt64 {
+		return "Beyond year 2262"
+	}
 	t := time.Unix(int64(timestamp), 0)
 	return t.Format(time.RFC3339)
 }
