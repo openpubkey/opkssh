@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -109,8 +110,7 @@ func formatTime(timestamp uint64) string {
 	}
 	// Check if timestamp exceeds MaxInt64 to avoid overflow when converting to int64
 	// MaxInt64 corresponds to year ~2262, which is far beyond realistic certificate validity
-	const maxInt64 = 1<<63 - 1
-	if timestamp > maxInt64 {
+	if timestamp > math.MaxInt64 {
 		return "Beyond year 2262"
 	}
 	t := time.Unix(int64(timestamp), 0)
