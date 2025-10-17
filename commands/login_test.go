@@ -425,7 +425,7 @@ func TestIdentityString(t *testing.T) {
 
 	t.Run("without email claim", func(t *testing.T) {
 		// Create a mock without email claim
-		var alg jwa.SignatureAlgorithm = jwa.ES256
+		alg := jwa.ES256
 		signer, err := util.GenKeyPair(alg)
 		require.NoError(t, err)
 
@@ -433,7 +433,7 @@ func TestIdentityString(t *testing.T) {
 		op, _, idtTemplate, err := providers.NewMockProvider(providerOpts)
 		require.NoError(t, err)
 
-		// Don't add email to ExtraClaims to simulate missing email
+		// Explicitly set ExtraClaims to empty to ensure no email claim is present in the ID token
 		idtTemplate.ExtraClaims = map[string]any{}
 
 		client, err := client.New(op, client.WithSigner(signer, alg))
