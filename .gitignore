@@ -43,3 +43,4 @@ test/integration/testfile.txt
 # Direnv files, because these should be opt-in by the developer.
 .direnv
 .envrc
+opkssh

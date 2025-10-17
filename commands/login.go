@@ -813,7 +813,7 @@ func IdentityString(pkt pktoken.PKToken) (string, error) {
 	}
 	claims := idt.GetClaims()
 	if claims.Email == "" {
-		return "Sub, issuer, audience: \n" + claims.Subject + " " + claims.Issuer + " " + claims.Audience, nil
+		return "WARNING: Email claim is missing from ID token. Some servers may require this claim.\nSub, issuer, audience: \n" + claims.Subject + " " + claims.Issuer + " " + claims.Audience, nil
 	} else {
 		return "Email, sub, issuer, audience: \n" + claims.Email + " " + claims.Subject + " " + claims.Issuer + " " + claims.Audience, nil
 	}

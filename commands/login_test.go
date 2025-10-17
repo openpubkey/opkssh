@@ -415,11 +415,41 @@ func TestCreateSSHCert(t *testing.T) {
 }
 
 func TestIdentityString(t *testing.T) {
-	pkt, _, _ := Mocks(t, ECDSA)
-	idString, err := IdentityString(*pkt)
-	require.NoError(t, err)
-	expIdString := "Email, sub, issuer, audience: \narthur.aardvark@example.com me https://accounts.example.com test_client_id"
-	require.Equal(t, expIdString, idString)
+	t.Run("with email claim", func(t *testing.T) {
+		pkt, _, _ := Mocks(t, ECDSA)
+		idString, err := IdentityString(*pkt)
+		require.NoError(t, err)
+		expIdString := "Email, sub, issuer, audience: \narthur.aardvark@example.com me https://accounts.example.com test_client_id"
+		require.Equal(t, expIdString, idString)
+	})
+
+	t.Run("without email claim", func(t *testing.T) {
+		// Create a mock without email claim
+		var alg jwa.SignatureAlgorithm = jwa.ES256
+		signer, err := util.GenKeyPair(alg)
+		require.NoError(t, err)
+
+		providerOpts := providers.DefaultMockProviderOpts()
+		op, _, idtTemplate, err := providers.NewMockProvider(providerOpts)
+		require.NoError(t, err)
+
+		// Don't add email to ExtraClaims to simulate missing email
+		idtTemplate.ExtraClaims = map[string]any{}
+
+		client, err := client.New(op, client.WithSigner(signer, alg))
+		require.NoError(t, err)
+
+		pkt, err := client.Auth(context.Background())
+		require.NoError(t, err)
+
+		idString, err := IdentityString(*pkt)
+		require.NoError(t, err)
+		require.Contains(t, idString, "WARNING: Email claim is missing from ID token")
+		require.Contains(t, idString, "Sub, issuer, audience:")
+		require.Contains(t, idString, "me") // subject
+		require.Contains(t, idString, "https://accounts.example.com") // issuer
+		require.Contains(t, idString, "test_client_id") // audience
+	})
 }
 
 func TestPrettyPrintIdToken(t *testing.T) {
