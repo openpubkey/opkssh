@@ -57,7 +57,7 @@ const providerStr3 = providerAlias3 + "," + providerArg3
 
 const allProvidersStr = providerStr1 + ";" + providerStr2 + ";" + providerStr3
 
-func Mocks(t *testing.T, keyType KeyType) (*pktoken.PKToken, crypto.Signer, providers.OpenIdProvider) {
+func Mocks(t *testing.T, keyType KeyType, extraClaims ...map[string]any) (*pktoken.PKToken, crypto.Signer, providers.OpenIdProvider) {
 	var err error
 	var alg jwa.SignatureAlgorithm
 	var signer crypto.Signer
@@ -76,9 +76,14 @@ func Mocks(t *testing.T, keyType KeyType) (*pktoken.PKToken, crypto.Signer, prov
 	op, _, idtTemplate, err := providers.NewMockProvider(providerOpts)
 	require.NoError(t, err)
 
-	mockEmail := "arthur.aardvark@example.com"
-	idtTemplate.ExtraClaims = map[string]any{
-		"email": mockEmail,
+	// Default: include email claim
+	if len(extraClaims) > 0 {
+		idtTemplate.ExtraClaims = extraClaims[0]
+	} else {
+		mockEmail := "arthur.aardvark@example.com"
+		idtTemplate.ExtraClaims = map[string]any{
+			"email": mockEmail,
+		}
 	}
 
 	client, err := client.New(op, client.WithSigner(signer, alg))
@@ -424,27 +429,13 @@ func TestIdentityString(t *testing.T) {
 	})
 
 	t.Run("without email claim", func(t *testing.T) {
-		// Create a mock without email claim
-		alg := jwa.ES256
-		signer, err := util.GenKeyPair(alg)
-		require.NoError(t, err)
-
-		providerOpts := providers.DefaultMockProviderOpts()
-		op, _, idtTemplate, err := providers.NewMockProvider(providerOpts)
-		require.NoError(t, err)
-
-		// Explicitly set ExtraClaims to empty to ensure no email claim is present in the ID token
-		idtTemplate.ExtraClaims = map[string]any{}
-
-		client, err := client.New(op, client.WithSigner(signer, alg))
-		require.NoError(t, err)
-
-		pkt, err := client.Auth(context.Background())
-		require.NoError(t, err)
-
+		// Create a mock without email claim by passing empty ExtraClaims
+		pkt, _, _ := Mocks(t, ECDSA, map[string]any{})
+		
 		idString, err := IdentityString(*pkt)
 		require.NoError(t, err)
 		require.Contains(t, idString, "WARNING: Email claim is missing from ID token")
+		require.Contains(t, idString, "Policies based on email will not work")
 		require.Contains(t, idString, "Sub, issuer, audience:")
 		require.Contains(t, idString, "me") // subject
 		require.Contains(t, idString, "https://accounts.example.com") // issuer
