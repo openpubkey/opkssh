@@ -431,15 +431,15 @@ func TestIdentityString(t *testing.T) {
 	t.Run("without email claim", func(t *testing.T) {
 		// Create a mock without email claim by passing empty ExtraClaims
 		pkt, _, _ := Mocks(t, ECDSA, map[string]any{})
-		
+
 		idString, err := IdentityString(*pkt)
 		require.NoError(t, err)
 		require.Contains(t, idString, "WARNING: Email claim is missing from ID token")
 		require.Contains(t, idString, "Policies based on email will not work")
 		require.Contains(t, idString, "Sub, issuer, audience:")
-		require.Contains(t, idString, "me") // subject
+		require.Contains(t, idString, "me")                           // subject
 		require.Contains(t, idString, "https://accounts.example.com") // issuer
-		require.Contains(t, idString, "test_client_id") // audience
+		require.Contains(t, idString, "test_client_id")               // audience
 	})
 }
 
