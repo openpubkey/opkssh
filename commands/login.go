@@ -818,7 +818,8 @@ Check if your client config (~/.opk/config.yml) has the correct scopes configure
 Sub, issuer, audience:
 %s %s %s`, claims.Subject, claims.Issuer, claims.Audience), nil
 	} else {
-		return "Email, sub, issuer, audience: \n" + claims.Email + " " + claims.Subject + " " + claims.Issuer + " " + claims.Audience, nil
+		return fmt.Sprintf(`Email, sub, issuer, audience: 
+%s %s %s %s`, claims.Email, claims.Subject, claims.Issuer, claims.Audience), nil
 	}
 }
 
