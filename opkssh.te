@@ -5,6 +5,7 @@ require {
     type var_log_t;
     type http_port_t;
     type sudo_exec_t;
+    type sudo_log_t;
     type squid_port_t;
     type http_cache_port_t;
     class file { append execute execute_no_trans open read map };
@@ -16,6 +17,7 @@ allow sshd_t http_port_t:tcp_socket name_connect;
 
 # 2. Allow writing to log files (always needed)
 allow sshd_t var_log_t:file { open append };
+allow sshd_t sudo_log_t:file { open };
 
 # 3. Boolean: enable home access via sudo
 bool opkssh_enable_home false;
