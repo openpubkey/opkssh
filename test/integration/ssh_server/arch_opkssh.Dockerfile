@@ -1,5 +1,5 @@
 # Stage 1: Build the Go binary
-FROM golang:1.25.3@sha256:7d73c4c57127279b23f3f70cbb368bf0fe08f7ab32af5daf5764173d25e78b74 as builder
+FROM golang:1.25.3@sha256:6ea52a02734dd15e943286b048278da1e04eca196a564578d718c7720433dbbe as builder
 
 # Set destination for COPY
 WORKDIR /app
@@ -16,7 +16,7 @@ ARG ISSUER_PORT="9998"
 RUN go build -v -o opksshbuild
 
 # Stage 2: Create a minimal ArchLinux-based image
-FROM quay.io/archlinux/archlinux:latest@sha256:ef52952c5e803ec99fd34a66119ca283c592460423f9d02df8c605a0c59a11ec
+FROM quay.io/archlinux/archlinux:latest@sha256:4524236733437ff1f35531147aa444b32f674d9f328aebe06d3511be575c80a3
 
 # Install dependencies required for runtime (e.g., SSH server)
 RUN pacman -Syu --noconfirm && \
