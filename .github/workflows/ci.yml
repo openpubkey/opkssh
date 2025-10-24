@@ -33,20 +33,6 @@ jobs:
       run: go mod download
     - name: Build
       run: go build -v -o /dev/null
-  nix-build:
-    name: Nix Build
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-        with:
-          persist-credentials: false
-      - name: Check Nix flake inputs
-        uses: DeterminateSystems/flake-checker-action@3164002371bc90729c68af0e24d5aacf20d7c9f6 # v12
-      - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@90bb610b90bf290cad97484ba341453bd1cbefea # v19
-      - name: Build
-        run: nix build .
   # Run integration tests
   test:
     needs: build
@@ -81,7 +67,7 @@ jobs:
     name: Shell Scripts Lint & Test
     runs-on: ubuntu-24.04
     container:
-      image: opensuse/tumbleweed:latest@sha256:f93ab1e87c76a18c86da56df0d36e71a7e23650fe4368a958104775fd0ffc0b6
+      image: opensuse/tumbleweed:latest@sha256:79e8b26f149f3e3706ed6198f062cd46bdf30d47ac46c5a9a26d69ddcceb339f
     steps:
     - name: Install packages
       run: |

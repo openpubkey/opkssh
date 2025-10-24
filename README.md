@@ -52,6 +52,14 @@ To install with [Chocolatey](https://chocolatey.org/install) run:
 choco install opkssh -y
 ```
 
+### Nix Install
+
+Use the [opkssh nixpkg](https://search.nixos.org/packages?channel=unstable&show=opkssh&query=opkssh) as normal, or test it via:
+
+```bash
+nix-shell -p opkssh
+```
+
 ### Manual Install (Windows, Linux, macOS)
 
 To install manually, download the opkssh binary and run it:
@@ -231,7 +239,7 @@ sudo chown root:opksshuser /etc/opk/providers
 sudo chmod 640 /etc/opk/providers
 ```
 
-## `/etc/opk/auth_id`
+### `/etc/opk/auth_id`
 
 `/etc/opk/auth_id` is the global authorized identities file.
 This is a server wide file where policies can be configured to determine which identities can assume what linux user accounts.
@@ -314,6 +322,40 @@ We then add the following lines to `/etc/ssh/sshd_config`
 AuthorizedKeysCommand /usr/local/bin/opkssh verify %u %k %t
 AuthorizedKeysCommandUser opksshuser
 ```
+
+## Server Configuration (NixOS)
+
+On NixOS, you can configure the SSH daemon by **including** the following lines to your config:
+
+```nix
+{ ... }:
+
+{
+  services.opkssh = {
+    enable = true;
+
+    providers = {
+      google = {
+        issuer = "https://accounts.google.com";
+        clientId =
+          "206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com";
+        lifetime = "24h";
+      };
+    };
+
+    authorizations = [
+      {
+        user = "YOUR_USERNAME";
+        principal = "YOUR_GMAIL";
+        issuer = "https://accounts.google.com";
+      }
+    ];
+  };
+}
+```
+
+See [search.nixos.org](https://search.nixos.org/options?channel=unstable&query=services.opkssh) for
+all available configuration options.
 
 ## Custom OpenID Providers (Authentik, Authelia, Keycloak, Zitadel...)
 
