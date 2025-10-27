@@ -10,13 +10,12 @@ import (
 	"time"
 
 	"github.com/melbahja/goph"
-	"github.com/openpubkey/openpubkey/pktoken/clientinstance"
-	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/opkssh/commands"
-	"github.com/openpubkey/opkssh/sshcert"
 	testprovider "github.com/openpubkey/opkssh/test/integration/provider"
 	"github.com/openpubkey/opkssh/test/integration/ssh_server"
+	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -32,25 +31,46 @@ func TestJITUserProvisioningEndToEnd(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Create a mock OIDC provider
-	providerOpts := providers.DefaultMockProviderOpts()
-	providerOpts.GQSign = true
-	providerOpts.Issuer = fmt.Sprintf("http://oidc.local:%s", issuerPort)
-	mockProvider, _, idtTemplate, err := providers.NewMockProvider(providerOpts)
+	// Create local Docker network
+	newNetwork, err := testcontainers.GenericNetwork(ctx, testcontainers.GenericNetworkRequest{
+		NetworkRequest: testcontainers.NetworkRequest{
+			Name:           "opkssh-jit-test-net",
+			CheckDuplicate: true,
+		},
+	})
 	require.NoError(t, err)
+	defer func() {
+		if err := newNetwork.Remove(ctx); err != nil {
+			t.Logf("failed to terminate Docker network: %v", err)
+		}
+	}()
 
-	mockEmail := "jituser@example.com"
-	idtTemplate.ExtraClaims = map[string]any{
-		"email": mockEmail,
-	}
-
-	// Start OIDC provider server
-	issuer, issuerCleanup, err := testprovider.StartIssuerContainer(ctx, mockProvider, issuerPort, networkName)
+	// Start OIDC server
+	authCallbackRedirectPort, err := GetAvailablePort()
 	require.NoError(t, err)
-	defer issuerCleanup()
+	oidcContainer, err := testprovider.RunExampleOpContainer(
+		ctx,
+		"opkssh-jit-test-net",
+		map[string]string{
+			"REDIRECT_URIS": fmt.Sprintf("http://localhost:%d/login-callback", authCallbackRedirectPort),
+			"USER_PASSWORD": "verysecure",
+		},
+		issuerPort,
+	)
+	require.NoError(t, err)
+	defer func() {
+		if err := oidcContainer.Terminate(ctx); err != nil {
+			t.Logf("failed to terminate OIDC container: %v", err)
+		}
+	}()
 
 	// Start SSH server container with OPKSSH and NSS module
-	sshContainer, err := ssh_server.RunOpkSshContainer(ctx, issuer.GetIP(), issuerPort, networkName, true)
+	// Fetch IPv4 address of OIDC container so that sshd server can route
+	// traffic to it
+	issuerHostIp, err := oidcContainer.ContainerIP(ctx)
+	require.NoError(t, err)
+
+	sshContainer, err := ssh_server.RunOpkSshContainer(ctx, issuerHostIp, issuerPort, "opkssh-jit-test-net", true)
 	require.NoError(t, err)
 	defer func() {
 		if err := sshContainer.Terminate(ctx); err != nil {
@@ -59,11 +79,13 @@ func TestJITUserProvisioningEndToEnd(t *testing.T) {
 	}()
 
 	// Enable JIT user provisioning in the container
-	_, _, err = sshContainer.Exec(ctx, []string{"sh", "-c", "echo 'enabled true' >> /etc/opk/nss-opkssh.conf"})
+	exitCode, _, err := sshContainer.Exec(ctx, []string{"sh", "-c", "echo 'enabled true' > /etc/opk/nss-opkssh.conf"})
 	require.NoError(t, err)
+	require.Equal(t, 0, exitCode)
 
-	_, _, err = sshContainer.Exec(ctx, []string{"sh", "-c", "echo 'auto_provision_users: true' >> /etc/opk/config.yml"})
+	exitCode, _, err = sshContainer.Exec(ctx, []string{"sh", "-c", "echo 'auto_provision_users: true' >> /etc/opk/config.yml"})
 	require.NoError(t, err)
+	require.Equal(t, 0, exitCode)
 
 	// Verify NSS module is installed and configured
 	exitCode, output, err := sshContainer.Exec(ctx, []string{"getent", "passwd", "nonexistentuser_jit"})
@@ -72,58 +94,67 @@ func TestJITUserProvisioningEndToEnd(t *testing.T) {
 	require.Contains(t, output, "nonexistentuser_jit", "NSS module should return user info")
 	require.Contains(t, output, "65534", "NSS module should return UID 65534")
 
-	// Create OPKSSH login and generate SSH certificate
-	ciClient := clientinstance.New(mockProvider,
-		clientinstance.WithSignGQ(true),
-	)
+	// Create OPK SSH provider configured against the OIDC container
+	zitadelOp, customTransport := createZitadelOPKSshProvider(oidcContainer.Port, authCallbackRedirectPort)
 
-	pkt, err := ciClient.OidcAuth(ctx, idtTemplate, nil)
-	require.NoError(t, err)
+	// Call login to generate SSH certificate
+	t.Log("------- call login cmd ------")
+	errCh := make(chan error)
+	go func() {
+		loginCmd := commands.LoginCmd{Fs: afero.NewOsFs()}
+		err := loginCmd.Login(ctx, zitadelOp, false, "")
+		errCh <- err
+	}()
 
-	// Generate SSH key pair
-	sshKeyPair, err := sshcert.GenerateKeyPair(sshcert.ECDSA)
-	require.NoError(t, err)
+	// Wait for login-callback server to come up
+	timeoutErr := WaitForServer(ctx, fmt.Sprintf("http://localhost:%d", authCallbackRedirectPort), LoginCallbackServerTimeout)
+	require.NoError(t, timeoutErr, "login callback server took too long to startup")
 
-	// Create SSH certificate with PK token
-	sshCert, err := sshcert.New(sshKeyPair.PublicKey, pkt, nil)
-	require.NoError(t, err)
+	// Do OIDC login
+	DoOidcInteractiveLogin(t, customTransport, fmt.Sprintf("http://localhost:%d/login", authCallbackRedirectPort), "test-user@oidc.local", "verysecure")
 
-	// Sign the SSH certificate
-	caSigner, err := sshcert.NewCASigner(sshKeyPair.PrivateKey)
-	require.NoError(t, err)
+	// Wait for interactive login to complete
+	timeoutCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	select {
+	case loginErr := <-errCh:
+		require.NoError(t, loginErr, "failed login")
+	case <-timeoutCtx.Done():
+		t.Fatal(timeoutCtx.Err())
+	}
 
-	certifiedPubKey, err := caSigner.SignCert(sshCert.SshCert)
-	require.NoError(t, err)
+	// Get the generated OPK SSH key
+	pubKey, secKeyFilePath, err := GetOPKSshKey("")
+	require.NoError(t, err, "expected to find OPK ssh key written to disk")
 
-	// Create SSH auth method with the signed certificate
-	authMethod := goph.RawKey(string(ssh.MarshalAuthorizedKey(certifiedPubKey)), sshKeyPair.PrivateKey)
+	// Create OPK SSH signer
+	certSigner, _ := createOpkSshSigner(t, pubKey, secKeyFilePath)
 
 	// Test username that doesn't exist on the system
 	testUsername := "jituser123"
 
 	// Verify user doesn't exist initially
-	exitCode, output, err = sshContainer.Exec(ctx, []string{"id", testUsername})
+	exitCode, _, err = sshContainer.Exec(ctx, []string{"id", testUsername})
 	require.NoError(t, err)
 	require.NotEqual(t, 0, exitCode, "user should not exist before SSH login")
-	require.Contains(t, output, "no such user", "expected user not found error")
 
-	// Add policy to allow the mock email to SSH as testUsername
-	addPolicy := commands.AddCmd{
-		Username: testUsername,
-	}
-	policyFilePath := "/etc/opk/auth_id"
-	policyLine := fmt.Sprintf("%s %s %s", testUsername, mockEmail, mockProvider.Issuer())
+	// Add policy to allow the test user to SSH as testUsername
+	mockEmail := "test-user@oidc.local"
+	mockIssuer := fmt.Sprintf("http://oidc.local:%s/", issuerPort)
+	policyLine := fmt.Sprintf("%s %s %s", testUsername, mockEmail, mockIssuer)
 
-	_, _, err = sshContainer.Exec(ctx, []string{"sh", "-c", fmt.Sprintf("echo '%s' >> %s", policyLine, policyFilePath)})
+	exitCode, _, err = sshContainer.Exec(ctx, []string{"sh", "-c", fmt.Sprintf("echo '%s' >> /etc/opk/auth_id", policyLine)})
 	require.NoError(t, err)
+	require.Equal(t, 0, exitCode)
 
 	// Attempt SSH connection as the non-existent user
 	// This should trigger JIT user provisioning
+	authKey := goph.Auth{ssh.PublicKeys(certSigner)}
 	sshClient, err := goph.NewConn(&goph.Config{
 		User:     testUsername,
 		Addr:     sshContainer.Host,
 		Port:     uint(sshContainer.Port),
-		Auth:     authMethod,
+		Auth:     authKey,
 		Callback: ssh.InsecureIgnoreHostKey(),
 		Timeout:  30 * time.Second,
 	})
@@ -131,9 +162,9 @@ func TestJITUserProvisioningEndToEnd(t *testing.T) {
 	defer sshClient.Close()
 
 	// Verify we can execute commands
-	output, err = sshClient.Run("whoami")
+	outputBytes, err := sshClient.Run("whoami")
 	require.NoError(t, err)
-	require.Equal(t, testUsername, strings.TrimSpace(string(output)), "SSH session should be as the provisioned user")
+	require.Equal(t, testUsername, strings.TrimSpace(string(outputBytes)), "SSH session should be as the provisioned user")
 
 	// Verify user was actually created on the system
 	exitCode, output, err = sshContainer.Exec(ctx, []string{"id", testUsername})
@@ -142,7 +173,7 @@ func TestJITUserProvisioningEndToEnd(t *testing.T) {
 	require.Contains(t, output, testUsername, "id command should return the username")
 
 	// Verify user's home directory was created
-	exitCode, output, err = sshContainer.Exec(ctx, []string{"ls", "-la", "/home/" + testUsername})
+	exitCode, _, err = sshContainer.Exec(ctx, []string{"ls", "-la", "/home/" + testUsername})
 	require.NoError(t, err)
 	require.Equal(t, 0, exitCode, "user home directory should exist")
 
@@ -162,25 +193,44 @@ func TestJITUserProvisioningDisabled(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Create a mock OIDC provider
-	providerOpts := providers.DefaultMockProviderOpts()
-	providerOpts.GQSign = true
-	providerOpts.Issuer = fmt.Sprintf("http://oidc.local:%s", issuerPort)
-	mockProvider, _, idtTemplate, err := providers.NewMockProvider(providerOpts)
+	// Create local Docker network
+	newNetwork, err := testcontainers.GenericNetwork(ctx, testcontainers.GenericNetworkRequest{
+		NetworkRequest: testcontainers.NetworkRequest{
+			Name:           "opkssh-jit-disabled-test-net",
+			CheckDuplicate: true,
+		},
+	})
+	require.NoError(t, err)
+	defer func() {
+		if err := newNetwork.Remove(ctx); err != nil {
+			t.Logf("failed to terminate Docker network: %v", err)
+		}
+	}()
+
+	// Start OIDC server
+	authCallbackRedirectPort, err := GetAvailablePort()
+	require.NoError(t, err)
+	oidcContainer, err := testprovider.RunExampleOpContainer(
+		ctx,
+		"opkssh-jit-disabled-test-net",
+		map[string]string{
+			"REDIRECT_URIS": fmt.Sprintf("http://localhost:%d/login-callback", authCallbackRedirectPort),
+			"USER_PASSWORD": "verysecure",
+		},
+		issuerPort,
+	)
+	require.NoError(t, err)
+	defer func() {
+		if err := oidcContainer.Terminate(ctx); err != nil {
+			t.Logf("failed to terminate OIDC container: %v", err)
+		}
+	}()
+
+	// Start SSH server container
+	issuerHostIp, err := oidcContainer.ContainerIP(ctx)
 	require.NoError(t, err)
 
-	mockEmail := "testuser@example.com"
-	idtTemplate.ExtraClaims = map[string]any{
-		"email": mockEmail,
-	}
-
-	// Start OIDC provider server
-	issuer, issuerCleanup, err := testprovider.StartIssuerContainer(ctx, mockProvider, issuerPort, networkName)
-	require.NoError(t, err)
-	defer issuerCleanup()
-
-	// Start SSH server container with OPKSSH but JIT disabled
-	sshContainer, err := ssh_server.RunOpkSshContainer(ctx, issuer.GetIP(), issuerPort, networkName, true)
+	sshContainer, err := ssh_server.RunOpkSshContainer(ctx, issuerHostIp, issuerPort, "opkssh-jit-disabled-test-net", true)
 	require.NoError(t, err)
 	defer func() {
 		if err := sshContainer.Terminate(ctx); err != nil {
@@ -189,50 +239,64 @@ func TestJITUserProvisioningDisabled(t *testing.T) {
 	}()
 
 	// Ensure JIT provisioning is disabled (default state)
-	_, _, err = sshContainer.Exec(ctx, []string{"sh", "-c", "echo 'enabled false' > /etc/opk/nss-opkssh.conf"})
+	exitCode, _, err := sshContainer.Exec(ctx, []string{"sh", "-c", "echo 'enabled false' > /etc/opk/nss-opkssh.conf"})
+	require.NoError(t, err)
+	require.Equal(t, 0, exitCode)
+
+	// Create OPK SSH provider
+	zitadelOp, customTransport := createZitadelOPKSshProvider(oidcContainer.Port, authCallbackRedirectPort)
+
+	// Call login
+	errCh := make(chan error)
+	go func() {
+		loginCmd := commands.LoginCmd{Fs: afero.NewOsFs()}
+		err := loginCmd.Login(ctx, zitadelOp, false, "")
+		errCh <- err
+	}()
+
+	// Wait for login-callback server
+	timeoutErr := WaitForServer(ctx, fmt.Sprintf("http://localhost:%d", authCallbackRedirectPort), LoginCallbackServerTimeout)
+	require.NoError(t, timeoutErr)
+
+	// Do OIDC login
+	DoOidcInteractiveLogin(t, customTransport, fmt.Sprintf("http://localhost:%d/login", authCallbackRedirectPort), "test-user@oidc.local", "verysecure")
+
+	// Wait for login to complete
+	timeoutCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	select {
+	case loginErr := <-errCh:
+		require.NoError(t, loginErr)
+	case <-timeoutCtx.Done():
+		t.Fatal(timeoutCtx.Err())
+	}
+
+	// Get SSH key
+	pubKey, secKeyFilePath, err := GetOPKSshKey("")
 	require.NoError(t, err)
 
-	// Create OPKSSH login and generate SSH certificate
-	ciClient := clientinstance.New(mockProvider,
-		clientinstance.WithSignGQ(true),
-	)
+	// Create signer
+	certSigner, _ := createOpkSshSigner(t, pubKey, secKeyFilePath)
 
-	pkt, err := ciClient.OidcAuth(ctx, idtTemplate, nil)
-	require.NoError(t, err)
-
-	// Generate SSH key pair
-	sshKeyPair, err := sshcert.GenerateKeyPair(sshcert.ECDSA)
-	require.NoError(t, err)
-
-	// Create SSH certificate with PK token
-	sshCert, err := sshcert.New(sshKeyPair.PublicKey, pkt, nil)
-	require.NoError(t, err)
-
-	// Sign the SSH certificate
-	caSigner, err := sshcert.NewCASigner(sshKeyPair.PrivateKey)
-	require.NoError(t, err)
-
-	certifiedPubKey, err := caSigner.SignCert(sshCert.SshCert)
-	require.NoError(t, err)
-
-	// Create SSH auth method with the signed certificate
-	authMethod := goph.RawKey(string(ssh.MarshalAuthorizedKey(certifiedPubKey)), sshKeyPair.PrivateKey)
-
-	// Test username that doesn't exist on the system
+	// Test username that doesn't exist
 	testUsername := "nonexistentuser456"
 
-	// Add policy to allow the mock email to SSH as testUsername
-	policyLine := fmt.Sprintf("%s %s %s", testUsername, mockEmail, mockProvider.Issuer())
-	_, _, err = sshContainer.Exec(ctx, []string{"sh", "-c", fmt.Sprintf("echo '%s' >> /etc/opk/auth_id", policyLine)})
+	// Add policy
+	mockEmail := "test-user@oidc.local"
+	mockIssuer := fmt.Sprintf("http://oidc.local:%s/", issuerPort)
+	policyLine := fmt.Sprintf("%s %s %s", testUsername, mockEmail, mockIssuer)
+	exitCode, _, err = sshContainer.Exec(ctx, []string{"sh", "-c", fmt.Sprintf("echo '%s' >> /etc/opk/auth_id", policyLine)})
 	require.NoError(t, err)
+	require.Equal(t, 0, exitCode)
 
-	// Attempt SSH connection as the non-existent user
+	// Attempt SSH connection as non-existent user
 	// This should FAIL because JIT provisioning is disabled
+	authKey := goph.Auth{ssh.PublicKeys(certSigner)}
 	_, err = goph.NewConn(&goph.Config{
 		User:     testUsername,
 		Addr:     sshContainer.Host,
 		Port:     uint(sshContainer.Port),
-		Auth:     authMethod,
+		Auth:     authKey,
 		Callback: ssh.InsecureIgnoreHostKey(),
 		Timeout:  10 * time.Second,
 	})
