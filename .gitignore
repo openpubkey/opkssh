@@ -44,3 +44,8 @@ test/integration/testfile.txt
 .direnv
 .envrc
 opkssh
+
+# NSS module build artifacts
+nss/*.o
+nss/*.so
+nss/*.so.*
