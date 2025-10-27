@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"os/exec"
+	"os/user"
 
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/openpubkey/verifier"
@@ -31,6 +33,12 @@ import (
 	"github.com/spf13/afero"
 	"golang.org/x/crypto/ssh"
 )
+
+// userExists checks if a Linux user exists on the system.
+func userExists(username string) bool {
+	_, err := user.Lookup(username)
+	return err == nil
+}
 
 // PolicyEnforcerFunc returns nil if the supplied PK token is permitted to login as
 // username. Otherwise, an error is returned indicating the reason for rejection
@@ -56,6 +64,8 @@ type VerifyCmd struct {
 	HttpClient *http.Client
 	// denyList is populated from ServerConfig after successful parsing
 	denyList policy.DenyList
+	// autoProvisionUsers indicates whether to automatically create users if they don't exist
+	autoProvisionUsers bool
 }
 
 // NewVerifyCmd creates a new VerifyCmd instance with the provided arguments.
@@ -120,13 +130,21 @@ func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, t
 
 		if err := v.CheckPolicy(userArg, pkt, userInfo, certB64Arg, typArg, v.denyList); err != nil {
 			return "", err
-		} else { // Success!
-			// sshd expects the public key in the cert, not the cert itself. This
-			// public key is key of the CA that signs the cert, in our setting there
-			// is no CA.
-			pubkeyBytes := ssh.MarshalAuthorizedKey(cert.SshCert.SignatureKey)
-			return "cert-authority " + string(pubkeyBytes), nil
 		}
+
+		// After successful policy check, provision user if needed
+		if v.autoProvisionUsers {
+			if err := v.ProvisionUser(userArg); err != nil {
+				return "", fmt.Errorf("failed to provision user: %w", err)
+			}
+		}
+
+		// Success!
+		// sshd expects the public key in the cert, not the cert itself. This
+		// public key is key of the CA that signs the cert, in our setting there
+		// is no CA.
+		pubkeyBytes := ssh.MarshalAuthorizedKey(cert.SshCert.SignatureKey)
+		return "cert-authority " + string(pubkeyBytes), nil
 	}
 }
 
@@ -155,6 +173,7 @@ func (v *VerifyCmd) ReadFromServerConfig() error {
 		Emails: serverConfig.DenyEmails,
 		Users:  serverConfig.DenyUsers,
 	}
+	v.autoProvisionUsers = serverConfig.AutoProvisionUsers
 	return serverConfig.SetEnvVars()
 }
 
@@ -165,6 +184,25 @@ func (v *VerifyCmd) UserInfoLookup(ctx context.Context, pkt *pktoken.PKToken, ac
 	}
 	ui.HttpClient = v.HttpClient
 	return ui.Request(ctx)
+}
+
+// ProvisionUser creates a Linux user if it doesn't already exist.
+// It uses sudo to execute adduser command with the opksshuser having the necessary permissions.
+func (v *VerifyCmd) ProvisionUser(username string) error {
+	// Check if user already exists
+	if userExists(username) {
+		return nil
+	}
+
+	// Create the user using sudo adduser
+	// The --disabled-password flag creates the user without a password
+	// The --gecos '' flag sets the user info fields to empty
+	cmd := exec.Command("sudo", "adduser", "--disabled-password", "--gecos", "", username)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to create user %s: %w", username, err)
+	}
+
+	return nil
 }
 
 // OpkPolicyEnforcerAuthFunc returns an opkssh policy.Enforcer that can be

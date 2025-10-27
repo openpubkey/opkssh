@@ -738,6 +738,19 @@ configure_sudo() {
     else
         echo "  Skipping sudoers configuration as it is only needed for home policy (HOME_POLICY is set to false)"
     fi
+
+    # Add sudoers rule for user provisioning (always added)
+    if [[ ! -f "$SUDOERS_PATH" ]]; then
+        echo "  Creating sudoers file at $SUDOERS_PATH..."
+        touch "$SUDOERS_PATH"
+        chmod 440 "$SUDOERS_PATH"
+    fi
+    SUDOERS_RULE_ADDUSER="$AUTH_CMD_USER ALL=(ALL) NOPASSWD: /usr/sbin/adduser *"
+    if ! grep -qxF "$SUDOERS_RULE_ADDUSER" "$SUDOERS_PATH"; then
+        echo "  Adding sudoers rule for adduser..."
+        echo "# This allows opkssh to create users automatically when auto_provision_users is enabled" >> "$SUDOERS_PATH"
+        echo "$SUDOERS_RULE_ADDUSER" >> "$SUDOERS_PATH"
+    fi
 }
 
 
@@ -785,9 +798,7 @@ main() {
     OS_TYPE=$(determine_linux_type) || return 1
     CPU_ARCH=$(check_cpu_architecture) || return 1
     ensure_command "wget" || return 1
-    if [[ "$HOME_POLICY" == true ]]; then
-        ensure_command "sudo" || return 1
-    fi
+    ensure_command "sudo" || return 1
     ensure_opkssh_user_and_group "$AUTH_CMD_USER" "$AUTH_CMD_GROUP" || return 1
     ensure_openssh_server "$OS_TYPE" || return 1
     install_opkssh_binary || return 1
@@ -795,9 +806,7 @@ main() {
     configure_opkssh
     configure_openssh_server || return 1
     restart_openssh_server || return 1
-    if [[ "$HOME_POLICY" == true ]]; then
-        configure_sudo
-    fi
+    configure_sudo
     log_opkssh_installation
 }
 
