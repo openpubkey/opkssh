@@ -306,6 +306,25 @@ chown {USER}:{USER} /home/{USER}/.opk/auth_id
 chmod 600 /home/{USER}/.opk/auth_id
 ```
 
+### JIT User Provisioning
+
+opkssh supports automatic Just-In-Time (JIT) user provisioning, which creates Linux user accounts automatically when a user with valid credentials attempts to SSH to the server for the first time.
+
+To enable JIT user provisioning, add the following to `/etc/opk/config.yml`:
+
+```yml
+---
+auto_provision_users: true
+```
+
+When enabled:
+- opkssh checks if the requested user exists before allowing SSH access
+- If the user doesn't exist and authentication is successful, opkssh automatically creates the user account
+- Users are created with `adduser --disabled-password --gecos ''`, meaning they have no password and can only authenticate via opkssh
+- The install script automatically configures sudo permissions for the `opksshuser` to run `adduser`
+
+This feature is useful for environments where user accounts should be created on-demand rather than pre-provisioned.
+
 ### AuthorizedKeysCommandUser
 
 We use a low privilege user for the SSH AuthorizedKeysCommandUser.

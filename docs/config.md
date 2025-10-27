@@ -71,6 +71,18 @@ env_vars:
   HTTPS_PROXY: http://yourproxy:3128
 ```
 
+It also supports an `auto_provision_users` field. This field is a boolean value that enables automatic creation of Linux users when they don't exist. When set to `true`, opkssh will automatically create a user account the first time someone with valid credentials attempts to SSH to the server.
+
+```yml
+---
+auto_provision_users: true
+```
+
+- When enabled, opkssh will check if the requested user exists before allowing SSH access.
+- If the user doesn't exist, opkssh will automatically create it using `adduser --disabled-password --gecos ''`.
+- The user is created with no password, relying on opkssh authentication only.
+- This feature requires that the `opksshuser` has sudo permissions to run `adduser`, which is configured automatically by the install script.
+
 It also supports a `deny_emails` field. This field is a YAML array of strings, where each string is an email address opkssh should never allow. An ID Token has a claim for an email on this list it will reject it.
 
 ```yml
