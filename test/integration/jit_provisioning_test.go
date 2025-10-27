@@ -29,27 +29,25 @@ import (
 func TestJITUserProvisioningEndToEnd(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
-
 	// Create local Docker network
-	newNetwork, err := testcontainers.GenericNetwork(ctx, testcontainers.GenericNetworkRequest{
+	newNetwork, err := testcontainers.GenericNetwork(TestCtx, testcontainers.GenericNetworkRequest{
 		NetworkRequest: testcontainers.NetworkRequest{
 			Name:           "opkssh-jit-test-net",
 			CheckDuplicate: true,
 		},
 	})
 	require.NoError(t, err)
-	defer func() {
-		if err := newNetwork.Remove(ctx); err != nil {
+	t.Cleanup(func() {
+		if err := newNetwork.Remove(TestCtx); err != nil {
 			t.Logf("failed to terminate Docker network: %v", err)
 		}
-	}()
+	})
 
 	// Start OIDC server
 	authCallbackRedirectPort, err := GetAvailablePort()
 	require.NoError(t, err)
 	oidcContainer, err := testprovider.RunExampleOpContainer(
-		ctx,
+		TestCtx,
 		"opkssh-jit-test-net",
 		map[string]string{
 			"REDIRECT_URIS": fmt.Sprintf("http://localhost:%d/login-callback", authCallbackRedirectPort),
@@ -58,37 +56,37 @@ func TestJITUserProvisioningEndToEnd(t *testing.T) {
 		issuerPort,
 	)
 	require.NoError(t, err)
-	defer func() {
-		if err := oidcContainer.Terminate(ctx); err != nil {
+	t.Cleanup(func() {
+		if err := oidcContainer.Terminate(TestCtx, testcontainers.StopTimeout(time.Millisecond)); err != nil {
 			t.Logf("failed to terminate OIDC container: %v", err)
 		}
-	}()
+	})
 
 	// Start SSH server container with OPKSSH and NSS module
 	// Fetch IPv4 address of OIDC container so that sshd server can route
 	// traffic to it
-	issuerHostIp, err := oidcContainer.ContainerIP(ctx)
+	issuerHostIp, err := oidcContainer.ContainerIP(TestCtx)
 	require.NoError(t, err)
 
-	sshContainer, err := ssh_server.RunOpkSshContainer(ctx, issuerHostIp, issuerPort, "opkssh-jit-test-net", true)
+	sshContainer, err := ssh_server.RunOpkSshContainer(TestCtx, issuerHostIp, issuerPort, "opkssh-jit-test-net", true)
 	require.NoError(t, err)
-	defer func() {
-		if err := sshContainer.Terminate(ctx); err != nil {
+	t.Cleanup(func() {
+		if err := sshContainer.Terminate(TestCtx); err != nil {
 			t.Logf("failed to terminate SSH container: %v", err)
 		}
-	}()
+	})
 
 	// Enable JIT user provisioning in the container
-	exitCode, _, err := sshContainer.Exec(ctx, []string{"sh", "-c", "echo 'enabled true' > /etc/opk/nss-opkssh.conf"})
+	exitCode, _, err := sshContainer.Exec(TestCtx, []string{"sh", "-c", "echo 'enabled true' > /etc/opk/nss-opkssh.conf"})
 	require.NoError(t, err)
 	require.Equal(t, 0, exitCode)
 
-	exitCode, _, err = sshContainer.Exec(ctx, []string{"sh", "-c", "echo 'auto_provision_users: true' >> /etc/opk/config.yml"})
+	exitCode, _, err = sshContainer.Exec(TestCtx, []string{"sh", "-c", "echo 'auto_provision_users: true' >> /etc/opk/config.yml"})
 	require.NoError(t, err)
 	require.Equal(t, 0, exitCode)
 
 	// Verify NSS module is installed and configured
-	exitCode, output, err := sshContainer.Exec(ctx, []string{"getent", "passwd", "nonexistentuser_jit"})
+	exitCode, output, err := sshContainer.Exec(TestCtx, []string{"getent", "passwd", "nonexistentuser_jit"})
 	require.NoError(t, err)
 	require.Equal(t, 0, exitCode, "getent should succeed with NSS module enabled")
 	require.Contains(t, output, "nonexistentuser_jit", "NSS module should return user info")
@@ -102,19 +100,19 @@ func TestJITUserProvisioningEndToEnd(t *testing.T) {
 	errCh := make(chan error)
 	go func() {
 		loginCmd := commands.LoginCmd{Fs: afero.NewOsFs()}
-		err := loginCmd.Login(ctx, zitadelOp, false, "")
+		err := loginCmd.Login(TestCtx, zitadelOp, false, "")
 		errCh <- err
 	}()
 
 	// Wait for login-callback server to come up
-	timeoutErr := WaitForServer(ctx, fmt.Sprintf("http://localhost:%d", authCallbackRedirectPort), LoginCallbackServerTimeout)
+	timeoutErr := WaitForServer(TestCtx, fmt.Sprintf("http://localhost:%d", authCallbackRedirectPort), LoginCallbackServerTimeout)
 	require.NoError(t, timeoutErr, "login callback server took too long to startup")
 
 	// Do OIDC login
 	DoOidcInteractiveLogin(t, customTransport, fmt.Sprintf("http://localhost:%d/login", authCallbackRedirectPort), "test-user@oidc.local", "verysecure")
 
 	// Wait for interactive login to complete
-	timeoutCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	timeoutCtx, cancel := context.WithTimeout(TestCtx, 3*time.Second)
 	defer cancel()
 	select {
 	case loginErr := <-errCh:
@@ -134,7 +132,7 @@ func TestJITUserProvisioningEndToEnd(t *testing.T) {
 	testUsername := "jituser123"
 
 	// Verify user doesn't exist initially
-	exitCode, _, err = sshContainer.Exec(ctx, []string{"id", testUsername})
+	exitCode, _, err = sshContainer.Exec(TestCtx, []string{"id", testUsername})
 	require.NoError(t, err)
 	require.NotEqual(t, 0, exitCode, "user should not exist before SSH login")
 
@@ -143,7 +141,7 @@ func TestJITUserProvisioningEndToEnd(t *testing.T) {
 	mockIssuer := fmt.Sprintf("http://oidc.local:%s/", issuerPort)
 	policyLine := fmt.Sprintf("%s %s %s", testUsername, mockEmail, mockIssuer)
 
-	exitCode, _, err = sshContainer.Exec(ctx, []string{"sh", "-c", fmt.Sprintf("echo '%s' >> /etc/opk/auth_id", policyLine)})
+	exitCode, _, err = sshContainer.Exec(TestCtx, []string{"sh", "-c", fmt.Sprintf("echo '%s' >> /etc/opk/auth_id", policyLine)})
 	require.NoError(t, err)
 	require.Equal(t, 0, exitCode)
 
@@ -167,18 +165,18 @@ func TestJITUserProvisioningEndToEnd(t *testing.T) {
 	require.Equal(t, testUsername, strings.TrimSpace(string(outputBytes)), "SSH session should be as the provisioned user")
 
 	// Verify user was actually created on the system
-	exitCode, output, err = sshContainer.Exec(ctx, []string{"id", testUsername})
+	exitCode, output, err = sshContainer.Exec(TestCtx, []string{"id", testUsername})
 	require.NoError(t, err)
 	require.Equal(t, 0, exitCode, "user should exist after SSH login")
 	require.Contains(t, output, testUsername, "id command should return the username")
 
 	// Verify user's home directory was created
-	exitCode, _, err = sshContainer.Exec(ctx, []string{"ls", "-la", "/home/" + testUsername})
+	exitCode, _, err = sshContainer.Exec(TestCtx, []string{"ls", "-la", "/home/" + testUsername})
 	require.NoError(t, err)
 	require.Equal(t, 0, exitCode, "user home directory should exist")
 
 	// Verify user has no password (disabled-password)
-	exitCode, output, err = sshContainer.Exec(ctx, []string{"grep", testUsername, "/etc/shadow"})
+	exitCode, output, err = sshContainer.Exec(TestCtx, []string{"grep", testUsername, "/etc/shadow"})
 	require.NoError(t, err)
 	require.Equal(t, 0, exitCode)
 	require.Contains(t, output, "!", "user should have disabled password")
@@ -191,27 +189,25 @@ func TestJITUserProvisioningEndToEnd(t *testing.T) {
 func TestJITUserProvisioningDisabled(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
-
 	// Create local Docker network
-	newNetwork, err := testcontainers.GenericNetwork(ctx, testcontainers.GenericNetworkRequest{
+	newNetwork, err := testcontainers.GenericNetwork(TestCtx, testcontainers.GenericNetworkRequest{
 		NetworkRequest: testcontainers.NetworkRequest{
 			Name:           "opkssh-jit-disabled-test-net",
 			CheckDuplicate: true,
 		},
 	})
 	require.NoError(t, err)
-	defer func() {
-		if err := newNetwork.Remove(ctx); err != nil {
+	t.Cleanup(func() {
+		if err := newNetwork.Remove(TestCtx); err != nil {
 			t.Logf("failed to terminate Docker network: %v", err)
 		}
-	}()
+	})
 
 	// Start OIDC server
 	authCallbackRedirectPort, err := GetAvailablePort()
 	require.NoError(t, err)
 	oidcContainer, err := testprovider.RunExampleOpContainer(
-		ctx,
+		TestCtx,
 		"opkssh-jit-disabled-test-net",
 		map[string]string{
 			"REDIRECT_URIS": fmt.Sprintf("http://localhost:%d/login-callback", authCallbackRedirectPort),
@@ -220,26 +216,26 @@ func TestJITUserProvisioningDisabled(t *testing.T) {
 		issuerPort,
 	)
 	require.NoError(t, err)
-	defer func() {
-		if err := oidcContainer.Terminate(ctx); err != nil {
+	t.Cleanup(func() {
+		if err := oidcContainer.Terminate(TestCtx, testcontainers.StopTimeout(time.Millisecond)); err != nil {
 			t.Logf("failed to terminate OIDC container: %v", err)
 		}
-	}()
+	})
 
 	// Start SSH server container
-	issuerHostIp, err := oidcContainer.ContainerIP(ctx)
+	issuerHostIp, err := oidcContainer.ContainerIP(TestCtx)
 	require.NoError(t, err)
 
-	sshContainer, err := ssh_server.RunOpkSshContainer(ctx, issuerHostIp, issuerPort, "opkssh-jit-disabled-test-net", true)
+	sshContainer, err := ssh_server.RunOpkSshContainer(TestCtx, issuerHostIp, issuerPort, "opkssh-jit-disabled-test-net", true)
 	require.NoError(t, err)
-	defer func() {
-		if err := sshContainer.Terminate(ctx); err != nil {
+	t.Cleanup(func() {
+		if err := sshContainer.Terminate(TestCtx); err != nil {
 			t.Logf("failed to terminate SSH container: %v", err)
 		}
-	}()
+	})
 
 	// Ensure JIT provisioning is disabled (default state)
-	exitCode, _, err := sshContainer.Exec(ctx, []string{"sh", "-c", "echo 'enabled false' > /etc/opk/nss-opkssh.conf"})
+	exitCode, _, err := sshContainer.Exec(TestCtx, []string{"sh", "-c", "echo 'enabled false' > /etc/opk/nss-opkssh.conf"})
 	require.NoError(t, err)
 	require.Equal(t, 0, exitCode)
 
@@ -250,19 +246,19 @@ func TestJITUserProvisioningDisabled(t *testing.T) {
 	errCh := make(chan error)
 	go func() {
 		loginCmd := commands.LoginCmd{Fs: afero.NewOsFs()}
-		err := loginCmd.Login(ctx, zitadelOp, false, "")
+		err := loginCmd.Login(TestCtx, zitadelOp, false, "")
 		errCh <- err
 	}()
 
 	// Wait for login-callback server
-	timeoutErr := WaitForServer(ctx, fmt.Sprintf("http://localhost:%d", authCallbackRedirectPort), LoginCallbackServerTimeout)
+	timeoutErr := WaitForServer(TestCtx, fmt.Sprintf("http://localhost:%d", authCallbackRedirectPort), LoginCallbackServerTimeout)
 	require.NoError(t, timeoutErr)
 
 	// Do OIDC login
 	DoOidcInteractiveLogin(t, customTransport, fmt.Sprintf("http://localhost:%d/login", authCallbackRedirectPort), "test-user@oidc.local", "verysecure")
 
 	// Wait for login to complete
-	timeoutCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	timeoutCtx, cancel := context.WithTimeout(TestCtx, 3*time.Second)
 	defer cancel()
 	select {
 	case loginErr := <-errCh:
@@ -285,7 +281,7 @@ func TestJITUserProvisioningDisabled(t *testing.T) {
 	mockEmail := "test-user@oidc.local"
 	mockIssuer := fmt.Sprintf("http://oidc.local:%s/", issuerPort)
 	policyLine := fmt.Sprintf("%s %s %s", testUsername, mockEmail, mockIssuer)
-	exitCode, _, err = sshContainer.Exec(ctx, []string{"sh", "-c", fmt.Sprintf("echo '%s' >> /etc/opk/auth_id", policyLine)})
+	exitCode, _, err = sshContainer.Exec(TestCtx, []string{"sh", "-c", fmt.Sprintf("echo '%s' >> /etc/opk/auth_id", policyLine)})
 	require.NoError(t, err)
 	require.Equal(t, 0, exitCode)
 
