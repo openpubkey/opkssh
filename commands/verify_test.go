@@ -333,8 +333,8 @@ func TestReadFromServerConfigAutoProvision(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name                   string
-		configContent          string
+		name                  string
+		configContent         string
 		expectedAutoProvision bool
 	}{
 		{
@@ -366,7 +366,7 @@ env_vars:
 			mockFs := afero.NewMemMapFs()
 			tempDir, _ := afero.TempDir(mockFs, "opk", "config")
 			configPath := filepath.Join(tempDir, "server_config.yml")
-			
+
 			err := afero.WriteFile(mockFs, configPath, []byte(tt.configContent), 0640)
 			require.NoError(t, err)
 
@@ -380,11 +380,10 @@ env_vars:
 					},
 				},
 			}
-			
+
 			err = ver.ReadFromServerConfig()
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedAutoProvision, ver.autoProvisionUsers)
 		})
 	}
 }
-
