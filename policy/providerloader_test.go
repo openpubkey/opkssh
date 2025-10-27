@@ -94,12 +94,12 @@ func TestProviderPolicy_CreateVerifierWithHTTPClient(t *testing.T) {
 		ClientID:         "test-google",
 		ExpirationPolicy: "24h",
 	})
-	
+
 	// Create a custom HTTP client
 	httpClient := &http.Client{
 		Timeout: 10 * time.Second,
 	}
-	
+
 	ver, err := policy.CreateVerifierWithHTTPClient(httpClient)
 	require.NoError(t, err)
 	require.NotNil(t, ver)
@@ -113,7 +113,7 @@ func TestProviderPolicy_CreateVerifierWithHTTPClient_Nil(t *testing.T) {
 		ClientID:         "test-google",
 		ExpirationPolicy: "24h",
 	})
-	
+
 	// Passing nil should work fine
 	ver, err := policy.CreateVerifierWithHTTPClient(nil)
 	require.NoError(t, err)
