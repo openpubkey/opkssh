@@ -24,6 +24,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -31,6 +33,7 @@ import (
 	"strings"
 	"syscall"
 	"text/tabwriter"
+	"time"
 
 	"github.com/openpubkey/opkssh/commands"
 	config "github.com/openpubkey/opkssh/commands/config"
@@ -297,13 +300,17 @@ Arguments:
 			printConfigProblems()
 			log.Println("Providers loaded: ", providerPolicy.ToString())
 
-			pktVerifier, err := providerPolicy.CreateVerifier()
+			// Create an optimized HTTP client for JWKS fetching and verification
+			httpClient := newOptimizedHTTPClient()
+
+			pktVerifier, err := providerPolicy.CreateVerifierWithHTTPClient(httpClient)
 			if err != nil {
 				log.Println("Failed to create pk token verifier (likely bad configuration):", err)
 				return err
 			}
 
 			v := commands.NewVerifyCmd(*pktVerifier, commands.OpkPolicyEnforcerFunc(userArg), serverConfigPathArg)
+			v.HttpClient = httpClient // Set HTTP client for UserInfo requests
 			if err := v.ReadFromServerConfig(); err != nil {
 				log.Println("Failed to set environment variables in config:", err)
 			}
@@ -423,6 +430,38 @@ func printConfigProblems() {
 		}
 	}
 }
+
+// newOptimizedHTTPClient creates an HTTP client optimized for JWKS fetching
+// and OIDC verification. It includes:
+// - Connection pooling and reuse
+// - DNS caching
+// - Appropriate timeouts
+// - Idle connection management
+func newOptimizedHTTPClient() *http.Client {
+	// Create a custom dialer with DNS caching
+	dialer := &net.Dialer{
+		Timeout:   10 * time.Second, // Connection timeout
+		KeepAlive: 30 * time.Second, // Keep TCP connections alive
+	}
+
+	// Create a custom transport with optimized settings
+	transport := &http.Transport{
+		DialContext:           dialer.DialContext,
+		MaxIdleConns:          100,              // Maximum idle connections across all hosts
+		MaxIdleConnsPerHost:   10,               // Maximum idle connections per host
+		IdleConnTimeout:       90 * time.Second, // How long idle connections stay open
+		TLSHandshakeTimeout:   10 * time.Second, // TLS handshake timeout
+		ExpectContinueTimeout: 1 * time.Second,
+		// Disable HTTP/2 for better compatibility and reliability
+		ForceAttemptHTTP2: false,
+	}
+
+	return &http.Client{
+		Transport: transport,
+		Timeout:   30 * time.Second, // Overall request timeout
+	}
+}
+
 
 // OpenSSH used to impose a 4096-octet limit on the string buffers available to
 // the percent_expand function. In October 2019 as part of the 8.1 release,

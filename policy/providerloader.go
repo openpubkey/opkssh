@@ -18,6 +18,7 @@ package policy
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/openpubkey/openpubkey/providers"
@@ -66,6 +67,10 @@ func (p *ProviderPolicy) AddRow(row ProvidersRow) {
 }
 
 func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
+	return p.CreateVerifierWithHTTPClient(nil)
+}
+
+func (p *ProviderPolicy) CreateVerifierWithHTTPClient(httpClient *http.Client) (*verifier.Verifier, error) {
 	pvs := []verifier.ProviderVerifier{}
 	var expirationPolicy verifier.ExpirationPolicy
 	var err error
@@ -80,16 +85,19 @@ func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
 			opts := providers.GetDefaultGoogleOpOptions()
 			opts.Issuer = row.Issuer
 			opts.ClientID = row.ClientID
+			opts.HttpClient = httpClient
 			provider = providers.NewGoogleOpWithOptions(opts)
 		} else if strings.HasPrefix(row.Issuer, "https://login.microsoftonline.com") {
 			opts := providers.GetDefaultAzureOpOptions()
 			opts.Issuer = row.Issuer
 			opts.ClientID = row.ClientID
+			opts.HttpClient = httpClient
 			provider = providers.NewAzureOpWithOptions(opts)
 		} else if row.Issuer == "https://gitlab.com" {
 			opts := providers.GetDefaultGitlabOpOptions()
 			opts.Issuer = row.Issuer
 			opts.ClientID = row.ClientID
+			opts.HttpClient = httpClient
 			provider = providers.NewGitlabOpWithOptions(opts)
 		} else if row.Issuer == "https://token.actions.githubusercontent.com" {
 			provider = providers.NewGithubOp(row.Issuer, "")
@@ -97,6 +105,7 @@ func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
 			opts := providers.GetDefaultGoogleOpOptions()
 			opts.Issuer = row.Issuer
 			opts.ClientID = row.ClientID
+			opts.HttpClient = httpClient
 			provider = providers.NewGoogleOpWithOptions(opts)
 		}
 
