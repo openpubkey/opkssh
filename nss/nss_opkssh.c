@@ -20,7 +20,9 @@
 #include <unistd.h>
 
 /* Configuration file path */
+#ifndef CONFIG_FILE
 #define CONFIG_FILE "/etc/opk/nss-opkssh.conf"
+#endif
 
 /* Default values for virtual users */
 #define DEFAULT_UID 65534
@@ -43,6 +45,13 @@ struct nss_opkssh_config {
 static void load_config(struct nss_opkssh_config *config) {
     FILE *fp;
     char line[512];
+    const char *config_file;
+    
+    /* Allow override for testing */
+    config_file = getenv("NSS_OPKSSH_CONFIG");
+    if (!config_file) {
+        config_file = CONFIG_FILE;
+    }
     
     /* Set defaults */
     config->enabled = 0;  /* Disabled by default */
@@ -52,7 +61,7 @@ static void load_config(struct nss_opkssh_config *config) {
     strncpy(config->shell, DEFAULT_SHELL, sizeof(config->shell) - 1);
     strncpy(config->gecos, DEFAULT_GECOS, sizeof(config->gecos) - 1);
     
-    fp = fopen(CONFIG_FILE, "r");
+    fp = fopen(config_file, "r");
     if (!fp) {
         return;  /* Config file doesn't exist, use defaults */
     }

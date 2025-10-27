@@ -264,3 +264,127 @@ env_vars:
 	}
 
 }
+
+func TestUserExists(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		username string
+		exists   bool
+	}{
+		{
+			name:     "root user exists",
+			username: "root",
+			exists:   true,
+		},
+		{
+			name:     "non-existent user",
+			username: "nonexistentuser12345",
+			exists:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := userExists(tt.username)
+			require.Equal(t, tt.exists, result)
+		})
+	}
+}
+
+func TestProvisionUser(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		username    string
+		shouldExist bool
+	}{
+		{
+			name:        "existing user (root)",
+			username:    "root",
+			shouldExist: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ver := &VerifyCmd{}
+			err := ver.ProvisionUser(tt.username)
+
+			if tt.shouldExist {
+				// Should succeed for existing users (no-op)
+				require.NoError(t, err)
+			}
+		})
+	}
+
+	// Test that the function doesn't panic with non-existent users
+	t.Run("non-existent user", func(t *testing.T) {
+		ver := &VerifyCmd{}
+		_ = ver.ProvisionUser("nonexistentuser_test_12345")
+		// We don't check error because it depends on sudo availability
+		// The important thing is that it doesn't panic
+	})
+}
+
+func TestReadFromServerConfigAutoProvision(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                   string
+		configContent          string
+		expectedAutoProvision bool
+	}{
+		{
+			name: "auto_provision_users enabled",
+			configContent: `---
+auto_provision_users: true
+`,
+			expectedAutoProvision: true,
+		},
+		{
+			name: "auto_provision_users disabled",
+			configContent: `---
+auto_provision_users: false
+`,
+			expectedAutoProvision: false,
+		},
+		{
+			name: "auto_provision_users not specified",
+			configContent: `---
+env_vars:
+  TEST_VAR: "value"
+`,
+			expectedAutoProvision: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockFs := afero.NewMemMapFs()
+			tempDir, _ := afero.TempDir(mockFs, "opk", "config")
+			configPath := filepath.Join(tempDir, "server_config.yml")
+			
+			err := afero.WriteFile(mockFs, configPath, []byte(tt.configContent), 0640)
+			require.NoError(t, err)
+
+			ver := VerifyCmd{
+				Fs:            mockFs,
+				ConfigPathArg: configPath,
+				filePermChecker: files.PermsChecker{
+					Fs: mockFs,
+					CmdRunner: func(name string, arg ...string) ([]byte, error) {
+						return []byte("root opksshuser"), nil
+					},
+				},
+			}
+			
+			err = ver.ReadFromServerConfig()
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedAutoProvision, ver.autoProvisionUsers)
+		})
+	}
+}
+

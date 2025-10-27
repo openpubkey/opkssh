@@ -49,3 +49,4 @@ opkssh
 nss/*.o
 nss/*.so
 nss/*.so.*
+nss/nss_opkssh_test
