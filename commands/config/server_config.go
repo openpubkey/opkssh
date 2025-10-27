@@ -24,9 +24,9 @@ import (
 
 // ServerConfig struct to represent the /etc/opk/config.yml file that runs on the server that the user is SSHing into
 type ServerConfig struct {
-	EnvVars           map[string]string `yaml:"env_vars"`
-	DenyUsers         []string          `yaml:"deny_users"`
-	DenyEmails        []string          `yaml:"deny_emails"`
+	EnvVars            map[string]string `yaml:"env_vars"`
+	DenyUsers          []string          `yaml:"deny_users"`
+	DenyEmails         []string          `yaml:"deny_emails"`
 	AutoProvisionUsers bool              `yaml:"auto_provision_users"`
 }
 

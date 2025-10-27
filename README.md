@@ -310,20 +310,63 @@ chmod 600 /home/{USER}/.opk/auth_id
 
 opkssh supports automatic Just-In-Time (JIT) user provisioning, which creates Linux user accounts automatically when a user with valid credentials attempts to SSH to the server for the first time.
 
-To enable JIT user provisioning, add the following to `/etc/opk/config.yml`:
+#### How It Works
+
+JIT user provisioning uses an NSS (Name Service Switch) module to solve the chicken-and-egg problem: OpenSSH requires users to exist before calling AuthorizedKeysCommand, but we want to create users during authentication.
+
+1. The NSS module makes OpenSSH believe the user exists (with temporary UID/GID)
+2. OpenSSH proceeds to call AuthorizedKeysCommand (opkssh verify)
+3. opkssh verifies the user's credentials against policy
+4. If authentication succeeds, opkssh creates the actual Linux user account
+5. SSH session is established with the newly created user
+
+#### Installation
+
+The NSS module is automatically installed by the install script. Manual installation:
+
+```bash
+cd nss
+make
+sudo make install
+```
+
+#### Configuration
+
+1. **Enable the NSS module** by editing `/etc/opk/nss-opkssh.conf`:
+
+```
+enabled true
+```
+
+2. **Enable auto_provision_users** in `/etc/opk/config.yml`:
 
 ```yml
 ---
 auto_provision_users: true
 ```
 
-When enabled:
-- opkssh checks if the requested user exists before allowing SSH access
-- If the user doesn't exist and authentication is successful, opkssh automatically creates the user account
-- Users are created with `adduser --disabled-password --gecos ''`, meaning they have no password and can only authenticate via opkssh
-- The install script automatically configures sudo permissions for the `opksshuser` to run `adduser`
+3. **Verify nsswitch.conf** includes opkssh (automatically configured during installation):
 
-This feature is useful for environments where user accounts should be created on-demand rather than pre-provisioned.
+```bash
+# /etc/nsswitch.conf should have:
+passwd:         files opkssh systemd
+```
+
+#### Security
+
+- The NSS module only makes users appear to exist; it doesn't grant access
+- Actual authentication still requires valid credentials through opkssh
+- Users are created with `adduser --disabled-password`, so they can only authenticate via opkssh
+- The NSS module checks `/etc/passwd` first to avoid interfering with real users
+
+#### Disabling
+
+To disable JIT user provisioning:
+
+1. Set `enabled false` in `/etc/opk/nss-opkssh.conf`, OR
+2. Set `auto_provision_users: false` in `/etc/opk/config.yml`
+
+For more details, see [nss/README.md](nss/README.md).
 
 ### AuthorizedKeysCommandUser
 

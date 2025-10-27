@@ -753,7 +753,167 @@ configure_sudo() {
     fi
 }
 
+# install_nss_module
+# Builds and installs the NSS module for JIT user provisioning
+#
+# Outputs:
+#   Writes to stdout the progress of NSS module installation
+#
+# Returns:
+#   0 if installation succeeds, 1 otherwise
+install_nss_module() {
+    local nss_dir
+    local nss_c_file
+    local nss_makefile
+    
+    echo "Installing NSS module for JIT user provisioning..."
+    
+    # Check if gcc is installed
+    if ! command -v gcc >/dev/null 2>&1; then
+        echo "  gcc not found. Installing gcc..."
+        if [[ "$OS_TYPE" == "debian" ]]; then
+            apt-get update && apt-get install -y gcc libc6-dev
+        elif [[ "$OS_TYPE" == "redhat" ]]; then
+            if command -v dnf >/dev/null 2>&1; then
+                dnf install -y gcc glibc-devel
+            else
+                yum install -y gcc glibc-devel
+            fi
+        elif [[ "$OS_TYPE" == "arch" ]]; then
+            pacman -S --noconfirm gcc
+        elif [[ "$OS_TYPE" == "suse" ]]; then
+            zypper install -y gcc glibc-devel
+        fi
+    fi
+    
+    # Check if make is installed
+    if ! command -v make >/dev/null 2>&1; then
+        echo "  make not found. Installing make..."
+        if [[ "$OS_TYPE" == "debian" ]]; then
+            apt-get install -y make
+        elif [[ "$OS_TYPE" == "redhat" ]]; then
+            if command -v dnf >/dev/null 2>&1; then
+                dnf install -y make
+            else
+                yum install -y make
+            fi
+        elif [[ "$OS_TYPE" == "arch" ]]; then
+            pacman -S --noconfirm make
+        elif [[ "$OS_TYPE" == "suse" ]]; then
+            zypper install -y make
+        fi
+    fi
+    
+    # Create NSS module directory
+    nss_dir="/tmp/opkssh-nss-$$"
+    mkdir -p "$nss_dir"
+    
+    # Download or copy NSS module source
+    if [[ -d "$INSTALL_DIR/../nss" ]]; then
+        echo "  Using local NSS module source..."
+        cp -r "$INSTALL_DIR/../nss"/* "$nss_dir/"
+    else
+        echo "  Downloading NSS module source from GitHub..."
+        if [[ "$INSTALL_VERSION" == "latest" ]]; then
+            wget -q -O "$nss_dir/nss_opkssh.c" "https://raw.githubusercontent.com/$GITHUB_REPO/main/nss/nss_opkssh.c"
+            wget -q -O "$nss_dir/Makefile" "https://raw.githubusercontent.com/$GITHUB_REPO/main/nss/Makefile"
+        else
+            wget -q -O "$nss_dir/nss_opkssh.c" "https://raw.githubusercontent.com/$GITHUB_REPO/$INSTALL_VERSION/nss/nss_opkssh.c"
+            wget -q -O "$nss_dir/Makefile" "https://raw.githubusercontent.com/$GITHUB_REPO/$INSTALL_VERSION/nss/Makefile"
+        fi
+    fi
+    
+    # Build the NSS module
+    echo "  Building NSS module..."
+    cd "$nss_dir"
+    if ! make; then
+        echo "  Failed to build NSS module" >&2
+        rm -rf "$nss_dir"
+        return 1
+    fi
+    
+    # Install the NSS module
+    echo "  Installing NSS module..."
+    if ! make install; then
+        echo "  Failed to install NSS module" >&2
+        rm -rf "$nss_dir"
+        return 1
+    fi
+    
+    # Clean up
+    rm -rf "$nss_dir"
+    
+    echo "  NSS module installed successfully"
+    return 0
+}
 
+# configure_nss_opkssh
+# Configures the NSS module and nsswitch.conf for JIT user provisioning
+#
+# Arguments:
+#   $1 - Path to etc directory (Optional, default /etc)
+#
+# Outputs:
+#   Writes to stdout the progress of NSS configuration
+#
+# Returns:
+#   0 on success
+configure_nss_opkssh() {
+    local etc_path="${1:-/etc}"
+    local nss_config="$etc_path/opk/nss-opkssh.conf"
+    local nsswitch_conf="$etc_path/nsswitch.conf"
+    
+    echo "Configuring NSS module for JIT user provisioning..."
+    
+    # Create NSS config file
+    if [[ ! -e "$nss_config" ]]; then
+        echo "  Creating NSS configuration file..."
+        cat > "$nss_config" << 'EOF'
+# NSS opkssh configuration for JIT user provisioning
+# Set enabled to true to enable JIT user provisioning
+enabled false
+
+# Virtual user UID (before actual creation)
+# Use 65534 (nobody) by default
+uid 65534
+
+# Virtual user GID (before actual creation)
+# Use 65534 (nogroup) by default
+gid 65534
+
+# Home directory prefix
+home_prefix /home
+
+# Default shell
+shell /bin/bash
+
+# GECOS field
+gecos OPKSSH JIT User
+EOF
+        chown root:"${AUTH_CMD_GROUP}" "$nss_config"
+        chmod 640 "$nss_config"
+    fi
+    
+    # Configure nsswitch.conf
+    if [[ -f "$nsswitch_conf" ]]; then
+        echo "  Configuring $nsswitch_conf..."
+        # Check if opkssh is already in the passwd line
+        if ! grep -q "^passwd:.*opkssh" "$nsswitch_conf"; then
+            # Add opkssh after files
+            sed -i.bak 's/^passwd:\s*files/passwd:         files opkssh/' "$nsswitch_conf"
+            echo "  Added opkssh to nsswitch.conf"
+        else
+            echo "  opkssh already configured in nsswitch.conf"
+        fi
+    else
+        echo "  Warning: $nsswitch_conf not found" >&2
+    fi
+    
+    echo "  NSS module configured"
+    echo "  To enable JIT user provisioning:"
+    echo "    1. Edit $nss_config and set 'enabled true'"
+    echo "    2. Edit /etc/opk/config.yml and set 'auto_provision_users: true'"
+}
 
 # log_opkssh_installation
 # Log the installation details to /var/log/opkssh.log to help with debugging
@@ -807,6 +967,8 @@ main() {
     configure_openssh_server || return 1
     restart_openssh_server || return 1
     configure_sudo
+    install_nss_module || echo "Warning: NSS module installation failed, JIT user provisioning may not work"
+    configure_nss_opkssh
     log_opkssh_installation
 }
 

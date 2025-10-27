@@ -78,10 +78,20 @@ It also supports an `auto_provision_users` field. This field is a boolean value 
 auto_provision_users: true
 ```
 
-- When enabled, opkssh will check if the requested user exists before allowing SSH access.
-- If the user doesn't exist, opkssh will automatically create it using `adduser --disabled-password --gecos ''`.
-- The user is created with no password, relying on opkssh authentication only.
-- This feature requires that the `opksshuser` has sudo permissions to run `adduser`, which is configured automatically by the install script.
+**JIT User Provisioning requires the NSS module to be enabled.** The NSS module allows OpenSSH to believe users exist before they are actually created. To enable:
+
+1. Set `enabled true` in `/etc/opk/nss-opkssh.conf`
+2. Set `auto_provision_users: true` in `/etc/opk/config.yml`
+3. Verify `/etc/nsswitch.conf` includes `opkssh` in the passwd line (automatically configured during installation)
+
+When enabled:
+- The NSS module reports users as existing (with temporary UID/GID 65534)
+- OpenSSH proceeds to call AuthorizedKeysCommand
+- opkssh verifies credentials and creates the actual user if authentication succeeds
+- The user is created with `adduser --disabled-password --gecos ''` (no password, opkssh authentication only)
+- The install script automatically configures sudo permissions for `opksshuser` to run `adduser`
+
+For more details on the NSS module, see [../nss/README.md](../nss/README.md).
 
 It also supports a `deny_emails` field. This field is a YAML array of strings, where each string is an email address opkssh should never allow. An ID Token has a claim for an email on this list it will reject it.
 
