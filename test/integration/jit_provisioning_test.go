@@ -5,6 +5,7 @@ package integration
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -50,8 +51,9 @@ func TestJITUserProvisioningEndToEnd(t *testing.T) {
 		TestCtx,
 		"opkssh-jit-test-net",
 		map[string]string{
-			"REDIRECT_URIS": fmt.Sprintf("http://localhost:%d/login-callback", authCallbackRedirectPort),
-			"USER_PASSWORD": "verysecure",
+			"AUTH_CALLBACK_PATH": callbackPath,
+			"REDIRECT_PORT":      strconv.Itoa(authCallbackRedirectPort),
+			"PORT":               issuerPort,
 		},
 		issuerPort,
 	)
@@ -210,8 +212,9 @@ func TestJITUserProvisioningDisabled(t *testing.T) {
 		TestCtx,
 		"opkssh-jit-disabled-test-net",
 		map[string]string{
-			"REDIRECT_URIS": fmt.Sprintf("http://localhost:%d/login-callback", authCallbackRedirectPort),
-			"USER_PASSWORD": "verysecure",
+			"AUTH_CALLBACK_PATH": callbackPath,
+			"REDIRECT_PORT":      strconv.Itoa(authCallbackRedirectPort),
+			"PORT":               issuerPort,
 		},
 		issuerPort,
 	)
