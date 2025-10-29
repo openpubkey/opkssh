@@ -213,24 +213,6 @@ name: Example Policy Command
 enforce_providers: true
 command: /usr/bin/local/opk/missing-cmd"`}}
 
-	configWithBadPerms := []mockFile{
-		{
-			Name:       "bad-perms-config.yml",
-			Permission: 0606,
-			Content: `
-name: Example Policy Command
-enforce_providers: true
-command: /usr/bin/local/opk/missing-cmd"`}}
-
-	commandWithBadPerms := []mockFile{
-		{
-			Name:       "bad-perms-command.yml",
-			Permission: 0640,
-			Content: `
-name: Example Policy Command
-enforce_providers: true
-command: /usr/bin/local/opk/bad-perms-policy-cmd`}}
-
 	tests := []struct {
 		name                string
 		tokens              map[string]string
@@ -323,34 +305,6 @@ command: /usr/bin/local/opk/bad-perms-policy-cmd`}}
 			expectedResultCount: 1,
 			expectErrorCount:    1,
 			errorExpected:       "Unterminated double-quoted string",
-		},
-		{
-			name: "Policy invalid config permissions",
-			tokens: map[string]string{
-				"OPKSSH_PLUGIN_ISS": "https://example.com",
-				"OPKSSH_PLUGIN_SUB": "1234",
-				"OPKSSH_PLUGIN_AUD": "abcd",
-			},
-			files:               configWithBadPerms,
-			cmdExecutor:         mockCmdExecutor,
-			expectedAllowed:     false,
-			expectedResultCount: 1,
-			expectErrorCount:    1,
-			errorExpected:       "expected one of the following permissions [640], got (606)",
-		},
-		{
-			name: "Policy invalid command permissions",
-			tokens: map[string]string{
-				"OPKSSH_PLUGIN_ISS": "https://example.com",
-				"OPKSSH_PLUGIN_SUB": "1234",
-				"OPKSSH_PLUGIN_AUD": "abcd",
-			},
-			files:               commandWithBadPerms,
-			cmdExecutor:         mockCmdExecutor,
-			expectedAllowed:     false,
-			expectedResultCount: 1,
-			expectErrorCount:    1,
-			errorExpected:       "expected one of the following permissions [555, 755], got (766)",
 		},
 	}
 

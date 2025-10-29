@@ -36,6 +36,7 @@ type AuditCmd struct {
 	Out              io.Writer
 	ErrOut           io.Writer
 	filePermsChecker files.PermsChecker
+	aclVerifier      files.ACLVerifier
 	ProviderLoader   policy.ProviderLoader
 	CurrentUsername  string
 
@@ -59,9 +60,11 @@ func NewAuditCmd(out io.Writer, errOut io.Writer) *AuditCmd {
 			Fs:        fs,
 			CmdRunner: files.ExecCmd,
 		},
+		aclVerifier: files.NewDefaultACLVerifier(fs),
 
-		ProviderPath: policy.SystemDefaultProvidersPath,
-		PolicyPath:   policy.SystemDefaultPolicyPath,
+		ProviderPath:   policy.SystemDefaultProvidersPath,
+		PolicyPath:     policy.SystemDefaultPolicyPath,
+		SkipUserPolicy: isWindows(),
 	}
 }
 
@@ -107,37 +110,41 @@ func (a *AuditCmd) Audit(opksshVersion string) (*TotalResults, error) {
 
 	// Audit user policy file if it exists and not skipping
 	if !a.SkipUserPolicy {
-		// We read /etc/passwd to enumerate all the home directories to find auth_id policy files.
-		var etcPasswdContent []byte
-		passwdPath := "/etc/passwd"
-		if exists, err := afero.Exists(a.Fs, passwdPath); !exists {
-			return nil, fmt.Errorf("failed to read /etc/passwd: /etc/passwd not found (needed to enumerate user home policies)")
-		} else if err != nil {
-			return nil, fmt.Errorf("failed to read /etc/passwd: %v", err)
+		if isWindows() {
+			fmt.Fprint(a.ErrOut, "skipping user policy audit on Windows (no /etc/passwd)\n")
 		} else {
-			etcPasswdContent, err = afero.ReadFile(a.Fs, passwdPath)
-			if err != nil {
+			// We read /etc/passwd to enumerate all the home directories to find auth_id policy files.
+			var etcPasswdContent []byte
+			passwdPath := "/etc/passwd"
+			if exists, err := afero.Exists(a.Fs, passwdPath); !exists {
+				return nil, fmt.Errorf("failed to read /etc/passwd: /etc/passwd not found (needed to enumerate user home policies)")
+			} else if err != nil {
 				return nil, fmt.Errorf("failed to read /etc/passwd: %v", err)
-			}
-		}
-		homeDirs := getHomeDirsFromEtcPasswd(string(etcPasswdContent))
-		for _, row := range homeDirs {
-			userPolicyPath := filepath.Join(row.HomeDir, ".opk", "auth_id")
-
-			userResults, userExists, err := a.auditPolicyFileWithStatus(userPolicyPath, []fs.FileMode{files.ModeHomePerms}, validator)
-			if err != nil {
-				fmt.Fprintf(a.ErrOut, "failed to audit user policy file at %s: %v\n", userPolicyPath, err)
-				totalResults.HomePolicyFiles = append(totalResults.HomePolicyFiles,
-					PolicyFileResult{FilePath: userPolicyPath, Error: err.Error()})
-				// Don't fail completely if user policy is unreadable
-			} else if userExists {
-				fmt.Fprintf(a.ErrOut, "\nvalidating %s...\n", userPolicyPath)
-				if !a.JsonOutput {
-					for _, result := range userResults.Rows {
-						a.printResult(result)
-					}
+			} else {
+				etcPasswdContent, err = afero.ReadFile(a.Fs, passwdPath)
+				if err != nil {
+					return nil, fmt.Errorf("failed to read /etc/passwd: %v", err)
 				}
-				totalResults.HomePolicyFiles = append(totalResults.HomePolicyFiles, *userResults)
+			}
+			homeDirs := getHomeDirsFromEtcPasswd(string(etcPasswdContent))
+			for _, row := range homeDirs {
+				userPolicyPath := filepath.Join(row.HomeDir, ".opk", "auth_id")
+
+				userResults, userExists, err := a.auditPolicyFileWithStatus(userPolicyPath, []fs.FileMode{files.ModeHomePerms}, validator)
+				if err != nil {
+					fmt.Fprintf(a.ErrOut, "failed to audit user policy file at %s: %v\n", userPolicyPath, err)
+					totalResults.HomePolicyFiles = append(totalResults.HomePolicyFiles,
+						PolicyFileResult{FilePath: userPolicyPath, Error: err.Error()})
+					// Don't fail completely if user policy is unreadable
+				} else if userExists {
+					fmt.Fprintf(a.ErrOut, "\nvalidating %s...\n", userPolicyPath)
+					if !a.JsonOutput {
+						for _, result := range userResults.Rows {
+							a.printResult(result)
+						}
+					}
+					totalResults.HomePolicyFiles = append(totalResults.HomePolicyFiles, *userResults)
+				}
 			}
 		}
 	}
@@ -208,6 +215,16 @@ func (a *AuditCmd) auditPolicyFileWithStatus(policyPath string, requiredPerms []
 
 	if permsErr := a.filePermsChecker.CheckPerm(policyPath, requiredPerms, "", ""); permsErr != nil {
 		results.PermsError = permsErr.Error()
+	}
+
+	// Check ACLs if verifier is available (Windows-specific)
+	if a.aclVerifier != nil {
+		report, err := a.aclVerifier.VerifyACL(policyPath, expectedSystemACL(requiredPerms[0]))
+		if err == nil && len(report.Problems) > 0 {
+			for _, problem := range report.Problems {
+				fmt.Fprintf(a.ErrOut, "  ACL issue: %s\n", problem)
+			}
+		}
 	}
 
 	// Load policy file

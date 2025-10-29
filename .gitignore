@@ -44,3 +44,5 @@ test/integration/testfile.txt
 .direnv
 .envrc
 opkssh
+
+tmp/
