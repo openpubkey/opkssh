@@ -1,3 +1,6 @@
+//go:build !windows
+// +build !windows
+
 // Copyright 2025 OpenPubkey
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,32 +22,8 @@ package files
 import (
 	"fmt"
 	"io/fs"
-	"os/exec"
 	"strings"
-
-	"github.com/spf13/afero"
 )
-
-// ModeSystemPerms is the expected permission bits that should be set for opkssh
-// system policy files (`/etc/opk/auth_id`, `/etc/opk/providers`). This mode means
-// that only the owner of the file can write/read to the file, but the group which
-// should be opksshuser can read the file.
-const ModeSystemPerms = fs.FileMode(0640)
-
-// ModeHomePerms is the expected permission bits that should be set for opkssh
-// user home policy files `~/.opk/auth_id`.
-const ModeHomePerms = fs.FileMode(0600)
-
-// PermsChecker contains methods to check the ownership, group
-// and file permissions of a file on a Unix-like system.
-type PermsChecker struct {
-	Fs        afero.Fs
-	CmdRunner func(string, ...string) ([]byte, error)
-}
-
-func NewPermsChecker(fs afero.Fs) *PermsChecker {
-	return &PermsChecker{Fs: fs, CmdRunner: ExecCmd}
-}
 
 // CheckPerm checks the file at the given path if it has the desired permissions.
 // The argument requirePerm is a list to enable the caller to specify multiple
@@ -98,9 +77,4 @@ func (u *PermsChecker) CheckPerm(path string, requirePerm []fs.FileMode, require
 	}
 
 	return nil
-}
-
-func ExecCmd(name string, arg ...string) ([]byte, error) {
-	cmd := exec.Command(name, arg...)
-	return cmd.CombinedOutput()
 }
