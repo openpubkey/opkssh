@@ -578,7 +578,7 @@ https://issuer.hello.coop app_xejobTKEsDNSRd5vofKB2iay_2rN 24h
 "@
         
         if ($PSCmdlet.ShouldProcess($providersPath, "Create providers file")) {
-            Set-Content -Path $providersPath -Value $providersContent -NoNewline
+            Set-Content -Path $providersPath -Value $providersContent
             Write-Verbose "  Created file: providers"
         }
     } else {
