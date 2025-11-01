@@ -65,6 +65,10 @@ func (p *ProviderPolicy) AddRow(row ProvidersRow) {
 	p.rows = append(p.rows, row)
 }
 
+func (p *ProviderPolicy) GetRows() []ProvidersRow {
+	return p.rows
+}
+
 func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
 	pvs := []verifier.ProviderVerifier{}
 	var expirationPolicy verifier.ExpirationPolicy
@@ -130,6 +134,11 @@ func (p ProviderPolicy) ToString() string {
 		sb.WriteString(row.ToString() + "\n")
 	}
 	return sb.String()
+}
+
+// ProviderLoader defines the interface for loading provider policies
+type ProviderLoader interface {
+	LoadProviderPolicy(path string) (*ProviderPolicy, error)
 }
 
 type ProvidersFileLoader struct {

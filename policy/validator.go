@@ -94,11 +94,11 @@ func (v *PolicyValidator) ValidateEntry(principal, identityAttr, issuer string, 
 		return result
 	}
 
-	// If not an alias, it must be a full issuer URL
+	// If not an alias, it must be a full issuer URL - exact match required
 	result.ResolvedIssuer = issuer
 
-	// Check if issuer exists in providers
-	providerRow, exists := v.issuerMap[issuer]
+	// Check if issuer exists in providers (exact match)
+	_, exists := v.issuerMap[issuer]
 	if !exists {
 		result.Status = StatusError
 		result.Reason = fmt.Sprintf("issuer not found in /etc/opk/providers")
@@ -111,11 +111,12 @@ func (v *PolicyValidator) ValidateEntry(principal, identityAttr, issuer string, 
 
 	// Log if both http and https variants exist
 	httpIssuer := strings.Replace(issuer, "https://", "http://", 1)
-	httpsIssuer := strings.Replace(issuer, "http://", "https://", 1)
 
-	if strings.HasPrefix(issuer, "https://") && _, exists := v.issuerMap[httpIssuer]; exists {
-		// Both https and http exist - this is expected for custom providers
-		result.Reason += " (note: both http:// and https:// variants exist in providers)"
+	if strings.HasPrefix(issuer, "https://") {
+		if _, httpExists := v.issuerMap[httpIssuer]; httpExists {
+			// Both https and http exist - this is expected for custom providers
+			result.Reason += " (note: both http:// and https:// variants exist in providers)"
+		}
 	}
 
 	return result

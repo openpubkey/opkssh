@@ -141,10 +141,11 @@ root bob@mail.com http://accounts.google.com`,
 
 			// Create audit command
 			cmd := &commands.AuditCmd{
-				Fs:               fs,
-				Out:              out,
-				ProviderLoader:   mockLoader,
-				SystemPolicyPath: "/etc/opk/auth_id",
+				Fs:                 fs,
+				Out:                out,
+				ProviderLoader:     mockLoader,
+				SystemProviderPath: "/etc/opk/providers",
+				SystemPolicyPath:   "/etc/opk/auth_id",
 				UserPolicyLookup: &MockUserLookup{
 					users: map[string]*user.User{
 						"testuser": {

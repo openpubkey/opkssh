@@ -39,6 +39,11 @@ func TestValidateEntry(t *testing.T) {
 		ClientID:         "example-client-id",
 		ExpirationPolicy: "24h",
 	})
+	providerPolicy.AddRow(policy.ProvidersRow{
+		Issuer:           "https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0",
+		ClientID:         "azure-client-id",
+		ExpirationPolicy: "24h",
+	})
 
 	validator := policy.NewPolicyValidator(providerPolicy)
 
@@ -169,6 +174,11 @@ func TestPolicyValidatorAliasResolution(t *testing.T) {
 	providerPolicy.AddRow(policy.ProvidersRow{
 		Issuer:           "https://accounts.google.com",
 		ClientID:         "google-client-id",
+		ExpirationPolicy: "24h",
+	})
+	providerPolicy.AddRow(policy.ProvidersRow{
+		Issuer:           "https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0",
+		ClientID:         "microsoft-client-id",
 		ExpirationPolicy: "24h",
 	})
 

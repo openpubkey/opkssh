@@ -19,7 +19,6 @@ package commands
 import (
 	"fmt"
 	"io"
-	"os"
 	"os/user"
 	"path/filepath"
 
@@ -29,12 +28,16 @@ import (
 
 // AuditCmd provides functionality to audit policy files against provider definitions
 type AuditCmd struct {
-	Fs               afero.Fs
-	Out              io.Writer
-	ProviderLoader   *policy.ProviderFileLoader
-	SystemPolicyPath string
-	UserPolicyLookup UserLookup
-	CurrentUsername  string
+	Fs                   afero.Fs
+	Out                  io.Writer
+	ProviderLoader       policy.ProviderLoader
+	SystemProviderPath   string // Path to provider definitions
+	SystemPolicyPath     string // Path to policy definitions
+	UserPolicyLookup     UserLookup
+	CurrentUsername      string
+	ProviderFilePath     string // Custom provider file path
+	PolicyFilePath       string // Custom policy file path
+	SkipUserPolicy       bool   // Skip auditing user policy file
 }
 
 // UserLookup defines the interface for looking up user information
@@ -52,22 +55,29 @@ func (OsUserLookup) Lookup(username string) (*user.User, error) {
 // NewAuditCmd creates a new AuditCmd with default settings
 func NewAuditCmd(out io.Writer) *AuditCmd {
 	return &AuditCmd{
-		Fs:               afero.NewOsFs(),
-		Out:              out,
-		ProviderLoader:   policy.NewProviderFileLoader(),
-		SystemPolicyPath: policy.SystemDefaultPolicyPath,
-		UserPolicyLookup: OsUserLookup{},
-		CurrentUsername:  getCurrentUsername(),
+		Fs:                 afero.NewOsFs(),
+		Out:                out,
+		ProviderLoader:     policy.NewProviderFileLoader(),
+		SystemProviderPath: policy.SystemDefaultProvidersPath,
+		SystemPolicyPath:   policy.SystemDefaultPolicyPath,
+		UserPolicyLookup:   OsUserLookup{},
+		CurrentUsername:    getCurrentUsername(),
 	}
 }
 
 // Run executes the audit command
 // Returns exit code: 0 for success, 1 for warnings/errors
 func (a *AuditCmd) Run() error {
+	// Determine which provider file to use
+	providerPath := a.SystemProviderPath
+	if a.ProviderFilePath != "" {
+		providerPath = a.ProviderFilePath
+	}
+
 	// Load providers first
-	providerPolicy, err := a.ProviderLoader.LoadProviderPolicy(a.SystemPolicyPath)
+	providerPolicy, err := a.ProviderLoader.LoadProviderPolicy(providerPath)
 	if err != nil {
-		fmt.Fprintf(a.Out, "ERROR: Failed to load providers from /etc/opk/providers: %v\n", err)
+		fmt.Fprintf(a.Out, "ERROR: Failed to load providers from %s: %v\n", providerPath, err)
 		return fmt.Errorf("failed to load providers: %w", err)
 	}
 
@@ -77,28 +87,49 @@ func (a *AuditCmd) Run() error {
 	// Collect all validation results
 	var allResults []policy.ValidationResult
 
-	// Audit system policy file
-	systemResults, err := a.auditPolicyFile(policy.SystemDefaultPolicyPath, validator)
-	if err != nil {
-		fmt.Fprintf(a.Out, "ERROR: Failed to audit system policy file: %v\n", err)
-		return fmt.Errorf("failed to audit system policy file: %w", err)
+	// Determine which policy file to use for system policy
+	policyPath := policy.SystemDefaultPolicyPath
+	if a.PolicyFilePath != "" {
+		policyPath = a.PolicyFilePath
 	}
-	allResults = append(allResults, systemResults...)
 
-	// Audit user policy file if it exists
-	userPolicyPath, err := a.getUserPolicyPath()
-	if err == nil && userPolicyPath != "" {
-		userResults, err := a.auditPolicyFile(userPolicyPath, validator)
-		if err != nil {
-			fmt.Fprintf(a.Out, "WARNING: Failed to audit user policy file at %s: %v\n", userPolicyPath, err)
-			// Don't fail completely if user policy is unreadable
-		} else {
-			allResults = append(allResults, userResults...)
+	// Audit policy file
+	systemResults, exists, err := a.auditPolicyFileWithStatus(policyPath, validator)
+	if err != nil {
+		fmt.Fprintf(a.Out, "ERROR: Failed to audit policy file: %v\n", err)
+		return fmt.Errorf("failed to audit policy file: %w", err)
+	}
+	
+	if exists {
+		fmt.Fprintf(a.Out, "\nValidating %s...\n\n", policyPath)
+		for _, result := range systemResults {
+			a.printResult(result)
+		}
+		allResults = append(allResults, systemResults...)
+	}
+
+	// Audit user policy file if it exists and not skipping
+	if !a.SkipUserPolicy {
+		userPolicyPath, err := a.getUserPolicyPath()
+		if err == nil && userPolicyPath != "" {
+			userResults, userExists, err := a.auditPolicyFileWithStatus(userPolicyPath, validator)
+			if err != nil {
+				fmt.Fprintf(a.Out, "WARNING: Failed to audit user policy file at %s: %v\n", userPolicyPath, err)
+				// Don't fail completely if user policy is unreadable
+			} else if userExists {
+				fmt.Fprintf(a.Out, "\nValidating %s...\n\n", userPolicyPath)
+				for _, result := range userResults {
+					a.printResult(result)
+				}
+				allResults = append(allResults, userResults...)
+			}
 		}
 	}
 
-	// Print results
-	a.printResults(allResults)
+	// Print summary only (results already printed above)
+	if len(allResults) == 0 {
+		fmt.Fprintf(a.Out, "\nNo policy entries to validate.\n")
+	}
 
 	// Print summary
 	summary := policy.CalculateSummary(allResults)
@@ -112,33 +143,29 @@ func (a *AuditCmd) Run() error {
 	return nil
 }
 
-// auditPolicyFile validates all entries in a policy file
-func (a *AuditCmd) auditPolicyFile(policyPath string, validator *policy.PolicyValidator) ([]policy.ValidationResult, error) {
+// auditPolicyFileWithStatus validates all entries in a policy file and returns results, whether file exists, and any errors
+func (a *AuditCmd) auditPolicyFileWithStatus(policyPath string, validator *policy.PolicyValidator) ([]policy.ValidationResult, bool, error) {
 	var results []policy.ValidationResult
 
 	// Check if file exists
 	exists, err := afero.Exists(a.Fs, policyPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check if policy file exists: %w", err)
+		return nil, false, fmt.Errorf("failed to check if policy file exists: %w", err)
 	}
 
 	if !exists {
-		// File doesn't exist, return empty results (not an error)
-		fmt.Fprintf(a.Out, "\nValidating %s...\n", policyPath)
-		fmt.Fprintf(a.Out, "(file does not exist, skipping)\n")
-		return results, nil
+		// File doesn't exist, return empty results with exists=false
+		return results, false, nil
 	}
 
 	// Load policy file
 	content, err := afero.ReadFile(a.Fs, policyPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read policy file: %w", err)
+		return nil, true, fmt.Errorf("failed to read policy file: %w", err)
 	}
 
 	// Parse policy
 	p := policy.FromTable(content, policyPath)
-
-	fmt.Fprintf(a.Out, "\nValidating %s...\n\n", policyPath)
 
 	lineNumber := 1
 	for _, user := range p.Users {
@@ -146,12 +173,17 @@ func (a *AuditCmd) auditPolicyFile(policyPath string, validator *policy.PolicyVa
 		for _, principal := range user.Principals {
 			result := validator.ValidateEntry(principal, user.IdentityAttribute, user.Issuer, lineNumber)
 			results = append(results, result)
-			a.printResult(result)
 		}
 		lineNumber++
 	}
 
-	return results, nil
+	return results, true, nil
+}
+
+// auditPolicyFile validates all entries in a policy file and returns results without printing
+func (a *AuditCmd) auditPolicyFile(policyPath string, validator *policy.PolicyValidator) ([]policy.ValidationResult, error) {
+	results, _, err := a.auditPolicyFileWithStatus(policyPath, validator)
+	return results, err
 }
 
 // getUserPolicyPath returns the path to the user's policy file, or empty string if not found
@@ -190,25 +222,6 @@ func (a *AuditCmd) printResult(result policy.ValidationResult) {
 	}
 
 	fmt.Fprintf(a.Out, "\n")
-}
-
-// printResults prints all validation results with a file header
-func (a *AuditCmd) printResults(results []policy.ValidationResult) {
-	if len(results) == 0 {
-		fmt.Fprintf(a.Out, "\nNo policy entries to validate.\n")
-		return
-	}
-
-	// Group results by file
-	fileMap := make(map[string][]policy.ValidationResult)
-	for _, result := range results {
-		// Track which file the result came from (we can infer from context)
-		// For now, just collect all and print
-	}
-
-	for _, result := range results {
-		a.printResult(result)
-	}
 }
 
 // printSummary prints the validation summary
