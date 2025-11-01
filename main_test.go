@@ -73,13 +73,13 @@ func TestIsOpenSSHVersion8Dot1OrGreater(t *testing.T) {
 			name:          "Malformed version string",
 			input:         "OpenSSH_, something not right",
 			wantIsGreater: false,
-			wantErr:       errors.New("invalid OpenSSH version"),
+			wantErr:       errors.New("invalid OpenSSH version format: OpenSSH_"),
 		},
 		{
 			name:          "No OpenSSH prefix at all",
 			input:         "Completely invalid input",
 			wantIsGreater: false,
-			wantErr:       errors.New("invalid OpenSSH version"),
+			wantErr:       errors.New("invalid OpenSSH version format: Completely invalid input"),
 		},
 		{
 			name:          "Includes trailing info (8.2, Raspbian-1)",
