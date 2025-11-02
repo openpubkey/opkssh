@@ -216,16 +216,10 @@ Arguments:
   opkssh logout
   opkssh logout -i .ssh/test`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 			defer cancel()
-			sigs := make(chan os.Signal, 1)
-			signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-			go func() {
-				<-sigs
-				cancel()
-			}()
 
-			login := commands.NewLogout(logDirArg, keyPathArg, keyTypeArg)
+			login := commands.NewLogout(logDirArg, keyPathArg)
 			if err := login.Run(ctx); err != nil {
 				log.Println("Error executing login command:", err)
 				return err
@@ -235,8 +229,7 @@ Arguments:
 	}
 	// Define flags for logout.
 	logoutCmd.Flags().StringVar(&logDirArg, "log-dir", "", "Directory to write output logs")
-	logoutCmd.Flags().StringVarP(&keyPathArg, "private-key-file", "i", "", "Path where private keys is is removed.")
-	logoutCmd.Flags().VarP(enumflag.New(&keyTypeArg, "Key Type", map[commands.KeyType][]string{commands.ECDSA: {commands.ECDSA.String()}, commands.ED25519: {commands.ED25519.String()}}, enumflag.EnumCaseInsensitive), "key-type", "t", "Type of key to generate")
+	logoutCmd.Flags().StringVarP(&keyPathArg, "private-key-file", "i", "", "Path to private key")
 	rootCmd.AddCommand(logoutCmd)
 
 	readhomeCmd := &cobra.Command{
