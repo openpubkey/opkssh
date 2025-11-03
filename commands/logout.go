@@ -107,12 +107,14 @@ func (l *LogoutCmd) removeKeysFromOpkSSHDir(userOpkSshDir string) {
 
 	afs := &afero.Afero{Fs: l.Fs}
 
-	// empty config file
-	err = afs.WriteFile(userOpkSshConfig, []byte{}, 0o600)
-	if err != nil {
-		log.Printf("Failed to write empty config file %s: %s\n", userOpkSshConfig, err)
-	} else {
-		log.Printf("Cleared config file %s", userOpkSshConfig)
+	// empty config file, only if it exists
+	if l.fileExists(userOpkSshConfig) {
+		err = afs.WriteFile(userOpkSshConfig, []byte{}, 0o600)
+		if err != nil {
+			log.Printf("Failed to write empty config file %s: %s\n", userOpkSshConfig, err)
+		} else {
+			log.Printf("Cleared config file %s", userOpkSshConfig)
+		}
 	}
 
 	// delete all identity files
