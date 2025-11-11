@@ -74,7 +74,7 @@ dev bob@example.com https://auth.example.com`,
 			},
 		},
 		{
-			name: "Protocol mismatch error",
+			name:            "Protocol mismatch error",
 			providerContent: `https://accounts.google.com google-client-id 24h`,
 			authIDContent: `root alice@mail.com https://accounts.google.com
 root bob@mail.com http://accounts.google.com`,
@@ -89,9 +89,9 @@ root bob@mail.com http://accounts.google.com`,
 			},
 		},
 		{
-			name: "Missing provider",
-			providerContent: `https://accounts.google.com google-client-id 24h`,
-			authIDContent: `root alice@mail.com https://notfound.com`,
+			name:                 "Missing provider",
+			providerContent:      `https://accounts.google.com google-client-id 24h`,
+			authIDContent:        `root alice@mail.com https://notfound.com`,
 			currentUsername:      "testuser",
 			hasUserAuthID:        false,
 			expectedSuccessCount: 0,
@@ -103,9 +103,9 @@ root bob@mail.com http://accounts.google.com`,
 			},
 		},
 		{
-			name: "Empty auth_id file",
-			providerContent: `https://accounts.google.com google-client-id 24h`,
-			authIDContent: "",
+			name:                 "Empty auth_id file",
+			providerContent:      `https://accounts.google.com google-client-id 24h`,
+			authIDContent:        "",
 			currentUsername:      "testuser",
 			hasUserAuthID:        false,
 			expectedSuccessCount: 0,
@@ -158,8 +158,15 @@ root bob@mail.com http://accounts.google.com`,
 			}
 
 			// Run audit
-			err = cmd.Run()
+			exitCode := cmd.Run()
 			output := out.String()
+
+			// Verify exit code is 0 for successful audit (no errors/warnings)
+			if tt.expectedErrorCount == 0 && tt.expectedWarningCount == 0 {
+				require.Equal(t, 0, exitCode, "Expected exit code 0 for successful audit")
+			} else if tt.expectedErrorCount > 0 || tt.expectedWarningCount > 0 {
+				require.Equal(t, 1, exitCode, "Expected exit code 1 when errors or warnings present")
+			}
 
 			// Verify output contains expected strings
 			for _, expected := range tt.expectedOutputContains {

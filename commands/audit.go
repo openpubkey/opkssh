@@ -28,16 +28,16 @@ import (
 
 // AuditCmd provides functionality to audit policy files against provider definitions
 type AuditCmd struct {
-	Fs                   afero.Fs
-	Out                  io.Writer
-	ProviderLoader       policy.ProviderLoader
-	SystemProviderPath   string // Path to provider definitions
-	SystemPolicyPath     string // Path to policy definitions
-	UserPolicyLookup     UserLookup
-	CurrentUsername      string
-	ProviderFilePath     string // Custom provider file path
-	PolicyFilePath       string // Custom policy file path
-	SkipUserPolicy       bool   // Skip auditing user policy file
+	Fs                 afero.Fs
+	Out                io.Writer
+	ProviderLoader     policy.ProviderLoader
+	SystemProviderPath string // Path to provider definitions
+	SystemPolicyPath   string // Path to policy definitions
+	UserPolicyLookup   UserLookup
+	CurrentUsername    string
+	ProviderFilePath   string // Custom provider file path
+	PolicyFilePath     string // Custom policy file path
+	SkipUserPolicy     bool   // Skip auditing user policy file
 }
 
 // UserLookup defines the interface for looking up user information
@@ -67,7 +67,7 @@ func NewAuditCmd(out io.Writer) *AuditCmd {
 
 // Run executes the audit command
 // Returns exit code: 0 for success, 1 for warnings/errors
-func (a *AuditCmd) Run() error {
+func (a *AuditCmd) Run() int {
 	// Determine which provider file to use
 	providerPath := a.SystemProviderPath
 	if a.ProviderFilePath != "" {
@@ -78,7 +78,7 @@ func (a *AuditCmd) Run() error {
 	providerPolicy, err := a.ProviderLoader.LoadProviderPolicy(providerPath)
 	if err != nil {
 		fmt.Fprintf(a.Out, "ERROR: Failed to load providers from %s: %v\n", providerPath, err)
-		return fmt.Errorf("failed to load providers: %w", err)
+		return 1
 	}
 
 	// Create validator from provider policy
@@ -97,9 +97,9 @@ func (a *AuditCmd) Run() error {
 	systemResults, exists, err := a.auditPolicyFileWithStatus(policyPath, validator)
 	if err != nil {
 		fmt.Fprintf(a.Out, "ERROR: Failed to audit policy file: %v\n", err)
-		return fmt.Errorf("failed to audit policy file: %w", err)
+		return 1
 	}
-	
+
 	if exists {
 		fmt.Fprintf(a.Out, "\nValidating %s...\n\n", policyPath)
 		for _, result := range systemResults {
@@ -136,11 +136,7 @@ func (a *AuditCmd) Run() error {
 	a.printSummary(summary)
 
 	// Return appropriate exit code
-	if summary.GetExitCode() != 0 {
-		return fmt.Errorf("audit found issues")
-	}
-
-	return nil
+	return summary.GetExitCode()
 }
 
 // auditPolicyFileWithStatus validates all entries in a policy file and returns results, whether file exists, and any errors

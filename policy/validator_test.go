@@ -48,11 +48,11 @@ func TestValidateEntry(t *testing.T) {
 	validator := policy.NewPolicyValidator(providerPolicy)
 
 	tests := []struct {
-		name             string
-		principal        string
-		identityAttr     string
-		issuer           string
-		expectedStatus   policy.ValidationStatus
+		name                   string
+		principal              string
+		identityAttr           string
+		issuer                 string
+		expectedStatus         policy.ValidationStatus
 		expectedReasonContains string
 	}{
 		{

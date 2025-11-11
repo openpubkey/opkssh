@@ -343,30 +343,33 @@ Exit code: 0 if all entries are valid, 1 if any warnings or errors are found.`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			audit := commands.NewAuditCmd(os.Stdout)
-			
+
 			// Apply command-line flags
-			if providersFile, _ := cmd.Flags().GetString("providers-file"); providersFile != "" {
+			providersFile, _ := cmd.Flags().GetString("providers-file")
+			if providersFile != "" {
 				audit.ProviderFilePath = providersFile
 			}
-			if policyFile, _ := cmd.Flags().GetString("policy-file"); policyFile != "" {
+
+			policyFile, _ := cmd.Flags().GetString("policy-file")
+			if policyFile != "" {
 				audit.PolicyFilePath = policyFile
 			}
-			if skipUser, _ := cmd.Flags().GetBool("skip-user-policy"); skipUser {
-				audit.SkipUserPolicy = true
+
+			skipUser, _ := cmd.Flags().GetBool("skip-user-policy")
+			audit.SkipUserPolicy = skipUser
+
+			exitCode := audit.Run()
+			if exitCode != 0 {
+				return fmt.Errorf("audit found issues")
 			}
-			
-			if err := audit.Run(); err != nil {
-				return err
-			}
-			// Exit code will be 1 if there were warnings/errors, handled by summary
 			return nil
 		},
 	}
-	
-	auditCmd.Flags().String("providers-file", "", "Path to providers file (default: /etc/opk/providers)")
-	auditCmd.Flags().String("policy-file", "", "Path to policy file (default: /etc/opk/auth_id)")
+
+	auditCmd.Flags().String("providers-file", "/etc/opk/providers", "Path to providers file")
+	auditCmd.Flags().String("policy-file", "/etc/opk/auth_id", "Path to policy file")
 	auditCmd.Flags().Bool("skip-user-policy", false, "Skip auditing user policy file (~/.opk/auth_id)")
-	
+
 	rootCmd.AddCommand(auditCmd)
 
 	clientCmd := &cobra.Command{
