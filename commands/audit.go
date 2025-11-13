@@ -176,11 +176,6 @@ func (a *AuditCmd) auditPolicyFileWithStatus(policyPath string, validator *polic
 	return results, true, nil
 }
 
-// auditPolicyFile validates all entries in a policy file and returns results without printing
-func (a *AuditCmd) auditPolicyFile(policyPath string, validator *policy.PolicyValidator) ([]policy.ValidationResult, error) {
-	results, _, err := a.auditPolicyFileWithStatus(policyPath, validator)
-	return results, err
-}
 
 // getUserPolicyPath returns the path to the user's policy file, or empty string if not found
 func (a *AuditCmd) getUserPolicyPath() (string, error) {
