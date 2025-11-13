@@ -107,7 +107,7 @@ func (v *PolicyValidator) ValidateEntry(principal, identityAttr, issuer string, 
 
 	// Issuer exists, entry is valid
 	result.Status = StatusSuccess
-	result.Reason = fmt.Sprintf("issuer matches provider entry")
+	result.Reason = "issuer matches provider entry"
 
 	// Log if both http and https variants exist
 	httpIssuer := strings.Replace(issuer, "https://", "http://", 1)
