@@ -101,7 +101,7 @@ func (v *PolicyValidator) ValidateEntry(principal, identityAttr, issuer string, 
 	_, exists := v.issuerMap[issuer]
 	if !exists {
 		result.Status = StatusError
-		result.Reason = fmt.Sprintf("issuer not found in /etc/opk/providers")
+		result.Reason = "issuer not found in /etc/opk/providers"
 		return result
 	}
 
