@@ -83,7 +83,7 @@ If you do not have root access, you can create a new auth_id file in at ~/auth_i
 sudo touch /etc/opk/auth_id
 sudo chown root:opksshuser /etc/opk/auth_id
 sudo chmod 640 /etc/opk/auth_id
-sudo opkssh add {USER} {EMAIL} {ISSUER}
+sudo opkssh add <user> <email> <issuer>
 ```
 
 **4: Configure sshd to use opkssh.** Check which configuration file is active.
@@ -101,8 +101,9 @@ add a new configuration file with a lower starting number than other configurati
 
 For example, if the file `/etc/ssh/sshd_config.d/20-systemd-userdb.conf` exists,
 create `/etc/ssh/sshd_config.d/19-opk-ssh.conf` with the lines above.
+By default, the opkssh installer will create this file at `/etc/ssh/sshd_config.d/60-opk-ssh.conf`.
 
-Verify the setting is active with 
+Verify the setting is active with
 
 ```bash
 sudo sshd -T | grep authorizedkeyscommand
