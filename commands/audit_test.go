@@ -19,6 +19,8 @@ package commands_test
 import (
 	"bytes"
 	"os/user"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/openpubkey/opkssh/commands"
@@ -68,8 +70,8 @@ dev bob@example.com https://auth.example.com`,
 			expectedErrorCount:   0,
 			expectedOutputContains: []string{
 				"Validating /etc/opk/auth_id",
-				"✓ SUCCESS",
-				"⚠ WARNING",
+				"[OK] SUCCESS",
+				"[WARN] WARNING",
 				"Total Entries Tested:  2",
 			},
 		},
@@ -84,7 +86,7 @@ root bob@mail.com http://accounts.google.com`,
 			expectedWarningCount: 0,
 			expectedErrorCount:   1,
 			expectedOutputContains: []string{
-				"✗ ERROR",
+				"[ERR] ERROR",
 				"issuer not found",
 			},
 		},
@@ -98,7 +100,7 @@ root bob@mail.com http://accounts.google.com`,
 			expectedWarningCount: 0,
 			expectedErrorCount:   1,
 			expectedOutputContains: []string{
-				"✗ ERROR",
+				"[ERR] ERROR",
 				"issuer not found",
 			},
 		},
@@ -168,9 +170,12 @@ root bob@mail.com http://accounts.google.com`,
 				require.Equal(t, 1, exitCode, "Expected exit code 1 when errors or warnings present")
 			}
 
+			// Normalize paths in output for cross-platform compatibility
+			normalizedOutput := strings.ReplaceAll(output, string(filepath.Separator), "/")
+
 			// Verify output contains expected strings
 			for _, expected := range tt.expectedOutputContains {
-				require.Contains(t, output, expected, "Expected output to contain: %s", expected)
+				require.Contains(t, normalizedOutput, expected, "Expected output to contain: %s", expected)
 			}
 
 			// Parse output to get counts (simple verification)

@@ -194,18 +194,18 @@ func (a *AuditCmd) getUserPolicyPath() (string, error) {
 
 // printResult prints a single validation result
 func (a *AuditCmd) printResult(result policy.ValidationResult) {
-	var statusSymbol string
+	var statusBadge string
 	switch result.Status {
 	case policy.StatusSuccess:
-		statusSymbol = "✓"
+		statusBadge = "[OK]"
 	case policy.StatusWarning:
-		statusSymbol = "⚠"
+		statusBadge = "[WARN]"
 	case policy.StatusError:
-		statusSymbol = "✗"
+		statusBadge = "[ERR]"
 	}
 
 	statusStr := fmt.Sprintf("%-8s", string(result.Status))
-	fmt.Fprintf(a.Out, "%s %-8s: %s %s %s", statusSymbol, statusStr, result.Principal, result.IdentityAttr, result.Issuer)
+	fmt.Fprintf(a.Out, "%s %-8s: %s %s %s", statusBadge, statusStr, result.Principal, result.IdentityAttr, result.Issuer)
 
 	if result.Reason != "" {
 		fmt.Fprintf(a.Out, " (%s)", result.Reason)
