@@ -176,7 +176,6 @@ func (a *AuditCmd) auditPolicyFileWithStatus(policyPath string, validator *polic
 	return results, true, nil
 }
 
-
 // getUserPolicyPath returns the path to the user's policy file, or empty string if not found
 func (a *AuditCmd) getUserPolicyPath() (string, error) {
 	if a.CurrentUsername == "" {
