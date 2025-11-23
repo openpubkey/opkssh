@@ -31,6 +31,10 @@ import (
 // defined
 var SystemDefaultPolicyPath = filepath.FromSlash("/etc/opk/auth_id")
 
+// SystemDefaultProvidersPath is the default filepath where opkssh provider
+// definitions are configured
+var SystemDefaultProvidersPath = filepath.FromSlash("/etc/opk/providers")
+
 // UserLookup defines the minimal interface to lookup users on the current
 // system
 type UserLookup interface {
