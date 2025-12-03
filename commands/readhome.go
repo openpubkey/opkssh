@@ -21,6 +21,7 @@ package commands
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -83,7 +84,7 @@ func ReadHome(username string) ([]byte, error) {
 		if fileInfo.Mode().Perm() != files.ModeHomePerms {
 			return nil, fmt.Errorf("unsafe file permissions for %s got %o expected %o", homePolicyPath, fileInfo.Mode().Perm(), files.ModeHomePerms)
 		}
-		fileBytes, err := os.ReadFile(homePolicyPath)
+		fileBytes, err := io.ReadAll(file)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read %s, %v", homePolicyPath, err)
 		}
