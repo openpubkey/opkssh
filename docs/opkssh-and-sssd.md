@@ -1,7 +1,7 @@
 # Use opkssh in combination with sssd
 
 In scenarions where the machines are already joined to a domain and where other `SSH` policies exist, `opkssh` login might run into issues.
-The SSH policies will take precedence based on the file name within `sshd_confi.d` and as such only the first matched policy will work.
+The SSH policies will take precedence based on the file name within `sshd_config.d` and as such only the first matched policy will work.
 The following steps give an example on how to combine  2 different policies (SSSD and OPKSSH) so that one is used as a fallback, incase the other fails.
 
 ## Scenario
@@ -52,7 +52,7 @@ The following steps give an example on how to combine  2 different policies (SSS
     ```
     - The script basically verifies with `opkssh` the user first and if the command fails then checks with `SSSD`. If both fail, then the login will be rejected. NOTE: `opkssh` requires multiple arguments, sssd requires only the username since the key is fethched from AD
 
-- For `opkssh` instead of specifying each user from the group, user a  policy plugin. Create the following files, `/etc/opk/policy.d/domain-plugin.yml` and `/etc/opk/policy.d/match-email.sh`
+- For `opkssh` instead of specifying each user from the group, use a  policy plugin. Create the following files, `/etc/opk/policy.d/domain-plugin.yml` and `/etc/opk/policy.d/match-email.sh`
 
     - Content of `domain-plugin.yml`. Set the correct rights and mode,  `chown root:opksshuser domain-olugin.yml` and `chmod 640 domain-plugin.yml`
 -rwxr-xr-x 1 root opksshuser 470 Nov 24 17:26 match-email.sh
@@ -60,7 +60,7 @@ The following steps give an example on how to combine  2 different policies (SSS
     name: Match linux username to email username
     command: /etc/opk/policy.d/match-email.sh <domain name> # example my-domain.com
     ```
-    - content of `math-email.sh`, basically verifies if the email claim matches for the user and then allows it via `opkssh` else login is denined. Set the rights and mode, `chmod 755 match-email.sh && chown root:opksshuser match-email.sh`
+    - content of `match-email.sh`, verifies if the email claim matches for the user and then allows it via `opkssh` else login is denined. Set the rights and mode, `chmod 755 match-email.sh && chown root:opksshuser match-email.sh`
 
     ```sh
     #!/usr/bin/env sh
