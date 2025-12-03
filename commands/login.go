@@ -813,9 +813,13 @@ func IdentityString(pkt pktoken.PKToken) (string, error) {
 	}
 	claims := idt.GetClaims()
 	if claims.Email == "" {
-		return "Sub, issuer, audience: \n" + claims.Subject + " " + claims.Issuer + " " + claims.Audience, nil
+		return fmt.Sprintf(`WARNING: Email claim is missing from ID token. Policies based on email will not work.
+Check if your client config (~/.opk/config.yml) has the correct scopes configured for this OpenID Provider.
+Sub, issuer, audience:
+%s %s %s`, claims.Subject, claims.Issuer, claims.Audience), nil
 	} else {
-		return "Email, sub, issuer, audience: \n" + claims.Email + " " + claims.Subject + " " + claims.Issuer + " " + claims.Audience, nil
+		return fmt.Sprintf(`Email, sub, issuer, audience: 
+%s %s %s %s`, claims.Email, claims.Subject, claims.Issuer, claims.Audience), nil
 	}
 }
 

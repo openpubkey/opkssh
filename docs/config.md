@@ -151,7 +151,7 @@ dev oidc-match-end:email:@example.com https://login.microsoftonline.com/9188040d
 
 These `auth_id` files can be edited by hand or you can use the add command to add new policies. The add command has the following syntax.
 
-`sudo opkssh add {USER} {EMAIL|SUB|CLAIM} {ISSUER}`
+`sudo opkssh add <user> <email|sub|claim> <issuer>`
 
 For convenience you can use the shorthand `google`, `azure`, `gitlab` rather than specifying the entire issuer.
 This is especially useful in the case of azure where the issuer contains a long and hard to remember random string.

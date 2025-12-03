@@ -30,8 +30,7 @@ import (
 	"regexp"
 	"strings"
 	"syscall"
-
-	"github.com/thediveo/enumflag/v2"
+	"text/tabwriter"
 
 	"github.com/openpubkey/opkssh/commands"
 	config "github.com/openpubkey/opkssh/commands/config"
@@ -39,8 +38,9 @@ import (
 	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
+	"github.com/spf13/cobra/doc"
+	"github.com/thediveo/enumflag/v2"
 	"golang.org/x/term"
-	"text/tabwriter"
 )
 
 var (
@@ -76,16 +76,16 @@ This program allows users to:
 
 	addCmd := &cobra.Command{
 		SilenceUsage: true,
-		Use:          "add <PRINCIPAL> <EMAIL|SUB|GROUP> <ISSUER>",
+		Use:          "add <principal> <email|sub|group> <issuer>",
 		Short:        "Appends new rule to the policy file",
 		Long: `Add appends a new policy entry in the auth_id policy file granting SSH access to the specified email or subscriber ID (sub) or group.
 
 It first attempts to write to the system-wide file (/etc/opk/auth_id). If it lacks permissions to update this file it falls back to writing to the user-specific file (~/.opk/auth_id).
 
 Arguments:
-  PRINCIPAL            The target user account (requested principal).
-  EMAIL|SUB|GROUP      Email address, subscriber ID or group authorized to assume this principal. If using an OIDC group, the argument needs to be in the format of oidc:groups:<groupId>.
-  ISSUER               OpenID Connect provider (issuer) URL associated with the email/sub/group.
+  principal            The target user account (requested principal).
+  email|sub|group      Email address, subscriber ID or group authorized to assume this principal. If using an OIDC group, the argument needs to be in the format of oidc:groups:<groupId>.
+  issuer               OpenID Connect provider (issuer) URL associated with the email/sub/group.
 `,
 		Args: cobra.ExactArgs(3),
 		Example: `  opkssh add root alice@example.com https://accounts.google.com
@@ -123,6 +123,24 @@ Arguments:
 		},
 	}
 	rootCmd.AddCommand(addCmd)
+
+	inspectCmd := &cobra.Command{
+		SilenceUsage: true,
+		Use:          "inspect <path>",
+		Short:        "Inspect and view details of an opkssh generated SSH key",
+		Example:      "  opkssh inspect ~/.ssh/id_ecdsa_sk-cert.pub",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			keyPathArg := args[0]
+			inspect := commands.NewInspectCmd(keyPathArg, cmd.OutOrStdout())
+			if err := inspect.Run(); err != nil {
+				log.Println("Error executing inspect command:", err)
+				return err
+			}
+			return nil
+		},
+		Args: cobra.ExactArgs(1),
+	}
+	rootCmd.AddCommand(inspectCmd)
 
 	var autoRefreshArg bool
 	var configPathArg string
@@ -191,9 +209,9 @@ Arguments:
 
 	readhomeCmd := &cobra.Command{
 		SilenceUsage: true,
-		Use:          "readhome <PRINCIPAL>",
+		Use:          "readhome <principal>",
 		Short:        "Read the principal's home policy file",
-		Long: `Read the principal's policy file (/home/<PRINCIPAL>/.opk/auth_id).
+		Long: `Read the principal's policy file (/home/<principal>/.opk/auth_id).
 
 You should not call this command directly. It is called by the opkssh verify command as part of the AuthorizedKeysCommand process to read the user's policy  (principals) home file (~/.opk/auth_id) with sudoer permissions. This allows us to use an unprivileged user as the AuthorizedKeysCommand user.
 `,
@@ -215,7 +233,7 @@ You should not call this command directly. It is called by the opkssh verify com
 	var serverConfigPathArg string
 	verifyCmd := &cobra.Command{
 		SilenceUsage: true,
-		Use:          "verify <PRINCIPAL> <CERT> <KEY_TYPE>",
+		Use:          "verify <principal> <cert> <key_type>",
 		Short:        "Verify an SSH key (used by sshd AuthorizedKeysCommand)",
 		Long: `Verify extracts a PK token from a base64-encoded SSH certificate and verifies it against policy. It expects an allowed provider file at /etc/opk/providers and a user policy file at either /etc/opk/auth_id or ~/.opk/auth_id.
 
@@ -239,9 +257,9 @@ Verification checks performed:
 If all checks pass, Verify authorizes the SSH connection.
 
 Arguments:
-  PRINCIPAL    Target username.
-  CERT         Base64-encoded SSH certificate.
-  KEY_TYPE     SSH certificate key type (e.g., ecdsa-sha2-nistp256-cert-v01@openssh.com)`,
+  principal    Target username.
+  cert         Base64-encoded SSH certificate.
+  key_type     SSH certificate key type (e.g., ecdsa-sha2-nistp256-cert-v01@openssh.com)`,
 		Args:    cobra.ExactArgs(3),
 		Example: `  opkssh verify root <base64-encoded-cert> ecdsa-sha2-nistp256-cert-v01@openssh.com`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -366,6 +384,28 @@ Arguments:
 	clientCmd.AddCommand(providerCmd)
 
 	rootCmd.AddCommand(clientCmd)
+
+	// genDocsCmd is a hidden command used as a helper for generating our
+	// command line reference documentation.
+	genDocsCmd := &cobra.Command{
+		Use:    "gendocs <output_dir>",
+		Hidden: true,
+		Args:   cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path := "./docs/cli/"
+			if len(args) > 1 {
+				path = args[1]
+			}
+
+			err := os.MkdirAll(path, 0775)
+			if err != nil {
+				return err
+			}
+
+			return doc.GenMarkdownTree(rootCmd, path)
+		},
+	}
+	rootCmd.AddCommand(genDocsCmd)
 
 	err := rootCmd.Execute()
 	if err != nil {

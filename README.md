@@ -52,6 +52,14 @@ To install with [Chocolatey](https://chocolatey.org/install) run:
 choco install opkssh -y
 ```
 
+### Nix Install
+
+Use the [opkssh nixpkg](https://search.nixos.org/packages?channel=unstable&show=opkssh&query=opkssh) as normal, or test it via:
+
+```bash
+nix-shell -p opkssh
+```
+
 ### Manual Install (Windows, Linux, macOS)
 
 To install manually, download the opkssh binary and run it:
@@ -231,7 +239,7 @@ sudo chown root:opksshuser /etc/opk/providers
 sudo chmod 640 /etc/opk/providers
 ```
 
-## `/etc/opk/auth_id`
+### `/etc/opk/auth_id`
 
 `/etc/opk/auth_id` is the global authorized identities file.
 This is a server wide file where policies can be configured to determine which identities can assume what linux user accounts.
@@ -260,7 +268,7 @@ dev oidc:"https://acme.com/groups":developer https://login.microsoftonline.com/9
 
 To add new rule run:
 
-`sudo opkssh add {USER} {EMAIL/SUB/GROUP} {ISSUER}`
+`sudo opkssh add <user> <email/sub/group> <issuer>`
 
 These `auth_id` files can be edited by hand or you can use the add command to add new policies.
 For convenience you can use the shorthand `google` or `azure` rather than specifying the entire issuer.
@@ -315,21 +323,55 @@ AuthorizedKeysCommand /usr/local/bin/opkssh verify %u %k %t
 AuthorizedKeysCommandUser opksshuser
 ```
 
+## Server Configuration (NixOS)
+
+On NixOS, you can configure the SSH daemon by **including** the following lines to your config:
+
+```nix
+{ ... }:
+
+{
+  services.opkssh = {
+    enable = true;
+
+    providers = {
+      google = {
+        issuer = "https://accounts.google.com";
+        clientId =
+          "206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com";
+        lifetime = "24h";
+      };
+    };
+
+    authorizations = [
+      {
+        user = "YOUR_USERNAME";
+        principal = "YOUR_GMAIL";
+        issuer = "https://accounts.google.com";
+      }
+    ];
+  };
+}
+```
+
+See [search.nixos.org](https://search.nixos.org/options?channel=unstable&query=services.opkssh) for
+all available configuration options.
+
 ## Custom OpenID Providers (Authentik, Authelia, Keycloak, Zitadel...)
 
 To log in using a custom OpenID Provider, run:
 
 ```bash
-opkssh login --provider="{ISSUER},{CLIENT_ID}"
+opkssh login --provider="<issuer>,<client_id>"
 ```
 
 or in the rare case that a client secret is required by the OpenID Provider:
 
 ```bash
-opkssh login --provider="{ISSUER},{CLIENT_ID},{CLIENT_SECRET},{SCOPES}"
+opkssh login --provider="<issuer>,<client_id>,<client_secret>,<scopes>"
 ```
 
-where ISSUER, CLIENT_ID and CLIENT_SECRET correspond to the issuer client ID and client secret of the custom OpenID Provider.
+where issuer, client_id and client_secret correspond to the issuer client ID and client secret of the custom OpenID Provider.
 
 For example if the issuer is `https://authentik.local/application/o/opkssh/` and the client ID was `ClientID123`:
 
@@ -525,4 +567,3 @@ For integration tests run:
 - [docs/gitlab-selfhosted.md](docs/gitlab-selfhosted.md) Guide on configuring and using a self hosted GitLab instance with opkssh.
 - [docs/paramiko.md](docs/paramiko.md) Guide to using the python SSH paramiko library with opkssh.
 - [docs/putty.md](docs/putty.md) Guide to using PuTTY with opkssh.
-

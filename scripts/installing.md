@@ -83,7 +83,7 @@ If you do not have root access, you can create a new auth_id file in at ~/auth_i
 sudo touch /etc/opk/auth_id
 sudo chown root:opksshuser /etc/opk/auth_id
 sudo chmod 640 /etc/opk/auth_id
-sudo opkssh add {USER} {EMAIL} {ISSUER}
+sudo opkssh add <user> <email> <issuer>
 ```
 
 **4: Configure sshd to use opkssh.** Check which configuration file is active.
