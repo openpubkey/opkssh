@@ -24,7 +24,7 @@ The name you specify will be the name of the Application, **not** the User Pool.
 
 > [!WARNING]
 >
-> Make sure you select "Single Page Application (SPA)", otherwise AWS will create a Client Secret.
+> Make sure you select `"Single Page Application (SPA)"`, otherwise AWS will create a Client Secret.
 
 > [!TIP]
 >
@@ -32,17 +32,19 @@ The name you specify will be the name of the Application, **not** the User Pool.
 
 ![User Pool Create](cognito_figs/user_pool_create.png)
 
-Decide options for sign-in identifiers and required attributes for signup, as they can never be changed later. We will setup return_uri's later. Once ready click `"Create user directory"`.
+Decide options for sign-in identifiers and required attributes for signup, as they can never be changed later. We will setup return_uri's later.
+
+Once ready click `"Create user directory"`.
 
 ### 2. Navigate to the App
 
-Once the User Pool is created you will be taken to a Success page. Go to the bottom and click "Go to overview". At this point you should see something like this:
+Once the User Pool is created you will be taken to a Success page. Go to the bottom and click `"Go to overview"`. At this point you should see something like this:
 
 ![User Pool Created](cognito_figs/user_pool_created.png)
 
 > [!TIP]
 >
-> At this point you should rename your User Pool to something more meaningful like "Datacenter Team".
+> At this point you should rename your User Pool to something more meaningful like `"Datacenter Team"`.
 
 Jump to the section [**Modifying the App**](#modifying-the-app) to continue the setup.
 
@@ -50,7 +52,7 @@ Jump to the section [**Modifying the App**](#modifying-the-app) to continue the 
 
 If you already have an existing User Pool, navigate to `"App clients"` section and click `"Create app client"`.
 
-Enter a name of the application, like `"OPKSSH"`. **Remember to select "Single Page Application (SPA)"**.
+Enter a name of the application, like `"OPKSSH"`. **Remember to select `"Single Page Application (SPA)"`**.
 
 ![App Client Create](cognito_figs/app_client_create.png)
 
@@ -58,7 +60,7 @@ We will setup return_uri's later. Once ready click `"Create app client"`.
 
 > [!WARNING]
 >
-> Make sure you select "Single Page Application (SPA)", otherwise AWS will create a Client Secret.
+> Make sure you select `"Single Page Application (SPA)"`, otherwise AWS will create a Client Secret.
 
 ## Modifying the App
 
@@ -100,7 +102,7 @@ If you go to the App > `"Login pages"` > `"Managed login style"` section, you ca
 
 ![Managed Login Empty](cognito_figs/managed_login_empty.png)
 
-If you only see a `"-"` under `"Managed login style"`, you need to create one. Go to `"Managed login"` on the left-hand sidebar, under "Styles" click `"Create a new style"`. Select your app and click `"Create"`.
+If you only see a `"-"` under `"Managed login style"`, you need to create one. Go to `"Managed login"` on the left-hand sidebar, under `"Styles"` click `"Create a new style"`. Select your app and click `"Create"`.
 
 ![Managed Login Create](cognito_figs/managed_login_create.png)
 
