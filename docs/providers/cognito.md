@@ -30,7 +30,7 @@ The name you specify will be the name of the Application, **not** the User Pool.
 >
 > Check you are in the correct AWS region.
 
-![User Pool Create](cognito_figs/user_pool_create.jpeg)
+![User Pool Create](cognito_figs/user_pool_create.png)
 
 Decide options for sign-in identifiers and required attributes for signup, as they can never be changed later. We will setup return_uri's later. Once ready click `"Create user directory"`.
 
@@ -146,7 +146,11 @@ This should run without error.
 
 ## Troubleshooting (Common Issues)
 
-### 403 Forbidden: You don't have permission to access this resource
+### Error message: failed to exchange token: oauth2: "invalid_client" "invalid_client_secret"
+
+This occurs if you (accidentally) created the App so that it has a Client Secret. There is no way to fix this. Go to `"App clients"` and delete the App. Then recreate it making sure to select `"Single Page Application (SPA)"`. Follow the [Setup with existing User Pool](#setup-with-existing-user-pool) section again.
+
+### Error message: 403 Forbidden: You don't have permission to access this resource
 
 This can occur if you have a WAF which is enforcing the `"AWSManagedRulesCommonRuleSet"` rule group. Add an exception for `"EC2MetaDataSSRF_QUERYARGUMENTS"` to your WAF rules.
 
