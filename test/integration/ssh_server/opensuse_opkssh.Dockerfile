@@ -16,7 +16,7 @@ ARG ISSUER_PORT="9998"
 RUN go build -v -o opksshbuild
 
 # Stage 2: Create a minimal openSUSE-Tumbleweed-based image
-FROM opensuse/tumbleweed:latest@sha256:2558ea2b274a68f7d02d6f1e77949096389bf62a685c5e752d03dbbb86d5aacb
+FROM opensuse/tumbleweed:latest@sha256:58012e8a43e6959749101345ce9d39823a4e0ad5db63bd7753a45032838c1986
 
 # Install dependencies required for runtime (e.g., SSH server)
 RUN zypper refresh && \
