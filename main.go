@@ -21,13 +21,14 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"syscall"
 	"text/tabwriter"
@@ -46,9 +47,13 @@ import (
 var (
 	// These can be overridden at build time using ldflags. For example:
 	// go build -v -o /usr/local/bin/opkssh -ldflags "-X main.Version=version"
-	Version           = "unversioned"
-	logFilePathServer = "/var/log/opkssh.log" // Remember if you change this, change it in the install script as well
+	Version = "unversioned"
 )
+
+// GetLogFilePathServer returns the platform-specific log file path
+func GetLogFilePathServer() string {
+	return GetLogFilePath()
+}
 
 func main() {
 	os.Exit(run())
@@ -266,11 +271,12 @@ Arguments:
 			ctx := context.Background()
 
 			// Setup logger
-			logFile, err := os.OpenFile(logFilePathServer, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0660) // Owner and group can read/write
+			logFilePath := GetLogFilePathServer()
+			logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0660) // Owner and group can read/write
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error opening log file: %v\n", err)
 				// It could be very difficult to figure out what is going on if the log file was deleted. Hopefully this message saves someone an hour of debugging.
-				fmt.Fprintf(os.Stderr, "Check if log exists at %v, if it does not create it with permissions: chown root:opksshuser %v; chmod 660 %v\n", logFilePathServer, logFilePathServer, logFilePathServer)
+				fmt.Fprintf(os.Stderr, "Check if log exists at %v, if it does not create it with permissions: chown root:opksshuser %v; chmod 660 %v\n", logFilePath, logFilePath, logFilePath)
 			} else {
 				defer logFile.Close()
 				log.SetOutput(logFile)
@@ -287,10 +293,10 @@ Arguments:
 			certB64Arg := args[1]
 			typArg := args[2]
 
-			providerPolicyPath := "/etc/opk/providers"
+			providerPolicyPath := filepath.Join(policy.GetSystemConfigBasePath(), "providers")
 			providerPolicy, err := policy.NewProviderFileLoader().LoadProviderPolicy(providerPolicyPath)
 			if err != nil {
-				log.Println("Failed to open /etc/opk/providers:", err)
+				log.Printf("Failed to open %s: %v\n", providerPolicyPath, err)
 				return err
 			}
 
@@ -319,7 +325,8 @@ Arguments:
 			}
 		},
 	}
-	verifyCmd.Flags().StringVar(&serverConfigPathArg, "config-path", "/etc/opk/config.yml", "Path to the server config file. Default: /etc/opk/config.yml.")
+	defaultConfigPath := filepath.Join(policy.GetSystemConfigBasePath(), "config.yml")
+	verifyCmd.Flags().StringVar(&serverConfigPathArg, "config-path", defaultConfigPath, fmt.Sprintf("Path to the server config file. Default: %s", defaultConfigPath))
 	rootCmd.AddCommand(verifyCmd)
 
 	clientCmd := &cobra.Command{
@@ -477,12 +484,35 @@ func getOpenSSHVersion() string {
 		if output, err := cmd.CombinedOutput(); err == nil && len(strings.TrimSpace(string(output))) > 0 {
 			return strings.TrimSpace(string(output))
 		}
+
+	case OSTypeWindows:
+		// For Windows, try to get version from ssh.exe
+		// Windows OpenSSH is typically in C:\Windows\System32\OpenSSH\ssh.exe
+		sshPath := filepath.Join(os.Getenv("SystemRoot"), "System32", "OpenSSH", "ssh.exe")
+		if _, err := os.Stat(sshPath); err == nil {
+			cmd := exec.Command(sshPath, "-V")
+			output, err := cmd.CombinedOutput()
+			if err == nil && len(strings.TrimSpace(string(output))) > 0 {
+				return strings.TrimSpace(string(output))
+			}
+		}
+		// Try ssh.exe in PATH
+		cmd := exec.Command("ssh.exe", "-V")
+		output, err := cmd.CombinedOutput()
+		if err == nil && len(strings.TrimSpace(string(output))) > 0 {
+			return strings.TrimSpace(string(output))
+		}
+
 	default:
 		log.Printf("Warning: Could not determine OpenSSH version using OS-specific methods for %s", osType)
 	}
 
 	// Try ssh -V (works on most systems)
-	cmd := exec.Command("ssh", "-V")
+	sshCmd := "ssh"
+	if osType == OSTypeWindows {
+		sshCmd = "ssh.exe"
+	}
+	cmd := exec.Command(sshCmd, "-V")
 	output, err := cmd.CombinedOutput()
 	if err == nil && len(strings.TrimSpace(string(output))) > 0 {
 		return strings.TrimSpace(string(output))
@@ -490,7 +520,11 @@ func getOpenSSHVersion() string {
 	log.Println("Warning: Error executing ssh -V:", err)
 
 	// Try sshd -V as fallback
-	cmd = exec.Command("sshd", "-V")
+	sshdCmd := "sshd"
+	if osType == OSTypeWindows {
+		sshdCmd = "sshd.exe"
+	}
+	cmd = exec.Command(sshdCmd, "-V")
 	output, err = cmd.CombinedOutput()
 	if err == nil && len(strings.TrimSpace(string(output))) > 0 {
 		return strings.TrimSpace(string(output))
@@ -501,23 +535,32 @@ func getOpenSSHVersion() string {
 }
 
 func isOpenSSHVersion8Dot1OrGreater(opensshVersion string) (bool, error) {
-	// To handle versions like 9.9p1; we only need the initial numeric part for the comparison
-	re, err := regexp.Compile(`^(\d+(?:\.\d+)*).*`)
+	// Extract version number from various formats:
+	// - "OpenSSH_9.5p1" -> "9.5"
+	// - "OpenSSH_for_Windows_9.5p2, LibreSSL 3.8.2" -> "9.5"
+
+	// First, get the part before comma (to handle LibreSSL suffix on Windows)
+	opensshVersion = strings.Split(opensshVersion, ",")[0]
+
+	// Try to extract version using regex that handles both Unix and Windows formats
+	// Matches: "OpenSSH_9.5", "OpenSSH_for_Windows_9.5", etc.
+	re, err := regexp.Compile(`OpenSSH[_a-zA-Z]*[_](\d+\.\d+)`)
 	if err != nil {
 		fmt.Println("Error compiling regex:", err)
 		return false, err
 	}
 
-	opensshVersion = strings.TrimPrefix(
-		strings.Split(opensshVersion, ", ")[0],
-		"OpenSSH_",
-	)
-
 	matches := re.FindStringSubmatch(opensshVersion)
 
-	if len(matches) <= 0 {
-		fmt.Println("Invalid OpenSSH version")
-		return false, errors.New("invalid OpenSSH version")
+	if len(matches) < 2 {
+		// If regex didn't match, try a simpler approach: find any version pattern
+		simpleRe := regexp.MustCompile(`(\d+\.\d+)`)
+		matches = simpleRe.FindStringSubmatch(opensshVersion)
+
+		if len(matches) < 2 {
+			log.Printf("Invalid OpenSSH version format: %s", opensshVersion)
+			return false, fmt.Errorf("invalid OpenSSH version format: %s", opensshVersion)
+		}
 	}
 
 	version := matches[1]
@@ -539,10 +582,16 @@ const (
 	OSTypeDebian  OSType = "debian"
 	OSTypeArch    OSType = "arch"
 	OSTypeSUSE    OSType = "suse"
+	OSTypeWindows OSType = "windows"
 )
 
 // detectOS determines the type of operating system.
 func detectOS() OSType {
+	// Check for Windows using runtime.GOOS
+	if runtime.GOOS == "windows" {
+		return OSTypeWindows
+	}
+
 	// Check for RedHat-based systems
 	if _, err := os.Stat("/etc/redhat-release"); err == nil {
 		return OSTypeRHEL
