@@ -510,15 +510,16 @@ opkssh add root alice@example.com https://authentik.local/application/o/opkssh/
 
 ### Tested
 
-| OpenID Provider                           | Tested | Notes                                                                                                       |
-|-------------------------------------------|--------|-------------------------------------------------------------------------------------------------------------|
-| [Authelia](https://www.authelia.com/)     | ✅      | [Authelia Integration Guide](https://www.authelia.com/integration/openid-connect/opkssh/)                   |
-| [Authentik](https://goauthentik.io/)      | ✅      | Do not add a certificate in the encryption section of the provider                                          |
-| [Azure](https://www.azure.com/)           | ✅      | [Entra ID (Azure) Integration Guide](docs/providers/azure.md)
-| [Gitlab Self-hosted](https://gitlab.com/) | ✅      | [Configuration guide](docs/gitlab-selfhosted.md)                                                            |
-| [Kanidm](https://kanidm.com/)             | ✅      | [Kanidm Integration Guide](https://kanidm.github.io/kanidm/master/integrations/oauth2/examples.html#opkssh) |
-| [PocketID](https://pocket-id.org/)        | ✅      | Create a new OIDC Client and inside the new client, check "Public client" on OIDC Client Settings           |
-| [Zitadel](https://zitadel.com/)           | ✅      | Check the UserInfo box on the Token Settings                                                                |
+| OpenID Provider                                | Tested | Notes                                                                                                   |
+|------------------------------------------------|--------|---------------------------------------------   ---------------------------------------------------------|
+| [Authelia](https://www.authelia.com/)          | ✅     | [Authelia Integration Guide](https://www.authelia.com/integration/openid-connect/opkssh/)               |
+| [Authentik](https://goauthentik.io/)           | ✅     | Do not add a certificate in the encryption section of the provider                                      |
+| [AWS Cognito](https://aws.amazon.com/cognito/) | ✅     | [Amazon Cognito Integration Guide](docs/providers/cognito.md)                                           |
+| [Azure](https://www.azure.com/)                | ✅     | [Entra ID (Azure) Integration Guide](docs/providers/azure.md)                                           |
+| [Gitlab Self-hosted](https://gitlab.com/)      | ✅     | [Configuration guide](docs/gitlab-selfhosted.md)                                                        |
+| [Kanidm](https://kanidm.com/)                  | ✅  | [Kanidm Integration Guide](https://kanidm.github.io/kanidm/master/integrations/oauth2/examples.html#opkssh)|
+| [PocketID](https://pocket-id.org/)             | ✅     | Create a new OIDC Client and inside the new client, check "Public client" on OIDC Client Settings       |
+| [Zitadel](https://zitadel.com/)                | ✅     | Check the UserInfo box on the Token Settings                                                            |
 
 Do not use Confidential/Secret mode **only** client ID is needed.
 
