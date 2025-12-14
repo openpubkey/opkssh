@@ -154,17 +154,30 @@ This occurs if you (accidentally) created the App so that it has a Client Secret
 
 ### Error message: 403 Forbidden: You don't have permission to access this resource
 
-This can occur if you have a WAF which is enforcing the `"AWSManagedRulesCommonRuleSet"` rule group. Add an exception for `"EC2MetaDataSSRF_QUERYARGUMENTS"` to your WAF rules.
+This can occur if you have a WAF which is enforcing the `"AWSManagedRulesCommonRuleSet"` rule group. **Do not disable the `"EC2MetaDataSSRF_QUERYARGUMENTS"` rule globally, as this removes SSRF protections and can expose your infrastructure to attack.** Instead, scope any override narrowly to only the Cognito OAuth endpoints (e.g., `/oauth2/authorize`, `/oauth2/token`) using a WAF `scope_down_statement`.
 
-Terraform/OpenTofu example:
+> [!WARNING]
+> **Security risk:** Disabling the `EC2MetaDataSSRF_QUERYARGUMENTS` rule globally is dangerous and can allow attackers to access internal metadata endpoints. Always scope the override to only the required Cognito OAuth endpoints and paths.
+
+Terraform/OpenTofu example (scoped override):
 
 ```hcl
-# Exclude EC2MetaDataSSRF_QUERYARGUMENTS for Cognito OAuth2 flows
+# Example: Exclude EC2MetaDataSSRF_QUERYARGUMENTS only for Cognito OAuth2 endpoints
 rule_action_override {
-    name = "EC2MetaDataSSRF_QUERYARGUMENTS"
-    action_to_use {
-        count {}
+  name = "EC2MetaDataSSRF_QUERYARGUMENTS"
+  action_to_use {
+    count {}
+  }
+  # Scope the override to only the Cognito OAuth endpoints
+  scope_down_statement {
+    byte_match_statement {
+      field_to_match {
+        uri_path {}
+      }
+      positional_constraint = "STARTS_WITH"
+      search_string         = "/oauth2/"
     }
+  }
 }
 ```
 
