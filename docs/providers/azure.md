@@ -73,10 +73,10 @@ It should look like it does here with Redirect URIs showing "3 public client".
 For each server you have installed opkssh on, edit the file `/etc/opk/providers` and set the Azure provider to use the client ID and tenant ID you just registered.
 
 ```
-https://login.microsoftonline.com/{TENANT ID}/v2.0 <CLIENT-ID> 12h
+https://login.microsoftonline.com/{TENANT ID}/v2.0 {CLIENT ID} 12h
 ```
 
-To test run `opkssh login --provider="https://login.microsoftonline.com/{TENANT ID}/v2.0,<CLIENT-ID>"` with the client ID you registered.
+To test run `opkssh login --provider="https://login.microsoftonline.com/{TENANT ID}/v2.0,{CLIENT ID}"` with the client ID you registered.
 If this works then server has been setup correctly.
 
 On the client check to see if you have already created a config at `~/.opk/config.yml`. If no config if found, create a config by running `opkssh login --create-config`.
@@ -84,16 +84,16 @@ On the client check to see if you have already created a config at `~/.opk/confi
 Then edit `~/.opk/config.yml` and change the entry for azure to use the client ID and tenant ID from the App Registration.
 
 ```yaml
-- alias: azure microsoft
-  issuer: https://login.microsoftonline.com/{TENANT ID}/v2.0
-  client_id: <CLIENT-ID>
-  scopes: openid profile email offline_access
-  access_type: offline
-  prompt: consent
-  redirect_uris:
-    - http://localhost:3000/login-callback
-    - http://localhost:10001/login-callback
-    - http://localhost:11110/login-callback
+  - alias: azure microsoft
+    issuer: https://login.microsoftonline.com/{TENANT ID}/v2.0
+    client_id: {CLIENT ID}
+    scopes: openid profile email offline_access
+    access_type: offline
+    prompt: consent
+    redirect_uris:
+      - http://localhost:3000/login-callback
+      - http://localhost:10001/login-callback
+      - http://localhost:11110/login-callback
 ```
 
 For more information see: [opkssh configuration files](https://github.com/openpubkey/opkssh/blob/main/docs/config.md).
@@ -141,16 +141,16 @@ On the client check to see if you have already created a config at `~/.opk/confi
 Edit `~/.opk/config.yml` and for the azure provider change `prompt: consent` to `prompt: none` as shown below.
 
 ```yaml
-- alias: azure microsoft
-  issuer: https://login.microsoftonline.com/{TENANT ID}/v2.0
-  client_id: <CLIENT-ID>
-  scopes: openid profile email offline_access
-  access_type: offline
-  prompt: none
-  redirect_uris:
-    - http://localhost:3000/login-callback
-    - http://localhost:10001/login-callback
-    - http://localhost:11110/login-callback
+  - alias: azure microsoft
+    issuer: https://login.microsoftonline.com/{TENANT ID}/v2.0
+    client_id: {CLIENT ID}
+    scopes: openid profile email offline_access
+    access_type: offline
+    prompt: none
+    redirect_uris:
+      - http://localhost:3000/login-callback
+      - http://localhost:10001/login-callback
+      - http://localhost:11110/login-callback
 ```
 
 See Issue: [Workaround for error message when using EntraID](https://github.com/openpubkey/opkssh/issues/253).
