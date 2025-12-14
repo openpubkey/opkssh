@@ -61,7 +61,7 @@ func TestOpenSSHVersionDetection(t *testing.T) {
 		},
 		{
 			name:           "SUSE",
-			containerImage: "opensuse/tumbleweed:latest",
+			containerImage: "opensuse/leap:16.0",
 			setupCommands: []string{
 				"zypper refresh",
 				"zypper install -y openssh sed",
