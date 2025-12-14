@@ -52,7 +52,7 @@ func TestOpenSSHVersionDetection(t *testing.T) {
 		},
 		{
 			name:           "RHEL/CentOS",
-			containerImage: "rockylinux:9",
+			containerImage: "rockylinux:10",
 			setupCommands: []string{
 				"dnf clean all && dnf makecache && dnf install -y openssh-server sed",
 			},
