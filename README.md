@@ -511,7 +511,7 @@ opkssh add root alice@example.com https://authentik.local/application/o/opkssh/
 ### Tested
 
 | OpenID Provider                                | Tested | Notes                                                                                                   |
-|------------------------------------------------|--------|---------------------------------------------   ---------------------------------------------------------|
+|-----------------------------------------------|--------|--------------------------------------------------------------------------------------------------------|
 | [Authelia](https://www.authelia.com/)          | ✅     | [Authelia Integration Guide](https://www.authelia.com/integration/openid-connect/opkssh/)               |
 | [Authentik](https://goauthentik.io/)           | ✅     | Do not add a certificate in the encryption section of the provider                                      |
 | [AWS Cognito](https://aws.amazon.com/cognito/) | ✅     | [Amazon Cognito Integration Guide](docs/providers/cognito.md)                                           |
