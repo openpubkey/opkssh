@@ -67,15 +67,12 @@ jobs:
     name: Shell Scripts Lint & Test
     runs-on: ubuntu-24.04
     container:
-      image: opensuse/leap:16.0
+      image: opensuse/tumbleweed:latest@sha256:c13ace4cd56d5d5e57885672ea75d91c3320998405b0305a1adef4a1a423a9d9
     steps:
     - name: Install packages
       run: |
         zypper refresh
-        zypper --non-interactive install --no-recommends git wget ShellCheck shunit2 findutils python3 python3-pip
-    - name: Install bashate
-      run: |
-        pip3 install --no-cache-dir bashate
+        zypper --non-interactive install --no-recommends git wget ShellCheck shunit2 findutils python313-bashate
     - name: Checkout
       uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       with:
