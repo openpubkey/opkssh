@@ -198,7 +198,7 @@ Second, we use the `AuthorizedKeysCommand` configuration option in `sshd_config`
 | Linux            | ✅        | ✅     |  Ubuntu 24.04.1 LTS    | -                       |
 | Linux            | ✅        | ✅     |  Centos 9              | -                       |
 | Linux            | ✅        | ✅     |  Arch Linux            | -                       |
-| Linux            | ✅        | ✅     |  openSUSE Tumbleweed   | -                       |
+| Linux            | ✅        | ✅     |  opensuse leap 16   | -                       |
 | macOS            | ❌        | ❌     |  -                     | Likely                  |
 | Windows11        | ❌        | ❌     |  -                     | Likely                  |
 
