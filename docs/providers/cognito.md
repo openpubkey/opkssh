@@ -178,6 +178,6 @@ rule_action_override {
 }
 ```
 
-### OPKSSH not seeing Cognito groups
+### Cognito groups
 
-This is completely untested. Please test and amend this section.
+OPKSSH has not been tested with cognito groups. If you run into issues please open a ticket.
