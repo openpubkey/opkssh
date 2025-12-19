@@ -479,7 +479,7 @@ install_opkssh_binary() {
             else
                 BINARY_URL="https://github.com/$GITHUB_REPO/releases/download/$INSTALL_VERSION/opkssh-linux-$CPU_ARCH"
             fi
-            
+
         # Download the binary
         echo "Downloading version $INSTALL_VERSION of $BINARY_NAME from $BINARY_URL..."
         wget -q --show-progress -O "$BINARY_NAME" "$BINARY_URL"
