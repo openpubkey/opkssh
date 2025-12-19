@@ -471,23 +471,23 @@ install_opkssh_binary() {
         fi
         echo "Using binary from specified path: $BINARY_PATH"
     else
-        if [[ "$INSTALL_VERSION" == "latest" ]]; then
-            if [[ -f "$BINARY_NAME" ]]; then
-                echo "Using binary from local file: $BINARY_NAME"
-            else
-                BINARY_URL="https://github.com/$GITHUB_REPO/releases/latest/download/opkssh-linux-$CPU_ARCH"
-            fi
+        if [[ -f "$BINARY_NAME" ]]; then
+            echo "Using binary from local file: $BINARY_NAME"
         else
-            BINARY_URL="https://github.com/$GITHUB_REPO/releases/download/$INSTALL_VERSION/opkssh-linux-$CPU_ARCH"
-        fi
-
+            if [[ "$INSTALL_VERSION" == "latest" ]]; then
+                BINARY_URL="https://github.com/$GITHUB_REPO/releases/latest/download/opkssh-linux-$CPU_ARCH"
+            else
+                BINARY_URL="https://github.com/$GITHUB_REPO/releases/download/$INSTALL_VERSION/opkssh-linux-$CPU_ARCH"
+            fi
+            
         # Download the binary
         echo "Downloading version $INSTALL_VERSION of $BINARY_NAME from $BINARY_URL..."
         wget -q --show-progress -O "$BINARY_NAME" "$BINARY_URL"
 
+        fi
         BINARY_PATH="$BINARY_NAME"
     fi
-
+    
     # Move to installation directory
     mv "$BINARY_PATH" "$INSTALL_DIR/$BINARY_NAME"
 
