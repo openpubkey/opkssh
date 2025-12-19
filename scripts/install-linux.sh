@@ -476,6 +476,7 @@ install_opkssh_binary() {
                 echo "Using binary from local file: $BINARY_NAME"
             else
                 BINARY_URL="https://github.com/$GITHUB_REPO/releases/latest/download/opkssh-linux-$CPU_ARCH"
+            fi
         else
             BINARY_URL="https://github.com/$GITHUB_REPO/releases/download/$INSTALL_VERSION/opkssh-linux-$CPU_ARCH"
         fi
