@@ -487,7 +487,7 @@ install_opkssh_binary() {
         fi
         BINARY_PATH="$BINARY_NAME"
     fi
-    
+
     # Move to installation directory
     mv "$BINARY_PATH" "$INSTALL_DIR/$BINARY_NAME"
 
