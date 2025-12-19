@@ -473,7 +473,7 @@ install_opkssh_binary() {
     else
         if [[ "$INSTALL_VERSION" == "latest" ]]; then
             if [[ -f "$BINARY_NAME" ]]; then
-                echo "Using binary from specified path: $BINARY_NAME"
+                echo "Using binary from local file: $BINARY_NAME"
             else
                 BINARY_URL="https://github.com/$GITHUB_REPO/releases/latest/download/opkssh-linux-$CPU_ARCH"
         else
