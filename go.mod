@@ -14,7 +14,7 @@ require (
 	github.com/testcontainers/testcontainers-go v0.38.0
 	github.com/thediveo/enumflag/v2 v2.0.7
 	github.com/zitadel/oidc/v3 v3.41.0
-	golang.org/x/crypto v0.40.0
+	golang.org/x/crypto v0.45.0
 	golang.org/x/term v0.33.0
 )
 
