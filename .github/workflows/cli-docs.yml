@@ -32,7 +32,7 @@ jobs:
           echo "changedfiles=$changedfiles" >> $GITHUB_OUTPUT
       - name: Open pull request for changes
         if: steps.changed-files.outputs.changedfiles == '1'
-        uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7.0.8
+        uses: peter-evans/create-pull-request@98357b18bf14b5342f975ff684046ec3b2a07725 # v8.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: cli-docs
