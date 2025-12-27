@@ -207,6 +207,7 @@ Arguments:
 	loginCmd.Flags().VarP(enumflag.New(&keyTypeArg, "Key Type", map[commands.KeyType][]string{commands.ECDSA: {commands.ECDSA.String()}, commands.ED25519: {commands.ED25519.String()}}, enumflag.EnumCaseInsensitive), "key-type", "t", "Type of key to generate")
 	rootCmd.AddCommand(loginCmd)
 
+	var homePolicyPathArg string
 	readhomeCmd := &cobra.Command{
 		SilenceUsage: true,
 		Use:          "readhome <principal>",
@@ -219,7 +220,8 @@ You should not call this command directly. It is called by the opkssh verify com
 		Example: `  opkssh readhome alice`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			userArg := os.Args[2]
-			if fileBytes, err := commands.ReadHome(userArg); err != nil {
+			readHomeCmd := commands.NewReadHomeCmd()
+			if fileBytes, err := readHomeCmd.ReadHome(userArg, homePolicyPathArg); err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to read user's home policy file: %v\n", err)
 				return err
 			} else {
@@ -228,6 +230,7 @@ You should not call this command directly. It is called by the opkssh verify com
 			}
 		},
 	}
+	readhomeCmd.Flags().StringVarP(&homePolicyPathArg, "home-policy-path", "f", "", "Optional path to the user's home policy file (/home/alice/.opk/auth_id_1234). It is intended for update scripts that run opkssh against a temp policy files to determine if the policy update is safe. If this flag is provided, it will be used to compute the filepath to the home policy file instead of the username. It will still check that the user exists.")
 	rootCmd.AddCommand(readhomeCmd)
 
 	var serverConfigPathArg string

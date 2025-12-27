@@ -29,8 +29,24 @@ import (
 	"strconv"
 	"syscall"
 
+	"github.com/openpubkey/opkssh/policy"
 	"github.com/openpubkey/opkssh/policy/files"
+	"github.com/spf13/afero"
 )
+
+// ReadHomeCmd provides functionality to read the home policy file for a user.
+type ReadHomeCmd struct {
+	Fs         afero.Fs
+	UserLookup policy.UserLookup
+}
+
+// NewReadHomeCmd creates a new instance of ReadHomeCmd with the default filesystem.
+func NewReadHomeCmd() *ReadHomeCmd {
+	return &ReadHomeCmd{
+		Fs:         afero.NewOsFs(),
+		UserLookup: policy.NewOsUserLookup(),
+	}
+}
 
 // ReadHome is used to read the home policy file for the user with
 // the specified username. This is used when opkssh is called by
@@ -38,7 +54,12 @@ import (
 // access to read the home policy file (`/home/<username>/opk/auth_id`).
 // This function is only available on Linux and Darwin because it relies on
 // syscall.Stat_t to determine the owner of the file.
-func ReadHome(username string) ([]byte, error) {
+//
+// The homePolicyPathArg parameter is optional and intended for checking test
+// policy files before overwriting the home policy. If the homePolicyPathArg
+// is provided, it will be used to compute the filepath to the home policy file
+// instead of the username. We still check that the user exists.
+func (r *ReadHomeCmd) ReadHome(username string, homePolicyPathArg string) ([]byte, error) {
 	if matched, _ := regexp.MatchString("^[a-z0-9_\\-.]+$", username); !matched {
 		return nil, fmt.Errorf("%s is not a valid linux username", username)
 	}
@@ -49,6 +70,11 @@ func ReadHome(username string) ([]byte, error) {
 	}
 	homePolicyPath := filepath.Join(userObj.HomeDir, ".opk", "auth_id")
 
+	// If a homePolicyPathArg is provided, override the path we computed from the username
+	if homePolicyPathArg != "" {
+		homePolicyPath = homePolicyPathArg
+	}
+
 	// Security critical: We reading this file as `sudo -u opksshuser`
 	// and opksshuser has elevated permissions to read any file whose
 	// path matches `/home/*/opk/auth_id`. We need to be cautious we do follow
@@ -56,7 +82,7 @@ func ReadHome(username string) ([]byte, error) {
 	// This would not permit the user to read the file, but they might be able
 	// to determine the existence of the file. We use O_NOFOLLOW to prevent
 	// following symlinks.
-	file, err := os.OpenFile(homePolicyPath, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	file, err := r.Fs.OpenFile(homePolicyPath, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
 	if err != nil {
 		if errors.Is(err, syscall.ELOOP) {
 			return nil, fmt.Errorf("home policy file %s is a symlink, symlink are unsafe in this context", homePolicyPath)

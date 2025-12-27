@@ -20,9 +20,23 @@ package commands
 
 import (
 	"errors"
+
+	"github.com/spf13/afero"
 )
 
+// ReadHomeCmd provides functionality to read the home policy file for a user.
+type ReadHomeCmd struct {
+	Fs afero.Fs
+}
+
 // ReadHome is not currently supported on Windows
-func ReadHome(username string) ([]byte, error) {
+func NewReadHomeCmd() *ReadHomeCmd {
+	return &ReadHomeCmd{
+		Fs: afero.NewOsFs(),
+	}
+}
+
+// ReadHome is not currently supported on Windows
+func (r *ReadHomeCmd) ReadHome(username string, homePolicyPathArg string) ([]byte, error) {
 	return nil, errors.New("readhome not supported on windows")
 }

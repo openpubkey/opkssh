@@ -268,6 +268,12 @@ func TestRun(t *testing.T) {
 				"hello     https://issuer.hello.coop\n",
 			wantExit: 0,
 		},
+		{
+			name:       "Readhome wrong --home-policy-path",
+			args:       []string{"opkssh", "readhome", "alice", "--home-policy-path=/non/existent/path"},
+			wantOutput: "Failed to read user's home policy file",
+			wantExit:   1,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
