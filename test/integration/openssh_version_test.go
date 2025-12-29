@@ -75,9 +75,8 @@ func TestOpenSSHVersionDetection(t *testing.T) {
 			setupCommands: []string{
 				"pacman-key --init",
 				"pacman-key --populate archlinux manjaro",
-				"pacman -Syyu --noconfirm",
-				"pacman -S --noconfirm --needed manjaro-keyring archlinux-keyring || true",
-				"pacman -S --noconfirm --needed openssh sed",
+				"pacman -Sy --noconfirm --needed manjaro-keyring archlinux-keyring",
+				"pacman -Sy --noconfirm --needed openssh sed",
 			},
 			versionCommand: `version=$(/usr/bin/pacman -Qi openssh | /usr/bin/awk '/^Version/ {print $3}' | /bin/sed -E 's/^([0-9]+\.[0-9]+).*/\1/'); /bin/echo "OpenSSH_$version"`,
 			expectedPrefix: "OpenSSH_",
