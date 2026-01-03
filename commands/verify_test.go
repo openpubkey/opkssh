@@ -47,11 +47,11 @@ const userInfoResponse = `{
 	"groups": ["group1", "group2"]
 }`
 
-func AllowAllPolicyEnforcer(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string, denyList policy.DenyList) error {
+func AllowAllPolicyEnforcer(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string, denyList policy.DenyList, extraArgs []string) error {
 	return nil
 }
 
-func AllowIfExpectedUserInfo(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string, denyList policy.DenyList) error {
+func AllowIfExpectedUserInfo(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string, denyList policy.DenyList, extraArgs []string) error {
 	if userInfo == "" {
 		return fmt.Errorf("userInfo is required")
 	} else if len(userInfo) != 93 {
@@ -83,7 +83,7 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 		name        string
 		accessToken string
 		errorString string
-		policyFunc  func(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string, denyList policy.DenyList) error
+		policyFunc  func(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string, denyList policy.DenyList, extraArgs []string) error
 	}{
 		{
 			name:       "Happy Path",
@@ -147,7 +147,7 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 				HttpClient:  mocks.NewMockGoogleUserInfoHTTPClient(userInfoResponse, expectedAccessToken),
 			}
 
-			pubkeyList, err := ver.AuthorizedKeysCommand(context.Background(), userArg, typeArg, certB64Arg)
+			pubkeyList, err := ver.AuthorizedKeysCommand(context.Background(), userArg, typeArg, certB64Arg, nil)
 
 			if tt.errorString != "" {
 				require.ErrorContains(t, err, tt.errorString)
