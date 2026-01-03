@@ -260,7 +260,7 @@ Arguments:
   principal    Target username.
   cert         Base64-encoded SSH certificate.
   key_type     SSH certificate key type (e.g., ecdsa-sha2-nistp256-cert-v01@openssh.com)`,
-		Args:    cobra.ExactArgs(3),
+		Args:    cobra.MinimumNArgs(3),
 		Example: `  opkssh verify root <base64-encoded-cert> ecdsa-sha2-nistp256-cert-v01@openssh.com`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
@@ -286,6 +286,7 @@ Arguments:
 			userArg := args[0]
 			certB64Arg := args[1]
 			typArg := args[2]
+			extraArgs := args[3:]
 
 			providerPolicyPath := "/etc/opk/providers"
 			providerPolicy, err := policy.NewProviderFileLoader().LoadProviderPolicy(providerPolicyPath)
@@ -308,7 +309,7 @@ Arguments:
 				log.Println("Failed to set environment variables in config:", err)
 			}
 
-			if authKey, err := v.AuthorizedKeysCommand(ctx, userArg, typArg, certB64Arg); err != nil {
+			if authKey, err := v.AuthorizedKeysCommand(ctx, userArg, typArg, certB64Arg, extraArgs); err != nil {
 				log.Println("failed to verify:", err)
 				return err
 			} else {
