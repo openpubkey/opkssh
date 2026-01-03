@@ -22,6 +22,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -79,6 +80,11 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 		"email": mockEmail,
 	}
 
+	mockExtraArgs := []string{
+		"extraArg1",
+		"extraArg2",
+	}
+
 	tests := []struct {
 		name        string
 		accessToken string
@@ -99,6 +105,16 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 			accessToken: "Bad-auth-token",
 			policyFunc:  AllowIfExpectedUserInfo,
 			errorString: "userInfo is required",
+		},
+		{
+			name: "Passes on extraArgs",
+			policyFunc: func(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string, denyList policy.DenyList, extraArgs []string) error {
+				if slices.Equal(extraArgs, mockExtraArgs) {
+					return nil
+				}
+
+				return fmt.Errorf("extraArgs doesn't match (expected %v, got %v)", mockExtraArgs, extraArgs)
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -147,7 +163,7 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 				HttpClient:  mocks.NewMockGoogleUserInfoHTTPClient(userInfoResponse, expectedAccessToken),
 			}
 
-			pubkeyList, err := ver.AuthorizedKeysCommand(context.Background(), userArg, typeArg, certB64Arg, nil)
+			pubkeyList, err := ver.AuthorizedKeysCommand(context.Background(), userArg, typeArg, certB64Arg, mockExtraArgs)
 
 			if tt.errorString != "" {
 				require.ErrorContains(t, err, tt.errorString)
