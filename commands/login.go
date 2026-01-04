@@ -99,7 +99,9 @@ type LoginCmd struct {
 	alg        jwa.SignatureAlgorithm
 	client     *client.OpkClient
 	principals []string
-	OutWriter  io.Writer // optional
+
+	// For testing
+	OutWriter io.Writer // Captures non-logged output that would normally be written to stdout
 }
 
 // NewLogin creates a new LoginCmd instance with the provided arguments.

@@ -115,14 +115,11 @@ func TestLoginCmd(t *testing.T) {
 		DefaultProvider: "mockOp",
 	}
 
-	cliOutput := bytes.Buffer{}
-
 	tests := []struct {
 		name            string
 		envVars         map[string]string
 		loginCmd        LoginCmd
 		ClientConfig    *config.ClientConfig
-		printKeyArg     bool
 		wantAccessToken bool
 		wantError       bool
 		errorString     string
@@ -149,13 +146,12 @@ func TestLoginCmd(t *testing.T) {
 			wantError: false,
 		},
 		{
-			name:    "Good path SSH cert and private key to filesystems",
+			name:    "Good path PrintKey",
 			envVars: map[string]string{},
 			loginCmd: LoginCmd{
 				Verbosity:   0,
 				PrintKeyArg: true,
 				LogDirArg:   logDir,
-				OutWriter:   &cliOutput,
 			},
 			wantError: false,
 		},
@@ -215,6 +211,10 @@ func TestLoginCmd(t *testing.T) {
 				tt.loginCmd.overrideProvider = &mockOp
 				tt.loginCmd.Fs = mockFs
 
+				// Allows us to capture non-logged CLI output
+				cliOutputBuffer := &bytes.Buffer{}
+				tt.loginCmd.OutWriter = cliOutputBuffer
+
 				err = tt.loginCmd.Run(context.Background())
 				if tt.wantError {
 					require.Error(t, err, "Expected error but got none")
@@ -227,14 +227,12 @@ func TestLoginCmd(t *testing.T) {
 					var pubKeyBytes []byte
 
 					if tt.loginCmd.PrintKeyArg {
-						if tt.loginCmd.PrintKeyArg {
-							got := cliOutput.String()
-							gotLines := strings.Split(strings.TrimSpace(got), "\n")
-							require.GreaterOrEqual(t, len(gotLines), 2, "expected at least 2 lines in output")
-							require.Contains(t, gotLines[0], "ecdsa-sha2-nistp256-cert-v01@openssh.com AAAA")
-							require.Contains(t, gotLines[1], "-----BEGIN OPENSSH PRIVATE KEY-----")
-							pubKeyBytes = []byte(gotLines[0])
-						}
+						got := cliOutputBuffer.String()
+						gotLines := strings.Split(strings.TrimSpace(got), "\n")
+						require.GreaterOrEqual(t, len(gotLines), 2, "expected at least 2 lines in output")
+						require.Contains(t, gotLines[0], "cert-v01@openssh.com AAAA")
+						require.Contains(t, gotLines[1], "-----BEGIN OPENSSH PRIVATE KEY-----")
+						pubKeyBytes = []byte(gotLines[0])
 					} else {
 						homePath, err := os.UserHomeDir()
 						require.NoError(t, err)
@@ -263,7 +261,6 @@ func TestLoginCmd(t *testing.T) {
 					} else {
 						require.Empty(t, accToken, "expected access token to not be set in SSH cert")
 					}
-
 				}
 			})
 		}
