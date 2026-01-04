@@ -379,10 +379,11 @@ func TestNewLogin(t *testing.T) {
 	providerArg := ""
 	keyPathArg := ""
 	providerAlias := ""
+	keyAsOutputArg := false
 	keyTypeArg := ECDSA
 
 	loginCmd := NewLogin(autoRefresh, configPathArg, createConfig, configureArg, logDir,
-		sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, keyPathArg, providerAlias, keyTypeArg)
+		sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, keyAsOutputArg, keyPathArg, providerAlias, keyTypeArg)
 	require.NotNil(t, loginCmd)
 }
 

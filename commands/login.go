@@ -85,6 +85,7 @@ type LoginCmd struct {
 	ProviderArg           string // OpenID Provider specification in the format: <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes>
 	ProviderAliasArg      string
 	KeyTypeArg            KeyType
+	KeyAsOutputArg        bool // Print private key and SSH cert instead of writing them to the filesystem
 	SSHConfigured         bool
 	Verbosity             int                       // Default verbosity is 0, 1 is verbose, 2 is debug
 	overrideProvider      *providers.OpenIdProvider // Used in tests to override the provider to inject a mock provider
@@ -103,7 +104,7 @@ type LoginCmd struct {
 // NewLogin creates a new LoginCmd instance with the provided arguments.
 func NewLogin(autoRefreshArg bool, configPathArg string, createConfigArg bool, configureArg bool, logDirArg string,
 	sendAccessTokenArg bool, disableBrowserOpenArg bool, printIdTokenArg bool,
-	providerArg string, keyPathArg string, providerAliasArg string, keyTypeArg KeyType,
+	providerArg string, keyAsOutputArg bool, keyPathArg string, providerAliasArg string, keyTypeArg KeyType,
 ) *LoginCmd {
 	return &LoginCmd{
 		Fs:                    afero.NewOsFs(),
@@ -117,6 +118,7 @@ func NewLogin(autoRefreshArg bool, configPathArg string, createConfigArg bool, c
 		PrintIdTokenArg:       printIdTokenArg,
 		KeyPathArg:            keyPathArg,
 		ProviderArg:           providerArg,
+		KeyAsOutputArg:        keyAsOutputArg,
 		ProviderAliasArg:      providerAliasArg,
 		KeyTypeArg:            keyTypeArg,
 	}
@@ -455,7 +457,10 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 	}
 
 	// Write ssh secret key and public key to filesystem
-	if seckeyPath != "" {
+	if l.KeyAsOutputArg {
+		log.Println(string(certBytes)) // Base64 encoded SSH cert
+		fmt.Println(seckeySshPem)      // SSH private key in OpenSSH native format
+	} else if seckeyPath != "" {
 		// If we have set seckeyPath then write it there
 		if err := l.writeKeys(seckeyPath, seckeyPath+"-cert.pub", seckeySshPem, certBytes); err != nil {
 			return nil, fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
