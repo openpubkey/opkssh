@@ -17,6 +17,7 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 	"crypto"
 	"crypto/rand"
@@ -24,6 +25,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"golang.org/x/crypto/ed25519"
@@ -113,11 +115,14 @@ func TestLoginCmd(t *testing.T) {
 		DefaultProvider: "mockOp",
 	}
 
+	cliOutput := bytes.Buffer{}
+
 	tests := []struct {
 		name            string
 		envVars         map[string]string
 		loginCmd        LoginCmd
 		ClientConfig    *config.ClientConfig
+		printKeyArg     bool
 		wantAccessToken bool
 		wantError       bool
 		errorString     string
@@ -140,6 +145,17 @@ func TestLoginCmd(t *testing.T) {
 				Verbosity:       2,
 				PrintIdTokenArg: true,
 				LogDirArg:       logDir,
+			},
+			wantError: false,
+		},
+		{
+			name:    "Good path SSH cert and private key to filesystems",
+			envVars: map[string]string{},
+			loginCmd: LoginCmd{
+				Verbosity:   0,
+				PrintKeyArg: true,
+				LogDirArg:   logDir,
+				OutWriter:   &cliOutput,
 			},
 			wantError: false,
 		},
@@ -208,34 +224,46 @@ func TestLoginCmd(t *testing.T) {
 				} else {
 					require.NoError(t, err, "Unexpected error")
 
-					homePath, err := os.UserHomeDir()
-					require.NoError(t, err)
+					var pubKeyBytes []byte
 
-					sshPath := filepath.Join(homePath, ".ssh", "id_ecdsa")
-					secKeyBytes, err := afero.ReadFile(mockFs, sshPath)
-					require.NoError(t, err)
-					require.NotNil(t, secKeyBytes)
-					require.Contains(t, string(secKeyBytes), "-----BEGIN OPENSSH PRIVATE KEY-----")
+					if tt.loginCmd.PrintKeyArg {
+						if tt.loginCmd.PrintKeyArg {
+							got := cliOutput.String()
+							gotLines := strings.Split(strings.TrimSpace(got), "\n")
+							require.GreaterOrEqual(t, len(gotLines), 2, "expected at least 2 lines in output")
+							require.Contains(t, gotLines[0], "ecdsa-sha2-nistp256-cert-v01@openssh.com AAAA")
+							require.Contains(t, gotLines[1], "-----BEGIN OPENSSH PRIVATE KEY-----")
+							pubKeyBytes = []byte(gotLines[0])
+						}
+					} else {
+						homePath, err := os.UserHomeDir()
+						require.NoError(t, err)
 
-					logBytes, err := afero.ReadFile(mockFs, logPath)
-					require.NoError(t, err)
-					require.NotNil(t, logBytes)
-					require.Contains(t, string(logBytes), "running login command with args:")
+						sshPath := filepath.Join(homePath, ".ssh", "id_ecdsa")
+						secKeyBytes, err := afero.ReadFile(mockFs, sshPath)
+						require.NoError(t, err)
+						require.NotNil(t, secKeyBytes)
+						require.Contains(t, string(secKeyBytes), "-----BEGIN OPENSSH PRIVATE KEY-----")
 
-					sshPubPath := filepath.Join(homePath, ".ssh", "id_ecdsa-cert.pub")
-					pubKeyBytes, err := afero.ReadFile(mockFs, sshPubPath)
-					require.NoError(t, err)
+						logBytes, err := afero.ReadFile(mockFs, logPath)
+						require.NoError(t, err)
+						require.NotNil(t, logBytes)
+						require.Contains(t, string(logBytes), "running login command with args:")
 
+						sshPubPath := filepath.Join(homePath, ".ssh", "id_ecdsa-cert.pub")
+						pubKeyBytes, err = afero.ReadFile(mockFs, sshPubPath)
+						require.NoError(t, err)
+					}
 					certSmug, err := sshcert.NewFromAuthorizedKey("fake-cert-type", string(pubKeyBytes))
 					require.NoError(t, err)
 
 					accToken := certSmug.GetAccessToken()
-
 					if tt.wantAccessToken {
 						require.NotEmpty(t, accToken, "expected access token to be set in SSH cert")
 					} else {
 						require.Empty(t, accToken, "expected access token to not be set in SSH cert")
 					}
+
 				}
 			})
 		}
