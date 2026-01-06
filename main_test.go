@@ -258,6 +258,12 @@ func TestRun(t *testing.T) {
 			wantExit:   1,
 		},
 		{
+			name:       "Verify command accepts extra arguments and fails on bad log file path",
+			args:       []string{"opkssh", "verify", "arg1", "arg2", "arg3", "extraArg1", "extraArg2"},
+			wantOutput: "Error opening log file:",
+			wantExit:   1,
+		},
+		{
 			name: "Client provider list",
 			args: []string{"opkssh", "client", "provider", "list", "--config-path=commands/config/default-client-config.yml"},
 			wantOutput: "" +

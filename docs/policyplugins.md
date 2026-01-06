@@ -3,7 +3,7 @@
 Inspired by the power of [the OpenSSH AuthorizedKeysCommand](https://man.openbsd.org/sshd_config.5#AuthorizedKeysCommand), opkssh provides policy plugins.
 These policy plugins provide a simple way to bring your own policy which extends the default opkssh policy.
 
-To use your own policy create a policy plugin config file in `/etc/opk/policy.d`. This config file specifies what command you want to call out to evaluate policy. To allow, the command must return "allowed" and exit code 0.
+To use your own policy create a policy plugin config file in `/etc/opk/policy.d`. This config file specifies what command you want to call out to evaluate policy. To allow, the command must output "allow" and exit code 0.
 
 The policy plugin does not bypass the providers check. This means that a policy plugin can count on the ID Token having been validated as validly signed by one of the OPs in the `/etc/opk/providers`. We do this to allow people to write policies without having to rebuild all the code in opkssh verify.
 
@@ -83,6 +83,7 @@ We provide the following values specified by [OpenSSHd AuthorizedKeysCommand TOK
 - OPKSSH_PLUGIN_U Target username (requested principal). This is `%u` token in SSH.
 - OPKSSH_PLUGIN_K Base64-encoded SSH public key (SSH certificate) provided for authentication. This is useful if someone really wants to see everything opkssh sees. This is the `%k` token in SSH.
 - OPKSSH_PLUGIN_T Public key type (SSH certificate format, e.g., [ecdsa-sha2-nistp256-cert-v01@openssh.com](mailto:ecdsa-sha2-nistp256-cert-v01@openssh.com)). This is the `%t` token in SSH.
+- OPKSSH_PLUGIN_EXTRA_ARGS Extra arguments in the AuthorizedKeysCommand represented by a JSON string. This can be used for TOKENS beyond the default.
 
 ### From ID Token claims
 
@@ -165,4 +166,28 @@ else
   echo "deny"
   exit 1
 fi
+```
+
+### Authorize access by client IP address
+This policy plugin allows `alice@example.com` to ssh as both the `alice` and `root` users if connecting from `10.0.0.1`, but restricts access to ssh as only the `alice` user if connecting from `10.0.0.2`.
+
+```bash
+# in /etc/ssh/sshd_config
+AuthorizedKeysCommand opkssh verify %u %k %t %C
+```
+
+```bash
+#!/usr/bin/env sh
+
+client_address=$(echo "${OPKSSH_PLUGIN_EXTRA_ARGS}" | jq -r '.[0]' | awk '{print $3}')
+case "${OPKSSH_PLUGIN_EMAIL}/${client_address}/${OPKSSH_PLUGIN_U}" in
+  "alice@example.com/10.0.0.1/alice"|"alice@example.com/10.0.0.1/root"|"alice@example.com/10.0.0.2/alice")
+    echo "allow"
+    exit 0
+    ;;
+  *)
+    echo "deny"
+    exit 1
+    ;;
+esac
 ```
