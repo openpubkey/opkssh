@@ -65,7 +65,7 @@ func (a *AuditCmd) Run() int {
 	providerPolicy, err := a.ProviderLoader.LoadProviderPolicy(providerPath)
 	if err != nil {
 		if strings.Contains(err.Error(), "permission denied") {
-			fmt.Fprintf(a.Out, "opkssh audit must be run as root or `sudo -u opksshuser` %s\n", providerPath)
+			fmt.Fprintf(a.Out, "opkssh audit must be run as root, try `sudo opkssh audit` %s\n", providerPath)
 		}
 		fmt.Fprintf(a.Out, "ERROR: Failed to load providers from %s: %v\n", providerPath, err)
 		return 1
