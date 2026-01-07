@@ -14,32 +14,18 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package commands_test
+package commands
 
 import (
 	"bytes"
-	"os/user"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/openpubkey/opkssh/commands"
 	"github.com/openpubkey/opkssh/policy"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )
-
-// MockUserLookup implements commands.UserLookup for testing
-type MockUserLookup struct {
-	users map[string]*user.User
-}
-
-func (m *MockUserLookup) Lookup(username string) (*user.User, error) {
-	if u, ok := m.users[username]; ok {
-		return u, nil
-	}
-	return nil, user.UnknownUserError(username)
-}
 
 // TestAuditCmd tests the audit command
 func TestAuditCmd(t *testing.T) {
@@ -142,21 +128,13 @@ root bob@mail.com http://accounts.google.com`,
 			}
 
 			// Create audit command
-			cmd := &commands.AuditCmd{
+			cmd := &AuditCmd{
 				Fs:                 fs,
 				Out:                out,
 				ProviderLoader:     mockLoader,
 				SystemProviderPath: "/etc/opk/providers",
 				SystemPolicyPath:   "/etc/opk/auth_id",
-				UserPolicyLookup: &MockUserLookup{
-					users: map[string]*user.User{
-						"testuser": {
-							Username: "testuser",
-							HomeDir:  "/home/testuser",
-						},
-					},
-				},
-				CurrentUsername: tt.currentUsername,
+				CurrentUsername:    tt.currentUsername,
 			}
 
 			// Run audit
@@ -236,4 +214,30 @@ func TestAuditCmdValidationResults(t *testing.T) {
 
 	errorResult := validator.ValidateEntry("root", "alice@mail.com", "https://notfound.com", 1)
 	require.Equal(t, policy.StatusError, errorResult.Status)
+}
+
+func TestGetHomeDirsFromEtcPasswd(t *testing.T) {
+	t.Parallel()
+	etcPasswdContent := "root:x:0:0:root:/root:/bin/bash\n" +
+		"# Comment line\n" +
+		"dev:x:1001:1001::/home/dev:/bin/sh\n" +
+		"\n" +
+		"alice:x:995:981::/home/alice:/bin/sh\n" +
+		"bob:x:1002:1002::/home/bob:/bin/sh\n" +
+		"carol:x:1003:1003::/home/carol:/bin/sh\n"
+
+	etcPasswdRows := getHomeDirsFromEtcPasswd(etcPasswdContent)
+
+	require.Len(t, etcPasswdRows, 5)
+
+	require.Equal(t, "root", etcPasswdRows[0].Username)
+	require.Equal(t, "/root", etcPasswdRows[0].HomeDir)
+	require.Equal(t, "dev", etcPasswdRows[1].Username)
+	require.Equal(t, "/home/dev", etcPasswdRows[1].HomeDir)
+	require.Equal(t, "alice", etcPasswdRows[2].Username)
+	require.Equal(t, "/home/alice", etcPasswdRows[2].HomeDir)
+	require.Equal(t, "bob", etcPasswdRows[3].Username)
+	require.Equal(t, "/home/bob", etcPasswdRows[3].HomeDir)
+	require.Equal(t, "carol", etcPasswdRows[4].Username)
+	require.Equal(t, "/home/carol", etcPasswdRows[4].HomeDir)
 }

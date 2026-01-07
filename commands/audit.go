@@ -21,6 +21,7 @@ import (
 	"io"
 	"os/user"
 	"path/filepath"
+	"strings"
 
 	"github.com/openpubkey/opkssh/policy"
 	"github.com/spf13/afero"
@@ -33,23 +34,10 @@ type AuditCmd struct {
 	ProviderLoader     policy.ProviderLoader
 	SystemProviderPath string // Path to provider definitions
 	SystemPolicyPath   string // Path to policy definitions
-	UserPolicyLookup   UserLookup
 	CurrentUsername    string
 	ProviderFilePath   string // Custom provider file path
 	PolicyFilePath     string // Custom policy file path
 	SkipUserPolicy     bool   // Skip auditing user policy file
-}
-
-// UserLookup defines the interface for looking up user information
-type UserLookup interface {
-	Lookup(username string) (*user.User, error)
-}
-
-// OsUserLookup implements UserLookup using os/user
-type OsUserLookup struct{}
-
-func (OsUserLookup) Lookup(username string) (*user.User, error) {
-	return user.Lookup(username)
 }
 
 // NewAuditCmd creates a new AuditCmd with default settings
@@ -60,7 +48,6 @@ func NewAuditCmd(out io.Writer) *AuditCmd {
 		ProviderLoader:     policy.NewProviderFileLoader(),
 		SystemProviderPath: policy.SystemDefaultProvidersPath,
 		SystemPolicyPath:   policy.SystemDefaultPolicyPath,
-		UserPolicyLookup:   OsUserLookup{},
 		CurrentUsername:    getCurrentUsername(),
 	}
 }
@@ -77,6 +64,9 @@ func (a *AuditCmd) Run() int {
 	// Load providers first
 	providerPolicy, err := a.ProviderLoader.LoadProviderPolicy(providerPath)
 	if err != nil {
+		if strings.Contains(err.Error(), "permission denied") {
+			fmt.Fprintf(a.Out, "opkssh audit must be run as root or `sudo -u opksshuser` %s\n", providerPath)
+		}
 		fmt.Fprintf(a.Out, "ERROR: Failed to load providers from %s: %v\n", providerPath, err)
 		return 1
 	}
@@ -110,8 +100,29 @@ func (a *AuditCmd) Run() int {
 
 	// Audit user policy file if it exists and not skipping
 	if !a.SkipUserPolicy {
-		userPolicyPath, err := a.getUserPolicyPath()
-		if err == nil && userPolicyPath != "" {
+
+		// We read /etc/passwd to enumerate all the home directories to find auth_id policy files.
+		var etcPasswdContent []byte
+		etcPasswdpath := "/etc/passwd"
+		if exists, err := afero.Exists(a.Fs, etcPasswdpath); err != nil {
+			fmt.Fprintf(a.Out, "ERROR: Failed to read /etc/passwd to enumerate user home directories: %v\n", err)
+			return 1
+		} else if !exists {
+			fmt.Fprintf(a.Out, "Error: /etc/passwd does not exist, cannot enumerate user home directories\n")
+			return 1
+		} else {
+			etcPasswdContent, err = afero.ReadFile(a.Fs, etcPasswdpath)
+			if err != nil {
+				fmt.Fprintf(a.Out, "ERROR: Failed to read /etc/passwd (needed to enumerate user home directories): %v\n", err)
+				return 1
+			}
+
+		}
+		homeDirs := getHomeDirsFromEtcPasswd(string(etcPasswdContent))
+
+		for _, row := range homeDirs {
+			userPolicyPath := filepath.Join(row.HomeDir, ".opk", "auth_id")
+			// TODO: Check misconfiguration where username does not matched current user
 			userResults, userExists, err := a.auditPolicyFileWithStatus(userPolicyPath, validator)
 			if err != nil {
 				fmt.Fprintf(a.Out, "WARNING: Failed to audit user policy file at %s: %v\n", userPolicyPath, err)
@@ -176,22 +187,6 @@ func (a *AuditCmd) auditPolicyFileWithStatus(policyPath string, validator *polic
 	return results, true, nil
 }
 
-// getUserPolicyPath returns the path to the user's policy file, or empty string if not found
-func (a *AuditCmd) getUserPolicyPath() (string, error) {
-	if a.CurrentUsername == "" {
-		return "", nil
-	}
-
-	u, err := a.UserPolicyLookup.Lookup(a.CurrentUsername)
-	if err != nil {
-		// User not found, return empty (not an error)
-		return "", nil
-	}
-
-	userPolicyPath := filepath.Join(u.HomeDir, ".opk", "auth_id")
-	return userPolicyPath, nil
-}
-
 // printResult prints a single validation result
 func (a *AuditCmd) printResult(result policy.ValidationResult) {
 	var statusBadge string
@@ -238,4 +233,34 @@ func getCurrentUsername() string {
 		return ""
 	}
 	return u.Username
+}
+
+type etcPasswdRow struct {
+	Username string
+	HomeDir  string
+}
+
+// getHomeDirsFromEtcPasswd parses /etc/passwd and returns a list of usernames
+// and their associated home directories. This is not sufficient for all home
+// directories as it does not consider home directories specified by NSS.
+func getHomeDirsFromEtcPasswd(etcPasswd string) []etcPasswdRow {
+	entries := []etcPasswdRow{}
+	for _, line := range strings.Split(etcPasswd, "\n") {
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		// /etc/passwd line is name:passwd:uid:gid:gecos:dir:shell
+		parts := strings.Split(line, ":")
+		if len(parts) < 7 {
+			continue
+		}
+		if parts[5] == "" {
+			continue
+		}
+
+		entry := etcPasswdRow{Username: parts[0], HomeDir: parts[5]}
+		entries = append(entries, entry)
+	}
+	return entries
 }
