@@ -27,6 +27,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const etcPasswdContent = "root:x:0:0:root:/root:/bin/bash\n" +
+	"# Comment line\n" +
+	"dev:x:1001:1001::/home/dev:/bin/sh\n" +
+	"\n" +
+	"alice:x:995:981::/home/alice:/bin/sh\n" +
+	"bob:x:1002:1002::/home/bob:/bin/sh\n" +
+	"carol:x:1003:1003::/home/carol:/bin/sh\n"
+
 // TestAuditCmd tests the audit command
 func TestAuditCmd(t *testing.T) {
 	t.Parallel()
@@ -113,8 +121,11 @@ root bob@mail.com http://accounts.google.com`,
 			fs := afero.NewMemMapFs()
 			out := &bytes.Buffer{}
 
+			err := afero.WriteFile(fs, "/etc/passwd", []byte(etcPasswdContent), 0640)
+			require.NoError(t, err)
+
 			// Create provider file
-			err := afero.WriteFile(fs, "/etc/opk/providers", []byte(tt.providerContent), 0640)
+			err = afero.WriteFile(fs, "/etc/opk/providers", []byte(tt.providerContent), 0640)
 			require.NoError(t, err)
 
 			// Create auth_id file
