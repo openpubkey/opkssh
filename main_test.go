@@ -20,6 +20,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -27,6 +28,8 @@ import (
 )
 
 func TestIsOpenSSHVersion8Dot1OrGreater(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name          string
 		input         string
@@ -42,6 +45,12 @@ func TestIsOpenSSHVersion8Dot1OrGreater(t *testing.T) {
 		{
 			name:          "Above 8.1 (8.4)",
 			input:         "OpenSSH_8.4",
+			wantIsGreater: true,
+			wantErr:       nil,
+		},
+		{
+			name:          "Regression test for 10.0 bug",
+			input:         "OpenSSH_10.0",
 			wantIsGreater: true,
 			wantErr:       nil,
 		},
@@ -91,31 +100,47 @@ func TestIsOpenSSHVersion8Dot1OrGreater(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotIsGreater, gotErr := isOpenSSHVersion8Dot1OrGreater(tt.input)
-
-			if gotIsGreater != tt.wantIsGreater {
-				t.Errorf(
-					"isOpenSSHVersion8Dot1OrGreater(%q) got %v; want %v",
-					tt.input,
-					gotIsGreater,
-					tt.wantIsGreater,
-				)
-			}
-
-			if (gotErr != nil) != (tt.wantErr != nil) {
-				t.Errorf(
-					"isOpenSSHVersion8Dot1OrGreater(%q) error = %v; want %v",
-					tt.input,
-					gotErr,
-					tt.wantErr,
-				)
-			} else if gotErr != nil && tt.wantErr != nil {
-				if gotErr.Error() != tt.wantErr.Error() {
-					t.Errorf("Unexpected error message. got %q; want %q",
-						gotErr.Error(), tt.wantErr.Error())
-				}
-			}
+			RunOpenSSHVersionTest(t, tt.name, tt.input, tt.wantIsGreater, tt.wantErr)
 		})
+	}
+}
+
+func TestOpenSSHVersion8Dot1OrGreaterViaBruteForce(t *testing.T) {
+	t.Parallel()
+	for major := 9; major <= 15; major++ {
+		for minor := 0; minor < 100; minor++ {
+			versionStr := "OpenSSH_" + strconv.Itoa(major) + "." + strconv.Itoa(minor)
+			expectedIsGreater := true
+			testName := "Testing openssh version " + versionStr
+			RunOpenSSHVersionTest(t, testName, versionStr, expectedIsGreater, nil)
+		}
+	}
+}
+
+func RunOpenSSHVersionTest(t *testing.T, testName string, versionOutput string, expectedIsGreater bool, expectedErr error) {
+	gotIsGreater, gotErr := isOpenSSHVersion8Dot1OrGreater(versionOutput)
+
+	if gotIsGreater != expectedIsGreater {
+		t.Errorf(
+			"isOpenSSHVersion8Dot1OrGreater(%q) got %v; want %v",
+			versionOutput,
+			gotIsGreater,
+			expectedIsGreater,
+		)
+	}
+
+	if (gotErr != nil) != (expectedErr != nil) {
+		t.Errorf(
+			"isOpenSSHVersion8Dot1OrGreater(%q) error = %v; want %v",
+			versionOutput,
+			gotErr,
+			expectedErr,
+		)
+	} else if gotErr != nil && expectedErr != nil {
+		if gotErr.Error() != expectedErr.Error() {
+			t.Errorf("Unexpected error message. got %q; want %q",
+				gotErr.Error(), expectedErr.Error())
+		}
 	}
 }
 
@@ -149,6 +174,7 @@ func RunCliAndCaptureResult(t *testing.T, args []string) (string, int) {
 }
 
 func TestRun(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		args       []string
