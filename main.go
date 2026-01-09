@@ -40,6 +40,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 	"github.com/thediveo/enumflag/v2"
+	"golang.org/x/mod/semver"
 	"golang.org/x/term"
 )
 
@@ -450,7 +451,6 @@ func checkOpenSSHVersion() {
 func getOpenSSHVersion() string {
 	// OS-specific package manager queries
 	osType := detectOS()
-	log.Printf("Attempting OS-specific version detection for: %s", osType)
 
 	switch osType {
 	case OSTypeRHEL:
@@ -503,7 +503,7 @@ func getOpenSSHVersion() string {
 	return ""
 }
 
-func isOpenSSHVersion8Dot1OrGreater(opensshVersion string) (bool, error) {
+func isOpenSSHVersion8Dot1OrGreater(opensshVersionStr string) (bool, error) {
 	// To handle versions like 9.9p1; we only need the initial numeric part for the comparison
 	re, err := regexp.Compile(`^(\d+(?:\.\d+)*).*`)
 	if err != nil {
@@ -511,8 +511,8 @@ func isOpenSSHVersion8Dot1OrGreater(opensshVersion string) (bool, error) {
 		return false, err
 	}
 
-	opensshVersion = strings.TrimPrefix(
-		strings.Split(opensshVersion, ", ")[0],
+	opensshVersion := strings.TrimPrefix(
+		strings.Split(opensshVersionStr, ", ")[0],
 		"OpenSSH_",
 	)
 
@@ -523,9 +523,10 @@ func isOpenSSHVersion8Dot1OrGreater(opensshVersion string) (bool, error) {
 		return false, errors.New("invalid OpenSSH version")
 	}
 
-	version := matches[1]
-
-	if version >= "8.1" {
+	version := "v" + matches[1] // semver requires that version strings start with 'v'
+	// OpenSSH doesn't use semantic versioning, but does use major.minor which after stripping the patch version can be compared using semver
+	if semver.Compare(version, "v8.1.0") >= 0 {
+		// if version is greater than or equal to v8.1.0
 		return true, nil
 	}
 
