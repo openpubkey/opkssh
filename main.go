@@ -524,7 +524,7 @@ func isOpenSSHVersion8Dot1OrGreater(opensshVersionStr string) (bool, error) {
 	}
 
 	version := "v" + matches[1] // semver requires that version strings start with 'v'
-	// OpenSSH doesn't use semantic versioning, but does use major.minor which after striping the patch version can be compared using semver
+	// OpenSSH doesn't use semantic versioning, but does use major.minor which after stripping the patch version can be compared using semver
 	if semver.Compare(version, "v8.1.0") >= 0 {
 		// if version is greater than or equal to v8.1.0
 		return true, nil
