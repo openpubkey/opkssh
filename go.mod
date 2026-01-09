@@ -3,19 +3,19 @@ module github.com/openpubkey/opkssh
 go 1.23.7
 
 require (
-	github.com/docker/go-connections v0.5.0
+	github.com/docker/go-connections v0.6.0
 	github.com/jeremija/gosubmit v0.2.8
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/lestrrat-go/jwx/v2 v2.1.6
 	github.com/melbahja/goph v1.4.0
 	github.com/openpubkey/openpubkey v0.18.0
-	github.com/spf13/cobra v1.9.1
-	github.com/stretchr/testify v1.10.0
+	github.com/spf13/cobra v1.10.1
+	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.38.0
 	github.com/thediveo/enumflag/v2 v2.0.7
-	github.com/zitadel/oidc/v3 v3.41.0
-	golang.org/x/crypto v0.40.0
-	golang.org/x/term v0.33.0
+	github.com/zitadel/oidc/v3 v3.44.0
+	golang.org/x/crypto v0.41.0
+	golang.org/x/term v0.34.0
 )
 
 require (
@@ -98,7 +98,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/segmentio/asm v1.2.0 // indirect
 	github.com/spf13/afero v1.14.0
-	golang.org/x/exp v0.0.0-20250717185816-542afb5b7346
+	golang.org/x/exp 8b4c13bb791b
 	golang.org/x/oauth2 v0.30.0 // indirect
 	golang.org/x/sys v0.34.0 // indirect
 	golang.org/x/text v0.27.0 // indirect
