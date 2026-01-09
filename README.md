@@ -518,6 +518,7 @@ opkssh add root alice@example.com https://authentik.local/application/o/opkssh/
 | [Azure](https://www.azure.com/)                | ✅     | [Entra ID (Azure) Integration Guide](docs/providers/azure.md)                                           |
 | [Gitlab Self-hosted](https://gitlab.com/)      | ✅     | [Configuration guide](docs/gitlab-selfhosted.md)                                                        |
 | [Kanidm](https://kanidm.com/)                  | ✅ | [Kanidm Integration Guide](https://kanidm.github.io/kanidm/master/integrations/oauth2/examples.html#opkssh)|
+| [Keycloak](https://www.keycloak.org)           | ✅     | [Keycloak Integration Guide](docs/providers/keycloak.md)                                                |
 | [PocketID](https://pocket-id.org/)             | ✅     | Create a new OIDC Client and inside the new client, check "Public client" on OIDC Client Settings       |
 | [Zitadel](https://zitadel.com/)                | ✅     | Check the UserInfo box on the Token Settings                                                            |
 
