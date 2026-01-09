@@ -129,7 +129,7 @@ func TestValidateEntry(t *testing.T) {
 func TestValidationSummary(t *testing.T) {
 	t.Parallel()
 
-	results := []policy.ValidationResult{
+	results := []policy.ValidationRowResult{
 		{Status: policy.StatusSuccess, Principal: "root", IdentityAttr: "alice@mail.com", Issuer: "google"},
 		{Status: policy.StatusSuccess, Principal: "dev", IdentityAttr: "bob@mail.com", Issuer: "https://accounts.google.com"},
 		{Status: policy.StatusWarning, Principal: "root", IdentityAttr: "charlie@mail.com", Issuer: "azure"},
@@ -151,7 +151,7 @@ func TestValidationSummary(t *testing.T) {
 func TestValidationSummaryNoErrors(t *testing.T) {
 	t.Parallel()
 
-	results := []policy.ValidationResult{
+	results := []policy.ValidationRowResult{
 		{Status: policy.StatusSuccess, Principal: "root", IdentityAttr: "alice@mail.com", Issuer: "google"},
 		{Status: policy.StatusSuccess, Principal: "dev", IdentityAttr: "bob@mail.com", Issuer: "https://accounts.google.com"},
 	}
@@ -198,7 +198,7 @@ func TestPolicyValidatorAliasResolution(t *testing.T) {
 func TestEmptyValidationResults(t *testing.T) {
 	t.Parallel()
 
-	var results []policy.ValidationResult
+	var results []policy.ValidationRowResult
 	summary := policy.CalculateSummary(results)
 
 	require.Equal(t, 0, summary.TotalTested)

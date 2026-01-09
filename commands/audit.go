@@ -19,11 +19,13 @@ package commands
 import (
 	"fmt"
 	"io"
+	"io/fs"
 	"os/user"
 	"path/filepath"
 	"strings"
 
 	"github.com/openpubkey/opkssh/policy"
+	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/spf13/afero"
 )
 
@@ -31,24 +33,31 @@ import (
 type AuditCmd struct {
 	Fs                 afero.Fs
 	Out                io.Writer
+	filePermsChecker   files.PermsChecker
 	ProviderLoader     policy.ProviderLoader
 	SystemProviderPath string // Path to provider definitions
 	SystemPolicyPath   string // Path to policy definitions
 	CurrentUsername    string
 	ProviderFilePath   string // Custom provider file path
 	PolicyFilePath     string // Custom policy file path
+	JsonOutput         bool   // Output results in JSON format
 	SkipUserPolicy     bool   // Skip auditing user policy file
 }
 
 // NewAuditCmd creates a new AuditCmd with default settings
 func NewAuditCmd(out io.Writer) *AuditCmd {
+	fs := afero.NewOsFs()
 	return &AuditCmd{
-		Fs:                 afero.NewOsFs(),
+		Fs:                 fs,
 		Out:                out,
 		ProviderLoader:     policy.NewProviderFileLoader(),
 		SystemProviderPath: policy.SystemDefaultProvidersPath,
 		SystemPolicyPath:   policy.SystemDefaultPolicyPath,
 		CurrentUsername:    getCurrentUsername(),
+		filePermsChecker: files.PermsChecker{
+			Fs:        fs,
+			CmdRunner: files.ExecCmd,
+		},
 	}
 }
 
@@ -70,12 +79,20 @@ func (a *AuditCmd) Run() int {
 		fmt.Fprintf(a.Out, "ERROR: Failed to load providers from %s: %v\n", providerPath, err)
 		return 1
 	}
+	permErr := a.filePermsChecker.CheckPerm(providerPath, []fs.FileMode{files.ModeSystemPerms}, "root", "opksshuser")
+
+	totalResults := TotalResults{
+		ProviderResults: ProviderResults{
+			FilePath:         providerPath,
+			PermissionsError: permErr,
+		},
+	}
 
 	// Create validator from provider policy
 	validator := policy.NewPolicyValidator(providerPolicy)
 
 	// Collect all validation results
-	var allResults []policy.ValidationResult
+	var allResults []policy.ValidationRowResult
 
 	// Determine which policy file to use for system policy
 	policyPath := policy.SystemDefaultPolicyPath
@@ -84,23 +101,23 @@ func (a *AuditCmd) Run() int {
 	}
 
 	// Audit policy file
-	systemResults, exists, err := a.auditPolicyFileWithStatus(policyPath, validator)
+	systemResults, exists, err := a.auditPolicyFileWithStatus(policyPath, []fs.FileMode{files.ModeSystemPerms}, validator)
 	if err != nil {
 		fmt.Fprintf(a.Out, "ERROR: Failed to audit policy file: %v\n", err)
 		return 1
 	}
+	totalResults.SystemPolicyFile = *systemResults
 
 	if exists {
 		fmt.Fprintf(a.Out, "\nValidating %s...\n\n", policyPath)
-		for _, result := range systemResults {
+		for _, result := range systemResults.Row {
 			a.printResult(result)
 		}
-		allResults = append(allResults, systemResults...)
+		allResults = append(allResults, systemResults.Row...)
 	}
 
 	// Audit user policy file if it exists and not skipping
 	if !a.SkipUserPolicy {
-
 		// We read /etc/passwd to enumerate all the home directories to find auth_id policy files.
 		var etcPasswdContent []byte
 		etcPasswdpath := "/etc/passwd"
@@ -119,26 +136,26 @@ func (a *AuditCmd) Run() int {
 
 		}
 		homeDirs := getHomeDirsFromEtcPasswd(string(etcPasswdContent))
-
 		for _, row := range homeDirs {
 			userPolicyPath := filepath.Join(row.HomeDir, ".opk", "auth_id")
 			// TODO: Check misconfiguration where username does not matched current user
-			userResults, userExists, err := a.auditPolicyFileWithStatus(userPolicyPath, validator)
+			userResults, userExists, err := a.auditPolicyFileWithStatus(userPolicyPath, []fs.FileMode{files.ModeHomePerms}, validator)
 			if err != nil {
 				fmt.Fprintf(a.Out, "WARNING: Failed to audit user policy file at %s: %v\n", userPolicyPath, err)
 				// Don't fail completely if user policy is unreadable
 			} else if userExists {
 				fmt.Fprintf(a.Out, "\nValidating %s...\n\n", userPolicyPath)
-				for _, result := range userResults {
+				for _, result := range userResults.Row {
 					a.printResult(result)
 				}
-				allResults = append(allResults, userResults...)
+				allResults = append(allResults, userResults.Row...)
+				totalResults.HomePolicyFiles = append(totalResults.HomePolicyFiles, *userResults)
 			}
 		}
 	}
 
 	// Print summary only (results already printed above)
-	if len(allResults) == 0 {
+	if len(totalResults.HomePolicyFiles) == 0 && len(totalResults.SystemPolicyFile.Row) == 0 {
 		fmt.Fprintf(a.Out, "\nNo policy entries to validate.\n")
 	}
 
@@ -151,8 +168,11 @@ func (a *AuditCmd) Run() int {
 }
 
 // auditPolicyFileWithStatus validates all entries in a policy file and returns results, whether file exists, and any errors
-func (a *AuditCmd) auditPolicyFileWithStatus(policyPath string, validator *policy.PolicyValidator) ([]policy.ValidationResult, bool, error) {
-	var results []policy.ValidationResult
+func (a *AuditCmd) auditPolicyFileWithStatus(policyPath string, requiredPerms []fs.FileMode, validator *policy.PolicyValidator) (*PolicyFileResult, bool, error) {
+	results := &PolicyFileResult{
+		FilePath: policyPath,
+		Row:      []policy.ValidationRowResult{},
+	}
 
 	// Check if file exists
 	exists, err := afero.Exists(a.Fs, policyPath)
@@ -164,6 +184,7 @@ func (a *AuditCmd) auditPolicyFileWithStatus(policyPath string, validator *polic
 		// File doesn't exist, return empty results with exists=false
 		return results, false, nil
 	}
+	results.PermissionsError = a.filePermsChecker.CheckPerm(policyPath, requiredPerms, "", "")
 
 	// Load policy file
 	content, err := afero.ReadFile(a.Fs, policyPath)
@@ -179,7 +200,7 @@ func (a *AuditCmd) auditPolicyFileWithStatus(policyPath string, validator *polic
 		// Each user entry maps to principals
 		for _, principal := range user.Principals {
 			result := validator.ValidateEntry(principal, user.IdentityAttribute, user.Issuer, lineNumber)
-			results = append(results, result)
+			results.Row = append(results.Row, result)
 		}
 		lineNumber++
 	}
@@ -188,7 +209,7 @@ func (a *AuditCmd) auditPolicyFileWithStatus(policyPath string, validator *polic
 }
 
 // printResult prints a single validation result
-func (a *AuditCmd) printResult(result policy.ValidationResult) {
+func (a *AuditCmd) printResult(result policy.ValidationRowResult) {
 	var statusBadge string
 	switch result.Status {
 	case policy.StatusSuccess:

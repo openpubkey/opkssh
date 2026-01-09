@@ -30,8 +30,8 @@ const (
 	StatusError   ValidationStatus = "ERROR"
 )
 
-// ValidationResult represents the result of validating a single policy entry
-type ValidationResult struct {
+// ValidationRowResult represents the result of validating a single policy entry
+type ValidationRowResult struct {
 	Status         ValidationStatus
 	Principal      string
 	IdentityAttr   string
@@ -71,8 +71,8 @@ func NewPolicyValidator(providerPolicy *ProviderPolicy) *PolicyValidator {
 }
 
 // ValidateEntry validates a single policy entry against the provider definitions
-func (v *PolicyValidator) ValidateEntry(principal, identityAttr, issuer string, lineNumber int) ValidationResult {
-	result := ValidationResult{
+func (v *PolicyValidator) ValidateEntry(principal, identityAttr, issuer string, lineNumber int) ValidationRowResult {
+	result := ValidationRowResult{
 		Principal:    principal,
 		IdentityAttr: identityAttr,
 		Issuer:       issuer,
@@ -144,7 +144,7 @@ func (s *ValidationSummary) GetExitCode() int {
 }
 
 // CalculateSummary calculates summary statistics from a list of validation results
-func CalculateSummary(results []ValidationResult) ValidationSummary {
+func CalculateSummary(results []ValidationRowResult) ValidationSummary {
 	summary := ValidationSummary{
 		TotalTested: len(results),
 	}

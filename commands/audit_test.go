@@ -23,17 +23,18 @@ import (
 	"testing"
 
 	"github.com/openpubkey/opkssh/policy"
+	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )
 
-const etcPasswdContent = "root:x:0:0:root:/root:/bin/bash\n" +
-	"# Comment line\n" +
-	"dev:x:1001:1001::/home/dev:/bin/sh\n" +
-	"\n" +
-	"alice:x:995:981::/home/alice:/bin/sh\n" +
-	"bob:x:1002:1002::/home/bob:/bin/sh\n" +
-	"carol:x:1003:1003::/home/carol:/bin/sh\n"
+const etcPasswdContent = `root:x:0:0:root:/root:/bin/bash\n" +
+# Comment line
+dev:x:1001:1001::/home/dev:/bin/sh
+
+alice:x:995:981::/home/alice:/bin/sh
+bob:x:1002:1002::/home/bob:/bin/sh
+carol:x:1003:1003::/home/carol:/bin/sh`
 
 // TestAuditCmd tests the audit command
 func TestAuditCmd(t *testing.T) {
@@ -54,9 +55,9 @@ func TestAuditCmd(t *testing.T) {
 		{
 			name: "Valid configuration",
 			providerContent: `https://accounts.google.com google-client-id 24h
-https://auth.example.com example-client-id 24h`,
+		https://auth.example.com example-client-id 24h`,
 			authIDContent: `root alice@mail.com google
-dev bob@example.com https://auth.example.com`,
+		dev bob@example.com https://auth.example.com`,
 			currentUsername:      "testuser",
 			hasUserAuthID:        false,
 			expectedSuccessCount: 2,
@@ -73,7 +74,7 @@ dev bob@example.com https://auth.example.com`,
 			name:            "Protocol mismatch error",
 			providerContent: `https://accounts.google.com google-client-id 24h`,
 			authIDContent: `root alice@mail.com https://accounts.google.com
-root bob@mail.com http://accounts.google.com`,
+		root bob@mail.com http://accounts.google.com`,
 			currentUsername:      "testuser",
 			hasUserAuthID:        false,
 			expectedSuccessCount: 1,
@@ -146,6 +147,12 @@ root bob@mail.com http://accounts.google.com`,
 				SystemProviderPath: "/etc/opk/providers",
 				SystemPolicyPath:   "/etc/opk/auth_id",
 				CurrentUsername:    tt.currentUsername,
+				filePermsChecker: files.PermsChecker{
+					Fs: fs,
+					CmdRunner: func(name string, arg ...string) ([]byte, error) {
+						return []byte("root" + " " + "opkssh"), nil
+					},
+				},
 			}
 
 			// Run audit
