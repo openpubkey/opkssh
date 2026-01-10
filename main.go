@@ -326,6 +326,56 @@ Arguments:
 	verifyCmd.Flags().StringVar(&serverConfigPathArg, "config-path", "/etc/opk/config.yml", "Path to the server config file. Default: /etc/opk/config.yml.")
 	rootCmd.AddCommand(verifyCmd)
 
+	auditCmd := &cobra.Command{
+		SilenceUsage: true,
+		Use:          "audit",
+		Short:        "Validate policy file entries against provider definitions",
+		Long: `Audit validates all entries in /etc/opk/auth_id and ~/.opk/auth_id against the provider definitions in /etc/opk/providers.
+
+The audit command checks that:
+  - Each issuer in policy files is defined in the providers file
+  - The protocol (http:// or https://) exactly matches between policy and provider files
+  - Predefined aliases (google, azure, microsoft, gitlab, hello) are correctly used
+
+Results are reported with the following status:
+  ✓ SUCCESS  - Entry is valid
+  ⚠ WARNING  - Entry is valid but uses an alias instead of full URL
+  ✗ ERROR    - Entry has issues (missing provider, protocol mismatch, etc.)
+
+Exit code: 0 if all entries are valid, 1 if any warnings or errors are found.`,
+		Example: `  opkssh audit`,
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			audit := commands.NewAuditCmd(os.Stdout)
+
+			// Apply command-line flags
+			providersFile, _ := cmd.Flags().GetString("providers-file")
+			if providersFile != "" {
+				audit.ProviderFilePath = providersFile
+			}
+
+			policyFile, _ := cmd.Flags().GetString("policy-file")
+			if policyFile != "" {
+				audit.PolicyFilePath = policyFile
+			}
+
+			skipUser, _ := cmd.Flags().GetBool("skip-user-policy")
+			audit.SkipUserPolicy = skipUser
+
+			exitCode := audit.Run()
+			if exitCode != 0 {
+				return fmt.Errorf("audit found issues")
+			}
+			return nil
+		},
+	}
+
+	auditCmd.Flags().String("providers-file", "/etc/opk/providers", "Path to providers file")
+	auditCmd.Flags().String("policy-file", "/etc/opk/auth_id", "Path to policy file")
+	auditCmd.Flags().Bool("skip-user-policy", false, "Skip auditing user policy file (~/.opk/auth_id)")
+
+	rootCmd.AddCommand(auditCmd)
+
 	clientCmd := &cobra.Command{
 		Use:     "client [subcommand]",
 		Short:   "Interact with client configuration",
