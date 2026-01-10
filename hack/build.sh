@@ -14,7 +14,7 @@ mkdir -p .mod-cache
 docker run --rm \
     -v "$PWD":/data/ \
     -w /data \
-    --user=$(id -g):$(id -g) \
+    --user=$(id -u):$(id -g) \
     -v ${PWD}/.cache:/.cache \
     -v ${PWD}/.mod-cache:/go/pkg/mod \
     golang:${GO_VERSION}-alpine \
