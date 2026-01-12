@@ -52,6 +52,7 @@ func TestNewTokens(t *testing.T) {
 		principal         string
 		sshCert           string
 		keyType           string
+		extraArgs         []string
 		expectTokens      map[string]string
 		expectErrorString string
 	}{
@@ -73,11 +74,13 @@ func TestNewTokens(t *testing.T) {
 			principal:    "root",
 			sshCert:      b64("SSH certificate"),
 			keyType:      "ssh-rsa",
+			extraArgs:    []string{"extraArg1", "extraArg2"},
 			expectTokens: map[string]string{
 				"OPKSSH_PLUGIN_AUD":            "test_client_id",
 				"OPKSSH_PLUGIN_EMAIL":          "alice@gmail.com",
 				"OPKSSH_PLUGIN_EMAIL_VERIFIED": "true",
 				"OPKSSH_PLUGIN_EXP":            "-",
+				"OPKSSH_PLUGIN_EXTRA_ARGS":     `["extraArg1","extraArg2"]`,
 				"OPKSSH_PLUGIN_GROUPS":         `["admin","user"]`,
 				"OPKSSH_PLUGIN_IAT":            "1999999990",
 				"OPKSSH_PLUGIN_IDT":            "-",
@@ -107,6 +110,7 @@ func TestNewTokens(t *testing.T) {
 				"OPKSSH_PLUGIN_EMAIL":          "",
 				"OPKSSH_PLUGIN_EMAIL_VERIFIED": "",
 				"OPKSSH_PLUGIN_EXP":            "-",
+				"OPKSSH_PLUGIN_EXTRA_ARGS":     "",
 				"OPKSSH_PLUGIN_GROUPS":         "",
 				"OPKSSH_PLUGIN_IAT":            "1999999990",
 				"OPKSSH_PLUGIN_IDT":            "-",
@@ -137,6 +141,7 @@ func TestNewTokens(t *testing.T) {
 				"OPKSSH_PLUGIN_EMAIL":          "",
 				"OPKSSH_PLUGIN_EMAIL_VERIFIED": "",
 				"OPKSSH_PLUGIN_EXP":            "-",
+				"OPKSSH_PLUGIN_EXTRA_ARGS":     "",
 				"OPKSSH_PLUGIN_GROUPS":         "",
 				"OPKSSH_PLUGIN_IAT":            "1999999990",
 				"OPKSSH_PLUGIN_IDT":            "-",
@@ -167,7 +172,7 @@ func TestNewTokens(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens, err := PopulatePluginEnvVars(tt.pkt, tt.userInfoJson, tt.principal, tt.sshCert, tt.keyType)
+			tokens, err := PopulatePluginEnvVars(tt.pkt, tt.userInfoJson, tt.principal, tt.sshCert, tt.keyType, tt.extraArgs)
 			if tt.expectErrorString != "" {
 				require.Error(t, err)
 				require.ErrorContains(t, err, tt.expectErrorString)

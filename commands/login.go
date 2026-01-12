@@ -85,6 +85,7 @@ type LoginCmd struct {
 	ProviderArg           string // OpenID Provider specification in the format: <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes>
 	ProviderAliasArg      string
 	KeyTypeArg            KeyType
+	PrintKeyArg           bool // Print private key and SSH cert instead of writing them to the filesystem
 	SSHConfigured         bool
 	Verbosity             int                       // Default verbosity is 0, 1 is verbose, 2 is debug
 	overrideProvider      *providers.OpenIdProvider // Used in tests to override the provider to inject a mock provider
@@ -98,12 +99,15 @@ type LoginCmd struct {
 	alg        jwa.SignatureAlgorithm
 	client     *client.OpkClient
 	principals []string
+
+	// For testing
+	OutWriter io.Writer // Captures non-logged output that would normally be written to stdout
 }
 
 // NewLogin creates a new LoginCmd instance with the provided arguments.
 func NewLogin(autoRefreshArg bool, configPathArg string, createConfigArg bool, configureArg bool, logDirArg string,
 	sendAccessTokenArg bool, disableBrowserOpenArg bool, printIdTokenArg bool,
-	providerArg string, keyPathArg string, providerAliasArg string, keyTypeArg KeyType,
+	providerArg string, printKeyArg bool, keyPathArg string, providerAliasArg string, keyTypeArg KeyType,
 ) *LoginCmd {
 	return &LoginCmd{
 		Fs:                    afero.NewOsFs(),
@@ -117,6 +121,7 @@ func NewLogin(autoRefreshArg bool, configPathArg string, createConfigArg bool, c
 		PrintIdTokenArg:       printIdTokenArg,
 		KeyPathArg:            keyPathArg,
 		ProviderArg:           providerArg,
+		PrintKeyArg:           printKeyArg,
 		ProviderAliasArg:      providerAliasArg,
 		KeyTypeArg:            keyTypeArg,
 	}
@@ -455,7 +460,11 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 	}
 
 	// Write ssh secret key and public key to filesystem
-	if seckeyPath != "" {
+	if l.PrintKeyArg {
+		w := l.out()
+		fmt.Fprintln(w, string(certBytes))    // Base64 encoded SSH cert
+		fmt.Fprintln(w, string(seckeySshPem)) // SSH private key in OpenSSH native format
+	} else if seckeyPath != "" {
 		// If we have set seckeyPath then write it there
 		if err := l.writeKeys(seckeyPath, seckeyPath+"-cert.pub", seckeySshPem, certBytes); err != nil {
 			return nil, fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
@@ -578,6 +587,13 @@ func (l *LoginCmd) LoginWithRefresh(ctx context.Context, provider providers.Refr
 			}
 		}
 	}
+}
+
+func (l *LoginCmd) out() io.Writer {
+	if l.OutWriter != nil {
+		return l.OutWriter
+	}
+	return os.Stdout
 }
 
 func createSSHCert(pkt *pktoken.PKToken, signer crypto.Signer, principals []string) ([]byte, []byte, error) {

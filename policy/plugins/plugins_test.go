@@ -511,14 +511,14 @@ command: /usr/bin/local/opk/policy-cmd arg1 arg2 arg3`), 0640)
 	pkt, err := client.Auth(context.Background())
 	require.NoError(t, err)
 
-	res, err := enforcer.CheckPolicies(tempDir, pkt, "", "root", "ssh-cert", "ssh-rsa")
+	res, err := enforcer.CheckPolicies(tempDir, pkt, "", "root", "ssh-cert", "ssh-rsa", nil)
 	require.NoError(t, err)
 	require.NotNil(t, res)
 
 	brokenPkt := pkt
 	brokenPkt.OpToken = []byte("corrupt.corrupt.corrupt")
 
-	res, err = enforcer.CheckPolicies(tempDir, brokenPkt, "", "root", "ssh-cert", "ssh-rsa")
+	res, err = enforcer.CheckPolicies(tempDir, brokenPkt, "", "root", "ssh-cert", "ssh-rsa", nil)
 	require.Error(t, err)
 	require.Nil(t, res)
 }

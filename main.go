@@ -40,6 +40,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 	"github.com/thediveo/enumflag/v2"
+	"golang.org/x/mod/semver"
 	"golang.org/x/term"
 )
 
@@ -151,6 +152,7 @@ Arguments:
 	var sendAccessTokenArg bool
 	var disableBrowserOpenArg bool
 	var printIdTokenArg bool
+	var printKeyArg bool
 	var keyPathArg string
 	var keyTypeArg commands.KeyType
 	loginCmd := &cobra.Command{
@@ -183,7 +185,7 @@ Arguments:
 				providerAliasArg = args[0]
 			}
 
-			login := commands.NewLogin(autoRefreshArg, configPathArg, createConfigArg, configureArg, logDirArg, sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, keyPathArg, providerAliasArg, keyTypeArg)
+			login := commands.NewLogin(autoRefreshArg, configPathArg, createConfigArg, configureArg, logDirArg, sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, printKeyArg, keyPathArg, providerAliasArg, keyTypeArg)
 			if err := login.Run(ctx); err != nil {
 				log.Println("Error executing login command:", err)
 				return err
@@ -203,6 +205,7 @@ Arguments:
 	loginCmd.Flags().BoolVar(&printIdTokenArg, "print-id-token", false, "Set this flag to print out the contents of the id_token. Useful for inspecting claims")
 	loginCmd.Flags().BoolVar(&sendAccessTokenArg, "send-access-token", false, "Set this flag to send the Access Token as well as the PK Token in the SSH cert. The Access Token is used to call the userinfo endpoint to get claims not included in the ID Token")
 	loginCmd.Flags().StringVar(&providerArg, "provider", "", "OpenID Provider specification in the format: <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes>")
+	loginCmd.Flags().BoolVarP(&printKeyArg, "print-key", "p", false, "Print private key and SSH cert instead of writing them to the filesystem")
 	loginCmd.Flags().StringVarP(&keyPathArg, "private-key-file", "i", "", "Path where private keys is written")
 	loginCmd.Flags().VarP(enumflag.New(&keyTypeArg, "Key Type", map[commands.KeyType][]string{commands.ECDSA: {commands.ECDSA.String()}, commands.ED25519: {commands.ED25519.String()}}, enumflag.EnumCaseInsensitive), "key-type", "t", "Type of key to generate")
 	rootCmd.AddCommand(loginCmd)
@@ -260,7 +263,7 @@ Arguments:
   principal    Target username.
   cert         Base64-encoded SSH certificate.
   key_type     SSH certificate key type (e.g., ecdsa-sha2-nistp256-cert-v01@openssh.com)`,
-		Args:    cobra.ExactArgs(3),
+		Args:    cobra.MinimumNArgs(3),
 		Example: `  opkssh verify root <base64-encoded-cert> ecdsa-sha2-nistp256-cert-v01@openssh.com`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
@@ -286,6 +289,7 @@ Arguments:
 			userArg := args[0]
 			certB64Arg := args[1]
 			typArg := args[2]
+			extraArgs := args[3:]
 
 			providerPolicyPath := "/etc/opk/providers"
 			providerPolicy, err := policy.NewProviderFileLoader().LoadProviderPolicy(providerPolicyPath)
@@ -308,7 +312,7 @@ Arguments:
 				log.Println("Failed to set environment variables in config:", err)
 			}
 
-			if authKey, err := v.AuthorizedKeysCommand(ctx, userArg, typArg, certB64Arg); err != nil {
+			if authKey, err := v.AuthorizedKeysCommand(ctx, userArg, typArg, certB64Arg, extraArgs); err != nil {
 				log.Println("failed to verify:", err)
 				return err
 			} else {
@@ -447,7 +451,6 @@ func checkOpenSSHVersion() {
 func getOpenSSHVersion() string {
 	// OS-specific package manager queries
 	osType := detectOS()
-	log.Printf("Attempting OS-specific version detection for: %s", osType)
 
 	switch osType {
 	case OSTypeRHEL:
@@ -500,7 +503,7 @@ func getOpenSSHVersion() string {
 	return ""
 }
 
-func isOpenSSHVersion8Dot1OrGreater(opensshVersion string) (bool, error) {
+func isOpenSSHVersion8Dot1OrGreater(opensshVersionStr string) (bool, error) {
 	// To handle versions like 9.9p1; we only need the initial numeric part for the comparison
 	re, err := regexp.Compile(`^(\d+(?:\.\d+)*).*`)
 	if err != nil {
@@ -508,8 +511,8 @@ func isOpenSSHVersion8Dot1OrGreater(opensshVersion string) (bool, error) {
 		return false, err
 	}
 
-	opensshVersion = strings.TrimPrefix(
-		strings.Split(opensshVersion, ", ")[0],
+	opensshVersion := strings.TrimPrefix(
+		strings.Split(opensshVersionStr, ", ")[0],
 		"OpenSSH_",
 	)
 
@@ -520,9 +523,10 @@ func isOpenSSHVersion8Dot1OrGreater(opensshVersion string) (bool, error) {
 		return false, errors.New("invalid OpenSSH version")
 	}
 
-	version := matches[1]
-
-	if version >= "8.1" {
+	version := "v" + matches[1] // semver requires that version strings start with 'v'
+	// OpenSSH doesn't use semantic versioning, but does use major.minor which after stripping the patch version can be compared using semver
+	if semver.Compare(version, "v8.1.0") >= 0 {
+		// if version is greater than or equal to v8.1.0
 		return true, nil
 	}
 

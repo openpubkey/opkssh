@@ -6,6 +6,11 @@ To make this process as straightforward as possible we provide this guide.
 
 **Note:** If you just want to use Azure with OPKSSH for personal email accounts, you can use default Azure client ID that comes with OPKSSH.
 
+> [!IMPORTANT]
+> If you're using a "Work or School Account" to sign in, the `azure` alias in `opkssh add` won't work for you!
+> Instead, use the full `opkssh add user@example.com https://login.microsoftonline.com/{TENANT_ID}/v2.0` syntax.
+> See [#443](https://github.com/openpubkey/opkssh/issues/443)
+
 **Something not working?** Open a new issue on <https://github.com/openpubkey/opkssh>
 
 ## Setup
