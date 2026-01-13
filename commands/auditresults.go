@@ -18,22 +18,31 @@ package commands
 
 import "github.com/openpubkey/opkssh/policy"
 
+// TotalResults aggregates all results of the audit
 type TotalResults struct {
+	// Overall status of the audit, true if the audit did not find any problems
+	Ok bool
+	// Username of the process that ran the audit
+	Username         string
 	ProviderResults  ProviderResults
 	SystemPolicyFile PolicyFileResult
 	HomePolicyFiles  []PolicyFileResult
 }
 
+// ProviderResults records the results of auditing a provider file, e.g. /etc/opk/providers
 type ProviderResults struct {
 	FilePath string
-	// PermissionsError records any permission errors found on the provider file
-	PermissionsError error
+	// Error records any permission errors found on the provider file
+	Error string
 }
 
+// PolicyFileResult records the results of auditing a policy file, e.g. /etc/opk/auth_id or ~/.opk/auth_id
 type PolicyFileResult struct {
 	FilePath string
 	// The validation results for each row in the policy file
 	Row []policy.ValidationRowResult
-	// PermissionsError records any permission errors found on the provider file
-	PermissionsError error
+	// Error records any errors found in reading the policy file
+	Error string
+	// PermsError records any permission errors found on the policy file
+	PermsError string
 }

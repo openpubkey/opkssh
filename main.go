@@ -345,27 +345,22 @@ Exit code: 0 if all entries are valid, 1 if any warnings or errors are found.`,
 		Example: `  opkssh audit`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			audit := commands.NewAuditCmd(os.Stdout)
+			audit := commands.NewAuditCmd(os.Stdout, os.Stderr)
 
 			// Apply command-line flags
 			providersFile, _ := cmd.Flags().GetString("providers-file")
 			if providersFile != "" {
-				audit.ProviderFilePath = providersFile
+				audit.ProviderPath = providersFile
 			}
 
 			policyFile, _ := cmd.Flags().GetString("policy-file")
 			if policyFile != "" {
-				audit.PolicyFilePath = policyFile
+				audit.PolicyPath = policyFile
 			}
 
 			skipUser, _ := cmd.Flags().GetBool("skip-user-policy")
 			audit.SkipUserPolicy = skipUser
-
-			exitCode := audit.Run()
-			if exitCode != 0 {
-				return fmt.Errorf("audit found issues")
-			}
-			return nil
+			return audit.Run()
 		},
 	}
 

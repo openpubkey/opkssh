@@ -17,6 +17,7 @@
 package commands
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
@@ -31,109 +32,92 @@ import (
 
 // AuditCmd provides functionality to audit policy files against provider definitions
 type AuditCmd struct {
-	Fs                 afero.Fs
-	Out                io.Writer
-	filePermsChecker   files.PermsChecker
-	ProviderLoader     policy.ProviderLoader
-	SystemProviderPath string // Path to provider definitions
-	SystemPolicyPath   string // Path to policy definitions
-	CurrentUsername    string
-	ProviderFilePath   string // Custom provider file path
-	PolicyFilePath     string // Custom policy file path
-	JsonOutput         bool   // Output results in JSON format
-	SkipUserPolicy     bool   // Skip auditing user policy file
+	Fs               afero.Fs
+	Out              io.Writer
+	ErrOut           io.Writer
+	filePermsChecker files.PermsChecker
+	ProviderLoader   policy.ProviderLoader
+	CurrentUsername  string
+
+	// Args
+	ProviderPath   string // Custom provider file path
+	PolicyPath     string // Custom policy file path
+	JsonOutput     bool   // Output results in JSON format
+	SkipUserPolicy bool   // Skip auditing user policy file
 }
 
 // NewAuditCmd creates a new AuditCmd with default settings
-func NewAuditCmd(out io.Writer) *AuditCmd {
+func NewAuditCmd(out io.Writer, errOut io.Writer) *AuditCmd {
 	fs := afero.NewOsFs()
 	return &AuditCmd{
-		Fs:                 fs,
-		Out:                out,
-		ProviderLoader:     policy.NewProviderFileLoader(),
-		SystemProviderPath: policy.SystemDefaultProvidersPath,
-		SystemPolicyPath:   policy.SystemDefaultPolicyPath,
-		CurrentUsername:    getCurrentUsername(),
+		Fs:              fs,
+		Out:             out,
+		ErrOut:          errOut,
+		ProviderLoader:  policy.NewProviderFileLoader(),
+		CurrentUsername: getCurrentUsername(),
 		filePermsChecker: files.PermsChecker{
 			Fs:        fs,
 			CmdRunner: files.ExecCmd,
 		},
+
+		ProviderPath: policy.SystemDefaultProvidersPath,
+		PolicyPath:   policy.SystemDefaultPolicyPath,
 	}
 }
 
-// Run executes the audit command
-// Returns exit code: 0 for success, 1 for warnings/errors
-func (a *AuditCmd) Run() int {
-	// Determine which provider file to use
-	providerPath := a.SystemProviderPath
-	if a.ProviderFilePath != "" {
-		providerPath = a.ProviderFilePath
+func (a *AuditCmd) Audit() (*TotalResults, error) {
+	providerPath := a.ProviderPath
+	policyPath := a.PolicyPath
+
+	totalResults := &TotalResults{
+		Username: a.CurrentUsername,
 	}
 
 	// Load providers first
 	providerPolicy, err := a.ProviderLoader.LoadProviderPolicy(providerPath)
 	if err != nil {
 		if strings.Contains(err.Error(), "permission denied") {
-			fmt.Fprintf(a.Out, "opkssh audit must be run as root, try `sudo opkssh audit` %s\n", providerPath)
+			fmt.Fprint(a.ErrOut, "opkssh audit must be run as root, try `sudo opkssh audit`\n")
 		}
-		fmt.Fprintf(a.Out, "ERROR: Failed to load providers from %s: %v\n", providerPath, err)
-		return 1
+		return nil, fmt.Errorf("failed to load providers (%s): %v", providerPath, err)
 	}
-	permErr := a.filePermsChecker.CheckPerm(providerPath, []fs.FileMode{files.ModeSystemPerms}, "root", "opksshuser")
-
-	totalResults := TotalResults{
-		ProviderResults: ProviderResults{
-			FilePath:         providerPath,
-			PermissionsError: permErr,
-		},
+	totalResults.ProviderResults = ProviderResults{
+		FilePath: providerPath,
 	}
 
 	// Create validator from provider policy
 	validator := policy.NewPolicyValidator(providerPolicy)
 
-	// Collect all validation results
-	var allResults []policy.ValidationRowResult
-
-	// Determine which policy file to use for system policy
-	policyPath := policy.SystemDefaultPolicyPath
-	if a.PolicyFilePath != "" {
-		policyPath = a.PolicyFilePath
-	}
-
 	// Audit policy file
 	systemResults, exists, err := a.auditPolicyFileWithStatus(policyPath, []fs.FileMode{files.ModeSystemPerms}, validator)
 	if err != nil {
-		fmt.Fprintf(a.Out, "ERROR: Failed to audit policy file: %v\n", err)
-		return 1
+		return nil, fmt.Errorf("failed to audit policy file: %v", err)
 	}
 	totalResults.SystemPolicyFile = *systemResults
 
 	if exists {
-		fmt.Fprintf(a.Out, "\nValidating %s...\n\n", policyPath)
-		for _, result := range systemResults.Row {
-			a.printResult(result)
+		fmt.Fprintf(a.ErrOut, "\nvalidating %s...\n\n", policyPath)
+		if !a.JsonOutput {
+			for _, result := range systemResults.Row {
+				a.printResult(result)
+			}
 		}
-		allResults = append(allResults, systemResults.Row...)
 	}
 
 	// Audit user policy file if it exists and not skipping
 	if !a.SkipUserPolicy {
 		// We read /etc/passwd to enumerate all the home directories to find auth_id policy files.
 		var etcPasswdContent []byte
-		etcPasswdpath := "/etc/passwd"
-		if exists, err := afero.Exists(a.Fs, etcPasswdpath); err != nil {
-			fmt.Fprintf(a.Out, "ERROR: Failed to read /etc/passwd to enumerate user home directories: %v\n", err)
-			return 1
-		} else if !exists {
-			fmt.Fprintf(a.Out, "Error: /etc/passwd does not exist, cannot enumerate user home directories\n")
-			return 1
+		passwdPath := "/etc/passwd"
+		if exists, err := afero.Exists(a.Fs, passwdPath); !exists {
+			return nil, fmt.Errorf("failed to read /etc/passwd: /etc/passwd not found (needed to enumerate user home policies)")
+		} else if err != nil {
+			return nil, fmt.Errorf("failed to read /etc/passwd: %v", err)
 		} else {
-			etcPasswdContent, err = afero.ReadFile(a.Fs, etcPasswdpath)
+			etcPasswdContent, err = afero.ReadFile(a.Fs, passwdPath)
 			if err != nil {
-				fmt.Fprintf(a.Out, "ERROR: Failed to read /etc/passwd (needed to enumerate user home directories): %v\n", err)
-				return 1
+				return nil, fmt.Errorf("failed to read /etc/passwd: %v", err)
 			}
-
 		}
 		homeDirs := getHomeDirsFromEtcPasswd(string(etcPasswdContent))
 		for _, row := range homeDirs {
@@ -141,30 +125,58 @@ func (a *AuditCmd) Run() int {
 			// TODO: Check misconfiguration where username does not matched current user
 			userResults, userExists, err := a.auditPolicyFileWithStatus(userPolicyPath, []fs.FileMode{files.ModeHomePerms}, validator)
 			if err != nil {
-				fmt.Fprintf(a.Out, "WARNING: Failed to audit user policy file at %s: %v\n", userPolicyPath, err)
+				fmt.Fprintf(a.ErrOut, "failed to audit user policy file at %s: %v\n", userPolicyPath, err)
+				totalResults.HomePolicyFiles = append(totalResults.HomePolicyFiles,
+					PolicyFileResult{FilePath: userPolicyPath, Error: err.Error()})
 				// Don't fail completely if user policy is unreadable
 			} else if userExists {
-				fmt.Fprintf(a.Out, "\nValidating %s...\n\n", userPolicyPath)
+				fmt.Fprintf(a.ErrOut, "\nvalidating %s...\n\n", userPolicyPath)
 				for _, result := range userResults.Row {
 					a.printResult(result)
 				}
-				allResults = append(allResults, userResults.Row...)
 				totalResults.HomePolicyFiles = append(totalResults.HomePolicyFiles, *userResults)
 			}
 		}
 	}
+	return totalResults, nil
+}
+
+// Run executes the audit command returns an error if it can't perform the
+// audit or if the audit finds errors or warnings in system configuration
+func (a *AuditCmd) Run() error {
+	totalResults, err := a.Audit()
+	if err != nil {
+		return err
+	}
 
 	// Print summary only (results already printed above)
 	if len(totalResults.HomePolicyFiles) == 0 && len(totalResults.SystemPolicyFile.Row) == 0 {
-		fmt.Fprintf(a.Out, "\nNo policy entries to validate.\n")
+		fmt.Fprint(a.ErrOut, "\nno policy entries to validate\n")
 	}
 
-	// Print summary
+	// Collect all validation results
+	allResults := []policy.ValidationRowResult{}
+	allResults = append(allResults, totalResults.SystemPolicyFile.Row...)
+	for _, homePolicy := range totalResults.HomePolicyFiles {
+		allResults = append(allResults, homePolicy.Row...)
+	}
 	summary := policy.CalculateSummary(allResults)
-	a.printSummary(summary)
 
-	// Return appropriate exit code
-	return summary.GetExitCode()
+	if a.JsonOutput {
+		jsonBytes, err := json.MarshalIndent(totalResults, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal JSON output: %v", err)
+		} else {
+			fmt.Fprintln(a.Out, string(jsonBytes))
+		}
+	} else {
+		a.printSummary(summary)
+	}
+
+	if summary.HasErrors() {
+		return fmt.Errorf("audit completed and discovered errors")
+	}
+	return nil
 }
 
 // auditPolicyFileWithStatus validates all entries in a policy file and returns results, whether file exists, and any errors
@@ -184,7 +196,10 @@ func (a *AuditCmd) auditPolicyFileWithStatus(policyPath string, requiredPerms []
 		// File doesn't exist, return empty results with exists=false
 		return results, false, nil
 	}
-	results.PermissionsError = a.filePermsChecker.CheckPerm(policyPath, requiredPerms, "", "")
+
+	if permsErr := a.filePermsChecker.CheckPerm(policyPath, requiredPerms, "", ""); permsErr != nil {
+		results.Error = permsErr.Error()
+	}
 
 	// Load policy file
 	content, err := afero.ReadFile(a.Fs, policyPath)
@@ -224,9 +239,12 @@ func (a *AuditCmd) printResult(result policy.ValidationRowResult) {
 	fmt.Fprintf(a.Out, "%s %-8s: %s %s %s", statusBadge, statusStr, result.Principal, result.IdentityAttr, result.Issuer)
 
 	if result.Reason != "" {
-		fmt.Fprintf(a.Out, " (%s)", result.Reason)
+		fmt.Fprintf(a.Out, " (%s) ", result.Reason)
 	}
 
+	for _, hint := range result.Hint {
+		fmt.Fprintf(a.Out, " - %s ", hint)
+	}
 	fmt.Fprintf(a.Out, "\n")
 }
 

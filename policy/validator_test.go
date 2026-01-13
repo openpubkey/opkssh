@@ -40,8 +40,18 @@ func TestValidateEntry(t *testing.T) {
 		ExpirationPolicy: "24h",
 	})
 	providerPolicy.AddRow(policy.ProvidersRow{
+		Issuer:           "http://op.example.com",
+		ClientID:         "example-client-id",
+		ExpirationPolicy: "24h",
+	})
+	providerPolicy.AddRow(policy.ProvidersRow{
 		Issuer:           "https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0",
 		ClientID:         "azure-client-id",
+		ExpirationPolicy: "24h",
+	})
+	providerPolicy.AddRow(policy.ProvidersRow{
+		Issuer:           "https://trailing.slash.example.com/",
+		ClientID:         "example-client-id",
 		ExpirationPolicy: "24h",
 	})
 
@@ -54,6 +64,7 @@ func TestValidateEntry(t *testing.T) {
 		issuer                 string
 		expectedStatus         policy.ValidationStatus
 		expectedReasonContains string
+		expectedHints          []string
 	}{
 		{
 			name:                   "SUCCESS: Full URL matching provider",
@@ -72,20 +83,20 @@ func TestValidateEntry(t *testing.T) {
 			expectedReasonContains: "issuer matches provider entry",
 		},
 		{
-			name:                   "WARNING: Using google alias",
+			name:                   "ERROR: Using google alias",
 			principal:              "root",
 			identityAttr:           "alice@mail.com",
 			issuer:                 "google",
-			expectedStatus:         policy.StatusWarning,
-			expectedReasonContains: "using alias instead of full URL",
+			expectedStatus:         policy.StatusError,
+			expectedReasonContains: "issuer not found",
 		},
 		{
-			name:                   "WARNING: Using azure alias",
+			name:                   "ERROR: Using azure alias",
 			principal:              "root",
 			identityAttr:           "alice@mail.com",
 			issuer:                 "azure",
-			expectedStatus:         policy.StatusWarning,
-			expectedReasonContains: "using alias instead of full URL",
+			expectedStatus:         policy.StatusError,
+			expectedReasonContains: "issuer not found",
 		},
 		{
 			name:                   "ERROR: Issuer not found",
@@ -111,6 +122,59 @@ func TestValidateEntry(t *testing.T) {
 			expectedStatus:         policy.StatusError,
 			expectedReasonContains: "issuer not found",
 		},
+		{
+			name:                   "ERROR: Issuer is empty",
+			principal:              "root",
+			identityAttr:           "alice@mail.com",
+			issuer:                 "",
+			expectedStatus:         policy.StatusError,
+			expectedReasonContains: "issuer is empty",
+		},
+		{
+			name:                   "ERROR: almost match between issuer and provider issuer (trailing slash)",
+			principal:              "root",
+			identityAttr:           "alice@mail.com",
+			issuer:                 "https://auth.example.com/",
+			expectedStatus:         policy.StatusError,
+			expectedReasonContains: "issuer not found",
+			expectedHints:          []string{"Remove the trailing slash from the issuer URL"},
+		},
+		{
+			name:                   "ERROR: trailing slash in issuer URL",
+			principal:              "root",
+			identityAttr:           "alice@mail.com",
+			issuer:                 "https://trailing.slash.example.com/",
+			expectedStatus:         policy.StatusError,
+			expectedReasonContains: "issuer URI (https://trailing.slash.example.com/) should not have a trailing slash",
+			expectedHints:          []string{"Remove the trailing slash from the issuer URL"},
+		},
+		{
+			name:                   "ERROR: http vs https mismatch",
+			principal:              "root",
+			identityAttr:           "alice@mail.com",
+			issuer:                 "http://auth.example.com",
+			expectedStatus:         policy.StatusError,
+			expectedReasonContains: "issuer not found",
+			expectedHints:          []string{"Change the scheme http:// of the issuer URL (http://auth.example.com) to match scheme https:// of provider (https://auth.example.com)"},
+		},
+		{
+			name:                   "ERROR: https vs http mismatch",
+			principal:              "root",
+			identityAttr:           "alice@mail.com",
+			issuer:                 "https://op.example.com",
+			expectedStatus:         policy.StatusError,
+			expectedReasonContains: "issuer not found",
+			expectedHints:          []string{"Change the scheme https:// of the issuer URL (https://op.example.com) to match scheme http:// of provider (http://op.example.com)"},
+		},
+		{
+			name:                   "WARNING: http warning",
+			principal:              "root",
+			identityAttr:           "alice@mail.com",
+			issuer:                 "http://op.example.com",
+			expectedStatus:         policy.StatusWarning,
+			expectedReasonContains: "issuer does not use https scheme",
+			expectedHints:          []string{"It is recommended to use https scheme for issuer URLs"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -120,6 +184,11 @@ func TestValidateEntry(t *testing.T) {
 			require.Equal(t, tt.expectedStatus, result.Status)
 			if tt.expectedReasonContains != "" {
 				require.Contains(t, result.Reason, tt.expectedReasonContains)
+			}
+			if len(tt.expectedHints) > 0 {
+				for i, expectedHint := range tt.expectedHints {
+					require.Contains(t, result.Hint[i], expectedHint)
+				}
 			}
 		})
 	}
@@ -184,14 +253,13 @@ func TestPolicyValidatorAliasResolution(t *testing.T) {
 
 	validator := policy.NewPolicyValidator(providerPolicy)
 
-	// Test google alias
+	// We do not currently support alias in the auth_id issuer field
 	result := validator.ValidateEntry("root", "alice@mail.com", "google", 1)
-	require.Equal(t, policy.StatusWarning, result.Status)
-	require.Equal(t, "https://accounts.google.com", result.ResolvedIssuer)
+	require.Equal(t, policy.StatusError, result.Status)
+	require.Equal(t, "google", result.Issuer)
 
-	// Test microsoft alias (should also resolve)
 	result = validator.ValidateEntry("root", "alice@mail.com", "microsoft", 1)
-	require.Equal(t, policy.StatusWarning, result.Status)
+	require.Equal(t, policy.StatusError, result.Status)
 }
 
 // TestEmptyValidationResults tests empty validation results

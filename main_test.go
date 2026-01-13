@@ -174,6 +174,12 @@ func TestRun(t *testing.T) {
 			wantExit:   0,
 		},
 		{
+			name:       "Audit Help flag",
+			args:       []string{"opkssh", "audit", "--help"},
+			wantOutput: "Audit validates all entries",
+			wantExit:   0,
+		},
+		{
 			name:       "Login Help flag",
 			args:       []string{"opkssh", "login", "--help"},
 			wantOutput: "Login creates opkssh SSH keys",

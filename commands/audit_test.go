@@ -18,6 +18,7 @@ package commands
 
 import (
 	"bytes"
+	_ "embed"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -28,15 +29,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const etcPasswdContent = `root:x:0:0:root:/root:/bin/bash\n" +
-# Comment line
-dev:x:1001:1001::/home/dev:/bin/sh
+//go:embed mocks/etc-passwd
+var etcPasswdContent []byte
 
-alice:x:995:981::/home/alice:/bin/sh
-bob:x:1002:1002::/home/bob:/bin/sh
-carol:x:1003:1003::/home/carol:/bin/sh`
-
-// TestAuditCmd tests the audit command
 func TestAuditCmd(t *testing.T) {
 	t.Parallel()
 
@@ -47,27 +42,30 @@ func TestAuditCmd(t *testing.T) {
 		userAuthIDContent      string
 		currentUsername        string
 		hasUserAuthID          bool
+		jsonOutput             bool
 		expectedSuccessCount   int
 		expectedWarningCount   int
 		expectedErrorCount     int
-		expectedOutputContains []string
+		expectedStdOutContains []string
+		expectedStdErrContains []string
 	}{
 		{
 			name: "Valid configuration",
 			providerContent: `https://accounts.google.com google-client-id 24h
 		https://auth.example.com example-client-id 24h`,
-			authIDContent: `root alice@mail.com google
+			authIDContent: `root alice@mail.com https://accounts.google.com
 		dev bob@example.com https://auth.example.com`,
 			currentUsername:      "testuser",
 			hasUserAuthID:        false,
 			expectedSuccessCount: 2,
-			expectedWarningCount: 1, // google alias usage
+			expectedWarningCount: 0, // google alias usage
 			expectedErrorCount:   0,
-			expectedOutputContains: []string{
-				"Validating /etc/opk/auth_id",
+			expectedStdOutContains: []string{
 				"[OK] SUCCESS",
-				"[WARN] WARNING",
 				"Total Entries Tested:  2",
+			},
+			expectedStdErrContains: []string{
+				"validating /etc/opk/auth_id",
 			},
 		},
 		{
@@ -80,7 +78,7 @@ func TestAuditCmd(t *testing.T) {
 			expectedSuccessCount: 1,
 			expectedWarningCount: 0,
 			expectedErrorCount:   1,
-			expectedOutputContains: []string{
+			expectedStdOutContains: []string{
 				"[ERR] ERROR",
 				"issuer not found",
 			},
@@ -94,7 +92,7 @@ func TestAuditCmd(t *testing.T) {
 			expectedSuccessCount: 0,
 			expectedWarningCount: 0,
 			expectedErrorCount:   1,
-			expectedOutputContains: []string{
+			expectedStdOutContains: []string{
 				"[ERR] ERROR",
 				"issuer not found",
 			},
@@ -108,11 +106,27 @@ func TestAuditCmd(t *testing.T) {
 			expectedSuccessCount: 0,
 			expectedWarningCount: 0,
 			expectedErrorCount:   0,
-			expectedOutputContains: []string{
-				"Validating /etc/opk/auth_id",
-				"No policy entries",
+			expectedStdOutContains: []string{
 				"Total Entries Tested:  0",
 			},
+			expectedStdErrContains: []string{
+				"no policy entries",
+				"validating /etc/opk/auth_id",
+			},
+		},
+		{
+			name: "Json Output (happy path)",
+			providerContent: `https://accounts.google.com google-client-id 24h
+		https://auth.example.com example-client-id 24h`,
+			authIDContent: `root alice@mail.com google
+		dev bob@example.com https://auth.example.com`,
+			currentUsername:        "testuser",
+			hasUserAuthID:          false,
+			jsonOutput:             true,
+			expectedSuccessCount:   2,
+			expectedWarningCount:   0,
+			expectedErrorCount:     1, // google alias usage
+			expectedStdOutContains: []string{"{\n  \"Ok\": false,\n  \"Username\": \"testuser\""},
 		},
 	}
 
@@ -120,7 +134,8 @@ func TestAuditCmd(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create in-memory filesystem
 			fs := afero.NewMemMapFs()
-			out := &bytes.Buffer{}
+			stdOut := &bytes.Buffer{}
+			errOut := &bytes.Buffer{}
 
 			err := afero.WriteFile(fs, "/etc/passwd", []byte(etcPasswdContent), 0640)
 			require.NoError(t, err)
@@ -141,41 +156,45 @@ func TestAuditCmd(t *testing.T) {
 
 			// Create audit command
 			cmd := &AuditCmd{
-				Fs:                 fs,
-				Out:                out,
-				ProviderLoader:     mockLoader,
-				SystemProviderPath: "/etc/opk/providers",
-				SystemPolicyPath:   "/etc/opk/auth_id",
-				CurrentUsername:    tt.currentUsername,
+				Fs:             fs,
+				Out:            stdOut,
+				ErrOut:         errOut,
+				ProviderLoader: mockLoader,
 				filePermsChecker: files.PermsChecker{
 					Fs: fs,
 					CmdRunner: func(name string, arg ...string) ([]byte, error) {
 						return []byte("root" + " " + "opkssh"), nil
 					},
 				},
+				ProviderPath:    "/etc/opk/providers",
+				PolicyPath:      "/etc/opk/auth_id",
+				CurrentUsername: tt.currentUsername,
+				JsonOutput:      tt.jsonOutput,
 			}
 
 			// Run audit
-			exitCode := cmd.Run()
-			output := out.String()
+			runErr := cmd.Run()
+			output := stdOut.String()
+			errOutput := errOut.String()
 
 			// Verify exit code is 0 for successful audit (no errors/warnings)
 			if tt.expectedErrorCount == 0 && tt.expectedWarningCount == 0 {
-				require.Equal(t, 0, exitCode, "Expected exit code 0 for successful audit")
+				require.NoError(t, runErr, "Expected no error when audit finds no errors or warnings")
 			} else if tt.expectedErrorCount > 0 || tt.expectedWarningCount > 0 {
-				require.Equal(t, 1, exitCode, "Expected exit code 1 when errors or warnings present")
+				require.Error(t, runErr, "Expected error when audit finds errors or warnings")
 			}
 
 			// Normalize paths in output for cross-platform compatibility
 			normalizedOutput := strings.ReplaceAll(output, string(filepath.Separator), "/")
+			normalizedErrOutput := strings.ReplaceAll(errOutput, string(filepath.Separator), "/")
 
-			// Verify output contains expected strings
-			for _, expected := range tt.expectedOutputContains {
-				require.Contains(t, normalizedOutput, expected, "Expected output to contain: %s", expected)
+			// Verify stdOut and stdErr contains expected strings
+			for _, expected := range tt.expectedStdOutContains {
+				require.Contains(t, normalizedOutput, expected, "Expected stdOut to contain: %s", expected)
 			}
-
-			// Parse output to get counts (simple verification)
-			// The exact counts are verified through policy validation tests
+			for _, expected := range tt.expectedStdErrContains {
+				require.Contains(t, normalizedErrOutput, expected, "Expected stdErr to contain: %s", expected)
+			}
 		})
 	}
 }
@@ -227,24 +246,14 @@ func TestAuditCmdValidationResults(t *testing.T) {
 	successResult := validator.ValidateEntry("root", "alice@mail.com", "https://accounts.google.com", 1)
 	require.Equal(t, policy.StatusSuccess, successResult.Status)
 
-	warningResult := validator.ValidateEntry("root", "alice@mail.com", "google", 1)
-	require.Equal(t, policy.StatusWarning, warningResult.Status)
-
 	errorResult := validator.ValidateEntry("root", "alice@mail.com", "https://notfound.com", 1)
 	require.Equal(t, policy.StatusError, errorResult.Status)
 }
 
 func TestGetHomeDirsFromEtcPasswd(t *testing.T) {
 	t.Parallel()
-	etcPasswdContent := "root:x:0:0:root:/root:/bin/bash\n" +
-		"# Comment line\n" +
-		"dev:x:1001:1001::/home/dev:/bin/sh\n" +
-		"\n" +
-		"alice:x:995:981::/home/alice:/bin/sh\n" +
-		"bob:x:1002:1002::/home/bob:/bin/sh\n" +
-		"carol:x:1003:1003::/home/carol:/bin/sh\n"
 
-	etcPasswdRows := getHomeDirsFromEtcPasswd(etcPasswdContent)
+	etcPasswdRows := getHomeDirsFromEtcPasswd(string(etcPasswdContent))
 
 	require.Len(t, etcPasswdRows, 5)
 

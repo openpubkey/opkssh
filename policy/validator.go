@@ -32,21 +32,19 @@ const (
 
 // ValidationRowResult represents the result of validating a single policy entry
 type ValidationRowResult struct {
-	Status         ValidationStatus
-	Principal      string
-	IdentityAttr   string
-	Issuer         string
-	Reason         string
-	ResolvedIssuer string // For alias resolution, the full issuer URL
-	LineNumber     int    // Line number in the policy file (1-indexed)
+	Status       ValidationStatus
+	Hint         []string
+	Principal    string
+	IdentityAttr string
+	Issuer       string
+	Reason       string
+	LineNumber   int // Line number in the policy file (1-indexed)
 }
 
 // PolicyValidator validates policy file entries against provider definitions
 type PolicyValidator struct {
 	// issuerMap maps issuer URL to ProvidersRow
 	issuerMap map[string]ProvidersRow
-	// aliasMap maps alias to issuer URL
-	aliasMap map[string]string
 }
 
 // NewPolicyValidator creates a new PolicyValidator from a ProviderPolicy
@@ -56,17 +54,8 @@ func NewPolicyValidator(providerPolicy *ProviderPolicy) *PolicyValidator {
 		issuerMap[row.Issuer] = row
 	}
 
-	// Build the alias map for predefined providers
-	aliasMap := make(map[string]string)
-	aliasMap["google"] = "https://accounts.google.com"
-	aliasMap["azure"] = "https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0"
-	aliasMap["microsoft"] = "https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0"
-	aliasMap["gitlab"] = "https://gitlab.com"
-	aliasMap["hello"] = "https://issuer.hello.coop"
-
 	return &PolicyValidator{
 		issuerMap: issuerMap,
-		aliasMap:  aliasMap,
 	}
 }
 
@@ -79,29 +68,54 @@ func (v *PolicyValidator) ValidateEntry(principal, identityAttr, issuer string, 
 		LineNumber:   lineNumber,
 	}
 
-	// Check if issuer is a known alias
-	if aliasIssuer, isAlias := v.aliasMap[issuer]; isAlias {
-		result.ResolvedIssuer = aliasIssuer
-		// Check if the resolved issuer exists in providers
-		if _, exists := v.issuerMap[aliasIssuer]; exists {
-			result.Status = StatusWarning
-			result.Reason = fmt.Sprintf("using alias instead of full URL %s", aliasIssuer)
-			return result
-		}
-		// Alias resolved but issuer not in providers (shouldn't happen for predefined aliases)
+	if issuer == "" {
 		result.Status = StatusError
-		result.Reason = fmt.Sprintf("alias '%s' resolves to %s, but issuer not found in providers", issuer, aliasIssuer)
+		result.Reason = "issuer is empty"
 		return result
 	}
-
-	// If not an alias, it must be a full issuer URL - exact match required
-	result.ResolvedIssuer = issuer
 
 	// Check if issuer exists in providers (exact match)
 	_, exists := v.issuerMap[issuer]
 	if !exists {
 		result.Status = StatusError
 		result.Reason = "issuer not found in /etc/opk/providers"
+
+		// issuer in policy file as a trailing slash, but issuer in provider does not
+		if issuer[len(issuer)-1] == '/' {
+			if almostMatchingIssuer, exists := v.issuerMap[issuer[0:len(issuer)-1]]; exists {
+				result.Hint = append(result.Hint,
+					fmt.Sprintf("Remove the trailing slash from the issuer URL (%s) to match provider entry (%s)",
+						issuer, almostMatchingIssuer.Issuer))
+				return result
+			}
+		}
+
+		// issuer in policy file as is http, but issuer in provider is https
+		httpIssuer := strings.Replace(issuer, "http://", "https://", 1)
+		if almostMatchingIssuer, exists := v.issuerMap[httpIssuer]; exists {
+			result.Hint = append(result.Hint,
+				fmt.Sprintf("Change the scheme http:// of the issuer URL (%s) to match scheme https:// of provider (%s)",
+					issuer, almostMatchingIssuer.Issuer))
+			return result
+		}
+
+		// issuer in policy file as is https, but issuer in provider is http
+		httpsIssuer := strings.Replace(issuer, "https://", "http://", 1)
+		if almostMatchingIssuer, exists := v.issuerMap[httpsIssuer]; exists {
+			result.Hint = append(result.Hint,
+				fmt.Sprintf("Change the scheme https:// of the issuer URL (%s) to match scheme http:// of provider (%s)",
+					issuer, almostMatchingIssuer.Issuer))
+			return result
+		}
+
+		result.Hint = append(result.Hint, "Ensure the issuer URL is correct and matches an entry in /etc/opk/providers")
+		return result
+	}
+
+	if issuer[len(issuer)-1] == '/' {
+		result.Status = StatusError
+		result.Reason = fmt.Sprintf("issuer URI (%s) should not have a trailing slash /", issuer)
+		result.Hint = append(result.Hint, "Remove the trailing slash from the issuer URL in both the policy and provider files")
 		return result
 	}
 
@@ -109,16 +123,11 @@ func (v *PolicyValidator) ValidateEntry(principal, identityAttr, issuer string, 
 	result.Status = StatusSuccess
 	result.Reason = "issuer matches provider entry"
 
-	// Log if both http and https variants exist
-	httpIssuer := strings.Replace(issuer, "https://", "http://", 1)
-
-	if strings.HasPrefix(issuer, "https://") {
-		if _, httpExists := v.issuerMap[httpIssuer]; httpExists {
-			// Both https and http exist - this is expected for custom providers
-			result.Reason += " (note: both http:// and https:// variants exist in providers)"
-		}
+	if !strings.HasPrefix(issuer, "https://") {
+		result.Status = StatusWarning
+		result.Reason = "issuer does not use https scheme"
+		result.Hint = append(result.Hint, "It is recommended to use https scheme for issuer URLs")
 	}
-
 	return result
 }
 
