@@ -17,9 +17,9 @@
 package main
 
 import (
-	"errors"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -27,95 +27,117 @@ import (
 )
 
 func TestIsOpenSSHVersion8Dot1OrGreater(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name          string
 		input         string
 		wantIsGreater bool
-		wantErr       error
+		wantErr       string
 	}{
 		{
 			name:          "Exact 8.1",
 			input:         "OpenSSH_8.1",
 			wantIsGreater: true,
-			wantErr:       nil,
+			wantErr:       "",
 		},
 		{
 			name:          "Above 8.1 (8.4)",
 			input:         "OpenSSH_8.4",
 			wantIsGreater: true,
-			wantErr:       nil,
+			wantErr:       "",
+		},
+		{
+			name:          "Regression test for 10.0 bug",
+			input:         "OpenSSH_10.0",
+			wantIsGreater: true,
+			wantErr:       "",
 		},
 		{
 			name:          "Above 8.1 with patch (9.9p1)",
 			input:         "OpenSSH_9.9p1",
 			wantIsGreater: true,
-			wantErr:       nil,
+			wantErr:       "",
 		},
 		{
 			name:          "Below 8.1 (7.9)",
 			input:         "OpenSSH_7.9",
 			wantIsGreater: false,
-			wantErr:       nil,
+			wantErr:       "",
 		},
 		{
 			name:          "Multiple dotted version above 8.1 (8.1.2)",
 			input:         "OpenSSH_8.1.2",
 			wantIsGreater: true,
-			wantErr:       nil,
+			wantErr:       "",
 		},
 		{
 			name:          "Multiple dotted version below 8.1 (7.10.3)",
 			input:         "OpenSSH_7.10.3",
 			wantIsGreater: false,
-			wantErr:       nil,
+			wantErr:       "",
 		},
 		{
 			name:          "Malformed version string",
 			input:         "OpenSSH_, something not right",
 			wantIsGreater: false,
-			wantErr:       errors.New("invalid OpenSSH version"),
+			wantErr:       "invalid OpenSSH version",
 		},
 		{
 			name:          "No OpenSSH prefix at all",
 			input:         "Completely invalid input",
 			wantIsGreater: false,
-			wantErr:       errors.New("invalid OpenSSH version"),
+			wantErr:       "invalid OpenSSH version",
 		},
 		{
 			name:          "Includes trailing info (8.2, Raspbian-1)",
 			input:         "OpenSSH_8.2, Raspbian-1",
 			wantIsGreater: true,
-			wantErr:       nil,
+			wantErr:       "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotIsGreater, gotErr := isOpenSSHVersion8Dot1OrGreater(tt.input)
-
-			if gotIsGreater != tt.wantIsGreater {
-				t.Errorf(
-					"isOpenSSHVersion8Dot1OrGreater(%q) got %v; want %v",
-					tt.input,
-					gotIsGreater,
-					tt.wantIsGreater,
-				)
-			}
-
-			if (gotErr != nil) != (tt.wantErr != nil) {
-				t.Errorf(
-					"isOpenSSHVersion8Dot1OrGreater(%q) error = %v; want %v",
-					tt.input,
-					gotErr,
-					tt.wantErr,
-				)
-			} else if gotErr != nil && tt.wantErr != nil {
-				if gotErr.Error() != tt.wantErr.Error() {
-					t.Errorf("Unexpected error message. got %q; want %q",
-						gotErr.Error(), tt.wantErr.Error())
-				}
-			}
+			RunOpenSSHVersionTest(t, tt.name, tt.input, tt.wantIsGreater, tt.wantErr)
 		})
+	}
+}
+
+func TestOpenSSHVersion8Dot1OrGreaterViaBruteForce(t *testing.T) {
+	t.Parallel()
+	for major := 7; major <= 15; major++ {
+		for minor := 0; minor <= 101; minor++ {
+			versionStr := "OpenSSH_" + strconv.Itoa(major) + "." + strconv.Itoa(minor)
+			testName := "Testing openssh version " + versionStr
+
+			expectedIsGreater := true
+			if major < 8 || (major == 8 && minor < 1) {
+				expectedIsGreater = false
+			}
+			RunOpenSSHVersionTest(t, testName, versionStr, expectedIsGreater, "")
+		}
+	}
+}
+
+func RunOpenSSHVersionTest(t *testing.T, testName string, versionOutput string, expectedIsGreater bool, expectedErr string) {
+	gotIsGreater, gotErr := isOpenSSHVersion8Dot1OrGreater(versionOutput)
+
+	require.Equal(t, expectedIsGreater, gotIsGreater,
+		"Test %q failed: isOpenSSHVersion8Dot1OrGreater(%q) got %v; want %v",
+		testName, versionOutput, gotIsGreater, expectedIsGreater)
+
+	if expectedErr != "" {
+		require.Error(t, gotErr,
+			"Test %q failed: isOpenSSHVersion8Dot1OrGreater(%q) expected error = %s",
+			testName, versionOutput, expectedErr, gotErr)
+		require.ErrorContains(t, gotErr, expectedErr,
+			"Test %q failed: isOpenSSHVersion8Dot1OrGreater(%q) expected error = %s, got %v",
+			testName, versionOutput, expectedErr, gotErr)
+	} else {
+		require.NoError(t, gotErr,
+			"Test %q failed: isOpenSSHVersion8Dot1OrGreater(%q) unexpected error = %v",
+			testName, versionOutput, gotErr)
 	}
 }
 
@@ -149,6 +171,7 @@ func RunCliAndCaptureResult(t *testing.T, args []string) (string, int) {
 }
 
 func TestRun(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		args       []string
