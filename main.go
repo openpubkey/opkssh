@@ -33,9 +33,9 @@ import (
 
 	"github.com/openpubkey/opkssh/commands"
 	config "github.com/openpubkey/opkssh/commands/config"
+	"github.com/openpubkey/opkssh/internal/sysdetails"
 	"github.com/openpubkey/opkssh/policy"
 	"github.com/openpubkey/opkssh/policy/files"
-	"github.com/openpubkey/opkssh/utils"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
@@ -481,7 +481,7 @@ func printConfigProblems() {
 // system running the verifier is greater than or equal to 8.1;
 // if not then prints a warning
 func checkOpenSSHVersion() {
-	version := utils.GetOpenSSHVersion()
+	version := sysdetails.GetOpenSSHVersion()
 	if version == "" {
 		log.Println("Warning: Could not determine OpenSSH version")
 		return

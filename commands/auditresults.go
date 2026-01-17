@@ -17,8 +17,8 @@
 package commands
 
 import (
+	"github.com/openpubkey/opkssh/internal/sysdetails"
 	"github.com/openpubkey/opkssh/policy"
-	"github.com/openpubkey/opkssh/utils"
 )
 
 // TotalResults aggregates all results of the audit
@@ -36,11 +36,11 @@ type TotalResults struct {
 }
 
 func (t *TotalResults) SetOsInfo() {
-	t.OsInfo = string(utils.DetectOS())
+	t.OsInfo = string(sysdetails.DetectOS())
 }
 
 func (t *TotalResults) SetOpenSSHVersion() {
-	t.OpenSSHVersion = utils.GetOpenSSHVersion()
+	t.OpenSSHVersion = sysdetails.GetOpenSSHVersion()
 }
 
 func (t *TotalResults) SetOk() {

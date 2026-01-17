@@ -81,7 +81,7 @@ func (v *PolicyValidator) ValidateEntry(principal, identityAttr, issuer string, 
 		result.Reason = "issuer not found in /etc/opk/providers"
 
 		// issuer in policy file as a trailing slash, but issuer in provider does not
-		if issuer[len(issuer)-1] == '/' {
+		if strings.HasSuffix(issuer, "/") {
 			if almostMatchingIssuer, exists := v.issuerMap[issuer[0:len(issuer)-1]]; exists {
 				result.Hint = append(result.Hint,
 					fmt.Sprintf("Remove the trailing slash from the issuer URL (%s) to match provider entry (%s)",
@@ -108,11 +108,12 @@ func (v *PolicyValidator) ValidateEntry(principal, identityAttr, issuer string, 
 			return result
 		}
 
-		result.Hint = append(result.Hint, "Ensure the issuer URL is correct and matches an entry in /etc/opk/providers")
+		result.Hint = append(result.Hint,
+			fmt.Sprintf("Ensure the issuer URL (%s) is correct and matches an entry in /etc/opk/providers", issuer))
 		return result
 	}
 
-	if issuer[len(issuer)-1] == '/' {
+	if strings.HasSuffix(issuer, "/") {
 		result.Status = StatusError
 		result.Reason = fmt.Sprintf("issuer URI (%s) should not have a trailing slash /", issuer)
 		result.Hint = append(result.Hint, "Remove the trailing slash from the issuer URL in both the policy and provider files")

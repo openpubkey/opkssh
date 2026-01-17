@@ -97,14 +97,15 @@ func ReadRowsWithDetails(content []byte) []RowDetails {
 				})
 			continue
 		}
-		columns, err := shellquote.Split(row)
 
+		columns, err := shellquote.Split(row)
 		if err != nil {
 			tableDetails = append(tableDetails, RowDetails{
 				Error:   err,
 				Content: rowContent,
 			})
 			log.Printf("Unable to parse: %s. (%s), skipping...\n", row, err)
+			continue
 		}
 		tableDetails = append(tableDetails, RowDetails{
 			Columns: columns,

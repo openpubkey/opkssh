@@ -214,9 +214,8 @@ func (a *AuditCmd) auditPolicyFileWithStatus(policyPath string, requiredPerms []
 		return nil, true, fmt.Errorf("failed to read policy file: %w", err)
 	}
 
-	rowDetails := files.ReadRowsWithDetails(content)
-
-	for i, rowDetails := range rowDetails {
+	rowDetailsList := files.ReadRowsWithDetails(content)
+	for i, rowDetails := range rowDetailsList {
 		lineNumber := i + 1
 
 		if rowDetails.Empty {

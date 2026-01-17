@@ -14,17 +14,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package utils
+package sysdetails
 
 import (
 	"log"
 	"os/exec"
 	"strings"
 )
-
-// TODO: Write tests for this
-// TODO: make internal package
-// TODO: Come up with a better name for the package
 
 // getOpenSSHVersion attempts to get OpenSSH version using multiple fallback methods
 func GetOpenSSHVersion() string {
