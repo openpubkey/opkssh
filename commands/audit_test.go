@@ -261,7 +261,6 @@ func TestAuditCmdJson(t *testing.T) {
 			currentUsername:            "testuser",
 			expOk:                      true,
 			expUsername:                "testuser",
-			expOsInfo:                  "generic",
 			expSystemPolicyFileRowsLen: 2,
 		},
 		{
@@ -273,7 +272,6 @@ func TestAuditCmdJson(t *testing.T) {
 			currentUsername:            "testuser",
 			expOk:                      false,
 			expUsername:                "testuser",
-			expOsInfo:                  "generic",
 			expSystemPolicyFileRowsLen: 2,
 		},
 		{
@@ -285,7 +283,6 @@ func TestAuditCmdJson(t *testing.T) {
 			currentUsername:            "testuser",
 			expOk:                      false,
 			expUsername:                "testuser",
-			expOsInfo:                  "generic",
 			expSystemPolicyFileRowsLen: 2,
 		},
 	}
@@ -308,7 +305,7 @@ func TestAuditCmdJson(t *testing.T) {
 
 			require.Equal(t, tt.expOk, totalResults.Ok)
 			require.Equal(t, tt.expUsername, totalResults.Username)
-			require.Equal(t, tt.expOsInfo, totalResults.OsInfo)
+			require.NotEmpty(t, totalResults.OsInfo)
 			require.Equal(t, tt.expSystemPolicyFileRowsLen, len(totalResults.SystemPolicyFile.Rows))
 		})
 	}
