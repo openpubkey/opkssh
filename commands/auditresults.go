@@ -16,7 +16,10 @@
 
 package commands
 
-import "github.com/openpubkey/opkssh/policy"
+import (
+	"github.com/openpubkey/opkssh/policy"
+	"github.com/openpubkey/opkssh/utils"
+)
 
 // TotalResults aggregates all results of the audit
 type TotalResults struct {
@@ -24,9 +27,51 @@ type TotalResults struct {
 	Ok bool
 	// Username of the process that ran the audit
 	Username         string
-	ProviderResults  ProviderResults
+	ProviderFile     ProviderResults
 	SystemPolicyFile PolicyFileResult
 	HomePolicyFiles  []PolicyFileResult
+	OpkVersion       string
+	OpenSSHVersion   string
+	OsInfo           string
+}
+
+func (t *TotalResults) SetOsInfo() {
+	t.OsInfo = string(utils.DetectOS())
+}
+
+func (t *TotalResults) SetOpenSSHVersion() {
+	t.OpenSSHVersion = utils.GetOpenSSHVersion()
+}
+
+func (t *TotalResults) SetOk() {
+	t.Ok = t.EvaluateOk()
+}
+
+func (t *TotalResults) EvaluateOk() bool {
+	if t.SystemPolicyFile.Error != "" || t.SystemPolicyFile.PermsError != "" {
+		return false
+	}
+	for _, row := range t.SystemPolicyFile.Rows {
+		if row.Status != policy.StatusSuccess {
+			return false
+		}
+	}
+	for _, homePolicy := range t.HomePolicyFiles {
+		if homePolicy.Error != "" || homePolicy.PermsError != "" {
+			return false
+		}
+		for _, row := range homePolicy.Rows {
+			if row.Status != policy.StatusSuccess {
+				return false
+			}
+		}
+	}
+	if t.ProviderFile.Error != "" {
+		return false
+	}
+
+	// No errors encountered
+	return true
 }
 
 // ProviderResults records the results of auditing a provider file, e.g. /etc/opk/providers
@@ -40,7 +85,7 @@ type ProviderResults struct {
 type PolicyFileResult struct {
 	FilePath string
 	// The validation results for each row in the policy file
-	Row []policy.ValidationRowResult
+	Rows []policy.ValidationRowResult
 	// Error records any errors found in reading the policy file
 	Error string
 	// PermsError records any permission errors found on the policy file

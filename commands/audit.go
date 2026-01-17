@@ -65,12 +65,13 @@ func NewAuditCmd(out io.Writer, errOut io.Writer) *AuditCmd {
 	}
 }
 
-func (a *AuditCmd) Audit() (*TotalResults, error) {
+func (a *AuditCmd) Audit(opksshVersion string) (*TotalResults, error) {
 	providerPath := a.ProviderPath
 	policyPath := a.PolicyPath
 
 	totalResults := &TotalResults{
-		Username: a.CurrentUsername,
+		Username:   a.CurrentUsername,
+		OpkVersion: opksshVersion,
 	}
 
 	// Load providers first
@@ -81,7 +82,7 @@ func (a *AuditCmd) Audit() (*TotalResults, error) {
 		}
 		return nil, fmt.Errorf("failed to load providers (%s): %v", providerPath, err)
 	}
-	totalResults.ProviderResults = ProviderResults{
+	totalResults.ProviderFile = ProviderResults{
 		FilePath: providerPath,
 	}
 
@@ -98,7 +99,7 @@ func (a *AuditCmd) Audit() (*TotalResults, error) {
 	if exists {
 		fmt.Fprintf(a.ErrOut, "\nvalidating %s...\n\n", policyPath)
 		if !a.JsonOutput {
-			for _, result := range systemResults.Row {
+			for _, result := range systemResults.Rows {
 				a.printResult(result)
 			}
 		}
@@ -122,7 +123,7 @@ func (a *AuditCmd) Audit() (*TotalResults, error) {
 		homeDirs := getHomeDirsFromEtcPasswd(string(etcPasswdContent))
 		for _, row := range homeDirs {
 			userPolicyPath := filepath.Join(row.HomeDir, ".opk", "auth_id")
-			// TODO: Check misconfiguration where username does not matched current user
+
 			userResults, userExists, err := a.auditPolicyFileWithStatus(userPolicyPath, []fs.FileMode{files.ModeHomePerms}, validator)
 			if err != nil {
 				fmt.Fprintf(a.ErrOut, "failed to audit user policy file at %s: %v\n", userPolicyPath, err)
@@ -131,34 +132,40 @@ func (a *AuditCmd) Audit() (*TotalResults, error) {
 				// Don't fail completely if user policy is unreadable
 			} else if userExists {
 				fmt.Fprintf(a.ErrOut, "\nvalidating %s...\n\n", userPolicyPath)
-				for _, result := range userResults.Row {
+				for _, result := range userResults.Rows {
 					a.printResult(result)
 				}
 				totalResults.HomePolicyFiles = append(totalResults.HomePolicyFiles, *userResults)
 			}
 		}
 	}
+
+	totalResults.SetOpenSSHVersion()
+	totalResults.SetOsInfo()
+	totalResults.SetOk()
+
 	return totalResults, nil
 }
 
 // Run executes the audit command returns an error if it can't perform the
-// audit or if the audit finds errors or warnings in system configuration
-func (a *AuditCmd) Run() error {
-	totalResults, err := a.Audit()
+// audit or if the audit finds errors or warnings in system configuration.
+// The opksshVersion parameter is the current opkssh version string.
+func (a *AuditCmd) Run(opksshVersion string) error {
+	totalResults, err := a.Audit(opksshVersion)
 	if err != nil {
 		return err
 	}
 
 	// Print summary only (results already printed above)
-	if len(totalResults.HomePolicyFiles) == 0 && len(totalResults.SystemPolicyFile.Row) == 0 {
+	if len(totalResults.HomePolicyFiles) == 0 && len(totalResults.SystemPolicyFile.Rows) == 0 {
 		fmt.Fprint(a.ErrOut, "\nno policy entries to validate\n")
 	}
 
 	// Collect all validation results
 	allResults := []policy.ValidationRowResult{}
-	allResults = append(allResults, totalResults.SystemPolicyFile.Row...)
+	allResults = append(allResults, totalResults.SystemPolicyFile.Rows...)
 	for _, homePolicy := range totalResults.HomePolicyFiles {
-		allResults = append(allResults, homePolicy.Row...)
+		allResults = append(allResults, homePolicy.Rows...)
 	}
 	summary := policy.CalculateSummary(allResults)
 
@@ -183,7 +190,7 @@ func (a *AuditCmd) Run() error {
 func (a *AuditCmd) auditPolicyFileWithStatus(policyPath string, requiredPerms []fs.FileMode, validator *policy.PolicyValidator) (*PolicyFileResult, bool, error) {
 	results := &PolicyFileResult{
 		FilePath: policyPath,
-		Row:      []policy.ValidationRowResult{},
+		Rows:     []policy.ValidationRowResult{},
 	}
 
 	// Check if file exists
@@ -215,7 +222,7 @@ func (a *AuditCmd) auditPolicyFileWithStatus(policyPath string, requiredPerms []
 		// Each user entry maps to principals
 		for _, principal := range user.Principals {
 			result := validator.ValidateEntry(principal, user.IdentityAttribute, user.Issuer, lineNumber)
-			results.Row = append(results.Row, result)
+			results.Rows = append(results.Rows, result)
 		}
 		lineNumber++
 	}

@@ -30,7 +30,72 @@ import (
 )
 
 //go:embed mocks/etc-passwd
-var etcPasswdContent []byte
+var etcPasswdMock []byte
+
+// MockProviderLoader mocks policy.ProviderFileLoader
+type MockProviderLoader struct {
+	content string
+	t       *testing.T
+}
+
+func (m *MockProviderLoader) LoadProviderPolicy(path string) (*policy.ProviderPolicy, error) {
+	pp := &policy.ProviderPolicy{}
+
+	// Simple parser for test data
+	lines := bytes.Split([]byte(m.content), []byte("\n"))
+	for _, line := range lines {
+		if len(line) == 0 || bytes.HasPrefix(line, []byte("#")) {
+			continue
+		}
+
+		parts := bytes.Fields(line)
+		if len(parts) >= 3 {
+			pp.AddRow(policy.ProvidersRow{
+				Issuer:           string(parts[0]),
+				ClientID:         string(parts[1]),
+				ExpirationPolicy: string(parts[2]),
+			})
+		}
+	}
+
+	return pp, nil
+}
+
+func SetupAuditCmdMocks(t *testing.T, etcPasswdContent string, providerContent string, authIDContent string, userAuthIDContent string, hasUserAuthID bool) AuditCmd {
+	// Create in-memory filesystem
+	fs := afero.NewMemMapFs()
+
+	err := afero.WriteFile(fs, "/etc/passwd", []byte(etcPasswdContent), 0640)
+	require.NoError(t, err)
+
+	// Create provider file
+	err = afero.WriteFile(fs, "/etc/opk/providers", []byte(providerContent), 0640)
+	require.NoError(t, err)
+
+	// Create auth_id file
+	err = afero.WriteFile(fs, "/etc/opk/auth_id", []byte(authIDContent), 0640)
+	require.NoError(t, err)
+
+	// Mock provider loader
+	mockLoader := &MockProviderLoader{
+		content: providerContent,
+		t:       t,
+	}
+
+	// Create audit command
+	return AuditCmd{
+		Fs:             fs,
+		ProviderLoader: mockLoader,
+		filePermsChecker: files.PermsChecker{
+			Fs: fs,
+			CmdRunner: func(name string, arg ...string) ([]byte, error) {
+				return []byte("root" + " " + "opkssh"), nil
+			},
+		},
+		ProviderPath: "/etc/opk/providers",
+		PolicyPath:   "/etc/opk/auth_id",
+	}
+}
 
 func TestAuditCmd(t *testing.T) {
 	t.Parallel()
@@ -132,48 +197,23 @@ func TestAuditCmd(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create in-memory filesystem
-			fs := afero.NewMemMapFs()
 			stdOut := &bytes.Buffer{}
 			errOut := &bytes.Buffer{}
 
-			err := afero.WriteFile(fs, "/etc/passwd", []byte(etcPasswdContent), 0640)
-			require.NoError(t, err)
-
-			// Create provider file
-			err = afero.WriteFile(fs, "/etc/opk/providers", []byte(tt.providerContent), 0640)
-			require.NoError(t, err)
-
-			// Create auth_id file
-			err = afero.WriteFile(fs, "/etc/opk/auth_id", []byte(tt.authIDContent), 0640)
-			require.NoError(t, err)
-
-			// Mock provider loader
-			mockLoader := &MockProviderLoader{
-				content: tt.providerContent,
-				t:       t,
-			}
-
 			// Create audit command
-			cmd := &AuditCmd{
-				Fs:             fs,
-				Out:            stdOut,
-				ErrOut:         errOut,
-				ProviderLoader: mockLoader,
-				filePermsChecker: files.PermsChecker{
-					Fs: fs,
-					CmdRunner: func(name string, arg ...string) ([]byte, error) {
-						return []byte("root" + " " + "opkssh"), nil
-					},
-				},
-				ProviderPath:    "/etc/opk/providers",
-				PolicyPath:      "/etc/opk/auth_id",
-				CurrentUsername: tt.currentUsername,
-				JsonOutput:      tt.jsonOutput,
-			}
+			auditCmd := SetupAuditCmdMocks(t, string(etcPasswdMock),
+				tt.providerContent, tt.authIDContent,
+				tt.userAuthIDContent, tt.hasUserAuthID)
+			auditCmd.Out = stdOut
+			auditCmd.ErrOut = errOut
+
+			auditCmd.CurrentUsername = tt.currentUsername
+			auditCmd.JsonOutput = tt.jsonOutput
 
 			// Run audit
-			runErr := cmd.Run()
+			runErr := auditCmd.Run("test_version")
+
+			// Capture outputs
 			output := stdOut.String()
 			errOutput := errOut.String()
 
@@ -199,33 +239,74 @@ func TestAuditCmd(t *testing.T) {
 	}
 }
 
-// MockProviderLoader mocks policy.ProviderFileLoader
-type MockProviderLoader struct {
-	content string
-	t       *testing.T
-}
+func TestAuditCmdJson(t *testing.T) {
+	tests := []struct {
+		name              string
+		passwordContent   string
+		providerContent   string
+		authIDContent     string
+		userAuthIDContent string
+		currentUsername   string
+		hasUserAuthID     bool
+		// Expected results
+		expOk                      bool
+		expUsername                string
+		expOsInfo                  string
+		expSystemPolicyFileRowsLen int
+	}{
+		{
+			name:            "Ok configuration",
+			passwordContent: string(etcPasswdMock),
+			providerContent: `https://accounts.google.com google-client-id 24h
+		https://auth.example.com example-client-id 24h`,
+			authIDContent: `root alice@mail.com https://accounts.google.com
+		dev bob@example.com https://auth.example.com`,
+			currentUsername:            "testuser",
+			hasUserAuthID:              false,
+			expOk:                      true,
+			expUsername:                "testuser",
+			expOsInfo:                  "generic",
+			expSystemPolicyFileRowsLen: 2,
+		},
+		{
+			name:            "Bad provider configuration",
+			passwordContent: string(etcPasswdMock),
+			providerContent: `corrupted content`,
+			authIDContent: `root alice@mail.com https://accounts.google.com
+		dev bob@example.com https://auth.example.com`,
+			currentUsername: "testuser",
+			hasUserAuthID:   false,
 
-func (m *MockProviderLoader) LoadProviderPolicy(path string) (*policy.ProviderPolicy, error) {
-	pp := &policy.ProviderPolicy{}
-
-	// Simple parser for test data
-	lines := bytes.Split([]byte(m.content), []byte("\n"))
-	for _, line := range lines {
-		if len(line) == 0 || bytes.HasPrefix(line, []byte("#")) {
-			continue
-		}
-
-		parts := bytes.Fields(line)
-		if len(parts) >= 3 {
-			pp.AddRow(policy.ProvidersRow{
-				Issuer:           string(parts[0]),
-				ClientID:         string(parts[1]),
-				ExpirationPolicy: string(parts[2]),
-			})
-		}
+			expOk:                      false,
+			expUsername:                "testuser",
+			expOsInfo:                  "generic",
+			expSystemPolicyFileRowsLen: 2,
+		},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create audit command
+			stdOut := &bytes.Buffer{}
+			errOut := &bytes.Buffer{}
 
-	return pp, nil
+			// Create audit command
+			auditCmd := SetupAuditCmdMocks(t, tt.passwordContent,
+				tt.providerContent, tt.authIDContent,
+				tt.userAuthIDContent, tt.hasUserAuthID)
+			auditCmd.Out = stdOut
+			auditCmd.ErrOut = errOut
+			auditCmd.CurrentUsername = tt.currentUsername
+
+			totalResults, err := auditCmd.Audit("test_version")
+			require.NoError(t, err, "Expected no error during audit")
+			require.NotNil(t, totalResults, "Expected totalResults to be non-nil")
+
+			require.Equal(t, tt.expOk, totalResults.Ok)
+			require.Equal(t, tt.expUsername, totalResults.Username)
+			require.Equal(t, tt.expOsInfo, totalResults.OsInfo)
+			require.Equal(t, tt.expSystemPolicyFileRowsLen, len(totalResults.SystemPolicyFile.Rows))
+		})
+	}
 }
 
 // TestAuditCmdValidationResults tests that validation results are properly calculated
@@ -253,7 +334,7 @@ func TestAuditCmdValidationResults(t *testing.T) {
 func TestGetHomeDirsFromEtcPasswd(t *testing.T) {
 	t.Parallel()
 
-	etcPasswdRows := getHomeDirsFromEtcPasswd(string(etcPasswdContent))
+	etcPasswdRows := getHomeDirsFromEtcPasswd(string(etcPasswdMock))
 
 	require.Len(t, etcPasswdRows, 5)
 
