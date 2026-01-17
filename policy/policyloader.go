@@ -72,7 +72,7 @@ func (l *PolicyLoader) LoadPolicyAtPath(path string) (*Policy, error) {
 		return nil, err
 	}
 
-	policy := FromTable(content, path)
+	policy, _ := FromTable(content, path)
 	return policy, nil
 }
 
@@ -178,7 +178,7 @@ func (h *HomePolicyLoader) LoadHomePolicy(username string, skipInvalidEntries bo
 			return nil, "", fmt.Errorf("failed to read user policy file %s: %w", policyFilePath, userPolicyErr)
 		}
 	}
-	policy := FromTable(policyBytes, policyFilePath)
+	policy, _ := FromTable(policyBytes, policyFilePath)
 
 	if skipInvalidEntries {
 		// Build valid user policy. Ignore user entries that give access to a

@@ -215,7 +215,7 @@ func TestAdd(t *testing.T) {
 				// Assert that the correct policy file is updated
 				code, policyContents := executeCommandAsUser(t, container.Container, []string{"cat", expectedPolicyFilepath}, RootUser)
 				require.Equal(t, 0, code, "failed to read policy file")
-				gotPolicy := policy.FromTable([]byte(policyContents), "test-path")
+				gotPolicy, _ := policy.FromTable([]byte(policyContents), "test-path")
 				require.True(t, files.ConfigProblems().NoProblems())
 
 				expectedPolicy := &policy.Policy{

@@ -51,20 +51,24 @@ type Policy struct {
 	Users []User
 }
 
-// FromTable decodes whitespace delimited input into policy.Policy
-func FromTable(input []byte, path string) *Policy {
+// FromTable decodes whitespace delimited input into policy.Policy.
+// Any problems encountered during parsing are returned. When verifying,
+// these problems should be ignored so that a error on one line does not
+// prevent all users from logging in.
+func FromTable(input []byte, path string) (*Policy, []files.ConfigProblem) {
+	problems := []files.ConfigProblem{}
 	table := files.NewTable(input)
 	policy := &Policy{}
-	for i, row := range table.GetRows() {
+	for _, row := range table.GetRows() {
 		// Error should not break everyone's ability to login, skip those rows
 		if len(row) != 3 {
 			configProblem := files.ConfigProblem{
-				Filepath:            path,
-				OffendingLine:       strings.Join(row, " "),
-				OffendingLineNumber: i,
-				ErrorMessage:        fmt.Sprintf("wrong number of arguments (expected=3, got=%d)", len(row)),
-				Source:              "user policy file",
+				Filepath:      path,
+				OffendingLine: strings.Join(row, " "),
+				ErrorMessage:  fmt.Sprintf("wrong number of arguments (expected=3, got=%d)", len(row)),
+				Source:        "user policy file",
 			}
+			problems = append(problems, configProblem)
 			files.ConfigProblems().RecordProblem(configProblem)
 			continue
 		}
@@ -75,7 +79,7 @@ func FromTable(input []byte, path string) *Policy {
 		}
 		policy.Users = append(policy.Users, user)
 	}
-	return policy
+	return policy, problems
 }
 
 // AddAllowedPrincipal adds a new allowed principal to the user whose email is

@@ -180,15 +180,14 @@ func (o *ProvidersFileLoader) FromTable(input []byte, path string) *ProviderPoli
 	policy := &ProviderPolicy{
 		rows: []ProvidersRow{},
 	}
-	for i, row := range table.GetRows() {
+	for _, row := range table.GetRows() {
 		// Error should not break everyone's ability to login, skip those rows
 		if len(row) != 3 {
 			configProblem := files.ConfigProblem{
-				Filepath:            path,
-				OffendingLine:       strings.Join(row, " "),
-				OffendingLineNumber: i,
-				ErrorMessage:        fmt.Sprintf("wrong number of arguments (expected=3, got=%d)", len(row)),
-				Source:              "providers policy file",
+				Filepath:      path,
+				OffendingLine: strings.Join(row, " "),
+				ErrorMessage:  fmt.Sprintf("wrong number of arguments (expected=3, got=%d)", len(row)),
+				Source:        "providers policy file",
 			}
 			files.ConfigProblems().RecordProblem(configProblem)
 			continue

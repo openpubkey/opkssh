@@ -214,19 +214,43 @@ func (a *AuditCmd) auditPolicyFileWithStatus(policyPath string, requiredPerms []
 		return nil, true, fmt.Errorf("failed to read policy file: %w", err)
 	}
 
-	// Parse policy
-	p := policy.FromTable(content, policyPath)
+	rowDetails := files.ReadRowsWithDetails(content)
 
-	lineNumber := 1
-	for _, user := range p.Users {
-		// Each user entry maps to principals
-		for _, principal := range user.Principals {
-			result := validator.ValidateEntry(principal, user.IdentityAttribute, user.Issuer, lineNumber)
-			results.Rows = append(results.Rows, result)
+	for i, rowDetails := range rowDetails {
+		lineNumber := i + 1
+
+		if rowDetails.Empty {
+			continue
 		}
-		lineNumber++
-	}
+		if rowDetails.Error != nil {
+			result := policy.ValidationRowResult{
+				Status:     policy.StatusError,
+				Reason:     rowDetails.Error.Error(),
+				LineNumber: lineNumber,
+			}
+			results.Rows = append(results.Rows, result)
+			continue
+		}
 
+		// We break the table by rows and then feed each row as if it is its own table record the line number of error
+		p, problems := policy.FromTable([]byte(rowDetails.Content), policyPath)
+		if len(problems) > 0 {
+			result := policy.ValidationRowResult{
+				Status:     policy.StatusError,
+				Reason:     problems[0].ErrorMessage,
+				LineNumber: lineNumber,
+			}
+			results.Rows = append(results.Rows, result)
+			continue
+		}
+		for _, user := range p.Users {
+			// Each user entry maps to principals
+			for _, principal := range user.Principals {
+				result := validator.ValidateEntry(principal, user.IdentityAttribute, user.Issuer, lineNumber)
+				results.Rows = append(results.Rows, result)
+			}
+		}
+	}
 	return results, true, nil
 }
 

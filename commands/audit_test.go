@@ -61,7 +61,7 @@ func (m *MockProviderLoader) LoadProviderPolicy(path string) (*policy.ProviderPo
 	return pp, nil
 }
 
-func SetupAuditCmdMocks(t *testing.T, etcPasswdContent string, providerContent string, authIDContent string, userAuthIDContent string, hasUserAuthID bool) AuditCmd {
+func SetupAuditCmdMocks(t *testing.T, etcPasswdContent string, providerContent string, systemPolicyContent string) AuditCmd {
 	// Create in-memory filesystem
 	fs := afero.NewMemMapFs()
 
@@ -73,7 +73,7 @@ func SetupAuditCmdMocks(t *testing.T, etcPasswdContent string, providerContent s
 	require.NoError(t, err)
 
 	// Create auth_id file
-	err = afero.WriteFile(fs, "/etc/opk/auth_id", []byte(authIDContent), 0640)
+	err = afero.WriteFile(fs, "/etc/opk/auth_id", []byte(systemPolicyContent), 0640)
 	require.NoError(t, err)
 
 	// Mock provider loader
@@ -103,8 +103,7 @@ func TestAuditCmd(t *testing.T) {
 	tests := []struct {
 		name                   string
 		providerContent        string
-		authIDContent          string
-		userAuthIDContent      string
+		SystemPolicyContent    string
 		currentUsername        string
 		hasUserAuthID          bool
 		jsonOutput             bool
@@ -118,7 +117,7 @@ func TestAuditCmd(t *testing.T) {
 			name: "Valid configuration",
 			providerContent: `https://accounts.google.com google-client-id 24h
 		https://auth.example.com example-client-id 24h`,
-			authIDContent: `root alice@mail.com https://accounts.google.com
+			SystemPolicyContent: `root alice@mail.com https://accounts.google.com
 		dev bob@example.com https://auth.example.com`,
 			currentUsername:      "testuser",
 			hasUserAuthID:        false,
@@ -136,7 +135,7 @@ func TestAuditCmd(t *testing.T) {
 		{
 			name:            "Protocol mismatch error",
 			providerContent: `https://accounts.google.com google-client-id 24h`,
-			authIDContent: `root alice@mail.com https://accounts.google.com
+			SystemPolicyContent: `root alice@mail.com https://accounts.google.com
 		root bob@mail.com http://accounts.google.com`,
 			currentUsername:      "testuser",
 			hasUserAuthID:        false,
@@ -151,7 +150,7 @@ func TestAuditCmd(t *testing.T) {
 		{
 			name:                 "Missing provider",
 			providerContent:      `https://accounts.google.com google-client-id 24h`,
-			authIDContent:        `root alice@mail.com https://notfound.com`,
+			SystemPolicyContent:  `root alice@mail.com https://notfound.com`,
 			currentUsername:      "testuser",
 			hasUserAuthID:        false,
 			expectedSuccessCount: 0,
@@ -165,7 +164,7 @@ func TestAuditCmd(t *testing.T) {
 		{
 			name:                 "Empty auth_id file",
 			providerContent:      `https://accounts.google.com google-client-id 24h`,
-			authIDContent:        "",
+			SystemPolicyContent:  "",
 			currentUsername:      "testuser",
 			hasUserAuthID:        false,
 			expectedSuccessCount: 0,
@@ -183,7 +182,7 @@ func TestAuditCmd(t *testing.T) {
 			name: "Json Output (happy path)",
 			providerContent: `https://accounts.google.com google-client-id 24h
 		https://auth.example.com example-client-id 24h`,
-			authIDContent: `root alice@mail.com google
+			SystemPolicyContent: `root alice@mail.com google
 		dev bob@example.com https://auth.example.com`,
 			currentUsername:        "testuser",
 			hasUserAuthID:          false,
@@ -202,8 +201,7 @@ func TestAuditCmd(t *testing.T) {
 
 			// Create audit command
 			auditCmd := SetupAuditCmdMocks(t, string(etcPasswdMock),
-				tt.providerContent, tt.authIDContent,
-				tt.userAuthIDContent, tt.hasUserAuthID)
+				tt.providerContent, tt.SystemPolicyContent)
 			auditCmd.Out = stdOut
 			auditCmd.ErrOut = errOut
 
@@ -241,13 +239,12 @@ func TestAuditCmd(t *testing.T) {
 
 func TestAuditCmdJson(t *testing.T) {
 	tests := []struct {
-		name              string
-		passwordContent   string
-		providerContent   string
-		authIDContent     string
-		userAuthIDContent string
-		currentUsername   string
-		hasUserAuthID     bool
+		name                string
+		passwordContent     string
+		providerContent     string
+		systemPolicyContent string
+		currentUsername     string
+
 		// Expected results
 		expOk                      bool
 		expUsername                string
@@ -259,10 +256,9 @@ func TestAuditCmdJson(t *testing.T) {
 			passwordContent: string(etcPasswdMock),
 			providerContent: `https://accounts.google.com google-client-id 24h
 		https://auth.example.com example-client-id 24h`,
-			authIDContent: `root alice@mail.com https://accounts.google.com
+			systemPolicyContent: `root alice@mail.com https://accounts.google.com
 		dev bob@example.com https://auth.example.com`,
 			currentUsername:            "testuser",
-			hasUserAuthID:              false,
 			expOk:                      true,
 			expUsername:                "testuser",
 			expOsInfo:                  "generic",
@@ -272,11 +268,21 @@ func TestAuditCmdJson(t *testing.T) {
 			name:            "Bad provider configuration",
 			passwordContent: string(etcPasswdMock),
 			providerContent: `corrupted content`,
-			authIDContent: `root alice@mail.com https://accounts.google.com
+			systemPolicyContent: `root alice@mail.com https://accounts.google.com
 		dev bob@example.com https://auth.example.com`,
-			currentUsername: "testuser",
-			hasUserAuthID:   false,
-
+			currentUsername:            "testuser",
+			expOk:                      false,
+			expUsername:                "testuser",
+			expOsInfo:                  "generic",
+			expSystemPolicyFileRowsLen: 2,
+		},
+		{
+			name:            "Bad system policy",
+			passwordContent: string(etcPasswdMock),
+			providerContent: `https://accounts.google.com google-client-id 24h
+		https://auth.example.com example-client-id 24h`,
+			systemPolicyContent:        "corrupted line\n'''",
+			currentUsername:            "testuser",
 			expOk:                      false,
 			expUsername:                "testuser",
 			expOsInfo:                  "generic",
@@ -291,8 +297,7 @@ func TestAuditCmdJson(t *testing.T) {
 
 			// Create audit command
 			auditCmd := SetupAuditCmdMocks(t, tt.passwordContent,
-				tt.providerContent, tt.authIDContent,
-				tt.userAuthIDContent, tt.hasUserAuthID)
+				tt.providerContent, tt.systemPolicyContent)
 			auditCmd.Out = stdOut
 			auditCmd.ErrOut = errOut
 			auditCmd.CurrentUsername = tt.currentUsername

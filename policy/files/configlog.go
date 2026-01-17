@@ -17,21 +17,19 @@
 package files
 
 import (
-	"fmt"
 	"strings"
 	"sync"
 )
 
 type ConfigProblem struct {
-	Filepath            string
-	OffendingLine       string
-	OffendingLineNumber int
-	ErrorMessage        string
-	Source              string
+	Filepath      string
+	OffendingLine string
+	ErrorMessage  string
+	Source        string
 }
 
 func (e ConfigProblem) String() string {
-	return "encountered error: " + e.ErrorMessage + ", reading " + e.OffendingLine + " in " + e.Filepath + " at line " + fmt.Sprint(e.OffendingLineNumber)
+	return "encountered error: " + e.ErrorMessage + ", reading " + e.OffendingLine + " in " + e.Filepath
 }
 
 type ConfigLog struct {
