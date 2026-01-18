@@ -97,7 +97,7 @@ func (a *AuditCmd) Audit(opksshVersion string) (*TotalResults, error) {
 	totalResults.SystemPolicyFile = *systemResults
 
 	if exists {
-		fmt.Fprintf(a.ErrOut, "\nvalidating %s...\n\n", policyPath)
+		fmt.Fprintf(a.ErrOut, "\nvalidating %s...\n", policyPath)
 		if !a.JsonOutput {
 			for _, result := range systemResults.Rows {
 				a.printResult(result)
@@ -131,7 +131,7 @@ func (a *AuditCmd) Audit(opksshVersion string) (*TotalResults, error) {
 					PolicyFileResult{FilePath: userPolicyPath, Error: err.Error()})
 				// Don't fail completely if user policy is unreadable
 			} else if userExists {
-				fmt.Fprintf(a.ErrOut, "\nvalidating %s...\n\n", userPolicyPath)
+				fmt.Fprintf(a.ErrOut, "\nvalidating %s...\n", userPolicyPath)
 				if !a.JsonOutput {
 					for _, result := range userResults.Rows {
 						a.printResult(result)
