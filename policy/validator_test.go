@@ -187,7 +187,7 @@ func TestValidateEntry(t *testing.T) {
 			}
 			if len(tt.expectedHints) > 0 {
 				for i, expectedHint := range tt.expectedHints {
-					require.Contains(t, result.Hint[i], expectedHint)
+					require.Contains(t, result.Hints[i], expectedHint)
 				}
 			}
 		})

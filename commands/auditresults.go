@@ -21,18 +21,36 @@ import (
 	"github.com/openpubkey/opkssh/policy"
 )
 
+// ProviderResults records the results of auditing a provider file, e.g. /etc/opk/providers
+type ProviderResults struct {
+	FilePath string `json:"file_path"`
+	// Error records any permission errors found on the provider file
+	Error string `json:"error"`
+}
+
+// PolicyFileResult records the results of auditing a policy file, e.g. /etc/opk/auth_id or ~/.opk/auth_id
+type PolicyFileResult struct {
+	FilePath string `json:"file_path"`
+	// The validation results for each row in the policy file
+	Rows []policy.ValidationRowResult `json:"rows"`
+	// Error records any errors found in reading the policy file
+	Error string `json:"error"`
+	// PermsError records any permission errors found on the policy file
+	PermsError string `json:"perms_error"`
+}
+
 // TotalResults aggregates all results of the audit
 type TotalResults struct {
 	// Overall status of the audit, true if the audit did not find any problems
-	Ok bool
+	Ok bool `json:"ok"`
 	// Username of the process that ran the audit
-	Username         string
-	ProviderFile     ProviderResults
-	SystemPolicyFile PolicyFileResult
-	HomePolicyFiles  []PolicyFileResult
-	OpkVersion       string
-	OpenSSHVersion   string
-	OsInfo           string
+	Username         string             `json:"username"`
+	ProviderFile     ProviderResults    `json:"providers_file"`
+	SystemPolicyFile PolicyFileResult   `json:"system_policy"`
+	HomePolicyFiles  []PolicyFileResult `json:"home_policy"`
+	OpkVersion       string             `json:"opk_version"`
+	OpenSSHVersion   string             `json:"openssh_version"`
+	OsInfo           string             `json:"os_info"`
 }
 
 func (t *TotalResults) SetOsInfo() {
@@ -72,22 +90,4 @@ func (t *TotalResults) EvaluateOk() bool {
 
 	// No errors encountered
 	return true
-}
-
-// ProviderResults records the results of auditing a provider file, e.g. /etc/opk/providers
-type ProviderResults struct {
-	FilePath string
-	// Error records any permission errors found on the provider file
-	Error string
-}
-
-// PolicyFileResult records the results of auditing a policy file, e.g. /etc/opk/auth_id or ~/.opk/auth_id
-type PolicyFileResult struct {
-	FilePath string
-	// The validation results for each row in the policy file
-	Rows []policy.ValidationRowResult
-	// Error records any errors found in reading the policy file
-	Error string
-	// PermsError records any permission errors found on the policy file
-	PermsError string
 }

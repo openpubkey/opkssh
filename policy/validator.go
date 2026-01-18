@@ -32,13 +32,13 @@ const (
 
 // ValidationRowResult represents the result of validating a single policy entry
 type ValidationRowResult struct {
-	Status       ValidationStatus
-	Hint         []string
-	Principal    string
-	IdentityAttr string
-	Issuer       string
-	Reason       string
-	LineNumber   int // Line number in the policy file (1-indexed)
+	Status       ValidationStatus `json:"status"`
+	Hints        []string         `json:"hints"`
+	Principal    string           `json:"principal"`
+	IdentityAttr string           `json:"identity_attr"`
+	Issuer       string           `json:"issuer"`
+	Reason       string           `json:"reason"`
+	LineNumber   int              `json:"line_number"` // Line number in the policy file (1-indexed)
 }
 
 // PolicyValidator validates policy file entries against provider definitions
@@ -64,6 +64,7 @@ func (v *PolicyValidator) ValidateEntry(principal, identityAttr, issuer string, 
 	result := ValidationRowResult{
 		Principal:    principal,
 		IdentityAttr: identityAttr,
+		Hints:        []string{},
 		Issuer:       issuer,
 		LineNumber:   lineNumber,
 	}
@@ -83,7 +84,7 @@ func (v *PolicyValidator) ValidateEntry(principal, identityAttr, issuer string, 
 		// issuer in policy file as a trailing slash, but issuer in provider does not
 		if strings.HasSuffix(issuer, "/") {
 			if almostMatchingIssuer, exists := v.issuerMap[issuer[0:len(issuer)-1]]; exists {
-				result.Hint = append(result.Hint,
+				result.Hints = append(result.Hints,
 					fmt.Sprintf("Remove the trailing slash from the issuer URL (%s) to match provider entry (%s)",
 						issuer, almostMatchingIssuer.Issuer))
 				return result
@@ -93,7 +94,7 @@ func (v *PolicyValidator) ValidateEntry(principal, identityAttr, issuer string, 
 		// issuer in policy file as is http, but issuer in provider is https
 		httpIssuer := strings.Replace(issuer, "http://", "https://", 1)
 		if almostMatchingIssuer, exists := v.issuerMap[httpIssuer]; exists {
-			result.Hint = append(result.Hint,
+			result.Hints = append(result.Hints,
 				fmt.Sprintf("Change the scheme http:// of the issuer URL (%s) to match scheme https:// of provider (%s)",
 					issuer, almostMatchingIssuer.Issuer))
 			return result
@@ -102,13 +103,13 @@ func (v *PolicyValidator) ValidateEntry(principal, identityAttr, issuer string, 
 		// issuer in policy file as is https, but issuer in provider is http
 		httpsIssuer := strings.Replace(issuer, "https://", "http://", 1)
 		if almostMatchingIssuer, exists := v.issuerMap[httpsIssuer]; exists {
-			result.Hint = append(result.Hint,
+			result.Hints = append(result.Hints,
 				fmt.Sprintf("Change the scheme https:// of the issuer URL (%s) to match scheme http:// of provider (%s)",
 					issuer, almostMatchingIssuer.Issuer))
 			return result
 		}
 
-		result.Hint = append(result.Hint,
+		result.Hints = append(result.Hints,
 			fmt.Sprintf("Ensure the issuer URL (%s) is correct and matches an entry in /etc/opk/providers", issuer))
 		return result
 	}
@@ -116,7 +117,7 @@ func (v *PolicyValidator) ValidateEntry(principal, identityAttr, issuer string, 
 	if strings.HasSuffix(issuer, "/") {
 		result.Status = StatusError
 		result.Reason = fmt.Sprintf("issuer URI (%s) should not have a trailing slash /", issuer)
-		result.Hint = append(result.Hint, "Remove the trailing slash from the issuer URL in both the policy and provider files")
+		result.Hints = append(result.Hints, "Remove the trailing slash from the issuer URL in both the policy and provider files")
 		return result
 	}
 
@@ -127,7 +128,7 @@ func (v *PolicyValidator) ValidateEntry(principal, identityAttr, issuer string, 
 	if !strings.HasPrefix(issuer, "https://") {
 		result.Status = StatusWarning
 		result.Reason = "issuer does not use https scheme"
-		result.Hint = append(result.Hint, "It is recommended to use https scheme for issuer URLs")
+		result.Hints = append(result.Hints, "It is recommended to use https scheme for issuer URLs")
 	}
 	return result
 }

@@ -274,7 +274,7 @@ func (a *AuditCmd) printResult(result policy.ValidationRowResult) {
 		fmt.Fprintf(a.Out, " (%s) ", result.Reason)
 	}
 
-	for _, hint := range result.Hint {
+	for _, hint := range result.Hints {
 		fmt.Fprintf(a.Out, " - %s ", hint)
 	}
 	fmt.Fprintf(a.Out, "\n")

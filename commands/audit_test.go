@@ -190,7 +190,7 @@ func TestAuditCmd(t *testing.T) {
 			expectedSuccessCount:   2,
 			expectedWarningCount:   0,
 			expectedErrorCount:     1, // google alias usage
-			expectedStdOutContains: []string{"{\n  \"Ok\": false,\n  \"Username\": \"testuser\""},
+			expectedStdOutContains: []string{"{\n  \"ok\": false,\n  \"username\": \"testuser\""},
 		},
 	}
 
