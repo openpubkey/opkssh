@@ -330,17 +330,17 @@ Arguments:
 		SilenceUsage: true,
 		Use:          "audit",
 		Short:        "Validate policy file entries against provider definitions",
-		Long: `Audit validates all entries in /etc/opk/auth_id and ~/.opk/auth_id against the provider definitions in /etc/opk/providers.
+		Long: `Audit validates all entries in /etc/opk/auth_id and ~/.opk/auth_id against the provider definitions in /etc/opk/providers. For complete audit details use the --json flag. Returns a non-zero exit code if any warnings or errors are found.
 
 The audit command checks that:
   - Each issuer in policy files is defined in the providers file
   - The protocol (http:// or https://) exactly matches between policy and provider files
-  - Predefined aliases (google, azure, microsoft, gitlab, hello) are correctly used
+  - The auth_id policy files do not throw parsing errors
 
 Results are reported with the following status:
-  ✓ SUCCESS  - Entry is valid
-  ⚠ WARNING  - Entry is valid but uses an alias instead of full URL
-  ✗ ERROR    - Entry has issues (missing provider, protocol mismatch, etc.)
+  SUCCESS  - Entry is valid
+  WARNING  - Entry is valid but may cause problems
+  ERROR    - Entry has issues (missing provider, protocol mismatch, etc.)
 
 Exit code: 0 if all entries are valid, 1 if any warnings or errors are found.`,
 		Example: `  opkssh audit`,
@@ -361,6 +361,8 @@ Exit code: 0 if all entries are valid, 1 if any warnings or errors are found.`,
 
 			skipUser, _ := cmd.Flags().GetBool("skip-user-policy")
 			audit.SkipUserPolicy = skipUser
+
+			audit.JsonOutput, _ = cmd.Flags().GetBool("json")
 			return audit.Run(Version)
 		},
 	}
@@ -368,6 +370,7 @@ Exit code: 0 if all entries are valid, 1 if any warnings or errors are found.`,
 	auditCmd.Flags().String("providers-file", "/etc/opk/providers", "Path to providers file")
 	auditCmd.Flags().String("policy-file", "/etc/opk/auth_id", "Path to policy file")
 	auditCmd.Flags().Bool("skip-user-policy", false, "Skip auditing user policy file (~/.opk/auth_id)")
+	auditCmd.Flags().BoolP("json", "j", false, "Output complete audit results in JSON")
 
 	rootCmd.AddCommand(auditCmd)
 
