@@ -10,6 +10,8 @@ We have the follow syntax rules:
 
 Our goal is to have an distinct meaning for each column. This way if we want to extend the rules we can add additional columns.
 
+You can check the correctness of server side config files by running the audit command: `sudo opkssh audit`.
+
 ## Client config `~/.opk/config.yml`
 
 The config file for the client is saved in `~/.opk/config.yml`.
@@ -205,5 +207,7 @@ chmod 600 /home/{USER}/.opk/auth_id
 ```
 
 ## See Also
+
+Our documentation on the [audit command](audit.md) for troubleshooting server side configurations. 
 
 Our documentation on the changes our install script makes to a server: [installing.md](../scripts/installing.md)

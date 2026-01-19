@@ -81,7 +81,7 @@ func (v *PolicyValidator) ValidateEntry(principal, identityAttr, issuer string, 
 		result.Status = StatusError
 		result.Reason = "issuer not found in /etc/opk/providers"
 
-		// issuer in policy file as a trailing slash, but issuer in provider does not
+		// issuer in policy file has a trailing slash, but issuer in provider file does not have a trailing slash
 		if strings.HasSuffix(issuer, "/") {
 			if almostMatchingIssuer, exists := v.issuerMap[issuer[0:len(issuer)-1]]; exists {
 				result.Hints = append(result.Hints,

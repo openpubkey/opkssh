@@ -207,7 +207,7 @@ func (a *AuditCmd) auditPolicyFileWithStatus(policyPath string, requiredPerms []
 	}
 
 	if permsErr := a.filePermsChecker.CheckPerm(policyPath, requiredPerms, "", ""); permsErr != nil {
-		results.Error = permsErr.Error()
+		results.PermsError = permsErr.Error()
 	}
 
 	// Load policy file
