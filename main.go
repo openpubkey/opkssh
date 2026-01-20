@@ -155,6 +155,8 @@ Arguments:
 	var printKeyArg bool
 	var keyPathArg string
 	var keyTypeArg commands.KeyType
+	var remoteRedirectURIArg string
+
 	loginCmd := &cobra.Command{
 		SilenceUsage: true,
 		Use:          "login [alias]",
@@ -185,7 +187,9 @@ Arguments:
 				providerAliasArg = args[0]
 			}
 
-			login := commands.NewLogin(autoRefreshArg, configPathArg, createConfigArg, configureArg, logDirArg, sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, printKeyArg, keyPathArg, providerAliasArg, keyTypeArg)
+			login := commands.NewLogin(autoRefreshArg, configPathArg, createConfigArg, configureArg, logDirArg,
+				sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, printKeyArg, keyPathArg,
+				providerAliasArg, keyTypeArg, remoteRedirectURIArg)
 			if err := login.Run(ctx); err != nil {
 				log.Println("Error executing login command:", err)
 				return err
@@ -207,6 +211,8 @@ Arguments:
 	loginCmd.Flags().StringVar(&providerArg, "provider", "", "OpenID Provider specification in the format: <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes>")
 	loginCmd.Flags().BoolVarP(&printKeyArg, "print-key", "p", false, "Print private key and SSH cert instead of writing them to the filesystem")
 	loginCmd.Flags().StringVarP(&keyPathArg, "private-key-file", "i", "", "Path where private keys is written")
+	loginCmd.Flags().StringVarP(&remoteRedirectURIArg, "remote-redirect-uri", "r", "", "Remote redirect URI")
+
 	loginCmd.Flags().VarP(enumflag.New(&keyTypeArg, "Key Type", map[commands.KeyType][]string{commands.ECDSA: {commands.ECDSA.String()}, commands.ED25519: {commands.ED25519.String()}}, enumflag.EnumCaseInsensitive), "key-type", "t", "Type of key to generate")
 	rootCmd.AddCommand(loginCmd)
 

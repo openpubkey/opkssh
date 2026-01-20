@@ -180,15 +180,19 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 	if strings.HasPrefix(p.Issuer, "https://accounts.google.com") {
 		opts := providers.GetDefaultGoogleOpOptions()
 		opts.Issuer = p.Issuer
-		opts.ClientID = p.ClientID
-		opts.ClientSecret = p.ClientSecret
+		// opts.ClientID = p.ClientID
+		// opts.ClientSecret = p.ClientSecret
+		opts.ClientID = "411517154569-7f10v0ftgp5elms1q8fm7avtp33t7i7n.apps.googleusercontent.com"
+		opts.ClientSecret = "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" // Not a secret. This is a public value in public OIDC apps
 		opts.GQSign = false
 		if p.hasScopes() {
 			opts.Scopes = p.Scopes
 		}
 		opts.PromptType = p.Prompt
 		opts.AccessType = p.AccessType
-		opts.RedirectURIs = p.RedirectURIs
+		// opts.RedirectURIs = p.RedirectURIs
+		opts.RedirectURIs = []string{"http://localhost:3000/login-callback"}
+		opts.RemoteRedirectURI = "https://openpubkey-test.com:3000/login-callback"
 		opts.OpenBrowser = openBrowser
 		provider = providers.NewGoogleOpWithOptions(opts)
 	} else if strings.HasPrefix(p.Issuer, "https://login.microsoftonline.com") {

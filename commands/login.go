@@ -87,9 +87,10 @@ type LoginCmd struct {
 	KeyTypeArg            KeyType
 	PrintKeyArg           bool // Print private key and SSH cert instead of writing them to the filesystem
 	SSHConfigured         bool
-	Verbosity             int                       // Default verbosity is 0, 1 is verbose, 2 is debug
-	overrideProvider      *providers.OpenIdProvider // Used in tests to override the provider to inject a mock provider
+	Verbosity             int // Default verbosity is 0, 1 is verbose, 2 is debug
+	RemoteRedirectUri     string
 
+	overrideProvider *providers.OpenIdProvider // Used in tests to override the provider to inject a mock provider
 	// State
 	Config *config.ClientConfig
 
@@ -108,6 +109,7 @@ type LoginCmd struct {
 func NewLogin(autoRefreshArg bool, configPathArg string, createConfigArg bool, configureArg bool, logDirArg string,
 	sendAccessTokenArg bool, disableBrowserOpenArg bool, printIdTokenArg bool,
 	providerArg string, printKeyArg bool, keyPathArg string, providerAliasArg string, keyTypeArg KeyType,
+	remoteRedirectUri string,
 ) *LoginCmd {
 	return &LoginCmd{
 		Fs:                    afero.NewOsFs(),
@@ -124,6 +126,7 @@ func NewLogin(autoRefreshArg bool, configPathArg string, createConfigArg bool, c
 		PrintKeyArg:           printKeyArg,
 		ProviderAliasArg:      providerAliasArg,
 		KeyTypeArg:            keyTypeArg,
+		RemoteRedirectUri:     remoteRedirectUri,
 	}
 }
 

@@ -406,9 +406,10 @@ func TestNewLogin(t *testing.T) {
 	providerAlias := ""
 	keyAsOutputArg := false
 	keyTypeArg := ECDSA
+	remoteRedirectURIArg := ""
 
 	loginCmd := NewLogin(autoRefresh, configPathArg, createConfig, configureArg, logDir,
-		sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, keyAsOutputArg, keyPathArg, providerAlias, keyTypeArg)
+		sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, keyAsOutputArg, keyPathArg, providerAlias, keyTypeArg, remoteRedirectURIArg)
 	require.NotNil(t, loginCmd)
 }
 
