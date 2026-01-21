@@ -88,7 +88,7 @@ type LoginCmd struct {
 	PrintKeyArg           bool // Print private key and SSH cert instead of writing them to the filesystem
 	SSHConfigured         bool
 	Verbosity             int // Default verbosity is 0, 1 is verbose, 2 is debug
-	RemoteRedirectUri     string
+	RemoteRedirectURI     string
 
 	overrideProvider *providers.OpenIdProvider // Used in tests to override the provider to inject a mock provider
 	// State
@@ -126,7 +126,7 @@ func NewLogin(autoRefreshArg bool, configPathArg string, createConfigArg bool, c
 		PrintKeyArg:           printKeyArg,
 		ProviderAliasArg:      providerAliasArg,
 		KeyTypeArg:            keyTypeArg,
-		RemoteRedirectUri:     remoteRedirectUri,
+		RemoteRedirectURI:     remoteRedirectUri,
 	}
 }
 
@@ -393,6 +393,11 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 		if !ok {
 			return nil, nil, fmt.Errorf("error getting provider config for alias %s", defaultProviderAlias)
 		}
+		if l.RemoteRedirectURI != "" {
+			// Override the remote redirect URI
+			providerConfig.RemoteRedirectURI = l.RemoteRedirectURI
+		}
+
 		provider, err = providerConfig.ToProvider(openBrowser)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
@@ -402,9 +407,9 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 		// If the default provider is WEBCHOOSER, we need to create a chooser and return it
 		var providerList []providers.BrowserOpenIdProvider
 		for _, providerConfig := range providerConfigs {
-			if l.RemoteRedirectUri != "" {
+			if l.RemoteRedirectURI != "" {
 				// Override the remote redirect URI
-				providerConfig.RemoteRedirectURI = l.RemoteRedirectUri
+				providerConfig.RemoteRedirectURI = l.RemoteRedirectURI
 			}
 			op, err := providerConfig.ToProvider(openBrowser)
 			if err != nil {
