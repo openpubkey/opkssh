@@ -403,7 +403,8 @@ func TestDetermineProvider(t *testing.T) {
 					require.Equal(t, provider.Issuer(), tt.wantIssuer)
 
 					if tt.remoteRedirectURI != "" {
-						// This only covers the case where are a single provider is selected.
+						// This only covers the case where a single provider is selected.
+						// We handle the chooser case by matching against the expected JSON.
 						unwrappedOp, ok := provider.(*providers.StandardOp)
 						require.True(t, ok, "Expected provider to be of type StandardOp")
 						require.Equal(t, tt.remoteRedirectURI, unwrappedOp.RemoteRedirectURI)
