@@ -110,4 +110,4 @@ require (
 
 // replace github.com/openpubkey/openpubkey => github.com/ethanheilman/openpubkey v0.0.0-c77375da5a2421f9de2f2fd40e5e602fb9bd82d1
 
-replace github.com/openpubkey/openpubkey => github.com/ethanheilman/openpubkey v0.0.0-20260120010719-c77375da5a24
+replace github.com/openpubkey/openpubkey => github.com/ethanheilman/openpubkey v0.0.0-20260121034631-2ea14ff27ec0

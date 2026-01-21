@@ -211,8 +211,7 @@ Arguments:
 	loginCmd.Flags().StringVar(&providerArg, "provider", "", "OpenID Provider specification in the format: <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes>")
 	loginCmd.Flags().BoolVarP(&printKeyArg, "print-key", "p", false, "Print private key and SSH cert instead of writing them to the filesystem")
 	loginCmd.Flags().StringVarP(&keyPathArg, "private-key-file", "i", "", "Path where private keys is written")
-	loginCmd.Flags().StringVarP(&remoteRedirectURIArg, "remote-redirect-uri", "r", "", "Remote redirect URI")
-
+	loginCmd.Flags().StringVar(&remoteRedirectURIArg, "remote-redirect-uri", "", "Remote redirect URI used for non-localhost redirects. This an advanced option for embedding opkssh in server-side logic. You probably don't want to set this.")
 	loginCmd.Flags().VarP(enumflag.New(&keyTypeArg, "Key Type", map[commands.KeyType][]string{commands.ECDSA: {commands.ECDSA.String()}, commands.ED25519: {commands.ED25519.String()}}, enumflag.EnumCaseInsensitive), "key-type", "t", "Type of key to generate")
 	rootCmd.AddCommand(loginCmd)
 

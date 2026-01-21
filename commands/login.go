@@ -402,6 +402,10 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 		// If the default provider is WEBCHOOSER, we need to create a chooser and return it
 		var providerList []providers.BrowserOpenIdProvider
 		for _, providerConfig := range providerConfigs {
+			if l.RemoteRedirectUri != "" {
+				// Override the remote redirect URI
+				providerConfig.RemoteRedirectURI = l.RemoteRedirectUri
+			}
 			op, err := providerConfig.ToProvider(openBrowser)
 			if err != nil {
 				return nil, nil, fmt.Errorf("error creating provider from config: %w", err)

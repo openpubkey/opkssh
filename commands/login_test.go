@@ -310,7 +310,7 @@ func TestDetermineProvider(t *testing.T) {
 			wantIssuer:    "",
 			wantError:     false,
 			errorString:   "",
-			wantChooser:   `[{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"GQSign":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000}]`,
+			wantChooser:   `[{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"","GQSign":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"ExtraURLParamOpts":null}]`,
 		},
 		{
 			name:          "Good path with env vars many providers and no default",
@@ -319,7 +319,7 @@ func TestDetermineProvider(t *testing.T) {
 			providerAlias: "",
 			wantIssuer:    "",
 			wantError:     false,
-			wantChooser:   `[{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"GQSign":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000},{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"GQSign":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000},{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"GQSign":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000}]`,
+			wantChooser:   `[{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"","GQSign":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"ExtraURLParamOpts":null},{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"","GQSign":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"ExtraURLParamOpts":null},{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"","GQSign":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"ExtraURLParamOpts":null}]`,
 		},
 		{
 			name:          "Good path with env vars many providers and providerAlias",

@@ -45,8 +45,8 @@ github.com/docker/go-units v0.5.0 h1:69rxXcBk27SvSaaxTtLh/8llcHD8vYHT7WSdRZ/jvr4
 github.com/docker/go-units v0.5.0/go.mod h1:fgPhTUdO+D/Jk86RDLlptpiXQzgHJF7gydDDbaIK4Dk=
 github.com/ebitengine/purego v0.8.4 h1:CF7LEKg5FFOsASUj0+QwaXf8Ht6TlFxg09+S9wz0omw=
 github.com/ebitengine/purego v0.8.4/go.mod h1:iIjxzd6CiRiOG0UyXP+V1+jWqUXVjPKLAI0mRfJZTmQ=
-github.com/ethanheilman/openpubkey v0.0.0-20260120010719-c77375da5a24 h1:/BR97PxDzHElRGv7Lrxb0N3ewtGzu0mP/RN4qmsTIGk=
-github.com/ethanheilman/openpubkey v0.0.0-20260120010719-c77375da5a24/go.mod h1:mdwk/Xsr/IsnKSQ6/FIvhAGehe3NbR8BxuAbdouGXrs=
+github.com/ethanheilman/openpubkey v0.0.0-20260121034631-2ea14ff27ec0 h1:A5ye1gMRAr/v5gDTySjw5P8iXCBWokWun01peim8GC8=
+github.com/ethanheilman/openpubkey v0.0.0-20260121034631-2ea14ff27ec0/go.mod h1:mdwk/Xsr/IsnKSQ6/FIvhAGehe3NbR8BxuAbdouGXrs=
 github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2Wg=
 github.com/felixge/httpsnoop v1.0.4/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSwevea8zH2U=
 github.com/go-chi/chi/v5 v5.2.2 h1:CMwsvRVTbXVytCk1Wd72Zy1LAsAh9GxMmSNWLHCG618=
