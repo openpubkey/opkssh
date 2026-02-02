@@ -2,7 +2,7 @@ module github.com/openpubkey/opkssh
 
 go 1.24.0
 
-toolchain go1.24.12
+toolchain go1.25.6
 
 require (
 	github.com/docker/go-connections v0.5.0
