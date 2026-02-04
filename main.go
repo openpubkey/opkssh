@@ -215,6 +215,31 @@ Arguments:
 	loginCmd.Flags().VarP(enumflag.New(&keyTypeArg, "Key Type", map[commands.KeyType][]string{commands.ECDSA: {commands.ECDSA.String()}, commands.ED25519: {commands.ED25519.String()}}, enumflag.EnumCaseInsensitive), "key-type", "t", "Type of key to generate")
 	rootCmd.AddCommand(loginCmd)
 
+	logoutCmd := &cobra.Command{
+		SilenceUsage: true,
+		Use:          "logout",
+		Short:        "Logout removes opkssh SSH keys",
+		Long:         `Logout removes opkssh SSH keys`,
+		Example: `
+  opkssh logout
+  opkssh logout -i .ssh/test`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+			defer cancel()
+
+			login := commands.NewLogout(logDirArg, keyPathArg)
+			if err := login.Run(ctx); err != nil {
+				log.Println("Error executing login command:", err)
+				return err
+			}
+			return nil
+		},
+	}
+	// Define flags for logout.
+	logoutCmd.Flags().StringVar(&logDirArg, "log-dir", "", "Directory to write output logs")
+	logoutCmd.Flags().StringVarP(&keyPathArg, "private-key-file", "i", "", "Path to private key")
+	rootCmd.AddCommand(logoutCmd)
+
 	readhomeCmd := &cobra.Command{
 		SilenceUsage: true,
 		Use:          "readhome <principal>",
