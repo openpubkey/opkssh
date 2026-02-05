@@ -1,18 +1,19 @@
-name: Build
+name: Fork CD
 
-# Validates GoReleaser can build on all branches (fork-friendly)
 on:
-  pull_request:
   push:
-    branches:
-      - '**'  # Run on all branches
+    tags:
+      - 'v*'
 
 permissions: {}
 
 jobs:
-  goreleaser-build:
-    name: Build opkssh with GoReleaser
+  goreleaser-release:
+    name: Build and release opkssh (forks only)
+    if: github.event.repository.fork == true
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -29,4 +30,10 @@ jobs:
         with:
           distribution: goreleaser
           version: "~> v2"
-          args: release --clean --snapshot
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish GitHub release
+        run: gh release edit "${{ github.ref_name }}" --draft=false --repo "${{ github.repository }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

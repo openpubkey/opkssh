@@ -82,12 +82,23 @@ func New(pkt *pktoken.PKToken, accessToken []byte, principals []string) (*SshCer
 }
 
 func NewFromAuthorizedKey(certType string, certB64 string) (*SshCertSmuggler, error) {
-	if certPubkey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(certType + " " + certB64)); err != nil {
+	authorizedKeyStr := certType + " " + certB64
+	if certPubkey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(authorizedKeyStr)); err != nil {
 		return nil, err
 	} else {
 		sshCert, ok := certPubkey.(*ssh.Certificate)
 		if !ok {
-			return nil, fmt.Errorf("parsed SSH authorized_key is not an SSH certificate")
+			// Get the actual type for debugging
+			actualType := fmt.Sprintf("%T", certPubkey)
+
+			// Truncate the base64 data for display (show first 50 chars)
+			truncatedB64 := certB64
+			if len(certB64) > 50 {
+				truncatedB64 = certB64[:50] + "..."
+			}
+
+			return nil, fmt.Errorf("parsed SSH authorized_key is not an SSH certificate. Got type: %s, Key type: %s, Base64 (truncated): %s. Expected a certificate (key type should end with '-cert-v01@openssh.com')",
+				actualType, certType, truncatedB64)
 		}
 		opkcert := &SshCertSmuggler{
 			SshCert: sshCert,

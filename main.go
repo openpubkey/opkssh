@@ -21,12 +21,13 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"syscall"
 	"text/tabwriter"
@@ -47,9 +48,13 @@ import (
 var (
 	// These can be overridden at build time using ldflags. For example:
 	// go build -v -o /usr/local/bin/opkssh -ldflags "-X main.Version=version"
-	Version           = "unversioned"
-	logFilePathServer = "/var/log/opkssh.log" // Remember if you change this, change it in the install script as well
+	Version = "unversioned"
 )
+
+// GetLogFilePathServer returns the platform-specific log file path
+func GetLogFilePathServer() string {
+	return GetLogFilePath()
+}
 
 func main() {
 	os.Exit(run())
@@ -274,11 +279,12 @@ Arguments:
 			ctx := context.Background()
 
 			// Setup logger
-			logFile, err := os.OpenFile(logFilePathServer, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0660) // Owner and group can read/write
+			logFilePath := GetLogFilePathServer()
+			logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0660) // Owner and group can read/write
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error opening log file: %v\n", err)
 				// It could be very difficult to figure out what is going on if the log file was deleted. Hopefully this message saves someone an hour of debugging.
-				fmt.Fprintf(os.Stderr, "Check if log exists at %v, if it does not create it with permissions: chown root:opksshuser %v; chmod 660 %v\n", logFilePathServer, logFilePathServer, logFilePathServer)
+				fmt.Fprintf(os.Stderr, "Check if log exists at %v, if it does not create it with permissions: chown root:opksshuser %v; chmod 660 %v\n", logFilePath, logFilePath, logFilePath)
 			} else {
 				defer logFile.Close()
 				log.SetOutput(logFile)
@@ -296,10 +302,10 @@ Arguments:
 			typArg := args[2]
 			extraArgs := args[3:]
 
-			providerPolicyPath := "/etc/opk/providers"
+			providerPolicyPath := filepath.Join(policy.GetSystemConfigBasePath(), "providers")
 			providerPolicy, err := policy.NewProviderFileLoader().LoadProviderPolicy(providerPolicyPath)
 			if err != nil {
-				log.Println("Failed to open /etc/opk/providers:", err)
+				log.Printf("Failed to open %s: %v\n", providerPolicyPath, err)
 				return err
 			}
 
@@ -328,14 +334,15 @@ Arguments:
 			}
 		},
 	}
-	verifyCmd.Flags().StringVar(&serverConfigPathArg, "config-path", "/etc/opk/config.yml", "Path to the server config file. Default: /etc/opk/config.yml.")
+	defaultConfigPath := filepath.Join(policy.GetSystemConfigBasePath(), "config.yml")
+	verifyCmd.Flags().StringVar(&serverConfigPathArg, "config-path", defaultConfigPath, fmt.Sprintf("Path to the server config file. Default: %s", defaultConfigPath))
 	rootCmd.AddCommand(verifyCmd)
 
 	auditCmd := &cobra.Command{
 		SilenceUsage: true,
 		Use:          "audit",
 		Short:        "Validate policy file entries against provider definitions",
-		Long: `Audit validates all entries in /etc/opk/auth_id and ~/.opk/auth_id against the provider definitions in /etc/opk/providers. For complete audit details use the --json flag. Returns a non-zero exit code if any warnings or errors are found.
+		Long: `Audit validates all entries in the system policy file and user policy files against the provider definitions in the providers file. For complete audit details use the --json flag. Returns a non-zero exit code if any warnings or errors are found.
 
 The audit command checks that:
   - Each issuer in policy files is defined in the providers file
@@ -372,9 +379,9 @@ Exit code: 0 if all entries are valid, 1 if any warnings or errors are found.`,
 		},
 	}
 
-	auditCmd.Flags().String("providers-file", "/etc/opk/providers", "Path to providers file")
-	auditCmd.Flags().String("policy-file", "/etc/opk/auth_id", "Path to policy file")
-	auditCmd.Flags().Bool("skip-user-policy", false, "Skip auditing user policy file (~/.opk/auth_id)")
+	auditCmd.Flags().String("providers-file", policy.SystemDefaultProvidersPath, "Path to providers file")
+	auditCmd.Flags().String("policy-file", policy.SystemDefaultPolicyPath, "Path to policy file")
+	auditCmd.Flags().Bool("skip-user-policy", runtime.GOOS == "windows", "Skip auditing user policy file (~/.opk/auth_id)")
 	auditCmd.Flags().BoolP("json", "j", false, "Output complete audit results in JSON")
 
 	rootCmd.AddCommand(auditCmd)
@@ -442,6 +449,10 @@ Exit code: 0 if all entries are valid, 1 if any warnings or errors are found.`,
 
 	rootCmd.AddCommand(clientCmd)
 
+	// permissions command for checking and fixing file permissions/ACLs
+	permissionsCmd := commands.NewPermissionsCmd()
+	rootCmd.AddCommand(permissionsCmd)
+
 	// genDocsCmd is a hidden command used as a helper for generating our
 	// command line reference documentation.
 	genDocsCmd := &cobra.Command{
@@ -500,24 +511,33 @@ func checkOpenSSHVersion() {
 	}
 }
 
-func isOpenSSHVersion8Dot1OrGreater(opensshVersionStr string) (bool, error) {
-	// To handle versions like 9.9p1; we only need the initial numeric part for the comparison
-	re, err := regexp.Compile(`^(\d+(?:\.\d+)*).*`)
+func isOpenSSHVersion8Dot1OrGreater(opensshVersion string) (bool, error) {
+	// Extract version number from various formats:
+	// - "OpenSSH_9.5p1" -> "9.5"
+	// - "OpenSSH_for_Windows_9.5p2, LibreSSL 3.8.2" -> "9.5"
+
+	// First, get the part before comma (to handle LibreSSL suffix on Windows)
+	opensshVersion = strings.Split(opensshVersion, ",")[0]
+
+	// Try to extract version using regex that handles both Unix and Windows formats
+	// Matches: "OpenSSH_9.5", "OpenSSH_for_Windows_9.5", etc.
+	re, err := regexp.Compile(`OpenSSH[_a-zA-Z]*[_](\d+\.\d+)`)
 	if err != nil {
 		fmt.Println("Error compiling regex:", err)
 		return false, err
 	}
 
-	opensshVersion := strings.TrimPrefix(
-		strings.Split(opensshVersionStr, ", ")[0],
-		"OpenSSH_",
-	)
-
 	matches := re.FindStringSubmatch(opensshVersion)
 
-	if len(matches) <= 0 {
-		fmt.Println("Invalid OpenSSH version")
-		return false, errors.New("invalid OpenSSH version")
+	if len(matches) < 2 {
+		// If regex didn't match, try a simpler approach: find any version pattern
+		simpleRe := regexp.MustCompile(`(\d+\.\d+)`)
+		matches = simpleRe.FindStringSubmatch(opensshVersion)
+
+		if len(matches) < 2 {
+			log.Printf("Invalid OpenSSH version format: %s", opensshVersion)
+			return false, fmt.Errorf("invalid OpenSSH version format: %s", opensshVersion)
+		}
 	}
 
 	version := "v" + matches[1] // semver requires that version strings start with 'v'
