@@ -43,6 +43,10 @@ sudo systemctl restart ssh
 
 ## Option 2: Custom bash script to override sshd authentication
 
+You can create a custom bash script that calls `opkssh` and then calls `aws instance connect` as fallback and use it to override sshd authentication.
+
+Here are the steps to create the custom bash script:
+
 **1. Disable the EC2 Instance Connect**
 
 ```bash
