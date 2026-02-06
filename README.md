@@ -569,3 +569,4 @@ For integration tests run:
 - [docs/gitlab-selfhosted.md](docs/gitlab-selfhosted.md) Guide on configuring and using a self hosted GitLab instance with opkssh.
 - [docs/paramiko.md](docs/paramiko.md) Guide to using the python SSH paramiko library with opkssh.
 - [docs/putty.md](docs/putty.md) Guide to using PuTTY with opkssh.
+- [docs/aws-ec2.md](docs/aws-ec2.md) Guide to get opkssh working on AWS EC2.
