@@ -352,6 +352,11 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 			return nil, nil, fmt.Errorf("error parsing provider argument: %w", err)
 		}
 
+		if l.RemoteRedirectURI != "" {
+			// Override the remote redirect URI
+			providerConfig.RemoteRedirectURI = l.RemoteRedirectURI
+		}
+
 		if provider, err = providerConfig.ToProvider(openBrowser); err != nil {
 			return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
 		} else {
