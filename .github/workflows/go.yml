@@ -1,7 +1,15 @@
 name: Go Checks
 
+# Run linting and tests on all branches when Go files change (fork-friendly)
 on:
   pull_request:
+    paths:
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
+  push:
+    branches:
+      - '**'  # Run on all branches
     paths:
       - "**.go"
       - "go.mod"

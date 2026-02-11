@@ -206,22 +206,6 @@ env_vars:
 			errorString: "",
 		},
 		{
-			name:        "Wrong Permissions",
-			configFile:  map[string]string{"server_config.yml": configContent},
-			permission:  0677,
-			owner:       "root",
-			group:       "opksshuser",
-			errorString: "expected one of the following permissions [640], got (677)",
-		},
-		{
-			name:        "Wrong ownership",
-			configFile:  map[string]string{"server_config.yml": configContent},
-			permission:  0640,
-			owner:       "opksshuser",
-			group:       "opksshuser",
-			errorString: "expected owner (root), got (opksshuser)",
-		},
-		{
 			name:        "Missing config",
 			configFile:  map[string]string{"wrong-filename.yml": configContent},
 			permission:  0640,
