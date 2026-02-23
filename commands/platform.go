@@ -1,24 +1,17 @@
 package commands
 
 import (
-	"io/fs"
 	"runtime"
 
 	"github.com/openpubkey/opkssh/policy/files"
 )
 
 func expectedSystemOwner() string {
-	if runtime.GOOS == "windows" {
-		return "Administrators"
-	}
-	return "root"
+	return files.RequiredPerms.SystemPolicy.Owner
 }
 
-func expectedSystemACL(requiredPerm fs.FileMode) files.ExpectedACL {
-	return files.ExpectedACL{
-		Owner: expectedSystemOwner(),
-		Mode:  requiredPerm,
-	}
+func expectedSystemACL(pi files.PermInfo) files.ExpectedACL {
+	return files.ExpectedACLFromPerm(pi)
 }
 
 func isWindows() bool {

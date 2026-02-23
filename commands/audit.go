@@ -93,7 +93,7 @@ func (a *AuditCmd) Audit(opksshVersion string) (*TotalResults, error) {
 	validator := policy.NewPolicyValidator(providerPolicy)
 
 	// Audit policy file
-	systemResults, exists, err := a.auditPolicyFileWithStatus(policyPath, []fs.FileMode{files.ModeSystemPerms}, validator)
+	systemResults, exists, err := a.auditPolicyFileWithStatus(policyPath, files.RequiredPerms.SystemPolicy, validator)
 	if err != nil {
 		return nil, fmt.Errorf("failed to audit policy file: %v", err)
 	}
@@ -130,7 +130,7 @@ func (a *AuditCmd) Audit(opksshVersion string) (*TotalResults, error) {
 			for _, row := range homeDirs {
 				userPolicyPath := filepath.Join(row.HomeDir, ".opk", "auth_id")
 
-				userResults, userExists, err := a.auditPolicyFileWithStatus(userPolicyPath, []fs.FileMode{files.ModeHomePerms}, validator)
+				userResults, userExists, err := a.auditPolicyFileWithStatus(userPolicyPath, files.RequiredPerms.HomePolicy, validator)
 				if err != nil {
 					fmt.Fprintf(a.ErrOut, "failed to audit user policy file at %s: %v\n", userPolicyPath, err)
 					totalResults.HomePolicyFiles = append(totalResults.HomePolicyFiles,
@@ -196,7 +196,7 @@ func (a *AuditCmd) Run(opksshVersion string) error {
 }
 
 // auditPolicyFileWithStatus validates all entries in a policy file and returns results, whether file exists, and any errors
-func (a *AuditCmd) auditPolicyFileWithStatus(policyPath string, requiredPerms []fs.FileMode, validator *policy.PolicyValidator) (*PolicyFileResult, bool, error) {
+func (a *AuditCmd) auditPolicyFileWithStatus(policyPath string, permInfo files.PermInfo, validator *policy.PolicyValidator) (*PolicyFileResult, bool, error) {
 	results := &PolicyFileResult{
 		FilePath: policyPath,
 		Rows:     []policy.ValidationRowResult{},
@@ -213,13 +213,13 @@ func (a *AuditCmd) auditPolicyFileWithStatus(policyPath string, requiredPerms []
 		return results, false, nil
 	}
 
-	if permsErr := a.filePermsChecker.CheckPerm(policyPath, requiredPerms, "", ""); permsErr != nil {
+	if permsErr := a.filePermsChecker.CheckPerm(policyPath, []fs.FileMode{permInfo.Mode}, "", ""); permsErr != nil {
 		results.PermsError = permsErr.Error()
 	}
 
 	// Check ACLs if verifier is available (Windows-specific)
 	if a.aclVerifier != nil {
-		report, err := a.aclVerifier.VerifyACL(policyPath, expectedSystemACL(requiredPerms[0]))
+		report, err := a.aclVerifier.VerifyACL(policyPath, expectedSystemACL(permInfo))
 		if err == nil && len(report.Problems) > 0 {
 			for _, problem := range report.Problems {
 				fmt.Fprintf(a.ErrOut, "  ACL issue: %s\n", problem)
