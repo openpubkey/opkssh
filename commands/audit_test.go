@@ -65,15 +65,25 @@ func SetupAuditCmdMocks(t *testing.T, etcPasswdContent string, providerContent s
 	// Create in-memory filesystem
 	fs := afero.NewMemMapFs()
 
-	err := afero.WriteFile(fs, "/etc/passwd", []byte(etcPasswdContent), 0640)
-	require.NoError(t, err)
+	providerPath := policy.SystemDefaultProvidersPath
+	policyPath := policy.SystemDefaultPolicyPath
+
+	// Ensure parent directories exist (required for Windows paths like C:\ProgramData\opk\)
+	require.NoError(t, fs.MkdirAll(filepath.Dir(providerPath), 0750))
+	require.NoError(t, fs.MkdirAll(filepath.Dir(policyPath), 0750))
+
+	// Write /etc/passwd only if content is provided (Unix only; not used on Windows)
+	if etcPasswdContent != "" {
+		err := afero.WriteFile(fs, "/etc/passwd", []byte(etcPasswdContent), 0640)
+		require.NoError(t, err)
+	}
 
 	// Create provider file
-	err = afero.WriteFile(fs, "/etc/opk/providers", []byte(providerContent), 0640)
+	err := afero.WriteFile(fs, providerPath, []byte(providerContent), 0640)
 	require.NoError(t, err)
 
 	// Create auth_id file
-	err = afero.WriteFile(fs, "/etc/opk/auth_id", []byte(systemPolicyContent), 0640)
+	err = afero.WriteFile(fs, policyPath, []byte(systemPolicyContent), 0640)
 	require.NoError(t, err)
 
 	// Mock provider loader
@@ -92,8 +102,8 @@ func SetupAuditCmdMocks(t *testing.T, etcPasswdContent string, providerContent s
 				return []byte("root" + " " + "opkssh"), nil
 			},
 		},
-		ProviderPath: "/etc/opk/providers",
-		PolicyPath:   "/etc/opk/auth_id",
+		ProviderPath: providerPath,
+		PolicyPath:   policyPath,
 	}
 }
 
@@ -129,7 +139,7 @@ func TestAuditCmd(t *testing.T) {
 				"Total Entries Tested:  2",
 			},
 			expectedStdErrContains: []string{
-				"validating /etc/opk/auth_id",
+				"validating " + strings.ReplaceAll(policy.SystemDefaultPolicyPath, string(filepath.Separator), "/"),
 			},
 		},
 		{
@@ -175,7 +185,7 @@ func TestAuditCmd(t *testing.T) {
 			},
 			expectedStdErrContains: []string{
 				"no policy entries",
-				"validating /etc/opk/auth_id",
+				"validating " + strings.ReplaceAll(policy.SystemDefaultPolicyPath, string(filepath.Separator), "/"),
 			},
 		},
 		{
