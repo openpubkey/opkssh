@@ -64,7 +64,7 @@ func NewAuditCmd(out io.Writer, errOut io.Writer) *AuditCmd {
 
 		ProviderPath:   policy.SystemDefaultProvidersPath,
 		PolicyPath:     policy.SystemDefaultPolicyPath,
-		SkipUserPolicy: isWindows(),
+		SkipUserPolicy: false,
 	}
 }
 
@@ -108,25 +108,12 @@ func (a *AuditCmd) Audit(opksshVersion string) (*TotalResults, error) {
 		}
 	}
 
-	// Audit user policy file if it exists and not skipping
+	// Audit user policy files if not skipping
 	if !a.SkipUserPolicy {
-		if isWindows() {
-			fmt.Fprint(a.ErrOut, "skipping user policy audit on Windows (no /etc/passwd)\n")
+		homeDirs, err := a.enumerateUserHomeDirs()
+		if err != nil {
+			fmt.Fprintf(a.ErrOut, "warning: could not enumerate user home directories: %v\n", err)
 		} else {
-			// We read /etc/passwd to enumerate all the home directories to find auth_id policy files.
-			var etcPasswdContent []byte
-			passwdPath := "/etc/passwd"
-			if exists, err := afero.Exists(a.Fs, passwdPath); !exists {
-				return nil, fmt.Errorf("failed to read /etc/passwd: /etc/passwd not found (needed to enumerate user home policies)")
-			} else if err != nil {
-				return nil, fmt.Errorf("failed to read /etc/passwd: %v", err)
-			} else {
-				etcPasswdContent, err = afero.ReadFile(a.Fs, passwdPath)
-				if err != nil {
-					return nil, fmt.Errorf("failed to read /etc/passwd: %v", err)
-				}
-			}
-			homeDirs := getHomeDirsFromEtcPasswd(string(etcPasswdContent))
 			for _, row := range homeDirs {
 				userPolicyPath := filepath.Join(row.HomeDir, ".opk", "auth_id")
 
