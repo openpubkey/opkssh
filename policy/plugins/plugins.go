@@ -39,6 +39,12 @@ var requiredPolicyDirPerms = []fs.FileMode{fs.FileMode(0700), fs.FileMode(0750),
 
 var requiredPolicyCmdPerms = []fs.FileMode{fs.FileMode(0555), fs.FileMode(0755)}
 
+// RequiredPolicyDirPerms returns the list of acceptable directory permission
+// modes for the policy plugin directory. Exported for use by external code.
+func RequiredPolicyDirPerms() []fs.FileMode {
+	return requiredPolicyDirPerms
+}
+
 type PluginResult struct {
 	Path         string
 	PluginConfig PluginConfig
