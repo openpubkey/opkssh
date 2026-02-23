@@ -27,6 +27,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"runtime"
 	"strings"
 	"syscall"
 	"text/tabwriter"
@@ -335,7 +336,7 @@ Arguments:
 		SilenceUsage: true,
 		Use:          "audit",
 		Short:        "Validate policy file entries against provider definitions",
-		Long: `Audit validates all entries in /etc/opk/auth_id and ~/.opk/auth_id against the provider definitions in /etc/opk/providers. For complete audit details use the --json flag. Returns a non-zero exit code if any warnings or errors are found.
+		Long: `Audit validates all entries in the system policy file and user policy files against the provider definitions in the providers file. For complete audit details use the --json flag. Returns a non-zero exit code if any warnings or errors are found.
 
 The audit command checks that:
   - Each issuer in policy files is defined in the providers file
@@ -372,9 +373,9 @@ Exit code: 0 if all entries are valid, 1 if any warnings or errors are found.`,
 		},
 	}
 
-	auditCmd.Flags().String("providers-file", "/etc/opk/providers", "Path to providers file")
-	auditCmd.Flags().String("policy-file", "/etc/opk/auth_id", "Path to policy file")
-	auditCmd.Flags().Bool("skip-user-policy", false, "Skip auditing user policy file (~/.opk/auth_id)")
+	auditCmd.Flags().String("providers-file", policy.SystemDefaultProvidersPath, "Path to providers file")
+	auditCmd.Flags().String("policy-file", policy.SystemDefaultPolicyPath, "Path to policy file")
+	auditCmd.Flags().Bool("skip-user-policy", runtime.GOOS == "windows", "Skip auditing user policy file (~/.opk/auth_id)")
 	auditCmd.Flags().BoolP("json", "j", false, "Output complete audit results in JSON")
 
 	rootCmd.AddCommand(auditCmd)
@@ -441,6 +442,10 @@ Exit code: 0 if all entries are valid, 1 if any warnings or errors are found.`,
 	clientCmd.AddCommand(providerCmd)
 
 	rootCmd.AddCommand(clientCmd)
+
+	// permissions command for checking and fixing file permissions/ACLs
+	permissionsCmd := commands.NewPermissionsCmd()
+	rootCmd.AddCommand(permissionsCmd)
 
 	// genDocsCmd is a hidden command used as a helper for generating our
 	// command line reference documentation.
