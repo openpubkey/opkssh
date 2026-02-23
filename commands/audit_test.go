@@ -99,7 +99,7 @@ func SetupAuditCmdMocks(t *testing.T, etcPasswdContent string, providerContent s
 		filePermsChecker: files.PermsChecker{
 			Fs: fs,
 			CmdRunner: func(name string, arg ...string) ([]byte, error) {
-				return []byte("root" + " " + "opkssh"), nil
+				return []byte("root" + " " + "opksshuser"), nil
 			},
 		},
 		ProviderPath: providerPath,
