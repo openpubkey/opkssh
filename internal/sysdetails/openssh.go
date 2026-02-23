@@ -56,12 +56,25 @@ func GetOpenSSHVersion() string {
 		if output, err := cmd.CombinedOutput(); err == nil && len(strings.TrimSpace(string(output))) > 0 {
 			return strings.TrimSpace(string(output))
 		}
+
+	case OSTypeWindows:
+		// For Windows, try ssh.exe in PATH
+		cmd := exec.Command("ssh.exe", "-V")
+		output, err := cmd.CombinedOutput()
+		if err == nil && len(strings.TrimSpace(string(output))) > 0 {
+			return strings.TrimSpace(string(output))
+		}
+
 	default:
 		log.Printf("Warning: Could not determine OpenSSH version using OS-specific methods for %s", osType)
 	}
 
 	// Try ssh -V (works on most systems)
-	cmd := exec.Command("ssh", "-V")
+	sshCmd := "ssh"
+	if osType == OSTypeWindows {
+		sshCmd = "ssh.exe"
+	}
+	cmd := exec.Command(sshCmd, "-V")
 	output, err := cmd.CombinedOutput()
 	if err == nil && len(strings.TrimSpace(string(output))) > 0 {
 		return strings.TrimSpace(string(output))
@@ -69,7 +82,11 @@ func GetOpenSSHVersion() string {
 	log.Println("Warning: Error executing ssh -V:", err)
 
 	// Try sshd -V as fallback
-	cmd = exec.Command("sshd", "-V")
+	sshdCmd := "sshd"
+	if osType == OSTypeWindows {
+		sshdCmd = "sshd.exe"
+	}
+	cmd = exec.Command(sshdCmd, "-V")
 	output, err = cmd.CombinedOutput()
 	if err == nil && len(strings.TrimSpace(string(output))) > 0 {
 		return strings.TrimSpace(string(output))

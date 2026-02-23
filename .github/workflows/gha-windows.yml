@@ -1,0 +1,107 @@
+name: Test GitHub Provider
+
+on:
+  push:
+
+jobs:
+  build:
+    name: Test on Windows Server 2022
+    runs-on: windows-2022
+    permissions:
+      id-token: write
+      contents: read
+    timeout-minutes: 10
+
+    steps:
+    - name: Install OpenSSH Server
+      run: |
+        Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+    
+    - name: Create default OpenSSH config files
+      run: |
+        Start-Service sshd
+        Start-Sleep -Seconds 2
+        Stop-Service sshd
+    
+    - name: Enable OpenSSH Server logs
+      run: |
+        $sshdConfig = "$env:ProgramData\ssh\sshd_config"
+        (Get-Content $sshdConfig -Raw).Replace('#SyslogFacility AUTH', 'SyslogFacility LOCAL0').Replace('#LogLevel INFO', 'LogLevel Debug3') |
+            Set-Content $sshdConfig -Encoding ascii
+   
+    - name: Set runneradmin password
+      run: net user runneradmin "P@ssw0rd123!"
+
+    - name: Checkout
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      with:
+        persist-credentials: false
+    
+    - name: Cache Go modules
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Install dependencies
+      run: go mod download
+    
+    - name: Build opkssh
+      run: go build -v -o opkssh.exe
+    
+    - name: Install opkssh with local binary
+      run: |
+        powershell -ExecutionPolicy Bypass -File "scripts/windows/Install-OpksshServer.ps1" `
+          -InstallFrom "$PWD\opkssh.exe" `
+          -NoSshdRestart `
+          -AuthCmdUser 'opksshuser' `
+          -Verbose
+    
+    - name: Add GitHub provider to opkssh configuration
+      run: |
+        $providersPath = 'C:\ProgramData\opk\providers'
+        if ((Get-Content -Path $providersPath -Raw) -notmatch "`r?`n$") {
+          Add-Content -Path $providersPath -Value ''
+        }
+        Add-Content -Path $providersPath -Value 'https://token.actions.githubusercontent.com github oidc'
+    
+    - name: Add current repository to policy
+      run: |
+        & 'C:\Program Files\opkssh\opkssh.exe' add runneradmin "repo:${env:GITHUB_REPOSITORY}:ref:${env:GITHUB_REF}" https://token.actions.githubusercontent.com
+    
+    - name: Start SSH service
+      run: Start-Service sshd
+    
+    - name: Test SSH connection without opkssh (should fail)
+      run: |
+        ssh -o StrictHostKeyChecking=no -o PasswordAuthentication=no runneradmin@localhost dir
+      continue-on-error: true
+    
+    - name: Login with GitHub OIDC
+      run: |
+        & 'C:\Program Files\opkssh\opkssh.exe' login github --print-id-token
+    
+    - name: Test SSH connection with opkssh (should pass)
+      run: |
+        ssh -o StrictHostKeyChecking=no -o PasswordAuthentication=no runneradmin@localhost dir
+    
+    - name: Debug - Dump opkssh config
+      run: |
+        Get-ChildItem 'C:\ProgramData\opk' -Recurse -ErrorAction Continue
+        Get-Content 'C:\ProgramData\opk\providers' -ErrorAction Continue
+        Get-Content 'C:\ProgramData\opk\auth_id' -ErrorAction Continue
+      if: always()
+    
+    - name: Debug - Dump opkssh logs
+      run: |
+        Get-Content 'C:\ProgramData\opk\logs\opkssh.log' -ErrorAction Continue
+      if: always()
+
+    - name: Debug - Dump sshd logs
+      run: |
+        Get-Content 'C:\ProgramData\ssh\logs\sshd.log' -ErrorAction Continue
+      if: always()

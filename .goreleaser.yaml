@@ -20,10 +20,6 @@ builds:
     goarch:
       - amd64
       - arm64
-    # Ignore some builds until they are not tested
-    ignore:
-      - goos: windows
-        goarch: arm64
 
 # Make binaries available with the same naming format as before
 archives:
@@ -51,6 +47,14 @@ nfpms:
       - archlinux  # Archlinux
     # TODO: Add debian overrides and match with https://salsa.debian.org/go-team/packages/opkssh
 
+# Include additional files in releases and configure release settings
+release:
+  draft: true
+  make_latest: true
+  extra_files:
+    - glob: scripts/windows/Install-OpksshServer.ps1
+    - glob: scripts/windows/Uninstall-OpksshServer.ps1
+
 # Create checksums file
 checksum:
   name_template: 'checksums.txt'
@@ -72,8 +76,3 @@ changelog:
       order: 1
     - title: 🧰 Maintenance
       order: 999
-
-# Define how to make GitHub releases
-release:
-  draft: true
-  make_latest: true
