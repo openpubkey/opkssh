@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/fs"
 	"os/user"
 	"path/filepath"
 	"strings"
@@ -189,28 +188,20 @@ func (a *AuditCmd) auditPolicyFileWithStatus(policyPath string, permInfo files.P
 		Rows:     []policy.ValidationRowResult{},
 	}
 
-	// Check if file exists
-	exists, err := afero.Exists(a.Fs, policyPath)
-	if err != nil {
-		return nil, false, fmt.Errorf("failed to check if policy file exists: %w", err)
-	}
-
-	if !exists {
-		// File doesn't exist, return empty results with exists=false
+	// Use shared permission checking logic
+	permResult := CheckFilePermissions(a.Fs, a.filePermsChecker, a.aclVerifier, policyPath, permInfo)
+	if !permResult.Exists {
 		return results, false, nil
 	}
 
-	if permsErr := a.filePermsChecker.CheckPerm(policyPath, []fs.FileMode{permInfo.Mode}, "", ""); permsErr != nil {
-		results.PermsError = permsErr.Error()
+	if permResult.PermsErr != "" {
+		results.PermsError = permResult.PermsErr
 	}
 
-	// Check ACLs if verifier is available (Windows-specific)
-	if a.aclVerifier != nil {
-		report, err := a.aclVerifier.VerifyACL(policyPath, expectedSystemACL(permInfo))
-		if err == nil && len(report.Problems) > 0 {
-			for _, problem := range report.Problems {
-				fmt.Fprintf(a.ErrOut, "  ACL issue: %s\n", problem)
-			}
+	// Report ACL problems to stderr
+	if permResult.ACLReport != nil && permResult.ACLErr == nil {
+		for _, problem := range permResult.ACLReport.Problems {
+			fmt.Fprintf(a.ErrOut, "  ACL issue: %s\n", problem)
 		}
 	}
 

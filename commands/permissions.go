@@ -3,7 +3,6 @@ package commands
 import (
 	"bufio"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -115,20 +114,21 @@ func runPermissionsCheck() error {
 
 	var problems []string
 
-	// System policy file
+	// System policy file — use shared permission check
 	sp := files.RequiredPerms.SystemPolicy
 	systemPolicy := policy.SystemDefaultPolicyPath
-	if _, err := ops.Stat(systemPolicy); err != nil {
-		problems = append(problems, fmt.Sprintf("%s: %v", systemPolicy, err))
+	sysResult := CheckFilePermissions(vfs, checker, aclVerifier, systemPolicy, sp)
+	if !sysResult.Exists {
+		problems = append(problems, fmt.Sprintf("%s: file does not exist", systemPolicy))
 	} else {
-		if err := checker.CheckPerm(systemPolicy, []fs.FileMode{sp.Mode}, sp.Owner, ""); err != nil {
-			problems = append(problems, fmt.Sprintf("%s: %v", systemPolicy, err))
+		if sysResult.PermsErr != "" {
+			problems = append(problems, fmt.Sprintf("%s: %s", systemPolicy, sysResult.PermsErr))
 		}
-		// ACL verification: print owner and ACEs
-		report, err := aclVerifier.VerifyACL(systemPolicy, expectedSystemACL(sp))
-		if err != nil {
-			problems = append(problems, fmt.Sprintf("%s: acl verify error: %v", systemPolicy, err))
-		} else {
+		// Print ACL details for visibility
+		if sysResult.ACLErr != nil {
+			problems = append(problems, fmt.Sprintf("%s: acl verify error: %v", systemPolicy, sysResult.ACLErr))
+		} else if sysResult.ACLReport != nil {
+			report := sysResult.ACLReport
 			if report.OwnerSIDStr != "" {
 				fmt.Printf("%s: owner=%s ownerSID=%s mode=%o\n", systemPolicy, report.Owner, report.OwnerSIDStr, report.Mode)
 			} else {
