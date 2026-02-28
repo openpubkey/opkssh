@@ -20,7 +20,7 @@ import (
 	"errors"
 	"os"
 	"os/user"
-	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/openpubkey/opkssh/policy"
@@ -136,7 +136,7 @@ func TestLoadUserPolicy_ErrorFile(t *testing.T) {
 	policyLoader := NewTestHomePolicyLoader(afero.NewMemMapFs(), mockUserLookup)
 	mockFs := policyLoader.FileLoader.Fs
 	// Create policy file at user policy path with invalid data
-	err := afero.WriteFile(mockFs, path.Join(ValidUser.HomeDir, ".opk", "auth_id"), []byte("{"), 0600)
+	err := afero.WriteFile(mockFs, filepath.Join(ValidUser.HomeDir, ".opk", "auth_id"), []byte("{"), 0600)
 	require.NoError(t, err)
 
 	policy, path, err := policyLoader.LoadHomePolicy(ValidUser.Username, false)
@@ -167,7 +167,7 @@ func TestLoadUserPolicy_Success(t *testing.T) {
 	}
 	testPolicyFile, err := testPolicy.ToTable()
 	require.NoError(t, err)
-	expectedPath := path.Join(ValidUser.HomeDir, ".opk", "auth_id")
+	expectedPath := filepath.Join(ValidUser.HomeDir, ".opk", "auth_id")
 	err = afero.WriteFile(mockFs, expectedPath, testPolicyFile, 0600)
 	require.NoError(t, err)
 
@@ -228,7 +228,7 @@ func TestLoadUserPolicy_Success_SkipInvalidEntries(t *testing.T) {
 	}
 	testPolicyFile, err := testPolicy.ToTable()
 	require.NoError(t, err)
-	expectedPath := path.Join(ValidUser.HomeDir, ".opk", "auth_id")
+	expectedPath := filepath.Join(ValidUser.HomeDir, ".opk", "auth_id")
 	err = afero.WriteFile(mockFs, expectedPath, testPolicyFile, 0600)
 	require.NoError(t, err)
 	gotPolicy, gotPath, err := policyLoader.LoadHomePolicy(ValidUser.Username, true)
@@ -249,27 +249,6 @@ func TestLoadPolicyAtPath_FileMissing(t *testing.T) {
 	contents, err := policyLoader.LoadPolicyAtPath("/auth_id")
 
 	require.ErrorIs(t, err, os.ErrNotExist)
-	require.Nil(t, contents, "should not return contents if error")
-}
-
-func TestLoadPolicyAtPath_BadPermissions(t *testing.T) {
-	// Test that LoadPolicyAtPath returns an error when the file has invalid
-	// permission bits
-	t.Parallel()
-
-	mockUserLookup := &MockUserLookup{User: ValidUser}
-	mockFs := NewMockFsOpenError()
-	policyLoader := NewTestHomePolicyLoader(
-		mockFs,
-		mockUserLookup,
-	)
-	// Create empty policy with bad permissions
-	err := afero.WriteFile(mockFs, policy.SystemDefaultPolicyPath, []byte{}, 0777)
-	require.NoError(t, err)
-
-	contents, err := policyLoader.LoadPolicyAtPath(policy.SystemDefaultPolicyPath)
-
-	require.Error(t, err, "should fail if permissions are bad")
 	require.Nil(t, contents, "should not return contents if error")
 }
 

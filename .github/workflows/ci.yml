@@ -1,11 +1,12 @@
 name: CI
 
-# Runs CI for pull requests and pushes to main
+# Runs CI for pull requests and pushes to any branch
+# This allows fork developers to get CI feedback on their branches
 on:
   pull_request:
   push:
     branches:
-      - main
+      - '**'  # Run on all branches
   # schedule:
   #   - cron: 0 14 * * MON-FRI # Every weekday at 14:00 UTC
 
@@ -33,6 +34,60 @@ jobs:
       run: go mod download
     - name: Build
       run: go build -v -o /dev/null
+  
+  # Check that binary can be built on Windows
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+    - name: Checkout
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      with:
+        persist-credentials: false
+    - name: Install Go
+      uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+      with:
+        go-version-file: 'go.mod'
+    - name: Install dependencies
+      run: go mod download
+    - name: Build Windows AMD64
+      shell: pwsh
+      run: |
+        $env:GOOS = "windows"
+        $env:GOARCH = "amd64"
+        go build -v -o opkssh-amd64.exe
+    - name: Build Windows ARM64
+      shell: pwsh
+      run: |
+        $env:GOOS = "windows"
+        $env:GOARCH = "arm64"
+        go build -v -o opkssh-arm64.exe
+    - name: Test binary works
+      shell: pwsh
+      run: |
+        .\opkssh-amd64.exe --version
+  
+  # Run Windows unit tests
+  test-windows:
+    name: 'Windows Tests'
+    runs-on: windows-latest
+    timeout-minutes: 8
+    steps:
+    - name: Checkout
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      with:
+        persist-credentials: false
+    - name: Install Go
+      uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+      with:
+        go-version-file: 'go.mod'
+    - name: Install dependencies
+      run: go mod download
+    - name: Run unit tests
+      shell: pwsh
+      run: go test ./...
+  
   # Run integration tests
   test:
     needs: build
