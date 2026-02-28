@@ -1,10 +1,11 @@
 name: Build
 
+# Validates GoReleaser can build on all branches (fork-friendly)
 on:
   pull_request:
   push:
     branches:
-      - main
+      - '**'  # Run on all branches
 
 permissions: {}
 
