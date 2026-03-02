@@ -764,9 +764,13 @@ log_opkssh_installation() {
     VERSION_INSTALLED=$("$INSTALL_DIR"/"$BINARY_NAME" --version)
     INSTALLED_ON=$(date)
     # Log the installation details to /var/log/opkssh.log to help with debugging
-    echo "Successfully installed opkssh (INSTALLED_ON: $INSTALLED_ON, VERSION_INSTALLED: $VERSION_INSTALLED, INSTALL_VERSION: $INSTALL_VERSION, LOCAL_INSTALL_FILE: $LOCAL_INSTALL_FILE, HOME_POLICY: $HOME_POLICY, RESTART_SSH: $RESTART_SSH)" >> "$log_file"
-
-    echo "Installation successful! Run '$BINARY_NAME' to use it."
+    echo "Successfully installed opkssh (INSTALLED_ON: $INSTALLED_ON, INSTALL_DIR: $INSTALL_DIR, VERSION_INSTALLED: $VERSION_INSTALLED, INSTALL_VERSION: $INSTALL_VERSION, LOCAL_INSTALL_FILE: $LOCAL_INSTALL_FILE, HOME_POLICY: $HOME_POLICY, RESTART_SSH: $RESTART_SSH)" >> "$log_file"
+    if [[ $INSTALL_DIR = "/usr/local/bin" ]]
+    then
+        echo "Installation successful! Run '$BINARY_NAME' to use it."
+    else
+        echo "Installation successful! Run '$INSTALL_DIR/$BINARY_NAME' to use it."
+    fi    
 }
 
 # main
