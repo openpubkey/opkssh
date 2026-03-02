@@ -33,9 +33,9 @@ This is useful if you want to install a locally built opkssh binary.
 
 ## What the script is doing
 
-**1: Download opkssh.** Download opkssh binary from Github releases for the corresponding CPU architecture.
+**1: Download opkssh.** Download opkssh binary from Github releases for the corresponding OS and CPU architecture.
 
-**2: Move binary to install director.** SSH to the server
+**2: Move binary to install directory.** SSH to the server
 
 Create the following file directory structure on the server and move the executable there:
 
