@@ -357,7 +357,7 @@ func TestDetermineProvider(t *testing.T) {
 			wantError:         false,
 		},
 		{
-			name:              "Good path remoteRedirectURI set (when provider Alias specified)",
+			name:              "Good path remoteRedirectURI set (when provider arg specified)",
 			envVars:           map[string]string{"OPKSSH_DEFAULT": providerAlias3, "OPKSSH_PROVIDERS": allProvidersStr},
 			providerArg:       providerArg2,
 			providerAlias:     "",
