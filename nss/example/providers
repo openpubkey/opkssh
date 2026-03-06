@@ -1,0 +1,13 @@
+# /etc/opk/providers — trusted OIDC providers
+#
+# Format: ISSUER  CLIENT_ID  EXPIRATION_POLICY
+#
+# ISSUER             — must match the "iss" claim in the OIDC token.
+# CLIENT_ID          — must match the "aud" claim.
+# EXPIRATION_POLICY  — how long a token remains valid after issue (e.g. 24h).
+#
+# Google example:
+https://accounts.google.com                                          YOUR_GOOGLE_CLIENT_ID          24h
+#
+# Azure AD / Microsoft Entra example:
+https://login.microsoftonline.com/YOUR_TENANT_ID/v2.0               YOUR_AZURE_CLIENT_ID           24h

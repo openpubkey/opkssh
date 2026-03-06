@@ -1,0 +1,12 @@
+# /etc/opk/auth_id — opkssh authorisation policy
+#
+# Format: PRINCIPAL  IDENTITY_ATTRIBUTE  ISSUER
+#
+# PRINCIPAL          — the Linux username that will be allowed to log in.
+# IDENTITY_ATTRIBUTE — the OIDC claim value used to match the token
+#                      (often the email address).
+# ISSUER             — the OIDC issuer URL from /etc/opk/providers.
+#
+# Examples:
+alice  alice@example.com  https://accounts.google.com
+bob    bob@corp.example   https://login.microsoftonline.com/YOUR_TENANT_ID/v2.0

@@ -1,0 +1,9 @@
+# Build artefacts — produced by `make all`
+libnss_opkssh.so.2
+opkssh-nssd
+
+# The root .gitignore ignores all files named "auth_id" (to prevent
+# accidental commits of live policy files) and "*.test" (Go test binaries).
+# Re-include the things we legitimately need inside this subtree.
+!auth_id
+!Dockerfile.test

@@ -1,0 +1,65 @@
+# Multi-stage build for opkssh-nssd integration tests.
+# Build context must be the nss/ directory:
+#
+#   docker build -f nss/Dockerfile.test nss/
+#   docker compose -f nss/docker-compose.test.yml run --rm tests
+#
+# Stage 1: compile the Go daemon and C NSS library.
+# Stage 2: lean runtime that runs the shell integration test suite.
+
+# ------------------------------------------------------------------ #
+# Stage 1: build                                                       #
+# ------------------------------------------------------------------ #
+FROM golang:1.21-bookworm AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        gcc \
+        libc6-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build/nss
+COPY . .
+RUN make all
+
+# ------------------------------------------------------------------ #
+# Stage 2: runtime / test environment                                  #
+# ------------------------------------------------------------------ #
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libpam-modules \
+        libpam-runtime \
+        libc6 \
+        bash \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install the NSS shared library and daemon from the build stage.
+COPY --from=builder /build/nss/libnss_opkssh.so.2 \
+    /usr/lib/x86_64-linux-gnu/libnss_opkssh.so.2
+COPY --from=builder /build/nss/opkssh-nssd /usr/sbin/opkssh-nssd
+RUN ldconfig
+
+# ------------------------------------------------------------------ #
+# opkssh-nssd configuration                                           #
+# ------------------------------------------------------------------ #
+RUN mkdir -p /etc/opk
+COPY test/auth_id  /etc/opk/auth_id
+COPY test/nss.conf /etc/opk/nss.conf
+
+# ------------------------------------------------------------------ #
+# NSS: add opkssh after files for passwd and shadow lookups.          #
+# ------------------------------------------------------------------ #
+RUN sed -i 's/^\(passwd\s*:\s*files\)/\1 opkssh/' /etc/nsswitch.conf && \
+    if grep -q '^shadow' /etc/nsswitch.conf; then \
+        sed -i 's/^\(shadow\s*:\s*files\)/\1 opkssh/' /etc/nsswitch.conf; \
+    else \
+        echo 'shadow: files opkssh' >> /etc/nsswitch.conf; \
+    fi
+
+# ------------------------------------------------------------------ #
+# Integration test script                                              #
+# ------------------------------------------------------------------ #
+COPY test/run_tests.sh /usr/local/bin/run_tests.sh
+RUN chmod +x /usr/local/bin/run_tests.sh
+
+CMD ["run_tests.sh"]

@@ -1,0 +1,27 @@
+[Unit]
+Description=opkssh NSS daemon for JIT user provisioning
+Documentation=https://github.com/openpubkey/opkssh
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/opkssh-nssd
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=3s
+
+# Create /run/opkssh owned by root with mode 0755 so that the
+# world-readable socket inside can be reached by any NSS caller.
+RuntimeDirectory=opkssh
+RuntimeDirectoryMode=0755
+
+# Hardening
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+NoNewPrivileges=true
+# Allow reading /etc/opk/auth_id and /etc/opk/nss.conf
+ReadOnlyPaths=/etc/opk
+
+[Install]
+WantedBy=multi-user.target

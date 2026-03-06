@@ -1,0 +1,7 @@
+services:
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    # Runs the shell integration test suite and exits with its status code.
+    # Usage: docker compose -f nss/docker-compose.test.yml run --rm tests

@@ -1,0 +1,7 @@
+# /etc/opk/auth_id — test fixture
+# Format: PRINCIPAL  IDENTITY_ATTRIBUTE  ISSUER
+alice  alice@example.com                       https://accounts.google.com
+bob    bob@example.com                         https://accounts.google.com
+carol  carol@corp.example                      https://login.microsoftonline.com/tenant/v2.0
+dave   oidc:groups:developers                  https://accounts.google.com
+eve    oidc-match-end:email:@example.com       https://accounts.google.com
