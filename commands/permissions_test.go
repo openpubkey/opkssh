@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bytes"
 	"path/filepath"
 	"testing"
 
@@ -10,44 +11,47 @@ import (
 )
 
 func TestPermissionsCheck_MissingSystemPolicyReportsProblem(t *testing.T) {
-	// Use in-memory FS
-	DefaultFs = afero.NewMemMapFs()
-	defer func() { DefaultFs = nil }()
+	vfs := afero.NewMemMapFs()
+	out := &bytes.Buffer{}
+	p := newTestPermissionsCmd(vfs, out)
 
 	// No system policy file created -> check should report problems
-	err := runPermissionsCheck()
+	err := p.Check()
 	require.Error(t, err)
 }
 
 func TestPermissionsCheck_WithSystemPolicyAndPlugins_Succeeds(t *testing.T) {
-	DefaultFs = afero.NewMemMapFs()
-	defer func() { DefaultFs = nil }()
+	vfs := afero.NewMemMapFs()
+	out := &bytes.Buffer{}
+	p := newTestPermissionsCmd(vfs, out)
 
 	// Create system policy file and parents under the system config base
-	fs := DefaultFs
 	path := policy.SystemDefaultPolicyPath
 	base := policy.GetSystemConfigBasePath()
-	_ = fs.MkdirAll(base, 0750)
-	err := afero.WriteFile(fs, path, []byte("user1 alice@example.com google\n"), 0640)
+	_ = vfs.MkdirAll(base, 0o750)
+	err := afero.WriteFile(vfs, path, []byte("user1 alice@example.com google\n"), 0o640)
 	require.NoError(t, err)
 
 	// Create plugins dir and a plugin file
 	providersDir := filepath.Join(base, "providers")
-	_ = fs.MkdirAll(providersDir, 0750)
+	_ = vfs.MkdirAll(providersDir, 0o750)
 	pluginsDir := filepath.Join(base, "policy.d")
-	_ = fs.MkdirAll(pluginsDir, 0750)
-	err = afero.WriteFile(fs, filepath.Join(pluginsDir, "example.yml"), []byte("name: test\ncommand: /bin/true\n"), 0640)
+	_ = vfs.MkdirAll(pluginsDir, 0o750)
+	err = afero.WriteFile(vfs, filepath.Join(pluginsDir, "example.yml"), []byte("name: test\ncommand: /bin/true\n"), 0o640)
 	require.NoError(t, err)
 
-	err = runPermissionsCheck()
+	err = p.Check()
 	require.NoError(t, err)
 }
 
 func TestPermissionsFix_DryRun_NoPanic(t *testing.T) {
-	DefaultFs = afero.NewMemMapFs()
-	defer func() { DefaultFs = nil }()
+	vfs := afero.NewMemMapFs()
+	out := &bytes.Buffer{}
+	p := newTestPermissionsCmd(vfs, out)
+	p.DryRun = true
+	p.Verbose = true
 
 	// Dry-run should not attempt to change real FS and should return nil
-	err := runPermissionsFix(true, false, true)
+	err := p.Fix()
 	require.NoError(t, err)
 }

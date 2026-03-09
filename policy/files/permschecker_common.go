@@ -1,4 +1,4 @@
-// Copyright 2025 OpenPubkey
+// Copyright 2026 OpenPubkey
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,11 +27,11 @@ import (
 // system policy files (on Unix: /etc/opk/auth_id, /etc/opk/providers; on Windows: %ProgramData%\opk\auth_id, %ProgramData%\opk\providers).
 // This mode means that only the owner of the file can write/read to the file, but the group which
 // should be opksshuser can read the file.
-const ModeSystemPerms = fs.FileMode(0640)
+const ModeSystemPerms = fs.FileMode(0o640)
 
 // ModeHomePerms is the expected permission bits that should be set for opkssh
 // user home policy files `~/.opk/auth_id`.
-const ModeHomePerms = fs.FileMode(0600)
+const ModeHomePerms = fs.FileMode(0o600)
 
 // PermsChecker contains methods to check the ownership, group
 // and file permissions of a file on a Unix-like system (or Windows).

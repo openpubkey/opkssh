@@ -1,7 +1,7 @@
 //go:build windows
 // +build windows
 
-// Copyright 2025 OpenPubkey
+// Copyright 2026 OpenPubkey
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,14 +48,14 @@ func (u *PermsChecker) CheckPerm(path string, requirePerm []fs.FileMode, require
 	// - Files show as 0666 (rw-rw-rw-) if not read-only, or 0444 (r--r--r--) if read-only
 	// - There's no way to make a file appear as 0640 through file attributes alone
 	// - Security is enforced through NTFS ACLs set by the installer
-	
+
 	// We also skip owner/group checks since Windows uses different security model
 	// (SIDs instead of uid/gid)
-	
-	_ = fileInfo        // Suppress unused variable warning
-	_ = requirePerm     // Suppress unused variable warning  
-	_ = requiredOwner   // Suppress unused variable warning
-	_ = requiredGroup   // Suppress unused variable warning
+
+	_ = fileInfo      // Suppress unused variable warning
+	_ = requirePerm   // Suppress unused variable warning
+	_ = requiredOwner // Suppress unused variable warning
+	_ = requiredGroup // Suppress unused variable warning
 
 	// On Windows, if we can stat the file, we consider it acceptable
 	// The actual security is enforced by NTFS ACLs

@@ -1,4 +1,4 @@
-// Copyright 2025 OpenPubkey
+// Copyright 2026 OpenPubkey
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,18 +51,18 @@ func TestAuditAndPermissionsCheckConsistency(t *testing.T) {
 	policyPath := policy.SystemDefaultPolicyPath
 	basePath := policy.GetSystemConfigBasePath()
 
-	require.NoError(t, vfs.MkdirAll(filepath.Dir(providerPath), 0750))
-	require.NoError(t, vfs.MkdirAll(filepath.Dir(policyPath), 0750))
+	require.NoError(t, vfs.MkdirAll(filepath.Dir(providerPath), 0o750))
+	require.NoError(t, vfs.MkdirAll(filepath.Dir(policyPath), 0o750))
 
 	providerContent := "https://accounts.google.com google-client-id 24h\n"
 	policyContent := "root alice@example.com https://accounts.google.com\n"
 
-	require.NoError(t, afero.WriteFile(vfs, providerPath, []byte(providerContent), 0640))
-	require.NoError(t, afero.WriteFile(vfs, policyPath, []byte(policyContent), 0640))
+	require.NoError(t, afero.WriteFile(vfs, providerPath, []byte(providerContent), 0o640))
+	require.NoError(t, afero.WriteFile(vfs, policyPath, []byte(policyContent), 0o640))
 
 	// Also create dirs expected by permissions check
-	require.NoError(t, vfs.MkdirAll(filepath.Join(basePath, "providers"), 0750))
-	require.NoError(t, vfs.MkdirAll(filepath.Join(basePath, "policy.d"), 0750))
+	require.NoError(t, vfs.MkdirAll(filepath.Join(basePath, "providers"), 0o750))
+	require.NoError(t, vfs.MkdirAll(filepath.Join(basePath, "policy.d"), 0o750))
 
 	// --- Run shared CheckFilePermissions (used by both commands) ---
 	sp := files.RequiredPerms.SystemPolicy
@@ -123,15 +123,15 @@ func TestAuditAndPermissionsCheckBadPerms(t *testing.T) {
 	providerPath := policy.SystemDefaultProvidersPath
 	policyPath := policy.SystemDefaultPolicyPath
 
-	require.NoError(t, vfs.MkdirAll(filepath.Dir(providerPath), 0750))
-	require.NoError(t, vfs.MkdirAll(filepath.Dir(policyPath), 0750))
+	require.NoError(t, vfs.MkdirAll(filepath.Dir(providerPath), 0o750))
+	require.NoError(t, vfs.MkdirAll(filepath.Dir(policyPath), 0o750))
 
 	providerContent := "https://accounts.google.com google-client-id 24h\n"
 	policyContent := "root alice@example.com https://accounts.google.com\n"
 
-	require.NoError(t, afero.WriteFile(vfs, providerPath, []byte(providerContent), 0640))
+	require.NoError(t, afero.WriteFile(vfs, providerPath, []byte(providerContent), 0o640))
 	// Intentionally wrong permissions
-	require.NoError(t, afero.WriteFile(vfs, policyPath, []byte(policyContent), 0777))
+	require.NoError(t, afero.WriteFile(vfs, policyPath, []byte(policyContent), 0o777))
 
 	sp := files.RequiredPerms.SystemPolicy
 

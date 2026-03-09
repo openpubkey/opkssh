@@ -1,7 +1,7 @@
 //go:build windows
 // +build windows
 
-// Copyright 2025 OpenPubkey
+// Copyright 2026 OpenPubkey
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,6 @@ package commands
 
 // enumerateUserHomeDirs returns the list of user home directories by reading
 // the Windows registry ProfileList. This is the Windows implementation.
-func (a *AuditCmd) enumerateUserHomeDirs() ([]etcPasswdRow, error) {
+func (a *AuditCmd) enumerateUserHomeDirs() ([]userHomeEntry, error) {
 	return getHomeDirsFromProfileList()
 }

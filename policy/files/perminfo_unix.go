@@ -1,7 +1,7 @@
 //go:build !windows
 // +build !windows
 
-// Copyright 2025 OpenPubkey
+// Copyright 2026 OpenPubkey
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,31 +39,31 @@ var RequiredPerms = struct {
 	PluginFile PermInfo
 }{
 	SystemPolicy: PermInfo{
-		Mode:      ModeSystemPerms, // 0640
+		Mode:      ModeSystemPerms, // 0o640
 		Owner:     "root",
 		Group:     "opksshuser",
 		MustExist: true,
 	},
 	HomePolicy: PermInfo{
-		Mode:      ModeHomePerms, // 0600
+		Mode:      ModeHomePerms, // 0o600
 		Owner:     "",            // owner is the user themselves
 		Group:     "",
 		MustExist: false,
 	},
 	ProvidersDir: PermInfo{
-		Mode:      0750,
+		Mode:      0o750,
 		Owner:     "root",
 		Group:     "",
 		MustExist: false,
 	},
 	PluginsDir: PermInfo{
-		Mode:      0750,
+		Mode:      0o750,
 		Owner:     "root",
 		Group:     "",
 		MustExist: false,
 	},
 	PluginFile: PermInfo{
-		Mode:      ModeSystemPerms, // 0640
+		Mode:      ModeSystemPerms, // 0o640
 		Owner:     "root",
 		Group:     "",
 		MustExist: false,

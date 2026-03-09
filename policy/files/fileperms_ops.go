@@ -1,4 +1,4 @@
-// Copyright 2025 OpenPubkey
+// Copyright 2026 OpenPubkey
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -62,7 +62,7 @@ func (o *OsFilePermsOps) MkdirAllWithPerm(path string, perm fs.FileMode) error {
 func (o *OsFilePermsOps) CreateFileWithPerm(path string) (afero.File, error) {
 	// Ensure parent directory exists
 	dir := filepath.Dir(path)
-	if err := o.Fs.MkdirAll(dir, 0750); err != nil {
+	if err := o.Fs.MkdirAll(dir, 0o750); err != nil {
 		return nil, err
 	}
 	return o.Fs.Create(path)

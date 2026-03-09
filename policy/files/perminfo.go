@@ -1,4 +1,4 @@
-// Copyright 2025 OpenPubkey
+// Copyright 2026 OpenPubkey
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ import (
 // requirements so that they are defined once and consumed by permission
 // checking, fixing and auditing code.
 type PermInfo struct {
-	// Mode is the expected Unix permission bits (e.g. 0640, 0600, 0750).
+	// Mode is the expected Unix permission bits (e.g. 0o640, 0o600, 0o750).
 	Mode fs.FileMode
 	// Owner is the expected owner of the file/directory (e.g. "root" on
 	// Linux, "Administrators" on Windows). An empty string means ownership

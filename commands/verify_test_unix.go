@@ -1,7 +1,7 @@
 //go:build !windows
 // +build !windows
 
-// Copyright 2025 OpenPubkey
+// Copyright 2026 OpenPubkey
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ env_vars:
 		{
 			name:        "Wrong Permissions",
 			configFile:  map[string]string{"server_config.yml": configContent},
-			permission:  0677,
+			permission:  0o677,
 			owner:       "root",
 			group:       "opksshuser",
 			errorString: "expected one of the following permissions [640], got (677)",
@@ -59,7 +59,7 @@ env_vars:
 		{
 			name:        "Wrong ownership",
 			configFile:  map[string]string{"server_config.yml": configContent},
-			permission:  0640,
+			permission:  0o640,
 			owner:       "opksshuser",
 			group:       "opksshuser",
 			errorString: "expected owner (root), got (opksshuser)",

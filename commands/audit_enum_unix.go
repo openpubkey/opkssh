@@ -1,7 +1,7 @@
 //go:build !windows
 // +build !windows
 
-// Copyright 2025 OpenPubkey
+// Copyright 2026 OpenPubkey
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ import (
 
 // enumerateUserHomeDirs returns the list of user home directories by reading
 // /etc/passwd. This is the Unix implementation.
-func (a *AuditCmd) enumerateUserHomeDirs() ([]etcPasswdRow, error) {
+func (a *AuditCmd) enumerateUserHomeDirs() ([]userHomeEntry, error) {
 	passwdPath := "/etc/passwd"
 	exists, err := afero.Exists(a.Fs, passwdPath)
 	if err != nil {

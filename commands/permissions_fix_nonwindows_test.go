@@ -4,6 +4,8 @@
 package commands
 
 import (
+	"bytes"
+	"io"
 	"testing"
 
 	"github.com/spf13/afero"
@@ -14,14 +16,20 @@ func TestRunPermissionsFix_NonWindows_CreatesAndSetsPerms(t *testing.T) {
 	mops := &mockFilePermsOps{Fs: mem}
 	mv := &mockACLVerifier{}
 
-	// Ensure elevation passes
-	prev := IsElevatedFunc
-	IsElevatedFunc = func() (bool, error) { return true, nil }
-	defer func() { IsElevatedFunc = prev }()
+	p := &PermissionsCmd{
+		Fs:            mem,
+		Out:           &bytes.Buffer{},
+		ErrOut:        &bytes.Buffer{},
+		Ops:           mops,
+		ACLVerifier:   mv,
+		IsElevatedFn:  func() (bool, error) { return true, nil },
+		ConfirmPrompt: func(prompt string, in io.Reader) (bool, error) { return true, nil },
+		Yes:           true,
+	}
 
-	err := runPermissionsFixWithDeps(mops, mv, mem, false, true, false)
+	err := p.Fix()
 	if err != nil {
-		t.Fatalf("runPermissionsFixWithDeps failed: %v", err)
+		t.Fatalf("Fix failed: %v", err)
 	}
 	if !mops.Created {
 		t.Fatalf("expected CreateFileWithPerm to be called")

@@ -301,7 +301,7 @@ func getCurrentUsername() string {
 	return u.Username
 }
 
-type etcPasswdRow struct {
+type userHomeEntry struct {
 	Username string
 	HomeDir  string
 }
@@ -309,8 +309,8 @@ type etcPasswdRow struct {
 // getHomeDirsFromEtcPasswd parses /etc/passwd and returns a list of usernames
 // and their associated home directories. This is not sufficient for all home
 // directories as it does not consider home directories specified by NSS.
-func getHomeDirsFromEtcPasswd(etcPasswd string) []etcPasswdRow {
-	entries := []etcPasswdRow{}
+func getHomeDirsFromEtcPasswd(etcPasswd string) []userHomeEntry {
+	entries := []userHomeEntry{}
 	for _, line := range strings.Split(etcPasswd, "\n") {
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -325,7 +325,7 @@ func getHomeDirsFromEtcPasswd(etcPasswd string) []etcPasswdRow {
 			continue
 		}
 
-		entry := etcPasswdRow{Username: parts[0], HomeDir: parts[5]}
+		entry := userHomeEntry{Username: parts[0], HomeDir: parts[5]}
 		entries = append(entries, entry)
 	}
 	return entries

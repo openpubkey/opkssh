@@ -346,18 +346,18 @@ func TestAuditCmdValidationResults(t *testing.T) {
 func TestGetHomeDirsFromEtcPasswd(t *testing.T) {
 	t.Parallel()
 
-	etcPasswdRows := getHomeDirsFromEtcPasswd(string(etcPasswdMock))
+	homeDirs := getHomeDirsFromEtcPasswd(string(etcPasswdMock))
 
-	require.Len(t, etcPasswdRows, 5)
+	require.Len(t, homeDirs, 5)
 
-	require.Equal(t, "root", etcPasswdRows[0].Username)
-	require.Equal(t, "/root", etcPasswdRows[0].HomeDir)
-	require.Equal(t, "dev", etcPasswdRows[1].Username)
-	require.Equal(t, "/home/dev", etcPasswdRows[1].HomeDir)
-	require.Equal(t, "alice", etcPasswdRows[2].Username)
-	require.Equal(t, "/home/alice", etcPasswdRows[2].HomeDir)
-	require.Equal(t, "bob", etcPasswdRows[3].Username)
-	require.Equal(t, "/home/bob", etcPasswdRows[3].HomeDir)
-	require.Equal(t, "carol", etcPasswdRows[4].Username)
-	require.Equal(t, "/home/carol", etcPasswdRows[4].HomeDir)
+	require.Equal(t, "root", homeDirs[0].Username)
+	require.Equal(t, "/root", homeDirs[0].HomeDir)
+	require.Equal(t, "dev", homeDirs[1].Username)
+	require.Equal(t, "/home/dev", homeDirs[1].HomeDir)
+	require.Equal(t, "alice", homeDirs[2].Username)
+	require.Equal(t, "/home/alice", homeDirs[2].HomeDir)
+	require.Equal(t, "bob", homeDirs[3].Username)
+	require.Equal(t, "/home/bob", homeDirs[3].HomeDir)
+	require.Equal(t, "carol", homeDirs[4].Username)
+	require.Equal(t, "/home/carol", homeDirs[4].HomeDir)
 }

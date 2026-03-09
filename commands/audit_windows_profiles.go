@@ -1,7 +1,7 @@
 //go:build windows
 // +build windows
 
-// Copyright 2025 OpenPubkey
+// Copyright 2026 OpenPubkey
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ const profileListKey = `SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList
 // registry ProfileList. This is the Windows equivalent of
 // getHomeDirsFromEtcPasswd and returns one entry per real user (SID prefix
 // S-1-5-21-) that has a profile directory on this machine.
-func getHomeDirsFromProfileList() ([]etcPasswdRow, error) {
+func getHomeDirsFromProfileList() ([]userHomeEntry, error) {
 	key, err := registry.OpenKey(registry.LOCAL_MACHINE, profileListKey,
 		registry.ENUMERATE_SUB_KEYS)
 	if err != nil {
@@ -48,7 +48,7 @@ func getHomeDirsFromProfileList() ([]etcPasswdRow, error) {
 		return nil, fmt.Errorf("failed to enumerate ProfileList subkeys: %w", err)
 	}
 
-	var entries []etcPasswdRow
+	var entries []userHomeEntry
 	for _, sid := range sids {
 		// Real user SIDs start with S-1-5-21-; skip well-known SIDs like
 		// SYSTEM (S-1-5-18), LOCAL SERVICE (S-1-5-19), NETWORK SERVICE
@@ -60,18 +60,21 @@ func getHomeDirsFromProfileList() ([]etcPasswdRow, error) {
 		subkey, err := registry.OpenKey(registry.LOCAL_MACHINE,
 			profileListKey+`\`+sid, registry.QUERY_VALUE)
 		if err != nil {
+			// Stale registry entries can exist for removed SIDs; skip silently.
 			continue
 		}
 		// GetStringValue already expands REG_EXPAND_SZ values.
 		profilePath, _, err := subkey.GetStringValue("ProfileImagePath")
 		subkey.Close()
 		if err != nil || profilePath == "" {
+			// Profile entries without a path are incomplete/corrupt; skip.
 			continue
 		}
 
 		// Resolve SID to username; skip if account has been deleted.
 		u, err := user.LookupId(sid)
 		if err != nil {
+			// Orphaned SIDs (deleted accounts) are common on Windows; skip.
 			continue
 		}
 
@@ -81,7 +84,7 @@ func getHomeDirsFromProfileList() ([]etcPasswdRow, error) {
 			username = parts[1]
 		}
 
-		entries = append(entries, etcPasswdRow{
+		entries = append(entries, userHomeEntry{
 			Username: username,
 			HomeDir:  profilePath,
 		})
