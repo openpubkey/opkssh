@@ -356,6 +356,15 @@ func TestDetermineProvider(t *testing.T) {
 			wantIssuer:        providerIssuer3,
 			wantError:         false,
 		},
+		{
+			name:              "Good path remoteRedirectURI set (when provider arg specified)",
+			envVars:           map[string]string{"OPKSSH_DEFAULT": providerAlias3, "OPKSSH_PROVIDERS": allProvidersStr},
+			providerArg:       providerArg2,
+			providerAlias:     "",
+			remoteRedirectURI: "https://example.com/login_callback",
+			wantIssuer:        providerIssuer2,
+			wantError:         false,
+		},
 	}
 
 	for _, tt := range tests {
