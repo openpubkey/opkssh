@@ -31,11 +31,11 @@ import (
 
 // AuditCmd provides functionality to audit policy files against provider definitions
 type AuditCmd struct {
-	Fs             afero.Fs
-	FileSystem     files.FileSystem
-	Out            io.Writer
-	ErrOut         io.Writer
-	ProviderLoader policy.ProviderLoader
+	Fs              afero.Fs
+	FileSystem      files.FileSystem
+	Out             io.Writer
+	ErrOut          io.Writer
+	ProviderLoader  policy.ProviderLoader
 	CurrentUsername string
 
 	// Args

@@ -66,16 +66,32 @@ type defaultFileSystem struct {
 	acl     ACLVerifier
 }
 
+// FileSystemOption configures a FileSystem created by NewFileSystem.
+type FileSystemOption func(*defaultFileSystem)
+
+// WithCmdRunner overrides the command runner used by the permission
+// checker. This is useful in tests where the real "stat" command
+// cannot be used against an in-memory filesystem.
+func WithCmdRunner(runner func(string, ...string) ([]byte, error)) FileSystemOption {
+	return func(d *defaultFileSystem) {
+		d.checker.CmdRunner = runner
+	}
+}
+
 // NewFileSystem creates a FileSystem backed by an afero.Fs. It wires up
 // the appropriate platform-specific implementations for permission
 // operations, permission checking, and ACL verification.
-func NewFileSystem(afs afero.Fs) FileSystem {
-	return &defaultFileSystem{
+func NewFileSystem(afs afero.Fs, opts ...FileSystemOption) FileSystem {
+	d := &defaultFileSystem{
 		afs:     afs,
 		ops:     NewDefaultFilePermsOps(afs),
 		checker: NewPermsChecker(afs),
 		acl:     NewDefaultACLVerifier(afs),
 	}
+	for _, opt := range opts {
+		opt(d)
+	}
+	return d
 }
 
 func (d *defaultFileSystem) Stat(path string) (fs.FileInfo, error) {

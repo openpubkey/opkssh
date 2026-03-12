@@ -13,7 +13,9 @@ import (
 // tests don't need real OS privileges.
 func newTestPermissionsCmd(vfs afero.Fs, out io.Writer) *PermissionsCmd {
 	return &PermissionsCmd{
-		FileSystem:    files.NewFileSystem(vfs),
+		FileSystem: files.NewFileSystem(vfs, files.WithCmdRunner(func(name string, arg ...string) ([]byte, error) {
+			return []byte("root opksshuser"), nil
+		})),
 		Out:           out,
 		ErrOut:        out,
 		IsElevatedFn:  func() (bool, error) { return true, nil },

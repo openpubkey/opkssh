@@ -39,7 +39,9 @@ func TestAuditAndPermissionsCheckConsistency(t *testing.T) {
 	// This test verifies that both audit and the shared permission checker
 	// report the same results for a well-configured system policy file.
 	vfs := afero.NewMemMapFs()
-	fsys := files.NewFileSystem(vfs)
+	fsys := files.NewFileSystem(vfs, files.WithCmdRunner(func(name string, arg ...string) ([]byte, error) {
+		return []byte("root opksshuser"), nil
+	}))
 
 	providerPath := policy.SystemDefaultProvidersPath
 	policyPath := policy.SystemDefaultPolicyPath
@@ -105,7 +107,9 @@ func TestAuditAndPermissionsCheckBadPerms(t *testing.T) {
 	t.Parallel()
 
 	vfs := afero.NewMemMapFs()
-	fsys := files.NewFileSystem(vfs)
+	fsys := files.NewFileSystem(vfs, files.WithCmdRunner(func(name string, arg ...string) ([]byte, error) {
+		return []byte("root opksshuser"), nil
+	}))
 
 	providerPath := policy.SystemDefaultProvidersPath
 	policyPath := policy.SystemDefaultPolicyPath
