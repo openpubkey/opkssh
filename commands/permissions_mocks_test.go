@@ -13,68 +13,77 @@ import (
 // tests don't need real OS privileges.
 func newTestPermissionsCmd(vfs afero.Fs, out io.Writer) *PermissionsCmd {
 	return &PermissionsCmd{
-		Fs:            vfs,
+		FileSystem:    files.NewFileSystem(vfs),
 		Out:           out,
 		ErrOut:        out,
-		Ops:           files.NewDefaultFilePermsOps(vfs),
-		ACLVerifier:   files.NewDefaultACLVerifier(vfs),
 		IsElevatedFn:  func() (bool, error) { return true, nil },
 		ConfirmPrompt: func(prompt string, in io.Reader) (bool, error) { return true, nil },
 	}
 }
 
-// mockFilePermsOps is a shared configurable mock implementing files.FilePermsOps.
-// It is used by both Unix and Windows permission fix tests.
-type mockFilePermsOps struct {
-	Fs          afero.Fs
+// mockFileSystem is a configurable mock implementing files.FileSystem.
+// It wraps an in-memory afero.Fs for real file I/O while tracking
+// permission-mutation calls for assertions.
+type mockFileSystem struct {
+	fs          afero.Fs
 	Created     bool
 	ChmodCalled bool
 	ChownCalled bool
 	Applied     []files.ACE
+	aclReport   files.ACLReport
 }
 
-func (m *mockFilePermsOps) MkdirAllWithPerm(path string, perm fs.FileMode) error {
-	return m.Fs.MkdirAll(path, 0o750)
+func (m *mockFileSystem) Stat(path string) (fs.FileInfo, error) {
+	return m.fs.Stat(path)
 }
 
-func (m *mockFilePermsOps) CreateFileWithPerm(path string) (afero.File, error) {
+func (m *mockFileSystem) Exists(path string) (bool, error) {
+	return afero.Exists(m.fs, path)
+}
+
+func (m *mockFileSystem) Open(path string) (afero.File, error) {
+	return m.fs.Open(path)
+}
+
+func (m *mockFileSystem) ReadFile(path string) ([]byte, error) {
+	return afero.ReadFile(m.fs, path)
+}
+
+func (m *mockFileSystem) MkdirAll(path string, perm fs.FileMode) error {
+	return m.fs.MkdirAll(path, 0o750)
+}
+
+func (m *mockFileSystem) CreateFile(path string) (afero.File, error) {
 	m.Created = true
-	return m.Fs.Create(path)
+	return m.fs.Create(path)
 }
 
-func (m *mockFilePermsOps) WriteFileWithPerm(path string, data []byte, perm fs.FileMode) error {
-	return afero.WriteFile(m.Fs, path, data, 0o644)
+func (m *mockFileSystem) WriteFile(path string, data []byte, perm fs.FileMode) error {
+	return afero.WriteFile(m.fs, path, data, 0o644)
 }
 
-func (m *mockFilePermsOps) Chmod(path string, perm fs.FileMode) error {
+func (m *mockFileSystem) Chmod(path string, perm fs.FileMode) error {
 	m.ChmodCalled = true
-	return m.Fs.Chmod(path, 0o644)
+	return m.fs.Chmod(path, 0o644)
 }
 
-func (m *mockFilePermsOps) Stat(path string) (fs.FileInfo, error) {
-	return m.Fs.Stat(path)
-}
-
-func (m *mockFilePermsOps) Chown(path string, owner string, group string) error {
+func (m *mockFileSystem) Chown(path string, owner string, group string) error {
 	m.ChownCalled = true
 	return nil
 }
 
-func (m *mockFilePermsOps) ApplyACE(path string, ace files.ACE) error {
+func (m *mockFileSystem) ApplyACE(path string, ace files.ACE) error {
 	m.Applied = append(m.Applied, ace)
 	return nil
 }
 
-// mockACLVerifier is a shared configurable mock implementing files.ACLVerifier.
-// It is used by both Unix and Windows permission fix tests.
-type mockACLVerifier struct {
-	Report files.ACLReport
+func (m *mockFileSystem) CheckPerm(path string, requirePerm []fs.FileMode, requiredOwner string, requiredGroup string) error {
+	return nil
 }
 
-func (m *mockACLVerifier) VerifyACL(path string, expected files.ExpectedACL) (files.ACLReport, error) {
-	if m.Report.Path == "" {
-		// Default: return a minimal successful report
+func (m *mockFileSystem) VerifyACL(path string, expected files.ExpectedACL) (files.ACLReport, error) {
+	if m.aclReport.Path == "" {
 		return files.ACLReport{Path: path, Exists: true}, nil
 	}
-	return m.Report, nil
+	return m.aclReport, nil
 }

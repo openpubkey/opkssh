@@ -10,15 +10,12 @@ import (
 
 func TestInstallCmd_ForceYes(t *testing.T) {
 	mem := afero.NewMemMapFs()
-	mops := &mockFilePermsOps{Fs: mem}
-	mv := &mockACLVerifier{}
+	mfs := &mockFileSystem{fs: mem}
 
 	p := &PermissionsCmd{
-		Fs:            mem,
+		FileSystem:    mfs,
 		Out:           &bytes.Buffer{},
 		ErrOut:        &bytes.Buffer{},
-		Ops:           mops,
-		ACLVerifier:   mv,
 		IsElevatedFn:  func() (bool, error) { return true, nil },
 		ConfirmPrompt: func(prompt string, in io.Reader) (bool, error) { return true, nil },
 	}
@@ -30,7 +27,7 @@ func TestInstallCmd_ForceYes(t *testing.T) {
 		t.Fatalf("install command failed: %v", err)
 	}
 	// install sets Yes=true internally; verify fix ran
-	if !mops.ChmodCalled {
+	if !mfs.ChmodCalled {
 		t.Fatalf("expected Chmod to be called")
 	}
 }

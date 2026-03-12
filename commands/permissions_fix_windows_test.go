@@ -23,16 +23,15 @@ func TestRunPermissionsFix_AppliesAdminACE_Windows(t *testing.T) {
 	mem.MkdirAll(pluginsDir, 0o750)
 	afero.WriteFile(mem, pluginsDir+"/plugin.yml", []byte("a"), 0o644)
 
-	mops := &mockFilePermsOps{Fs: mem}
-	// Verifier returns no ACEs so ApplyACE should be called for Admin and SYSTEM
-	mv := &mockACLVerifier{Report: files.ACLReport{Path: systemPolicy, Exists: true, ACEs: []files.ACE{}}}
+	mfs := &mockFileSystem{
+		fs:        mem,
+		aclReport: files.ACLReport{Path: systemPolicy, Exists: true, ACEs: []files.ACE{}},
+	}
 
 	p := &PermissionsCmd{
-		Fs:            mem,
+		FileSystem:    mfs,
 		Out:           &bytes.Buffer{},
 		ErrOut:        &bytes.Buffer{},
-		Ops:           mops,
-		ACLVerifier:   mv,
 		IsElevatedFn:  func() (bool, error) { return true, nil },
 		ConfirmPrompt: func(prompt string, in io.Reader) (bool, error) { return true, nil },
 		Yes:           true,
@@ -43,13 +42,13 @@ func TestRunPermissionsFix_AppliesAdminACE_Windows(t *testing.T) {
 		t.Fatalf("Fix failed: %v", err)
 	}
 
-	if len(mops.Applied) < 2 {
-		t.Fatalf("expected at least 2 ApplyACE calls for Admin and SYSTEM, got %d", len(mops.Applied))
+	if len(mfs.Applied) < 2 {
+		t.Fatalf("expected at least 2 ApplyACE calls for Admin and SYSTEM, got %d", len(mfs.Applied))
 	}
 
 	// check principals present
 	var foundAdmin, foundSystem bool
-	for _, a := range mops.Applied {
+	for _, a := range mfs.Applied {
 		if a.Principal == "Administrators" {
 			foundAdmin = true
 		}
@@ -58,6 +57,6 @@ func TestRunPermissionsFix_AppliesAdminACE_Windows(t *testing.T) {
 		}
 	}
 	if !foundAdmin || !foundSystem {
-		t.Fatalf("expected ApplyACE for Administrators and SYSTEM, got: %+v", mops.Applied)
+		t.Fatalf("expected ApplyACE for Administrators and SYSTEM, got: %+v", mfs.Applied)
 	}
 }

@@ -47,12 +47,10 @@ func defaultConfirmPrompt(prompt string, in io.Reader) (bool, error) {
 
 // PermissionsCmd provides functionality to check and fix file permissions
 type PermissionsCmd struct {
-	Fs            afero.Fs
+	FileSystem    files.FileSystem
 	Out           io.Writer
 	ErrOut        io.Writer
 	In            io.Reader
-	Ops           files.FilePermsOps
-	ACLVerifier   files.ACLVerifier
 	IsElevatedFn  func() (bool, error)
 	ConfirmPrompt func(string, io.Reader) (bool, error)
 
@@ -65,14 +63,11 @@ type PermissionsCmd struct {
 
 // NewPermissionsCmd creates a new PermissionsCmd with default settings
 func NewPermissionsCmd(out io.Writer, errOut io.Writer) *PermissionsCmd {
-	fs := afero.NewOsFs()
 	return &PermissionsCmd{
-		Fs:            fs,
+		FileSystem:    files.NewFileSystem(afero.NewOsFs()),
 		Out:           out,
 		ErrOut:        errOut,
 		In:            os.Stdin,
-		Ops:           files.NewDefaultFilePermsOps(fs),
-		ACLVerifier:   files.NewDefaultACLVerifier(fs),
 		IsElevatedFn:  IsElevated,
 		ConfirmPrompt: defaultConfirmPrompt,
 	}
@@ -135,18 +130,13 @@ type checkResult struct {
 
 // Check verifies permissions and ownership for opkssh files.
 func (p *PermissionsCmd) Check() error {
-	checker := files.PermsChecker{Fs: p.Fs, CmdRunner: func(name string, arg ...string) ([]byte, error) {
-		// Return owner/group that match expected values so tests won't fail
-		return []byte("root opksshuser"), nil
-	}}
-
 	var problems []string
 	var results []checkResult
 
 	// System policy file — use shared permission check
 	sp := files.RequiredPerms.SystemPolicy
 	systemPolicy := policy.SystemDefaultPolicyPath
-	sysResult := CheckFilePermissions(p.Fs, checker, p.ACLVerifier, systemPolicy, sp)
+	sysResult := CheckFilePermissions(p.FileSystem, systemPolicy, sp)
 	if !sysResult.Exists {
 		problems = append(problems, fmt.Sprintf("%s: file does not exist", systemPolicy))
 		results = append(results, checkResult{Path: systemPolicy, Exists: false})
@@ -185,7 +175,7 @@ func (p *PermissionsCmd) Check() error {
 
 	// Providers dir
 	providersDir := filepath.Join(policy.GetSystemConfigBasePath(), "providers")
-	if _, err := p.Ops.Stat(providersDir); err != nil {
+	if _, err := p.FileSystem.Stat(providersDir); err != nil {
 		// not fatal, but report
 		problems = append(problems, fmt.Sprintf("%s: %v", providersDir, err))
 		results = append(results, checkResult{Path: providersDir, Exists: false, PermsErr: err.Error()})
@@ -195,13 +185,13 @@ func (p *PermissionsCmd) Check() error {
 
 	// Policy plugins dir
 	pluginsDir := filepath.Join(policy.GetSystemConfigBasePath(), "policy.d")
-	if _, err := p.Ops.Stat(pluginsDir); err != nil {
+	if _, err := p.FileSystem.Stat(pluginsDir); err != nil {
 		problems = append(problems, fmt.Sprintf("%s: %v", pluginsDir, err))
 		results = append(results, checkResult{Path: pluginsDir, Exists: false, PermsErr: err.Error()})
 	} else {
 		cr := checkResult{Path: pluginsDir, Exists: true}
 		// Check directory perms using plugin package expectations
-		if err := checker.CheckPerm(pluginsDir, plugins.RequiredPolicyDirPerms(), files.RequiredPerms.PluginsDir.Owner, ""); err != nil {
+		if err := p.FileSystem.CheckPerm(pluginsDir, plugins.RequiredPolicyDirPerms(), files.RequiredPerms.PluginsDir.Owner, ""); err != nil {
 			problems = append(problems, fmt.Sprintf("%s: %v", pluginsDir, err))
 			cr.PermsErr = err.Error()
 		}
@@ -242,7 +232,7 @@ func (p *PermissionsCmd) Fix() error {
 	pf := files.RequiredPerms.PluginFile
 
 	systemPolicy := policy.SystemDefaultPolicyPath
-	if _, err := p.Ops.Stat(systemPolicy); err != nil {
+	if _, err := p.FileSystem.Stat(systemPolicy); err != nil {
 		planned = append(planned, "create file: "+systemPolicy)
 	}
 	planned = append(planned, "chmod "+systemPolicy+" to "+sp.Mode.String())
@@ -253,17 +243,17 @@ func (p *PermissionsCmd) Fix() error {
 	planned = append(planned, "chown "+systemPolicy+" to "+plannedOwner)
 
 	providersDir := filepath.Join(policy.GetSystemConfigBasePath(), "providers")
-	if _, err := p.Ops.Stat(providersDir); err != nil {
+	if _, err := p.FileSystem.Stat(providersDir); err != nil {
 		planned = append(planned, "mkdir "+providersDir)
 	}
 	planned = append(planned, "chown "+providersDir+" to "+pd.Owner)
 
 	pluginsDir := filepath.Join(policy.GetSystemConfigBasePath(), "policy.d")
-	if _, err := p.Ops.Stat(pluginsDir); err != nil {
+	if _, err := p.FileSystem.Stat(pluginsDir); err != nil {
 		planned = append(planned, "mkdir "+pluginsDir)
 	}
 	// include plugin files if present
-	if fi, err := p.Fs.Open(pluginsDir); err == nil {
+	if fi, err := p.FileSystem.Open(pluginsDir); err == nil {
 		entries, _ := fi.Readdir(-1)
 		for _, e := range entries {
 			if !e.IsDir() && strings.HasSuffix(e.Name(), ".yml") {
@@ -317,17 +307,17 @@ func (p *PermissionsCmd) Fix() error {
 	var errorsFound []string
 
 	// Create system policy file if missing
-	if _, err := p.Ops.Stat(systemPolicy); err != nil {
-		if f, err := p.Ops.CreateFileWithPerm(systemPolicy); err != nil {
+	if _, err := p.FileSystem.Stat(systemPolicy); err != nil {
+		if f, err := p.FileSystem.CreateFile(systemPolicy); err != nil {
 			errorsFound = append(errorsFound, "create "+systemPolicy+": "+err.Error())
 		} else {
 			f.Close()
 		}
 	}
-	if err := p.Ops.Chmod(systemPolicy, sp.Mode); err != nil {
+	if err := p.FileSystem.Chmod(systemPolicy, sp.Mode); err != nil {
 		errorsFound = append(errorsFound, "chmod "+systemPolicy+": "+err.Error())
 	}
-	if err := p.Ops.Chown(systemPolicy, sp.Owner, sp.Group); err != nil {
+	if err := p.FileSystem.Chown(systemPolicy, sp.Owner, sp.Group); err != nil {
 		errorsFound = append(errorsFound, "chown "+systemPolicy+": "+err.Error())
 	}
 
@@ -337,11 +327,11 @@ func (p *PermissionsCmd) Fix() error {
 		adminSID, _, _ := files.ResolveAccountToSID("Administrators")
 		systemSID, _, _ := files.ResolveAccountToSID("SYSTEM")
 
-		report, err := p.ACLVerifier.VerifyACL(systemPolicy, files.ExpectedACLFromPerm(sp))
+		report, err := p.FileSystem.VerifyACL(systemPolicy, files.ExpectedACLFromPerm(sp))
 		if err != nil {
 			errorsFound = append(errorsFound, "acl verify: "+err.Error())
 		} else {
-			// Ensure Administrators and SYSTEM have full control; if missing, apply via Ops.ApplyACE
+			// Ensure Administrators and SYSTEM have full control; if missing, apply via ApplyACE
 			needAdmin := true
 			needSystem := true
 			for _, a := range report.ACEs {
@@ -357,7 +347,7 @@ func (p *PermissionsCmd) Fix() error {
 				if len(adminSID) > 0 {
 					ace.PrincipalSID = adminSID
 				}
-				if err := p.Ops.ApplyACE(systemPolicy, ace); err != nil {
+				if err := p.FileSystem.ApplyACE(systemPolicy, ace); err != nil {
 					errorsFound = append(errorsFound, "apply ACE Administrators:F: "+err.Error())
 				}
 			}
@@ -366,7 +356,7 @@ func (p *PermissionsCmd) Fix() error {
 				if len(systemSID) > 0 {
 					ace.PrincipalSID = systemSID
 				}
-				if err := p.Ops.ApplyACE(systemPolicy, ace); err != nil {
+				if err := p.FileSystem.ApplyACE(systemPolicy, ace); err != nil {
 					errorsFound = append(errorsFound, "apply ACE SYSTEM:F: "+err.Error())
 				}
 			}
@@ -374,35 +364,35 @@ func (p *PermissionsCmd) Fix() error {
 	}
 
 	// Providers dir
-	if _, err := p.Ops.Stat(providersDir); err != nil {
-		if err := p.Ops.MkdirAllWithPerm(providersDir, pd.Mode); err != nil {
+	if _, err := p.FileSystem.Stat(providersDir); err != nil {
+		if err := p.FileSystem.MkdirAll(providersDir, pd.Mode); err != nil {
 			errorsFound = append(errorsFound, "mkdir "+providersDir+": "+err.Error())
 		}
 	}
-	if err := p.Ops.Chown(providersDir, pd.Owner, pd.Group); err != nil {
+	if err := p.FileSystem.Chown(providersDir, pd.Owner, pd.Group); err != nil {
 		errorsFound = append(errorsFound, "chown "+providersDir+": "+err.Error())
 	}
 
 	// Plugins dir
-	if _, err := p.Ops.Stat(pluginsDir); err != nil {
-		if err := p.Ops.MkdirAllWithPerm(pluginsDir, pld.Mode); err != nil {
+	if _, err := p.FileSystem.Stat(pluginsDir); err != nil {
+		if err := p.FileSystem.MkdirAll(pluginsDir, pld.Mode); err != nil {
 			errorsFound = append(errorsFound, "mkdir "+pluginsDir+": "+err.Error())
 		}
 	}
-	if fi, err := p.Fs.Open(pluginsDir); err == nil {
+	if fi, err := p.FileSystem.Open(pluginsDir); err == nil {
 		entries, _ := fi.Readdir(-1)
 		for _, e := range entries {
 			if !e.IsDir() && strings.HasSuffix(e.Name(), ".yml") {
 				path := filepath.Join(pluginsDir, e.Name())
-				if err := p.Ops.Chmod(path, pf.Mode); err != nil {
+				if err := p.FileSystem.Chmod(path, pf.Mode); err != nil {
 					errorsFound = append(errorsFound, "chmod "+path+": "+err.Error())
 				}
-				if err := p.Ops.Chown(path, pf.Owner, pf.Group); err != nil {
+				if err := p.FileSystem.Chown(path, pf.Owner, pf.Group); err != nil {
 					errorsFound = append(errorsFound, "chown "+path+": "+err.Error())
 				}
 				// On Windows, ensure ACLs for plugin files as well
 				if runtime.GOOS == "windows" {
-					if report, err := p.ACLVerifier.VerifyACL(path, files.ExpectedACLFromPerm(pf)); err == nil {
+					if report, err := p.FileSystem.VerifyACL(path, files.ExpectedACLFromPerm(pf)); err == nil {
 						needAdmin := true
 						for _, a := range report.ACEs {
 							if a.Principal == "Administrators" && strings.Contains(a.Rights, "GENERIC_ALL") {
@@ -414,7 +404,7 @@ func (p *PermissionsCmd) Fix() error {
 							if adminSID, _, _ := files.ResolveAccountToSID("Administrators"); len(adminSID) > 0 {
 								ace.PrincipalSID = adminSID
 							}
-							if err := p.Ops.ApplyACE(path, ace); err != nil {
+							if err := p.FileSystem.ApplyACE(path, ace); err != nil {
 								errorsFound = append(errorsFound, "apply ACE Administrators:F for "+path+": "+err.Error())
 							}
 						}

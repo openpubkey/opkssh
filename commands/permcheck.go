@@ -20,7 +20,6 @@ import (
 	"io/fs"
 
 	"github.com/openpubkey/opkssh/policy/files"
-	"github.com/spf13/afero"
 )
 
 // PermCheckResult contains the results of checking permissions on a single file
@@ -44,16 +43,14 @@ type PermCheckResult struct {
 // of the file at path. It centralises the permission-checking logic shared by
 // the audit and permissions commands so that both report consistent results.
 func CheckFilePermissions(
-	vfs afero.Fs,
-	checker files.PermsChecker,
-	aclVerifier files.ACLVerifier,
+	fsys files.FileSystem,
 	path string,
 	permInfo files.PermInfo,
 ) PermCheckResult {
 	result := PermCheckResult{Path: path}
 
 	// Check existence
-	exists, err := afero.Exists(vfs, path)
+	exists, err := fsys.Exists(path)
 	if err != nil {
 		result.Exists = false
 		result.PermsErr = err.Error()
@@ -66,16 +63,14 @@ func CheckFilePermissions(
 	result.Exists = true
 
 	// Check file mode and ownership
-	if err := checker.CheckPerm(path, []fs.FileMode{permInfo.Mode}, permInfo.Owner, permInfo.Group); err != nil {
+	if err := fsys.CheckPerm(path, []fs.FileMode{permInfo.Mode}, permInfo.Owner, permInfo.Group); err != nil {
 		result.PermsErr = err.Error()
 	}
 
-	// Check ACLs if verifier is available (Windows-specific in practice)
-	if aclVerifier != nil {
-		report, err := aclVerifier.VerifyACL(path, files.ExpectedACLFromPerm(permInfo))
-		result.ACLReport = &report
-		result.ACLErr = err
-	}
+	// Check ACLs
+	report, err := fsys.VerifyACL(path, files.ExpectedACLFromPerm(permInfo))
+	result.ACLReport = &report
+	result.ACLErr = err
 
 	return result
 }

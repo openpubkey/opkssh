@@ -95,15 +95,10 @@ func SetupAuditCmdMocks(t *testing.T, etcPasswdContent string, providerContent s
 	// Create audit command
 	return AuditCmd{
 		Fs:             fs,
+		FileSystem:     files.NewFileSystem(fs),
 		ProviderLoader: mockLoader,
-		filePermsChecker: files.PermsChecker{
-			Fs: fs,
-			CmdRunner: func(name string, arg ...string) ([]byte, error) {
-				return []byte("root" + " " + "opksshuser"), nil
-			},
-		},
-		ProviderPath: providerPath,
-		PolicyPath:   policyPath,
+		ProviderPath:   providerPath,
+		PolicyPath:     policyPath,
 	}
 }
 

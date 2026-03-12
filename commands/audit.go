@@ -31,13 +31,12 @@ import (
 
 // AuditCmd provides functionality to audit policy files against provider definitions
 type AuditCmd struct {
-	Fs               afero.Fs
-	Out              io.Writer
-	ErrOut           io.Writer
-	filePermsChecker files.PermsChecker
-	aclVerifier      files.ACLVerifier
-	ProviderLoader   policy.ProviderLoader
-	CurrentUsername  string
+	Fs             afero.Fs
+	FileSystem     files.FileSystem
+	Out            io.Writer
+	ErrOut         io.Writer
+	ProviderLoader policy.ProviderLoader
+	CurrentUsername string
 
 	// Args
 	ProviderPath   string // Custom provider file path
@@ -51,15 +50,11 @@ func NewAuditCmd(out io.Writer, errOut io.Writer) *AuditCmd {
 	fs := afero.NewOsFs()
 	return &AuditCmd{
 		Fs:              fs,
+		FileSystem:      files.NewFileSystem(fs),
 		Out:             out,
 		ErrOut:          errOut,
 		ProviderLoader:  policy.NewProviderFileLoader(),
 		CurrentUsername: getCurrentUsername(),
-		filePermsChecker: files.PermsChecker{
-			Fs:        fs,
-			CmdRunner: files.ExecCmd,
-		},
-		aclVerifier: files.NewDefaultACLVerifier(fs),
 
 		ProviderPath:   policy.SystemDefaultProvidersPath,
 		PolicyPath:     policy.SystemDefaultPolicyPath,
@@ -189,7 +184,7 @@ func (a *AuditCmd) auditPolicyFileWithStatus(policyPath string, permInfo files.P
 	}
 
 	// Use shared permission checking logic
-	permResult := CheckFilePermissions(a.Fs, a.filePermsChecker, a.aclVerifier, policyPath, permInfo)
+	permResult := CheckFilePermissions(a.FileSystem, policyPath, permInfo)
 	if !permResult.Exists {
 		return results, false, nil
 	}

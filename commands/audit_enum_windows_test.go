@@ -33,12 +33,9 @@ func TestEnumerateUserHomeDirs_Windows(t *testing.T) {
 
 	vfs := afero.NewMemMapFs()
 	cmd := &AuditCmd{
-		Fs:  vfs,
-		Out: &bytes.Buffer{},
-		filePermsChecker: files.PermsChecker{
-			Fs:        vfs,
-			CmdRunner: func(string, ...string) ([]byte, error) { return nil, nil },
-		},
+		Fs:         vfs,
+		FileSystem: files.NewFileSystem(vfs),
+		Out:        &bytes.Buffer{},
 	}
 
 	entries, err := cmd.enumerateUserHomeDirs()

@@ -39,13 +39,7 @@ func TestAuditAndPermissionsCheckConsistency(t *testing.T) {
 	// This test verifies that both audit and the shared permission checker
 	// report the same results for a well-configured system policy file.
 	vfs := afero.NewMemMapFs()
-	checker := files.PermsChecker{
-		Fs: vfs,
-		CmdRunner: func(name string, arg ...string) ([]byte, error) {
-			return []byte("root opksshuser"), nil
-		},
-	}
-	aclVerifier := files.NewDefaultACLVerifier(vfs)
+	fsys := files.NewFileSystem(vfs)
 
 	providerPath := policy.SystemDefaultProvidersPath
 	policyPath := policy.SystemDefaultPolicyPath
@@ -66,7 +60,7 @@ func TestAuditAndPermissionsCheckConsistency(t *testing.T) {
 
 	// --- Run shared CheckFilePermissions (used by both commands) ---
 	sp := files.RequiredPerms.SystemPolicy
-	permResult := CheckFilePermissions(vfs, checker, aclVerifier, policyPath, sp)
+	permResult := CheckFilePermissions(fsys, policyPath, sp)
 	require.True(t, permResult.Exists, "system policy file should exist")
 	require.Empty(t, permResult.PermsErr,
 		"CheckFilePermissions should report no perms error for correct permissions")
@@ -76,16 +70,15 @@ func TestAuditAndPermissionsCheckConsistency(t *testing.T) {
 	errOut := &bytes.Buffer{}
 
 	auditCmd := AuditCmd{
-		Fs:               vfs,
-		Out:              stdOut,
-		ErrOut:           errOut,
-		ProviderLoader:   &MockProviderLoader{content: providerContent, t: t},
-		CurrentUsername:  "testuser",
-		filePermsChecker: checker,
-		aclVerifier:      aclVerifier,
-		ProviderPath:     providerPath,
-		PolicyPath:       policyPath,
-		SkipUserPolicy:   true,
+		Fs:              vfs,
+		FileSystem:      fsys,
+		Out:             stdOut,
+		ErrOut:          errOut,
+		ProviderLoader:  &MockProviderLoader{content: providerContent, t: t},
+		CurrentUsername: "testuser",
+		ProviderPath:    providerPath,
+		PolicyPath:      policyPath,
+		SkipUserPolicy:  true,
 	}
 
 	totalResults, err := auditCmd.Audit("test_version")
@@ -112,13 +105,7 @@ func TestAuditAndPermissionsCheckBadPerms(t *testing.T) {
 	t.Parallel()
 
 	vfs := afero.NewMemMapFs()
-	checker := files.PermsChecker{
-		Fs: vfs,
-		CmdRunner: func(name string, arg ...string) ([]byte, error) {
-			return []byte("root opksshuser"), nil
-		},
-	}
-	aclVerifier := files.NewDefaultACLVerifier(vfs)
+	fsys := files.NewFileSystem(vfs)
 
 	providerPath := policy.SystemDefaultProvidersPath
 	policyPath := policy.SystemDefaultPolicyPath
@@ -136,23 +123,22 @@ func TestAuditAndPermissionsCheckBadPerms(t *testing.T) {
 	sp := files.RequiredPerms.SystemPolicy
 
 	// Both should detect the wrong permissions
-	permResult := CheckFilePermissions(vfs, checker, aclVerifier, policyPath, sp)
+	permResult := CheckFilePermissions(fsys, policyPath, sp)
 	require.True(t, permResult.Exists)
 	require.NotEmpty(t, permResult.PermsErr, "should detect wrong permissions")
 
 	stdOut := &bytes.Buffer{}
 	errOut := &bytes.Buffer{}
 	auditCmd := AuditCmd{
-		Fs:               vfs,
-		Out:              stdOut,
-		ErrOut:           errOut,
-		ProviderLoader:   &MockProviderLoader{content: providerContent, t: t},
-		CurrentUsername:  "testuser",
-		filePermsChecker: checker,
-		aclVerifier:      aclVerifier,
-		ProviderPath:     providerPath,
-		PolicyPath:       policyPath,
-		SkipUserPolicy:   true,
+		Fs:              vfs,
+		FileSystem:      fsys,
+		Out:             stdOut,
+		ErrOut:          errOut,
+		ProviderLoader:  &MockProviderLoader{content: providerContent, t: t},
+		CurrentUsername: "testuser",
+		ProviderPath:    providerPath,
+		PolicyPath:      policyPath,
+		SkipUserPolicy:  true,
 	}
 	totalResults, err := auditCmd.Audit("test_version")
 	require.NoError(t, err)
