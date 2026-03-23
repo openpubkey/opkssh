@@ -21,15 +21,13 @@ package commands
 
 import (
 	"fmt"
-
-	"github.com/spf13/afero"
 )
 
 // enumerateUserHomeDirs returns the list of user home directories by reading
 // /etc/passwd. This is the Unix implementation.
 func (a *AuditCmd) enumerateUserHomeDirs() ([]userHomeEntry, error) {
 	passwdPath := "/etc/passwd"
-	exists, err := afero.Exists(a.Fs, passwdPath)
+	exists, err := a.Fs.Exists(passwdPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check /etc/passwd: %w", err)
 	}
@@ -37,7 +35,7 @@ func (a *AuditCmd) enumerateUserHomeDirs() ([]userHomeEntry, error) {
 		return nil, fmt.Errorf("/etc/passwd not found (needed to enumerate user home policies)")
 	}
 
-	etcPasswdContent, err := afero.ReadFile(a.Fs, passwdPath)
+	etcPasswdContent, err := a.Fs.ReadFile(passwdPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read /etc/passwd: %w", err)
 	}

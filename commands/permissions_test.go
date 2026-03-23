@@ -32,9 +32,10 @@ func TestPermissionsCheck_WithSystemPolicyAndPlugins_Succeeds(t *testing.T) {
 	err := afero.WriteFile(vfs, path, []byte("user1 alice@example.com google\n"), 0o640)
 	require.NoError(t, err)
 
-	// Create plugins dir and a plugin file
-	providersDir := filepath.Join(base, "providers")
-	_ = vfs.MkdirAll(providersDir, 0o750)
+	// Create providers file and plugins dir
+	providersFile := filepath.Join(base, "providers")
+	err = afero.WriteFile(vfs, providersFile, []byte("https://accounts.google.com google-client-id 24h\n"), 0o640)
+	require.NoError(t, err)
 	pluginsDir := filepath.Join(base, "policy.d")
 	_ = vfs.MkdirAll(pluginsDir, 0o750)
 	err = afero.WriteFile(vfs, filepath.Join(pluginsDir, "example.yml"), []byte("name: test\ncommand: /bin/true\n"), 0o640)

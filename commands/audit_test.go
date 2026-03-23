@@ -94,8 +94,7 @@ func SetupAuditCmdMocks(t *testing.T, etcPasswdContent string, providerContent s
 
 	// Create audit command
 	return AuditCmd{
-		Fs: fs,
-		FileSystem: files.NewFileSystem(fs, files.WithCmdRunner(func(name string, arg ...string) ([]byte, error) {
+		Fs: files.NewFileSystem(fs, files.WithCmdRunner(func(name string, arg ...string) ([]byte, error) {
 			return []byte("root opksshuser"), nil
 		})),
 		ProviderLoader: mockLoader,

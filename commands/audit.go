@@ -31,8 +31,7 @@ import (
 
 // AuditCmd provides functionality to audit policy files against provider definitions
 type AuditCmd struct {
-	Fs              afero.Fs
-	FileSystem      files.FileSystem
+	Fs              files.FileSystem
 	Out             io.Writer
 	ErrOut          io.Writer
 	ProviderLoader  policy.ProviderLoader
@@ -47,10 +46,8 @@ type AuditCmd struct {
 
 // NewAuditCmd creates a new AuditCmd with default settings
 func NewAuditCmd(out io.Writer, errOut io.Writer) *AuditCmd {
-	fs := afero.NewOsFs()
 	return &AuditCmd{
-		Fs:              fs,
-		FileSystem:      files.NewFileSystem(fs),
+		Fs:              files.NewFileSystem(afero.NewOsFs()),
 		Out:             out,
 		ErrOut:          errOut,
 		ProviderLoader:  policy.NewProviderFileLoader(),
@@ -184,7 +181,7 @@ func (a *AuditCmd) auditPolicyFileWithStatus(policyPath string, permInfo files.P
 	}
 
 	// Use shared permission checking logic
-	permResult := CheckFilePermissions(a.FileSystem, policyPath, permInfo)
+	permResult := CheckFilePermissions(a.Fs, policyPath, permInfo)
 	if !permResult.Exists {
 		return results, false, nil
 	}
@@ -201,7 +198,7 @@ func (a *AuditCmd) auditPolicyFileWithStatus(policyPath string, permInfo files.P
 	}
 
 	// Load policy file
-	content, err := afero.ReadFile(a.Fs, policyPath)
+	content, err := a.Fs.ReadFile(policyPath)
 	if err != nil {
 		return nil, true, fmt.Errorf("failed to read policy file: %w", err)
 	}

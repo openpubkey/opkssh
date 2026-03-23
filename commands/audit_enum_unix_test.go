@@ -36,9 +36,8 @@ func TestEnumerateUserHomeDirs_Unix(t *testing.T) {
 	require.NoError(t, afero.WriteFile(vfs, "/etc/passwd", []byte(passwdContent), 0o644))
 
 	cmd := &AuditCmd{
-		Fs:         vfs,
-		FileSystem: files.NewFileSystem(vfs, files.WithCmdRunner(func(string, ...string) ([]byte, error) { return nil, nil })),
-		Out:        &bytes.Buffer{},
+		Fs:  files.NewFileSystem(vfs, files.WithCmdRunner(func(string, ...string) ([]byte, error) { return nil, nil })),
+		Out: &bytes.Buffer{},
 	}
 
 	entries, err := cmd.enumerateUserHomeDirs()
@@ -56,9 +55,8 @@ func TestEnumerateUserHomeDirs_Unix_MissingPasswd(t *testing.T) {
 	vfs := afero.NewMemMapFs()
 
 	cmd := &AuditCmd{
-		Fs:         vfs,
-		FileSystem: files.NewFileSystem(vfs, files.WithCmdRunner(func(string, ...string) ([]byte, error) { return nil, nil })),
-		Out:        &bytes.Buffer{},
+		Fs:  files.NewFileSystem(vfs, files.WithCmdRunner(func(string, ...string) ([]byte, error) { return nil, nil })),
+		Out: &bytes.Buffer{},
 	}
 
 	_, err := cmd.enumerateUserHomeDirs()

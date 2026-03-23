@@ -52,7 +52,7 @@ func (m *mockFileSystem) ReadFile(path string) ([]byte, error) {
 }
 
 func (m *mockFileSystem) MkdirAll(path string, perm fs.FileMode) error {
-	return m.fs.MkdirAll(path, 0o750)
+	return m.fs.MkdirAll(path, perm)
 }
 
 func (m *mockFileSystem) CreateFile(path string) (afero.File, error) {
@@ -61,12 +61,12 @@ func (m *mockFileSystem) CreateFile(path string) (afero.File, error) {
 }
 
 func (m *mockFileSystem) WriteFile(path string, data []byte, perm fs.FileMode) error {
-	return afero.WriteFile(m.fs, path, data, 0o644)
+	return afero.WriteFile(m.fs, path, data, perm)
 }
 
 func (m *mockFileSystem) Chmod(path string, perm fs.FileMode) error {
 	m.ChmodCalled = true
-	return m.fs.Chmod(path, 0o644)
+	return m.fs.Chmod(path, perm)
 }
 
 func (m *mockFileSystem) Chown(path string, owner string, group string) error {

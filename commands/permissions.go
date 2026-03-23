@@ -173,14 +173,32 @@ func (p *PermissionsCmd) Check() error {
 		results = append(results, cr)
 	}
 
-	// Providers dir
-	providersDir := filepath.Join(policy.GetSystemConfigBasePath(), "providers")
-	if _, err := p.FileSystem.Stat(providersDir); err != nil {
+	// Providers file
+	providersFile := policy.SystemDefaultProvidersPath
+	pp := files.RequiredPerms.Providers
+	provResult := CheckFilePermissions(p.FileSystem, providersFile, pp)
+	if !provResult.Exists {
 		// not fatal, but report
-		problems = append(problems, fmt.Sprintf("%s: %v", providersDir, err))
-		results = append(results, checkResult{Path: providersDir, Exists: false, PermsErr: err.Error()})
+		problems = append(problems, fmt.Sprintf("%s: file does not exist", providersFile))
+		results = append(results, checkResult{Path: providersFile, Exists: false})
 	} else {
-		results = append(results, checkResult{Path: providersDir, Exists: true})
+		cr := checkResult{Path: providersFile, Exists: true, PermsErr: provResult.PermsErr}
+		if provResult.PermsErr != "" {
+			problems = append(problems, fmt.Sprintf("%s: %s", providersFile, provResult.PermsErr))
+		}
+		results = append(results, cr)
+	}
+
+	// Config file
+	configFile := filepath.Join(policy.GetSystemConfigBasePath(), "config.yml")
+	cp := files.RequiredPerms.Config
+	cfgResult := CheckFilePermissions(p.FileSystem, configFile, cp)
+	if cfgResult.Exists {
+		cr := checkResult{Path: configFile, Exists: true, PermsErr: cfgResult.PermsErr}
+		if cfgResult.PermsErr != "" {
+			problems = append(problems, fmt.Sprintf("%s: %s", configFile, cfgResult.PermsErr))
+		}
+		results = append(results, cr)
 	}
 
 	// Policy plugins dir
@@ -191,7 +209,7 @@ func (p *PermissionsCmd) Check() error {
 	} else {
 		cr := checkResult{Path: pluginsDir, Exists: true}
 		// Check directory perms using plugin package expectations
-		if err := p.FileSystem.CheckPerm(pluginsDir, plugins.RequiredPolicyDirPerms(), files.RequiredPerms.PluginsDir.Owner, ""); err != nil {
+		if err := p.FileSystem.CheckPerm(pluginsDir, plugins.RequiredPolicyDirPerms(), files.RequiredPerms.PluginsDir.Owner, files.RequiredPerms.PluginsDir.Group); err != nil {
 			problems = append(problems, fmt.Sprintf("%s: %v", pluginsDir, err))
 			cr.PermsErr = err.Error()
 		}
@@ -227,7 +245,7 @@ func (p *PermissionsCmd) Fix() error {
 	var planned []string
 
 	sp := files.RequiredPerms.SystemPolicy
-	pd := files.RequiredPerms.ProvidersDir
+	pv := files.RequiredPerms.Providers
 	pld := files.RequiredPerms.PluginsDir
 	pf := files.RequiredPerms.PluginFile
 
@@ -242,11 +260,26 @@ func (p *PermissionsCmd) Fix() error {
 	}
 	planned = append(planned, "chown "+systemPolicy+" to "+plannedOwner)
 
-	providersDir := filepath.Join(policy.GetSystemConfigBasePath(), "providers")
-	if _, err := p.FileSystem.Stat(providersDir); err != nil {
-		planned = append(planned, "mkdir "+providersDir)
+	providersFile := policy.SystemDefaultProvidersPath
+	if _, err := p.FileSystem.Stat(providersFile); err == nil {
+		planned = append(planned, "chmod "+providersFile+" to "+pv.Mode.String())
+		pvOwner := pv.Owner
+		if pv.Group != "" {
+			pvOwner += ":" + pv.Group
+		}
+		planned = append(planned, "chown "+providersFile+" to "+pvOwner)
 	}
-	planned = append(planned, "chown "+providersDir+" to "+pd.Owner)
+
+	configFile := filepath.Join(policy.GetSystemConfigBasePath(), "config.yml")
+	cp := files.RequiredPerms.Config
+	if _, err := p.FileSystem.Stat(configFile); err == nil {
+		planned = append(planned, "chmod "+configFile+" to "+cp.Mode.String())
+		cpOwner := cp.Owner
+		if cp.Group != "" {
+			cpOwner += ":" + cp.Group
+		}
+		planned = append(planned, "chown "+configFile+" to "+cpOwner)
+	}
 
 	pluginsDir := filepath.Join(policy.GetSystemConfigBasePath(), "policy.d")
 	if _, err := p.FileSystem.Stat(pluginsDir); err != nil {
@@ -363,14 +396,24 @@ func (p *PermissionsCmd) Fix() error {
 		}
 	}
 
-	// Providers dir
-	if _, err := p.FileSystem.Stat(providersDir); err != nil {
-		if err := p.FileSystem.MkdirAll(providersDir, pd.Mode); err != nil {
-			errorsFound = append(errorsFound, "mkdir "+providersDir+": "+err.Error())
+	// Providers file
+	if _, err := p.FileSystem.Stat(providersFile); err == nil {
+		if err := p.FileSystem.Chmod(providersFile, pv.Mode); err != nil {
+			errorsFound = append(errorsFound, "chmod "+providersFile+": "+err.Error())
+		}
+		if err := p.FileSystem.Chown(providersFile, pv.Owner, pv.Group); err != nil {
+			errorsFound = append(errorsFound, "chown "+providersFile+": "+err.Error())
 		}
 	}
-	if err := p.FileSystem.Chown(providersDir, pd.Owner, pd.Group); err != nil {
-		errorsFound = append(errorsFound, "chown "+providersDir+": "+err.Error())
+
+	// Config file
+	if _, err := p.FileSystem.Stat(configFile); err == nil {
+		if err := p.FileSystem.Chmod(configFile, cp.Mode); err != nil {
+			errorsFound = append(errorsFound, "chmod "+configFile+": "+err.Error())
+		}
+		if err := p.FileSystem.Chown(configFile, cp.Owner, cp.Group); err != nil {
+			errorsFound = append(errorsFound, "chown "+configFile+": "+err.Error())
+		}
 	}
 
 	// Plugins dir

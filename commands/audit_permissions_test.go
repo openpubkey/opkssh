@@ -56,8 +56,8 @@ func TestAuditAndPermissionsCheckConsistency(t *testing.T) {
 	require.NoError(t, afero.WriteFile(vfs, providerPath, []byte(providerContent), 0o640))
 	require.NoError(t, afero.WriteFile(vfs, policyPath, []byte(policyContent), 0o640))
 
-	// Also create dirs expected by permissions check
-	require.NoError(t, vfs.MkdirAll(filepath.Join(basePath, "providers"), 0o750))
+	// Also create files expected by permissions check
+	require.NoError(t, afero.WriteFile(vfs, filepath.Join(basePath, "providers"), []byte(providerContent), 0o640))
 	require.NoError(t, vfs.MkdirAll(filepath.Join(basePath, "policy.d"), 0o750))
 
 	// --- Run shared CheckFilePermissions (used by both commands) ---
@@ -72,8 +72,7 @@ func TestAuditAndPermissionsCheckConsistency(t *testing.T) {
 	errOut := &bytes.Buffer{}
 
 	auditCmd := AuditCmd{
-		Fs:              vfs,
-		FileSystem:      fsys,
+		Fs:              fsys,
 		Out:             stdOut,
 		ErrOut:          errOut,
 		ProviderLoader:  &MockProviderLoader{content: providerContent, t: t},
@@ -134,8 +133,7 @@ func TestAuditAndPermissionsCheckBadPerms(t *testing.T) {
 	stdOut := &bytes.Buffer{}
 	errOut := &bytes.Buffer{}
 	auditCmd := AuditCmd{
-		Fs:              vfs,
-		FileSystem:      fsys,
+		Fs:              fsys,
 		Out:             stdOut,
 		ErrOut:          errOut,
 		ProviderLoader:  &MockProviderLoader{content: providerContent, t: t},

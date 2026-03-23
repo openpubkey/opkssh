@@ -28,9 +28,12 @@ var RequiredPerms = struct {
 	// HomePolicy is the per-user policy file
 	// (e.g. ~/.opk/auth_id).
 	HomePolicy PermInfo
-	// ProvidersDir is the directory containing provider configuration
+	// Providers is the provider configuration file
 	// (e.g. /etc/opk/providers).
-	ProvidersDir PermInfo
+	Providers PermInfo
+	// Config is the server configuration file
+	// (e.g. /etc/opk/config.yml).
+	Config PermInfo
 	// PluginsDir is the directory containing policy plugin definitions
 	// (e.g. /etc/opk/policy.d).
 	PluginsDir PermInfo
@@ -50,10 +53,16 @@ var RequiredPerms = struct {
 		Group:     "",
 		MustExist: false,
 	},
-	ProvidersDir: PermInfo{
-		Mode:      0o750,
+	Providers: PermInfo{
+		Mode:      ModeSystemPerms, // 0o640
 		Owner:     "root",
-		Group:     "",
+		Group:     "opksshuser",
+		MustExist: false,
+	},
+	Config: PermInfo{
+		Mode:      ModeSystemPerms, // 0o640
+		Owner:     "root",
+		Group:     "opksshuser",
 		MustExist: false,
 	},
 	PluginsDir: PermInfo{
