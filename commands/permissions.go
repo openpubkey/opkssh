@@ -133,28 +133,18 @@ func (p *PermissionsCmd) Check() error {
 	var problems []string
 	var results []checkResult
 
-	// System policy file — use shared permission check
-	sp := files.RequiredPerms.SystemPolicy
-	systemPolicy := policy.SystemDefaultPolicyPath
-	sysResult := CheckFilePermissions(p.FileSystem, systemPolicy, sp)
-	if !sysResult.Exists {
-		problems = append(problems, fmt.Sprintf("%s: file does not exist", systemPolicy))
-		results = append(results, checkResult{Path: systemPolicy, Exists: false})
-	} else {
-		cr := checkResult{Path: systemPolicy, Exists: true, PermsErr: sysResult.PermsErr}
-		if sysResult.PermsErr != "" {
-			problems = append(problems, fmt.Sprintf("%s: %s", systemPolicy, sysResult.PermsErr))
-		}
-		// Print ACL details for visibility
-		if sysResult.ACLErr != nil {
-			problems = append(problems, fmt.Sprintf("%s: acl verify error: %v", systemPolicy, sysResult.ACLErr))
-			cr.ACLErr = sysResult.ACLErr.Error()
-		} else if sysResult.ACLReport != nil {
-			report := sysResult.ACLReport
+	// checkACLResult is a helper that processes ACL findings from
+	// CheckFilePermissions and appends them to problems/checkResult.
+	checkACLResult := func(path string, result PermCheckResult, cr *checkResult) {
+		if result.ACLErr != nil {
+			problems = append(problems, fmt.Sprintf("%s: acl verify error: %v", path, result.ACLErr))
+			cr.ACLErr = result.ACLErr.Error()
+		} else if result.ACLReport != nil {
+			report := result.ACLReport
 			if report.OwnerSIDStr != "" {
-				fmt.Fprintf(p.Out, "%s: owner=%s ownerSID=%s mode=%o\n", systemPolicy, report.Owner, report.OwnerSIDStr, report.Mode)
+				fmt.Fprintf(p.Out, "%s: owner=%s ownerSID=%s mode=%o\n", path, report.Owner, report.OwnerSIDStr, report.Mode)
 			} else {
-				fmt.Fprintf(p.Out, "%s: owner=%s mode=%o\n", systemPolicy, report.Owner, report.Mode)
+				fmt.Fprintf(p.Out, "%s: owner=%s mode=%o\n", path, report.Owner, report.Mode)
 			}
 			if len(report.ACEs) > 0 {
 				fmt.Fprintln(p.Out, "  ACEs:")
@@ -170,6 +160,21 @@ func (p *PermissionsCmd) Check() error {
 				fmt.Fprintln(p.Out, "  ACL problem:", prob)
 			}
 		}
+	}
+
+	// System policy file — use shared permission check
+	sp := files.RequiredPerms.SystemPolicy
+	systemPolicy := policy.SystemDefaultPolicyPath
+	sysResult := CheckFilePermissions(p.FileSystem, systemPolicy, sp)
+	if !sysResult.Exists {
+		problems = append(problems, fmt.Sprintf("%s: file does not exist", systemPolicy))
+		results = append(results, checkResult{Path: systemPolicy, Exists: false})
+	} else {
+		cr := checkResult{Path: systemPolicy, Exists: true, PermsErr: sysResult.PermsErr}
+		if sysResult.PermsErr != "" {
+			problems = append(problems, fmt.Sprintf("%s: %s", systemPolicy, sysResult.PermsErr))
+		}
+		checkACLResult(systemPolicy, sysResult, &cr)
 		results = append(results, cr)
 	}
 
@@ -186,6 +191,7 @@ func (p *PermissionsCmd) Check() error {
 		if provResult.PermsErr != "" {
 			problems = append(problems, fmt.Sprintf("%s: %s", providersFile, provResult.PermsErr))
 		}
+		checkACLResult(providersFile, provResult, &cr)
 		results = append(results, cr)
 	}
 
@@ -198,6 +204,7 @@ func (p *PermissionsCmd) Check() error {
 		if cfgResult.PermsErr != "" {
 			problems = append(problems, fmt.Sprintf("%s: %s", configFile, cfgResult.PermsErr))
 		}
+		checkACLResult(configFile, cfgResult, &cr)
 		results = append(results, cr)
 	}
 
