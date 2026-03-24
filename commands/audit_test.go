@@ -65,15 +65,25 @@ func SetupAuditCmdMocks(t *testing.T, etcPasswdContent string, providerContent s
 	// Create in-memory filesystem
 	fs := afero.NewMemMapFs()
 
-	err := afero.WriteFile(fs, "/etc/passwd", []byte(etcPasswdContent), 0640)
-	require.NoError(t, err)
+	providerPath := policy.SystemDefaultProvidersPath
+	policyPath := policy.SystemDefaultPolicyPath
+
+	// Ensure parent directories exist (required for Windows paths like C:\ProgramData\opk\)
+	require.NoError(t, fs.MkdirAll(filepath.Dir(providerPath), 0750))
+	require.NoError(t, fs.MkdirAll(filepath.Dir(policyPath), 0750))
+
+	// Write /etc/passwd only if content is provided (Unix only; not used on Windows)
+	if etcPasswdContent != "" {
+		err := afero.WriteFile(fs, "/etc/passwd", []byte(etcPasswdContent), 0640)
+		require.NoError(t, err)
+	}
 
 	// Create provider file
-	err = afero.WriteFile(fs, "/etc/opk/providers", []byte(providerContent), 0640)
+	err := afero.WriteFile(fs, providerPath, []byte(providerContent), 0640)
 	require.NoError(t, err)
 
 	// Create auth_id file
-	err = afero.WriteFile(fs, "/etc/opk/auth_id", []byte(systemPolicyContent), 0640)
+	err = afero.WriteFile(fs, policyPath, []byte(systemPolicyContent), 0640)
 	require.NoError(t, err)
 
 	// Mock provider loader
@@ -84,16 +94,12 @@ func SetupAuditCmdMocks(t *testing.T, etcPasswdContent string, providerContent s
 
 	// Create audit command
 	return AuditCmd{
-		Fs:             fs,
+		Fs: files.NewFileSystem(fs, files.WithCmdRunner(func(name string, arg ...string) ([]byte, error) {
+			return []byte("root opksshuser"), nil
+		})),
 		ProviderLoader: mockLoader,
-		filePermsChecker: files.PermsChecker{
-			Fs: fs,
-			CmdRunner: func(name string, arg ...string) ([]byte, error) {
-				return []byte("root" + " " + "opkssh"), nil
-			},
-		},
-		ProviderPath: "/etc/opk/providers",
-		PolicyPath:   "/etc/opk/auth_id",
+		ProviderPath:   providerPath,
+		PolicyPath:     policyPath,
 	}
 }
 
@@ -129,7 +135,7 @@ func TestAuditCmd(t *testing.T) {
 				"Total Entries Tested:  2",
 			},
 			expectedStdErrContains: []string{
-				"validating /etc/opk/auth_id",
+				"validating " + strings.ReplaceAll(policy.SystemDefaultPolicyPath, string(filepath.Separator), "/"),
 			},
 		},
 		{
@@ -175,7 +181,7 @@ func TestAuditCmd(t *testing.T) {
 			},
 			expectedStdErrContains: []string{
 				"no policy entries",
-				"validating /etc/opk/auth_id",
+				"validating " + strings.ReplaceAll(policy.SystemDefaultPolicyPath, string(filepath.Separator), "/"),
 			},
 		},
 		{
@@ -336,18 +342,18 @@ func TestAuditCmdValidationResults(t *testing.T) {
 func TestGetHomeDirsFromEtcPasswd(t *testing.T) {
 	t.Parallel()
 
-	etcPasswdRows := getHomeDirsFromEtcPasswd(string(etcPasswdMock))
+	homeDirs := getHomeDirsFromEtcPasswd(string(etcPasswdMock))
 
-	require.Len(t, etcPasswdRows, 5)
+	require.Len(t, homeDirs, 5)
 
-	require.Equal(t, "root", etcPasswdRows[0].Username)
-	require.Equal(t, "/root", etcPasswdRows[0].HomeDir)
-	require.Equal(t, "dev", etcPasswdRows[1].Username)
-	require.Equal(t, "/home/dev", etcPasswdRows[1].HomeDir)
-	require.Equal(t, "alice", etcPasswdRows[2].Username)
-	require.Equal(t, "/home/alice", etcPasswdRows[2].HomeDir)
-	require.Equal(t, "bob", etcPasswdRows[3].Username)
-	require.Equal(t, "/home/bob", etcPasswdRows[3].HomeDir)
-	require.Equal(t, "carol", etcPasswdRows[4].Username)
-	require.Equal(t, "/home/carol", etcPasswdRows[4].HomeDir)
+	require.Equal(t, "root", homeDirs[0].Username)
+	require.Equal(t, "/root", homeDirs[0].HomeDir)
+	require.Equal(t, "dev", homeDirs[1].Username)
+	require.Equal(t, "/home/dev", homeDirs[1].HomeDir)
+	require.Equal(t, "alice", homeDirs[2].Username)
+	require.Equal(t, "/home/alice", homeDirs[2].HomeDir)
+	require.Equal(t, "bob", homeDirs[3].Username)
+	require.Equal(t, "/home/bob", homeDirs[3].HomeDir)
+	require.Equal(t, "carol", homeDirs[4].Username)
+	require.Equal(t, "/home/carol", homeDirs[4].HomeDir)
 }
