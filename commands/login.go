@@ -86,6 +86,7 @@ type LoginCmd struct {
 	ProviderAliasArg      string
 	KeyTypeArg            KeyType
 	PrintKeyArg           bool // Print private key and SSH cert instead of writing them to the filesystem
+	PrintSshKeyArg        bool // Print SSH cert details. Useful for inspecting the generated cert
 	SSHConfigured         bool
 	Verbosity             int // Default verbosity is 0, 1 is verbose, 2 is debug
 	RemoteRedirectURI     string
@@ -109,7 +110,7 @@ type LoginCmd struct {
 func NewLogin(autoRefreshArg bool, configPathArg string, createConfigArg bool, configureArg bool, logDirArg string,
 	sendAccessTokenArg bool, disableBrowserOpenArg bool, printIdTokenArg bool,
 	providerArg string, printKeyArg bool, keyPathArg string, providerAliasArg string, keyTypeArg KeyType,
-	remoteRedirectUri string,
+	remoteRedirectUri string, printSshKeyArg bool,
 ) *LoginCmd {
 	return &LoginCmd{
 		Fs:                    afero.NewOsFs(),
@@ -124,6 +125,7 @@ func NewLogin(autoRefreshArg bool, configPathArg string, createConfigArg bool, c
 		KeyPathArg:            keyPathArg,
 		ProviderArg:           providerArg,
 		PrintKeyArg:           printKeyArg,
+		PrintSshKeyArg:        printSshKeyArg,
 		ProviderAliasArg:      providerAliasArg,
 		KeyTypeArg:            keyTypeArg,
 		RemoteRedirectURI:     remoteRedirectUri,
@@ -503,7 +505,14 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 			return nil, fmt.Errorf("failed to format ID Token: %w", err)
 		}
 
-		fmt.Printf("id_token:\n%s\n", idTokenStr)
+		fmt.Fprintf(l.out(), "id_token:\n%s\n", idTokenStr)
+	}
+
+	if l.PrintSshKeyArg {
+		inspect := NewInspectCmd(string(certBytes), l.out())
+		if err := inspect.Run(); err != nil {
+			return nil, fmt.Errorf("failed to inspect SSH key: %w", err)
+		}
 	}
 
 	idStr, err := IdentityString(*pkt)

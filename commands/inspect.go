@@ -188,7 +188,7 @@ func (i *InspectCmd) printJSON(data []byte) {
 }
 
 func (i *InspectCmd) printJSONObject(obj any) {
-	pretty, err := json.MarshalIndent(obj, "", "  ")
+	pretty, err := json.MarshalIndent(obj, "", "    ")
 	if err != nil {
 		i.printf("Error pretty-printing: %v\n", err)
 		i.printf("%v\n", obj)

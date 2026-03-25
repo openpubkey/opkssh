@@ -67,8 +67,8 @@ func TestInspectSSHCert(t *testing.T) {
 			output := buf.String()
 			require.Contains(t, output, "--- SSH Certificate Information ---")
 			require.Contains(t, output, "[guest dev]")
-			require.Contains(t, output, "Provider Signature (OP) exists\n{\n  \"alg\": \"RS256\",\n  \"kid\": \"kid-")
-			require.Contains(t, output, "Client Signature (CIC) exists\n{\n  \"alg\": \"")
+			require.Contains(t, output, "Provider Signature (OP) exists\n{\n    \"alg\": \"RS256\",\n    \"kid\": \"kid-")
+			require.Contains(t, output, "Client Signature (CIC) exists\n{\n    \"alg\": \"")
 		})
 	}
 }

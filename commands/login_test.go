@@ -156,6 +156,16 @@ func TestLoginCmd(t *testing.T) {
 			wantError: false,
 		},
 		{
+			name:    "Good path PrintSshKey",
+			envVars: map[string]string{},
+			loginCmd: LoginCmd{
+				Verbosity:      0,
+				PrintSshKeyArg: true,
+				LogDirArg:      logDir,
+			},
+			wantError: false,
+		},
+		{
 			name:    "Good path with SendAccessToken set in arg and config",
 			envVars: map[string]string{},
 			loginCmd: LoginCmd{
@@ -233,6 +243,17 @@ func TestLoginCmd(t *testing.T) {
 						require.Contains(t, gotLines[0], "cert-v01@openssh.com AAAA")
 						require.Contains(t, gotLines[1], "-----BEGIN OPENSSH PRIVATE KEY-----")
 						pubKeyBytes = []byte(gotLines[0])
+					} else if tt.loginCmd.PrintSshKeyArg {
+						got := cliOutputBuffer.String()
+						require.Contains(t, got, "--- SSH Certificate Information ---")
+						require.Contains(t, got, "--- PKToken Structure ---")
+
+						homePath, err := os.UserHomeDir()
+						require.NoError(t, err)
+						// KeyTypeArg defaults to ECDSA so keys are written to id_ecdsa path
+						sshPubPath := filepath.Join(homePath, ".ssh", "id_ecdsa-cert.pub")
+						pubKeyBytes, err = afero.ReadFile(mockFs, sshPubPath)
+						require.NoError(t, err)
 					} else {
 						homePath, err := os.UserHomeDir()
 						require.NoError(t, err)
@@ -447,7 +468,7 @@ func TestNewLogin(t *testing.T) {
 	remoteRedirectURIArg := ""
 
 	loginCmd := NewLogin(autoRefresh, configPathArg, createConfig, configureArg, logDir,
-		sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, keyAsOutputArg, keyPathArg, providerAlias, keyTypeArg, remoteRedirectURIArg)
+		sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, keyAsOutputArg, keyPathArg, providerAlias, keyTypeArg, remoteRedirectURIArg, false)
 	require.NotNil(t, loginCmd)
 }
 
