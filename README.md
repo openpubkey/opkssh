@@ -200,7 +200,9 @@ Second, we use the `AuthorizedKeysCommand` configuration option in `sshd_config`
 | Linux            | ✅        | ✅     |  Arch Linux            | -                       |
 | Linux            | ✅        | ✅     |  opensuse leap 16   | -                       |
 | macOS            | ❌        | ❌     |  -                     | Likely                  |
-| Windows11        | ❌        | ❌     |  -                     | Likely                  |
+| Windows Server   | ✅        | ✅     |  Windows Server 2022   | -                       |
+| Windows Server   | ✅        | ✅     |  Windows Server 2025   | -                       |
+| Windows 11       | ✅        | ✅     |  Windows 11 ARM64      | -                       |
 
 ## Server Configuration
 
