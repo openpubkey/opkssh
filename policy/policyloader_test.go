@@ -25,27 +25,13 @@ import (
 
 	"github.com/openpubkey/opkssh/policy"
 	"github.com/openpubkey/opkssh/policy/files"
+	"github.com/openpubkey/opkssh/test/testutil"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )
 
-type MockUserLookup struct {
-	// User is returned on any call to Lookup() if Error is nil
-	User *user.User
-	// Error is returned on any call to Lookup() if non-nil
-	Error error
-}
-
-var _ policy.UserLookup = &MockUserLookup{}
-
-// Lookup implements policy.UserLookup
-func (m *MockUserLookup) Lookup(username string) (*user.User, error) {
-	if m.Error == nil {
-		return m.User, nil
-	} else {
-		return nil, m.Error
-	}
-}
+// MockUserLookup is an alias for testutil.MockUserLookup to keep test code concise.
+type MockUserLookup = testutil.MockUserLookup
 
 // MockFsOpenError embeds an afero.MemMapFs (implements afero.Fs) but allows for
 // finer control on when an error should be returned on a specific filepath
@@ -96,7 +82,7 @@ func NewTestSystemPolicyLoader(fs afero.Fs, userLookup policy.UserLookup) *polic
 	}
 }
 
-var ValidUser *user.User = &user.User{HomeDir: "/home/foo", Username: "foo"}
+var ValidUser = testutil.ValidUser
 
 func TestLoadUserPolicy_FailUserLookup(t *testing.T) {
 	// Test that LoadUserPolicy returns an error when user lookup fails
