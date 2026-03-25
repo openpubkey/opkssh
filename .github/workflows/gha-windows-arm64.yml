@@ -10,7 +10,7 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
     - name: Install OpenSSH Server
@@ -34,15 +34,10 @@ jobs:
       with:
         persist-credentials: false
     
-    - name: Cache Go modules
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+    - name: Install Go
+      uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
       with:
-        path: |
-          ~/go/pkg/mod
-          ~/.cache/go-build
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
+        go-version-file: 'go.mod'
 
     - name: Install dependencies
       run: go mod download
