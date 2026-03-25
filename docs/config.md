@@ -61,7 +61,7 @@ providers:
 
 ```
 
-## Server config `/etc/opk/config.yml`
+## Server config `/etc/opk/config.yml` (Linux) or `%ProgramData%\opk\config.yml` (Windows)
 
 This is the config file for opkssh when used on the SSH server.
 It supports setting additional environment variables when `opkssh verify` is called.
@@ -98,7 +98,7 @@ sudo chown root:opksshuser /etc/opk/config.yml
 sudo chmod 640 /etc/opk/config.yml
 ```
 
-## Allowed OpenID Providers: `/etc/opk/providers`
+## Allowed OpenID Providers: `/etc/opk/providers` (Linux) or `%ProgramData%\opk\providers` (Windows)
 
 This file functions as an access control list that enables admins to determine the OpenID Providers and Client IDs they wish to use.
 This file contains a list of allowed OPKSSH OPs (OpenID Providers) and the associated client ID.
@@ -121,7 +121,7 @@ https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0 096c
 https://gitlab.com 8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923 24h
 ```
 
-## Authorized identities files: `/etc/opk/auth_id` and `/home/{USER}/.opk/auth_id`
+## Authorized identities files: `/etc/opk/auth_id` and `/home/{USER}/.opk/auth_id` (Linux) or `%ProgramData%\opk\auth_id` and `{USERPROFILE}\.opk\auth_id` (Windows)
 
 These files contain the policies to determine which identities can assume what linux user accounts.
 Linux user accounts are typically referred to in SSH as *principals* and we use this terminology.
@@ -133,7 +133,7 @@ We support email "wildcard" validation using the `oidc-match-end:email:` prefix.
 - This matching is **case-insensitive**.
 - Use with care, as allowing a domain grants access to all users at that domain.
 
-### System authorized identity file `/etc/opk/auth_id`
+### System authorized identity file `/etc/opk/auth_id` (Linux) or `%ProgramData%\opk\auth_id` (Windows)
 
 This is a server wide policy file.
 
@@ -186,7 +186,7 @@ sudo chmod 640 /etc/opk/auth_id
 
 **Note:** The permissions for the system authorized identity file are different than the home authorized identity file.
 
-### Home authorized identity file `/home/{USER}/.opk/auth_id`
+### Home authorized identity file `/home/{USER}/.opk/auth_id` (Linux) or `{USERPROFILE}\.opk\auth_id` (Windows)
 
 This is user/principal specific permissions.
 That is, if it is in `/home/alice/.opk/auth_id` it can only specify who can assume the principal `alice` on the server.

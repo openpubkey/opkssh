@@ -6,6 +6,8 @@ BeforeAll {
 }
 
 Describe "Set-SshdConfiguration" {
+    # Tests that Set-SshdConfiguration correctly detects, preserves, and
+    # updates AuthorizedKeysCommand/AuthorizedKeysCommandUser in sshd_config.
     It "returns true when sshd_config already matches desired configuration" {
         $tempPath = Join-Path $env:TEMP "sshd_config.test.$([guid]::NewGuid().ToString())"
         $binaryPath = "C:\Program Files\opkssh\opkssh.exe"

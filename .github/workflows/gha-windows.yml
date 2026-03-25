@@ -1,4 +1,4 @@
-name: Test GitHub Provider
+name: Test GitHub Provider Windows Server 2022
 
 on:
   push:
@@ -27,11 +27,8 @@ jobs:
       run: |
         $sshdConfig = "$env:ProgramData\ssh\sshd_config"
         (Get-Content $sshdConfig -Raw).Replace('#SyslogFacility AUTH', 'SyslogFacility LOCAL0').Replace('#LogLevel INFO', 'LogLevel Debug3') |
-            Set-Content $sshdConfig -Encoding ascii
+            Set-Content $sshdConfig
    
-    - name: Set runneradmin password
-      run: net user runneradmin "P@ssw0rd123!"
-
     - name: Checkout
       uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       with:

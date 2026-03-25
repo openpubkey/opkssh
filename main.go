@@ -51,11 +51,6 @@ var (
 	Version = "unversioned"
 )
 
-// GetLogFilePathServer returns the platform-specific log file path
-func GetLogFilePathServer() string {
-	return GetLogFilePath()
-}
-
 func main() {
 	os.Exit(run())
 }
@@ -317,7 +312,7 @@ Arguments:
 			ctx := context.Background()
 
 			// Setup logger
-			logFilePath := GetLogFilePathServer()
+			logFilePath := GetLogFilePath()
 			logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0660) // Owner and group can read/write
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error opening log file: %v\n", err)
