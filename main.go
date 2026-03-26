@@ -154,7 +154,7 @@ Arguments:
 	var disableBrowserOpenArg bool
 	var printIdTokenArg bool
 	var printKeyArg bool
-	var printSshKeyArg bool
+	var inspectCertArg bool
 	var verboseArg bool
 	var keyPathArg string
 	var keyTypeArg commands.KeyType
@@ -191,12 +191,12 @@ Arguments:
 			}
 
 			if verboseArg {
-				printSshKeyArg = true
+				inspectCertArg = true
 			}
 
 			login := commands.NewLogin(autoRefreshArg, configPathArg, createConfigArg, configureArg, logDirArg,
 				sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, printKeyArg, keyPathArg,
-				providerAliasArg, keyTypeArg, remoteRedirectURIArg, printSshKeyArg)
+				providerAliasArg, keyTypeArg, remoteRedirectURIArg, inspectCertArg)
 			if err := login.Run(ctx); err != nil {
 				log.Println("Error executing login command:", err)
 				return err
@@ -216,9 +216,9 @@ Arguments:
 	loginCmd.Flags().BoolVar(&printIdTokenArg, "print-id-token", false, "Set this flag to print out the contents of the id_token. Useful for inspecting claims")
 	loginCmd.Flags().BoolVar(&sendAccessTokenArg, "send-access-token", false, "Set this flag to send the Access Token as well as the PK Token in the SSH cert. The Access Token is used to call the userinfo endpoint to get claims not included in the ID Token")
 	loginCmd.Flags().StringVar(&providerArg, "provider", "", "OpenID Provider specification in the format: <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes>")
-	loginCmd.Flags().BoolVarP(&printKeyArg, "print-key", "p", false, "Print private key and SSH cert instead of writing them to the filesystem")
-	loginCmd.Flags().BoolVar(&printSshKeyArg, "print-ssh-key", false, "Set this flag to print out details of the generated SSH key. Useful for inspecting the SSH certificate")
-	loginCmd.Flags().BoolVarP(&verboseArg, "verbose", "v", false, "Enable verbose output, prints the SSH key details")
+	loginCmd.Flags().BoolVarP(&printKeyArg, "print-key", "p", false, "Print the raw private key and SSH cert to stdout instead of writing them to the filesystem")
+	loginCmd.Flags().BoolVar(&inspectCertArg, "inspect-cert", false, "Display a human-readable inspection of the generated SSH certificate (public information only)")
+	loginCmd.Flags().BoolVarP(&verboseArg, "verbose", "v", false, "Enable verbose output (currently enables --inspect-cert)")
 	loginCmd.Flags().StringVarP(&keyPathArg, "private-key-file", "i", "", "Path where private keys is written")
 	loginCmd.Flags().StringVar(&remoteRedirectURIArg, "remote-redirect-uri", "", "Remote redirect URI used for non-localhost redirects. This is an advanced option for embedding opkssh in server-side logic.")
 	loginCmd.Flags().VarP(enumflag.New(&keyTypeArg, "Key Type", map[commands.KeyType][]string{commands.ECDSA: {commands.ECDSA.String()}, commands.ED25519: {commands.ED25519.String()}}, enumflag.EnumCaseInsensitive), "key-type", "t", "Type of key to generate")

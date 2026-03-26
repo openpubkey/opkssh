@@ -156,11 +156,11 @@ func TestLoginCmd(t *testing.T) {
 			wantError: false,
 		},
 		{
-			name:    "Good path PrintSshKey",
+			name:    "Good path InspectCert",
 			envVars: map[string]string{},
 			loginCmd: LoginCmd{
 				Verbosity:      0,
-				PrintSshKeyArg: true,
+				InspectCertArg: true,
 				LogDirArg:      logDir,
 			},
 			wantError: false,
@@ -243,7 +243,7 @@ func TestLoginCmd(t *testing.T) {
 						require.Contains(t, gotLines[0], "cert-v01@openssh.com AAAA")
 						require.Contains(t, gotLines[1], "-----BEGIN OPENSSH PRIVATE KEY-----")
 						pubKeyBytes = []byte(gotLines[0])
-					} else if tt.loginCmd.PrintSshKeyArg {
+					} else if tt.loginCmd.InspectCertArg {
 						got := cliOutputBuffer.String()
 						require.Contains(t, got, "--- SSH Certificate Information ---")
 						require.Contains(t, got, "--- PKToken Structure ---")
