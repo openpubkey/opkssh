@@ -305,17 +305,15 @@ function Remove-OpksshFromPath {
                     return $true
                 }
                 
-                # Filter out the folder to remove (case-insensitive)
-                $result = [Collections.Generic.HashSet[string]]::new([StringComparer]::InvariantCultureIgnoreCase)
-                $currentPathFolders | 
+                # Filter out the folder to remove (case-insensitive), preserving original order
+                $filteredPathFolders = $currentPathFolders | 
                     Where-Object { 
                         $normalizedFolder = $_.TrimEnd([IO.Path]::DirectorySeparatorChar)
                         $normalizedFolder -ne $normalizedInstallDir
-                    } | 
-                    ForEach-Object { $result.Add($_) > $null }
+                    }
                 
                 # Build new PATH and save it
-                $newPath = $result -join [IO.Path]::PathSeparator
+                $newPath = $filteredPathFolders -join [IO.Path]::PathSeparator
                 $key.SetValue('Path', $newPath, 'ExpandString')
                 
                 Write-UninstallLog "  Removed from system PATH" -Level Success

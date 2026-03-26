@@ -44,6 +44,11 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-go-
 
+    - name: Install Go
+      uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+      with:
+        go-version-file: 'go.mod'
+
     - name: Install dependencies
       run: go mod download
     

@@ -583,7 +583,7 @@ https://issuer.hello.coop app_xejobTKEsDNSRd5vofKB2iay_2rN 24h
 "@
         
         if ($PSCmdlet.ShouldProcess($providersPath, "Create providers file")) {
-            Set-Content -Path $providersPath -Value $providersContent -NoNewline
+            Set-Content -Path $providersPath -Value $providersContent -NoNewline -Encoding UTF8
             Write-Verbose "  Created file: providers"
         }
     } else {
@@ -694,7 +694,7 @@ function Set-SshdConfiguration {
     
     # Write new configuration
     if ($PSCmdlet.ShouldProcess($sshdConfigPath, "Update sshd_config")) {
-        Set-Content -Path $sshdConfigPath -Value $newConfigLines -Force
+        Set-Content -Path $sshdConfigPath -Value $newConfigLines -Encoding ascii -Force
         Write-Verbose "  Updated sshd_config"
     }
     
@@ -801,20 +801,27 @@ function Add-OpksshToPath {
                 }
                 
                 # Add new folder to the current PATH
-                $newPathFolders = $currentPathFolders + @($normalizedInstallDir)
-                
-                # Normalize folders to remove trailing slashes and duplicates
-                $result = [Collections.Generic.HashSet[string]]::new([StringComparer]::InvariantCultureIgnoreCase)
-                $newPathFolders |
-                    ForEach-Object {
-                        $normalized = $_.TrimEnd([IO.Path]::DirectorySeparatorChar).Trim()
-                        if ($normalized -ne '') {
-                            $result.Add($normalized) > $null
-                        }
+                # Preserve original order while removing duplicates (case-insensitive)
+                $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::InvariantCultureIgnoreCase)
+                $orderedPathFolders = New-Object 'System.Collections.Generic.List[string]'
+
+                foreach ($folder in $currentPathFolders) {
+                    $normalized = $folder.TrimEnd([IO.Path]::DirectorySeparatorChar).Trim()
+                    if ($normalized -ne '' -and $seen.Add($normalized)) {
+                        [void]$orderedPathFolders.Add($normalized)
                     }
+                }
+
+                # Append install directory if it's not already present
+                if ($seen.Add($normalizedInstallDir)) {
+                    [void]$orderedPathFolders.Add($normalizedInstallDir)
+                    Write-Verbose "Adding installation directory to PATH"
+                } else {
+                    Write-Verbose "Installation directory already in PATH"
+                }
                 
                 # Build new PATH and save it
-                $newPath = $result -join [IO.Path]::PathSeparator
+                $newPath = [string]::Join([IO.Path]::PathSeparator, $orderedPathFolders)
                 $key.SetValue('Path', $newPath, 'ExpandString')
                 
                 Write-Log "  Added to system PATH: $InstallDir" -Level Success
@@ -1094,11 +1101,13 @@ $($_.ScriptStackTrace)
 
 #endregion Main Installation Logic
 
-# Execute main installation
-try {
-    Install-OpksshServer
-}
-catch {
-    # Final catch to improve error display.
-    $_.Exception | Write-Host -ForegroundColor Red
+# Execute main installation (only when not dot-sourced)
+if ($MyInvocation.InvocationName -ne '.') {
+    try {
+        Install-OpksshServer
+    }
+    catch {
+        # Final catch to improve error display.
+        $_.Exception | Write-Host -ForegroundColor Red
+    }
 }

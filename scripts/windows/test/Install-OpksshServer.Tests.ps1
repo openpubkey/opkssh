@@ -2,7 +2,32 @@
 
 BeforeAll {
     $scriptPath = Join-Path $PSScriptRoot "..\Install-OpksshServer.ps1"
-    . $scriptPath
+
+    # Use AST parsing to extract only the functions we need for testing
+    # without executing the script (which has #Requires -RunAsAdministrator)
+    $scriptContent = Get-Content -Path $scriptPath -Raw
+
+    $tokens = $null
+    $errors = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseInput($scriptContent, [ref]$tokens, [ref]$errors)
+
+    $functionsToLoad = @('Set-SshdConfiguration', 'Write-Log')
+    foreach ($funcName in $functionsToLoad) {
+        $funcAst = $ast.Find(
+            {
+                param($node)
+                $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                $node.Name -eq $funcName
+            }.GetNewClosure(),
+            $true
+        )
+
+        if (-not $funcAst) {
+            throw "Could not find function '$funcName' in $scriptPath."
+        }
+
+        . ([scriptblock]::Create($funcAst.Extent.Text))
+    }
 }
 
 Describe "Set-SshdConfiguration" {
@@ -24,15 +49,15 @@ Describe "Set-SshdConfiguration" {
         $result | Should -BeTrue
 
         $final = Get-Content -Path $tempPath -Raw
-        $final | Should -Match [regex]::Escape("AuthorizedKeysCommand $quotedBinary verify %u %k %t")
-        $final | Should -Match [regex]::Escape("AuthorizedKeysCommandUser $authUser")
+        $final | Should -Match $([regex]::Escape("AuthorizedKeysCommand $quotedBinary verify %u %k %t"))
+        $final | Should -Match $([regex]::Escape("AuthorizedKeysCommandUser $authUser"))
     }
 
     It "returns false when a different AuthorizedKeysCommand is present and overwrite is not set" {
         $tempPath = Join-Path $env:TEMP "sshd_config.test.$([guid]::NewGuid().ToString())"
         @(
-            "AuthorizedKeysCommand \"C:\\Other\\opkssh.exe\" verify %u %k %t",
-            "AuthorizedKeysCommandUser otheruser"
+            'AuthorizedKeysCommand "C:\Other\opkssh.exe" verify %u %k %t',
+            'AuthorizedKeysCommandUser otheruser'
         ) | Set-Content -Path $tempPath -Force
 
         $result = Set-SshdConfiguration -BinaryPath "C:\Program Files\opkssh\opkssh.exe" -AuthCmdUser "opksshuser" -SshdConfigPath $tempPath
@@ -42,8 +67,8 @@ Describe "Set-SshdConfiguration" {
     It "overwrites existing configuration when -OverwriteConfig is set" {
         $tempPath = Join-Path $env:TEMP "sshd_config.test.$([guid]::NewGuid().ToString())"
         @(
-            "AuthorizedKeysCommand \"C:\\Other\\opkssh.exe\" verify %u %k %t",
-            "AuthorizedKeysCommandUser otheruser"
+            'AuthorizedKeysCommand "C:\Other\opkssh.exe" verify %u %k %t',
+            'AuthorizedKeysCommandUser otheruser'
         ) | Set-Content -Path $tempPath -Force
 
         $binaryPath = "C:\Program Files\opkssh\opkssh.exe"
@@ -54,7 +79,7 @@ Describe "Set-SshdConfiguration" {
         $result | Should -BeTrue
 
         $final = Get-Content -Path $tempPath -Raw
-        $final | Should -Match [regex]::Escape("AuthorizedKeysCommand $quotedBinary verify %u %k %t")
-        $final | Should -Match [regex]::Escape("AuthorizedKeysCommandUser $authUser")
+        $final | Should -Match $([regex]::Escape("AuthorizedKeysCommand $quotedBinary verify %u %k %t"))
+        $final | Should -Match $([regex]::Escape("AuthorizedKeysCommandUser $authUser"))
     }
 }

@@ -76,3 +76,4 @@ release:
   extra_files:
     - glob: scripts/windows/Install-OpksshServer.ps1
     - glob: scripts/windows/Uninstall-OpksshServer.ps1
+    - glob: scripts/windows/Test-OpksshInstallation.ps1

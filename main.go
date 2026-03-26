@@ -317,7 +317,11 @@ Arguments:
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error opening log file: %v\n", err)
 				// It could be very difficult to figure out what is going on if the log file was deleted. Hopefully this message saves someone an hour of debugging.
-				fmt.Fprintf(os.Stderr, "Check if log exists at %v, if it does not create it with permissions: chown root:opksshuser %v; chmod 660 %v\n", logFilePath, logFilePath, logFilePath)
+				if runtime.GOOS == "windows" {
+					fmt.Fprintf(os.Stderr, "Check if the log file exists at %v. If it does not, create it and ensure the account running sshd has read/write access (for example, via the file's Security properties or using icacls). The log directory may be under %%ProgramData%%.\n", logFilePath)
+				} else {
+					fmt.Fprintf(os.Stderr, "Check if log exists at %v, if it does not create it with permissions: chown root:opksshuser %v; chmod 660 %v\n", logFilePath, logFilePath, logFilePath)
+				}
 			} else {
 				defer logFile.Close()
 				log.SetOutput(logFile)

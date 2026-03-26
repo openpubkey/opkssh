@@ -43,8 +43,8 @@ func ReadHome(username string) ([]byte, error) {
 	// Look up the user to get their SID and home directory
 	userObj, err := user.Lookup(username)
 	if err != nil {
-		// On Windows, user.Lookup may need DOMAIN\user format. Try with
-		// the bare username first, then fall back if needed.
+		// On Windows, user.Lookup may need DOMAIN\user format, but we
+		// only attempt lookup using the provided username string.
 		return nil, fmt.Errorf("failed to find user %s: %w", username, err)
 	}
 
