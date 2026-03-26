@@ -1,4 +1,4 @@
-// Copyright 2026 OpenPubkey
+// Copyright 2025 OpenPubkey
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -76,6 +76,7 @@ func TestLogoutCmd_RemoveDefaultKeys(t *testing.T) {
 			logoutCmd := &LogoutCmd{
 				Fs:        mockFs,
 				OutWriter: output,
+				ErrWriter: &bytes.Buffer{},
 			}
 
 			err := logoutCmd.Run()
@@ -100,6 +101,7 @@ func TestLogoutCmd_NoKeysFound(t *testing.T) {
 	logoutCmd := &LogoutCmd{
 		Fs:        mockFs,
 		OutWriter: output,
+		ErrWriter: &bytes.Buffer{},
 	}
 
 	err := logoutCmd.Run()
@@ -139,6 +141,7 @@ func TestLogoutCmd_SkipsNonOpenpubkeyKeys(t *testing.T) {
 	logoutCmd := &LogoutCmd{
 		Fs:        mockFs,
 		OutWriter: output,
+		ErrWriter: &bytes.Buffer{},
 	}
 
 	err = logoutCmd.Run()
@@ -162,6 +165,7 @@ func TestLogoutCmd_SpecificKey(t *testing.T) {
 		Fs:         mockFs,
 		KeyPathArg: seckeyPath,
 		OutWriter:  output,
+		ErrWriter:  &bytes.Buffer{},
 	}
 
 	err := logoutCmd.Run()
@@ -208,6 +212,7 @@ func TestLogoutCmd_SpecificKeyNotOpenpubkey(t *testing.T) {
 		Fs:         mockFs,
 		KeyPathArg: seckeyPath,
 		OutWriter:  output,
+		ErrWriter:  &bytes.Buffer{},
 	}
 
 	err = logoutCmd.Run()
@@ -253,6 +258,7 @@ func TestLogoutCmd_OpkSSHDir(t *testing.T) {
 	logoutCmd := &LogoutCmd{
 		Fs:        mockFs,
 		OutWriter: output,
+		ErrWriter: &bytes.Buffer{},
 	}
 
 	err = logoutCmd.Run()
@@ -285,9 +291,195 @@ func TestLogoutCmd_MultipleKeys(t *testing.T) {
 	logoutCmd := &LogoutCmd{
 		Fs:        mockFs,
 		OutWriter: output,
+		ErrWriter: &bytes.Buffer{},
 	}
 
 	err := logoutCmd.Run()
 	require.NoError(t, err)
 	require.Contains(t, output.String(), "Successfully removed 2 opkssh key pair(s)")
+}
+
+func TestLogoutCmd_MismatchedKeyPair(t *testing.T) {
+	mockFs := afero.NewMemMapFs()
+	afs := &afero.Afero{Fs: mockFs}
+
+	homePath, err := os.UserHomeDir()
+	require.NoError(t, err)
+	sshPath := filepath.Join(homePath, ".ssh")
+
+	err = afs.MkdirAll(sshPath, os.ModePerm)
+	require.NoError(t, err)
+
+	// Create a cert with one key pair
+	pkt1, signer1, _ := Mocks(t, ECDSA)
+	principals := []string{}
+	certBytes, _, err := createSSHCert(pkt1, signer1, principals)
+	require.NoError(t, err)
+
+	// Create a different secret key
+	_, signer2, _ := Mocks(t, ECDSA)
+	_, seckeySshPem2, err := createSSHCert(pkt1, signer2, principals)
+	require.NoError(t, err)
+
+	seckeyPath := filepath.Join(sshPath, "id_ecdsa")
+	pubkeyPath := seckeyPath + "-cert.pub"
+
+	// Write the secret key from signer2 but cert from signer1
+	err = afs.WriteFile(seckeyPath, seckeySshPem2, 0o600)
+	require.NoError(t, err)
+
+	certBytes = append(certBytes, []byte(" openpubkey")...)
+	err = afs.WriteFile(pubkeyPath, certBytes, 0o644)
+	require.NoError(t, err)
+
+	output := &bytes.Buffer{}
+	errOutput := &bytes.Buffer{}
+	logoutCmd := &LogoutCmd{
+		Fs:        mockFs,
+		OutWriter: output,
+		ErrWriter: errOutput,
+	}
+
+	err = logoutCmd.Run()
+	require.NoError(t, err) // Should not error, just skip the mismatched pair
+
+	// Verify files still exist (not deleted due to mismatch)
+	_, err = mockFs.Stat(seckeyPath)
+	require.NoError(t, err, "private key should still exist")
+
+	_, err = mockFs.Stat(pubkeyPath)
+	require.NoError(t, err, "certificate should still exist")
+
+	require.Contains(t, errOutput.String(), "certificate does not match secret key")
+	require.Contains(t, output.String(), "No opkssh keys found to remove")
+}
+
+func TestLogoutCmd_MismatchedKeyPairSpecific(t *testing.T) {
+	mockFs := afero.NewMemMapFs()
+	afs := &afero.Afero{Fs: mockFs}
+
+	homePath, err := os.UserHomeDir()
+	require.NoError(t, err)
+	sshPath := filepath.Join(homePath, ".ssh")
+
+	err = afs.MkdirAll(sshPath, os.ModePerm)
+	require.NoError(t, err)
+
+	// Create a cert with one key pair
+	pkt1, signer1, _ := Mocks(t, ECDSA)
+	principals := []string{}
+	certBytes, _, err := createSSHCert(pkt1, signer1, principals)
+	require.NoError(t, err)
+
+	// Create a different secret key
+	_, signer2, _ := Mocks(t, ECDSA)
+	_, seckeySshPem2, err := createSSHCert(pkt1, signer2, principals)
+	require.NoError(t, err)
+
+	seckeyPath := filepath.Join(sshPath, "id_ecdsa")
+	pubkeyPath := seckeyPath + "-cert.pub"
+
+	err = afs.WriteFile(seckeyPath, seckeySshPem2, 0o600)
+	require.NoError(t, err)
+
+	certBytes = append(certBytes, []byte(" openpubkey")...)
+	err = afs.WriteFile(pubkeyPath, certBytes, 0o644)
+	require.NoError(t, err)
+
+	output := &bytes.Buffer{}
+	logoutCmd := &LogoutCmd{
+		Fs:         mockFs,
+		KeyPathArg: seckeyPath,
+		OutWriter:  output,
+		ErrWriter:  &bytes.Buffer{},
+	}
+
+	err = logoutCmd.Run()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "key pair mismatch")
+
+	// Verify files still exist
+	_, err = mockFs.Stat(seckeyPath)
+	require.NoError(t, err, "private key should still exist")
+
+	_, err = mockFs.Stat(pubkeyPath)
+	require.NoError(t, err, "certificate should still exist")
+}
+
+func TestLogoutCmd_VerboseOutput(t *testing.T) {
+	mockFs := afero.NewMemMapFs()
+	afs := &afero.Afero{Fs: mockFs}
+
+	homePath, err := os.UserHomeDir()
+	require.NoError(t, err)
+	sshPath := filepath.Join(homePath, ".ssh")
+
+	err = afs.MkdirAll(sshPath, os.ModePerm)
+	require.NoError(t, err)
+
+	// Create a non-openpubkey key so we can see the verbose skip message
+	pkt, signer, _ := Mocks(t, ECDSA)
+	principals := []string{}
+	certBytes, seckeySshPem, err := createSSHCert(pkt, signer, principals)
+	require.NoError(t, err)
+
+	seckeyPath := filepath.Join(sshPath, "id_ecdsa")
+	pubkeyPath := seckeyPath + "-cert.pub"
+
+	err = afs.WriteFile(seckeyPath, seckeySshPem, 0o600)
+	require.NoError(t, err)
+
+	certBytes = append(certBytes, []byte(" user@host")...)
+	err = afs.WriteFile(pubkeyPath, certBytes, 0o644)
+	require.NoError(t, err)
+
+	output := &bytes.Buffer{}
+	errOutput := &bytes.Buffer{}
+	logoutCmd := &LogoutCmd{
+		Fs:        mockFs,
+		Verbosity: 1,
+		OutWriter: output,
+		ErrWriter: errOutput,
+	}
+
+	err = logoutCmd.Run()
+	require.NoError(t, err)
+	require.Contains(t, errOutput.String(), "not generated by opkssh")
+}
+
+func TestVerifyKeyPairMatch(t *testing.T) {
+	t.Run("matching ECDSA pair", func(t *testing.T) {
+		pkt, signer, _ := Mocks(t, ECDSA)
+		certBytes, secKeyPem, err := createSSHCert(pkt, signer, []string{})
+		require.NoError(t, err)
+
+		certBytes = append(certBytes, []byte(" openpubkey")...)
+		err = verifyKeyPairMatch(secKeyPem, certBytes)
+		require.NoError(t, err)
+	})
+
+	t.Run("matching ED25519 pair", func(t *testing.T) {
+		pkt, signer, _ := Mocks(t, ED25519)
+		certBytes, secKeyPem, err := createSSHCert(pkt, signer, []string{})
+		require.NoError(t, err)
+
+		certBytes = append(certBytes, []byte(" openpubkey")...)
+		err = verifyKeyPairMatch(secKeyPem, certBytes)
+		require.NoError(t, err)
+	})
+
+	t.Run("mismatched pair", func(t *testing.T) {
+		pkt, signer1, _ := Mocks(t, ECDSA)
+		certBytes, _, err := createSSHCert(pkt, signer1, []string{})
+		require.NoError(t, err)
+
+		_, signer2, _ := Mocks(t, ECDSA)
+		_, secKeyPem2, err := createSSHCert(pkt, signer2, []string{})
+		require.NoError(t, err)
+
+		certBytes = append(certBytes, []byte(" openpubkey")...)
+		err = verifyKeyPairMatch(secKeyPem2, certBytes)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "does not match")
+	})
 }

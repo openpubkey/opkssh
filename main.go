@@ -217,6 +217,7 @@ Arguments:
 	rootCmd.AddCommand(loginCmd)
 
 	var logoutKeyPathArg string
+	var logoutVerboseArg bool
 	logoutCmd := &cobra.Command{
 		SilenceUsage: true,
 		Use:          "logout",
@@ -231,6 +232,9 @@ Use the -i flag to remove a specific key pair.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logout := commands.NewLogoutCmd(logoutKeyPathArg)
+			if logoutVerboseArg {
+				logout.Verbosity = 1
+			}
 			if err := logout.Run(); err != nil {
 				log.Println("Error executing logout command:", err)
 				return err
@@ -239,6 +243,7 @@ Use the -i flag to remove a specific key pair.`,
 		},
 	}
 	logoutCmd.Flags().StringVarP(&logoutKeyPathArg, "private-key-file", "i", "", "Path to the specific private key to remove")
+	logoutCmd.Flags().BoolVarP(&logoutVerboseArg, "verbose", "v", false, "Print verbose output to stderr")
 	rootCmd.AddCommand(logoutCmd)
 
 	readhomeCmd := &cobra.Command{
