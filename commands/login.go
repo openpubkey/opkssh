@@ -871,7 +871,7 @@ func PrettyIdToken(pkt pktoken.PKToken) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	idtJson, err := json.MarshalIndent(idt.GetClaims(), "", "    ")
+	idtJson, err := json.MarshalIndent(idt.GetClaims(), "", "  ")
 	if err != nil {
 		return "", err
 	}
