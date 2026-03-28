@@ -27,18 +27,10 @@ import (
 var ValidUser = &user.User{HomeDir: "/home/foo", Username: "foo"}
 
 // MockUserLookup implements [policy.UserLookup] for testing.
-// It supports both single-user and multi-user lookup scenarios:
 //   - Set [User] for a default user returned on any Lookup call.
-//   - Set [Users] to map specific usernames to user records.
 //   - Set [Error] to force every Lookup call to fail.
-//
-// When both Users and User are set, Users is checked first; if the username
-// is not found in the map, User is returned as a fallback.
 type MockUserLookup struct {
-	// Users, if non-nil, maps usernames to user records.
-	Users map[string]*user.User
-	// User is returned on any call to Lookup() when Users is nil or the
-	// username is not found in Users.
+	// User is returned on any call to Lookup() if Error is nil.
 	User *user.User
 	// Error, if non-nil, is returned on any call to Lookup().
 	Error error
@@ -50,11 +42,6 @@ var _ policy.UserLookup = &MockUserLookup{}
 func (m *MockUserLookup) Lookup(username string) (*user.User, error) {
 	if m.Error != nil {
 		return nil, m.Error
-	}
-	if m.Users != nil {
-		if u, ok := m.Users[username]; ok {
-			return u, nil
-		}
 	}
 	if m.User != nil {
 		return m.User, nil
