@@ -87,7 +87,7 @@ func NewFromAuthorizedKey(certType string, certB64 string) (*SshCertSmuggler, er
 	} else {
 		sshCert, ok := certPubkey.(*ssh.Certificate)
 		if !ok {
-			return nil, fmt.Errorf("parsed SSH authorized_key is not an SSH certificate")
+			return nil, fmt.Errorf("parsed SSH authorized_key is not an SSH certificate (got type %T, cert type %q)", certPubkey, certType)
 		}
 		opkcert := &SshCertSmuggler{
 			SshCert: sshCert,
