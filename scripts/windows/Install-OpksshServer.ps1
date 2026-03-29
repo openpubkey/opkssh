@@ -925,31 +925,31 @@ function Install-OpksshServer {
         Write-Host ""
         
         # Step 1: Verify prerequisites
-        Write-Host "[1/10] Checking prerequisites..." -ForegroundColor Yellow
+        Write-Host "[1/11] Checking prerequisites..." -ForegroundColor Yellow
         Test-Prerequisites | Out-Null
         Write-Host "  Prerequisites OK" -ForegroundColor Green
         Write-Host ""
         
         # Step 2: Get system architecture
-        Write-Host "[2/10] Detecting system architecture..." -ForegroundColor Yellow
+        Write-Host "[2/11] Detecting system architecture..." -ForegroundColor Yellow
         $arch = Get-SystemArchitecture
         Write-Host "  Architecture: $arch" -ForegroundColor Green
         Write-Host ""
         
         # Step 3: Validate version
-        Write-Host "[3/10] Validating opkssh version..." -ForegroundColor Yellow
+        Write-Host "[3/11] Validating opkssh version..." -ForegroundColor Yellow
         Test-OpksshVersion -Version $InstallVersion | Out-Null
         Write-Host "  Version OK: $InstallVersion" -ForegroundColor Green
         Write-Host ""
         
         # Step 4: Create user account (if needed)
-        Write-Host "[4/10] Configuring authentication user..." -ForegroundColor Yellow
+        Write-Host "[4/11] Configuring authentication user..." -ForegroundColor Yellow
         New-OpksshUser -Username $AuthCmdUser | Out-Null
         Write-Host "  Auth user: $AuthCmdUser" -ForegroundColor Green
         Write-Host ""
         
         # Step 5: Install binary
-        Write-Host "[5/10] Installing opkssh binary..." -ForegroundColor Yellow
+        Write-Host "[5/11] Installing opkssh binary..." -ForegroundColor Yellow
         $binaryPath = Install-OpksshBinary -InstallDir $InstallDir `
                                            -LocalFile $InstallFrom `
                                            -Version $InstallVersion `
@@ -959,7 +959,7 @@ function Install-OpksshServer {
         Write-Host ""
         
         # Step 6: Install uninstall script
-        Write-Host "[6/10] Installing uninstall script..." -ForegroundColor Yellow
+        Write-Host "[6/11] Installing uninstall script..." -ForegroundColor Yellow
         $uninstallPath = Install-UninstallScript -InstallDir $InstallDir `
                                                   -Version $InstallVersion `
                                                   -GitHubRepo $GitHubRepo
