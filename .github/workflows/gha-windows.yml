@@ -81,6 +81,18 @@ jobs:
           -AuthCmdUser 'opksshuser' `
           -Verbose
     
+    - name: Verify system PATH after install
+      run: |
+        $installDir = 'C:\Program Files\opkssh'
+        $regPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment'
+        $systemPath = (Get-ItemProperty -Path $regPath -Name Path).Path
+        $folders = $systemPath -split [IO.Path]::PathSeparator
+        $found = $folders | Where-Object { $_.TrimEnd([IO.Path]::DirectorySeparatorChar) -eq $installDir }
+        if (-not $found) {
+          throw "FAIL: '$installDir' was NOT found in the system PATH after install"
+        }
+        Write-Host "PASS: '$installDir' is in the system PATH after install"
+    
     - name: Add GitHub provider to opkssh configuration
       run: |
         $providersPath = 'C:\ProgramData\opk\providers'
@@ -108,6 +120,25 @@ jobs:
     - name: Test SSH connection with opkssh (should pass)
       run: |
         ssh -o StrictHostKeyChecking=no -o PasswordAuthentication=no runneradmin@localhost dir
+    
+    - name: Uninstall opkssh
+      run: |
+        powershell -ExecutionPolicy Bypass -File "scripts/windows/Uninstall-OpksshServer.ps1" `
+          -Force `
+          -NoSshdRestart `
+          -Verbose
+    
+    - name: Verify system PATH after uninstall
+      run: |
+        $installDir = 'C:\Program Files\opkssh'
+        $regPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment'
+        $systemPath = (Get-ItemProperty -Path $regPath -Name Path).Path
+        $folders = $systemPath -split [IO.Path]::PathSeparator
+        $found = $folders | Where-Object { $_.TrimEnd([IO.Path]::DirectorySeparatorChar) -eq $installDir }
+        if ($found) {
+          throw "FAIL: '$installDir' is still in the system PATH after uninstall"
+        }
+        Write-Host "PASS: '$installDir' was correctly removed from the system PATH after uninstall"
     
     - name: Debug - Dump opkssh config
       run: |
