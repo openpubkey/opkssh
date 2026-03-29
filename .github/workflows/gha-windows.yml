@@ -1,16 +1,33 @@
-name: Test GitHub Provider Windows Server 2022
+name: Test GitHub Provider Windows
 
 on:
   push:
 
 jobs:
   build:
-    name: Test on Windows Server 2022
-    runs-on: windows-2022
+    name: Test on ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
     permissions:
       id-token: write
       contents: read
-    timeout-minutes: 10
+    timeout-minutes: ${{ matrix.timeout }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows Server 2022
+            runner: windows-2022
+            timeout: 10
+            cache: true
+          - name: Windows Server 2025
+            runner: windows-2025
+            timeout: 10
+            cache: true
+          - name: Windows 11 ARM64
+            runner: windows-11-arm
+            timeout: 15
+            cache: false
 
     steps:
     - name: Install OpenSSH Server
@@ -35,6 +52,7 @@ jobs:
         persist-credentials: false
     
     - name: Cache Go modules
+      if: matrix.cache
       uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       with:
         path: |
