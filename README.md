@@ -516,6 +516,7 @@ opkssh add root alice@example.com https://authentik.local/application/o/opkssh/
 | [Authentik](https://goauthentik.io/)           | ✅     | Do not add a certificate in the encryption section of the provider                                      |
 | [AWS Cognito](https://aws.amazon.com/cognito/) | ✅     | [Amazon Cognito Integration Guide](docs/providers/cognito.md)                                           |
 | [Azure](https://www.azure.com/)                | ✅     | [Entra ID (Azure) Integration Guide](docs/providers/azure.md)                                           |
+| [GitHub Actions](https://github.com/features/actions) | ✅ | [GitHub Actions Guide](docs/github-actions.md)                                                          |
 | [Gitlab Self-hosted](https://gitlab.com/)      | ✅     | [Configuration guide](docs/gitlab-selfhosted.md)                                                        |
 | [Kanidm](https://kanidm.com/)                  | ✅ | [Kanidm Integration Guide](https://kanidm.github.io/kanidm/master/integrations/oauth2/examples.html#opkssh)|
 | [Keycloak](https://www.keycloak.org)           | ✅     | [Keycloak Integration Guide](docs/providers/keycloak.md)                                                |
@@ -570,3 +571,4 @@ For integration tests run:
 - [docs/paramiko.md](docs/paramiko.md) Guide to using the python SSH paramiko library with opkssh.
 - [docs/putty.md](docs/putty.md) Guide to using PuTTY with opkssh.
 - [docs/aws-ec2.md](docs/aws-ec2.md) Guide to get opkssh working on AWS EC2.
+- [docs/github-actions.md](docs/github-actions.md) Guide to SSHing via GitHub Actions.
