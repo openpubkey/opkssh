@@ -113,6 +113,7 @@ jobs:
         ssh -o StrictHostKeyChecking=no -o PasswordAuthentication=no runneradmin@localhost dir 2>&1
         if ($LASTEXITCODE -eq 0) { throw "SSH should have failed but succeeded" }
         Write-Host "SSH correctly rejected without opkssh (exit code: $LASTEXITCODE)"
+        exit 0
     
     - name: Login with GitHub OIDC
       run: |
