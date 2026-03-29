@@ -24,8 +24,9 @@ import (
 )
 
 // ReadWithSudoScript on Windows does not use sudo (which doesn't exist).
-// On Windows, the sshd service runs as LocalSystem which has full access to
-// read user home directories, so we don't need privilege escalation.
+// On Windows, home policy files are not supported. The verify process runs as
+// the dedicated opksshuser account, which only has read access to system policy
+// files. There is no privilege escalation mechanism on Windows.
 // This function just returns an error indicating home policy reading failed
 // and we should rely on the system policy.
 func ReadWithSudoScript(h *HomePolicyLoader, username string) ([]byte, error) {

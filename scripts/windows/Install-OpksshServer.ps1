@@ -35,8 +35,8 @@
 
 .PARAMETER AuthCmdUser
     User account that will run the AuthorizedKeysCommand.
-    Default is "System" (the OpenSSH service account).
-    You can specify "opksshuser" to create a dedicated local user instead.
+    Default is "opksshuser" (a dedicated local user account).
+    Using "System" (LocalSystem) is not supported.
 
 .PARAMETER GitHubRepo
     GitHub repository to download from (format: owner/repo).
@@ -97,8 +97,7 @@ param(
     [string]$ConfigPath = "C:\ProgramData\opk",
 
     [Parameter(HelpMessage="User account for AuthorizedKeysCommand")]
-    [ValidateSet("System", "opksshuser")]
-    [string]$AuthCmdUser = "System",
+    [string]$AuthCmdUser = "opksshuser",
 
     [Parameter(HelpMessage="GitHub repository (owner/repo)")]
     [string]$GitHubRepo = "openpubkey/opkssh"
@@ -185,64 +184,9 @@ function Test-Prerequisites {
     }
     Write-Verbose "  sshd service found: $($sshdService.Status)"
     
-    # Check OpenSSH version when using System account
+    # Reject LocalSystem account usage
     if ($AuthCmdUser -eq "System") {
-        Write-Verbose "  Validating OpenSSH version for LocalSystem account..."
-
-        # Use 'ssh -V' to detect the OpenSSH version on Windows.
-        # (Get-Command sshd).Version reads the PE file version resource, which is
-        # often $null on Windows OpenSSH installations, making the comparison
-        # always fail. 'ssh -V' reliably returns the actual version string to
-        # stderr, e.g. "OpenSSH_for_Windows_9.5p2, LibreSSL 3.8.2".
-        try {
-            $sshVersionOutput = & ssh.exe -V 2>&1
-            if (-not $sshVersionOutput) {
-                throw "'ssh -V' returned empty output"
-            }
-        } catch {
-            throw "Failed to detect OpenSSH version. Is OpenSSH installed and in PATH? Error: $_"
-        }
-
-        # Strip the trailing library info to get a clean display string.
-        $sshdVersion = ($sshVersionOutput -split ',')[0].Trim()
-        Write-Verbose "  Detected OpenSSH version: $sshdVersion"
-
-        # Parse major and minor from "OpenSSH_for_Windows_9.5p2" or "OpenSSH_9.5p2"
-        if ($sshdVersion -match 'OpenSSH(?:_for_Windows)?_(\d+)\.(\d+)') {
-            $majorVer = [int]$Matches[1]
-            $minorVer = [int]$Matches[2]
-            $canUseSystemAccount = ($majorVer -gt 8) -or ($majorVer -eq 8 -and $minorVer -ge 9)
-        } else {
-            throw "Could not parse OpenSSH version number from: '$sshVersionOutput'"
-        }
-
-        if (-not $canUseSystemAccount) {
-            $errorMessage = @"
-
-========================================
-ERROR: OpenSSH Version Too Old
-========================================
-
-Your OpenSSH Server version ($sshdVersion) does not support using 'LocalSystem' 
-as the AuthorizedKeysCommandUser.
-
-OpenSSH Server 8.9.0 or higher is required to use the LocalSystem account.
-
-SOLUTION:
-Run the installer with the -AuthCmdUser parameter:
-
-    .\Install-OpksshServer.ps1 -AuthCmdUser "opksshuser"
-
-This will create and use a dedicated 'opksshuser' account instead.
-
-========================================
-"@
-            throw $errorMessage
-        }
-
-        Write-Verbose "  OpenSSH version is compatible with LocalSystem account"
-    } else {
-        Write-Verbose "  Using custom user account, no version restriction"
+        throw "Using LocalSystem as AuthorizedKeysCommandUser is not supported. Use 'opksshuser' instead."
     }
     
     # Verify sshd_config exists
@@ -340,11 +284,6 @@ function New-OpksshUser {
         [string]$Username
     )
     
-    if ($Username -eq "System") {
-        Write-Verbose "Using built-in service account: System"
-        return $true
-    }
-    
     Write-Verbose "Checking if user '$Username' exists..."
     $existingUser = Get-LocalUser -Name $Username -ErrorAction SilentlyContinue
     
@@ -373,9 +312,31 @@ function New-OpksshUser {
             
             Write-Log "Created user: $Username" -Level Success
             
-            # Note: Denying interactive logon requires editing local security policy
-            # This would typically be done via secedit or Group Policy
-            Write-Warning "Manual step required: Deny interactive logon rights for user '$Username' via Local Security Policy"
+            # Deny interactive logon for the service account using secedit
+            try {
+                $tempCfg = [System.IO.Path]::GetTempFileName()
+                $tempDb  = [System.IO.Path]::GetTempFileName()
+                try {
+                    secedit /export /cfg $tempCfg | Out-Null
+                    $content = Get-Content $tempCfg -Raw
+                    if ($content -match 'SeDenyInteractiveLogonRight\s*=\s*(.*)') {
+                        $existing = $Matches[1]
+                        $content = $content -replace "SeDenyInteractiveLogonRight\s*=\s*.*",
+                            "SeDenyInteractiveLogonRight = $existing,$Username"
+                    } else {
+                        $content = $content -replace '\[Privilege Rights\]',
+                            "[Privilege Rights]`r`nSeDenyInteractiveLogonRight = $Username"
+                    }
+                    Set-Content $tempCfg $content
+                    secedit /configure /db $tempDb /cfg $tempCfg /areas USER_RIGHTS | Out-Null
+                    Write-Log "Denied interactive logon for user: $Username" -Level Success
+                } finally {
+                    Remove-Item $tempCfg, $tempDb -ErrorAction SilentlyContinue
+                }
+            } catch {
+                Write-Warning "Could not automatically deny interactive logon for '$Username': $($_.Exception.Message)"
+                Write-Warning "Manual step required: Deny interactive logon rights for user '$Username' via Local Security Policy"
+            }
             
         } catch {
             throw "Failed to create user '$Username': $($_.Exception.Message)"
@@ -613,6 +574,25 @@ https://issuer.hello.coop app_xejobTKEsDNSRd5vofKB2iay_2rN 24h
         }
     }
     
+    # Grant opksshuser read access to config directory (inherited by files)
+    if ($AuthCmdUser -ne "System") {
+        $configAcl = Get-Acl $ConfigPath
+        $readRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+            $AuthCmdUser, "ReadAndExecute", "ContainerInherit,ObjectInherit", "None", "Allow")
+        $configAcl.AddAccessRule($readRule)
+        Set-Acl -Path $ConfigPath -AclObject $configAcl
+        Write-Verbose "  Granted $AuthCmdUser read access to $ConfigPath"
+
+        # Grant opksshuser write access to logs directory
+        $logsDir = Join-Path $ConfigPath "logs"
+        $logsAcl = Get-Acl $logsDir
+        $writeRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+            $AuthCmdUser, "Modify", "ContainerInherit,ObjectInherit", "None", "Allow")
+        $logsAcl.AddAccessRule($writeRule)
+        Set-Acl -Path $logsDir -AclObject $logsAcl
+        Write-Verbose "  Granted $AuthCmdUser write access to $logsDir"
+    }
+
     Write-Log "Configuration created successfully" -Level Success
     return $true
 }
@@ -974,6 +954,17 @@ function Install-OpksshServer {
                                            -Architecture $arch `
                                            -GitHubRepo $GitHubRepo
         Write-Host "  Installed: $binaryPath" -ForegroundColor Green
+
+        # Grant opksshuser read+execute access to the binary directory
+        if ($AuthCmdUser -ne "System") {
+            $binAcl = Get-Acl $InstallDir
+            $execRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+                $AuthCmdUser, "ReadAndExecute", "ContainerInherit,ObjectInherit", "None", "Allow")
+            $binAcl.AddAccessRule($execRule)
+            Set-Acl -Path $InstallDir -AclObject $binAcl
+            Write-Verbose "  Granted $AuthCmdUser read+execute access to $InstallDir"
+        }
+
         Write-Host ""
         
         # Step 6: Install uninstall script
