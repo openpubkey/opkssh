@@ -188,16 +188,34 @@ function Test-Prerequisites {
     # Check OpenSSH version when using System account
     if ($AuthCmdUser -eq "System") {
         Write-Verbose "  Validating OpenSSH version for LocalSystem account..."
-        
+
+        # Use 'ssh -V' to detect the OpenSSH version on Windows.
+        # (Get-Command sshd).Version reads the PE file version resource, which is
+        # often $null on Windows OpenSSH installations, making the comparison
+        # always fail. 'ssh -V' reliably returns the actual version string to
+        # stderr, e.g. "OpenSSH_for_Windows_9.5p2, LibreSSL 3.8.2".
         try {
-            $canUseSystemAccount = (Get-Command sshd).Version -ge [version]'8.9'
+            $sshVersionOutput = & ssh.exe -V 2>&1
+            if (-not $sshVersionOutput) {
+                throw "'ssh -V' returned empty output"
+            }
         } catch {
-            throw "Unexpected: sshd.exe not in PATH?"
+            throw "Failed to detect OpenSSH version. Is OpenSSH installed and in PATH? Error: $_"
         }
-        
-        $sshdVersion = (Get-Command sshd).Version
-        Write-Verbose "  Detected OpenSSH Server version: $sshdVersion"
-        
+
+        # Strip the trailing library info to get a clean display string.
+        $sshdVersion = ($sshVersionOutput -split ',')[0].Trim()
+        Write-Verbose "  Detected OpenSSH version: $sshdVersion"
+
+        # Parse major and minor from "OpenSSH_for_Windows_9.5p2" or "OpenSSH_9.5p2"
+        if ($sshdVersion -match 'OpenSSH(?:_for_Windows)?_(\d+)\.(\d+)') {
+            $majorVer = [int]$Matches[1]
+            $minorVer = [int]$Matches[2]
+            $canUseSystemAccount = ($majorVer -gt 8) -or ($majorVer -eq 8 -and $minorVer -ge 9)
+        } else {
+            throw "Could not parse OpenSSH version number from: '$sshVersionOutput'"
+        }
+
         if (-not $canUseSystemAccount) {
             $errorMessage = @"
 
@@ -221,7 +239,7 @@ This will create and use a dedicated 'opksshuser' account instead.
 "@
             throw $errorMessage
         }
-        
+
         Write-Verbose "  OpenSSH version is compatible with LocalSystem account"
     } else {
         Write-Verbose "  Using custom user account, no version restriction"
