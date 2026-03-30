@@ -121,7 +121,7 @@ https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0 096c
 https://gitlab.com 8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923 24h
 ```
 
-## Authorized identities files: `/etc/opk/auth_id` and `/home/{USER}/.opk/auth_id` (Linux) or `%ProgramData%\opk\auth_id` and `{USERPROFILE}\.opk\auth_id` (Windows)
+## Authorized identities files: `/etc/opk/auth_id` and `/home/{USER}/.opk/auth_id` (Linux) or `%ProgramData%\opk\auth_id` (Windows)
 
 These files contain the policies to determine which identities can assume what linux user accounts.
 Linux user accounts are typically referred to in SSH as *principals* and we use this terminology.
@@ -186,7 +186,9 @@ sudo chmod 640 /etc/opk/auth_id
 
 **Note:** The permissions for the system authorized identity file are different than the home authorized identity file.
 
-### Home authorized identity file `/home/{USER}/.opk/auth_id` (Linux) or `{USERPROFILE}\.opk\auth_id` (Windows)
+### Home authorized identity file `/home/{USER}/.opk/auth_id` (Linux)
+
+> **Note:** Per-user home policy is not yet supported on Windows.
 
 This is user/principal specific permissions.
 That is, if it is in `/home/alice/.opk/auth_id` it can only specify who can assume the principal `alice` on the server.

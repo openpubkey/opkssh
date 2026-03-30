@@ -33,11 +33,6 @@
     Directory where opkssh configuration files will be created.
     Default is "C:\ProgramData\opk".
 
-.PARAMETER AuthCmdUser
-    User account that will run the AuthorizedKeysCommand.
-    Default is "opksshuser" (a dedicated local user account).
-    Using "System" (LocalSystem) is not supported.
-
 .PARAMETER GitHubRepo
     GitHub repository to download from (format: owner/repo).
     Default is "openpubkey/opkssh".
@@ -56,11 +51,6 @@
     .\Install-OpksshServer.ps1 -InstallVersion "v0.10.0" -Verbose
     
     Install a specific version with verbose output.
-
-.EXAMPLE
-    .\Install-OpksshServer.ps1 -AuthCmdUser "opksshuser"
-    
-    Install using a dedicated local user account instead of System.
 
 .NOTES
     Author: OpenPubkey Project
@@ -95,9 +85,6 @@ param(
 
     [Parameter(HelpMessage="Configuration directory path")]
     [string]$ConfigPath = "C:\ProgramData\opk",
-
-    [Parameter(HelpMessage="User account for AuthorizedKeysCommand")]
-    [string]$AuthCmdUser = "opksshuser",
 
     [Parameter(HelpMessage="GitHub repository (owner/repo)")]
     [string]$GitHubRepo = "openpubkey/opkssh"
@@ -183,11 +170,6 @@ function Test-Prerequisites {
         throw "sshd service not found. OpenSSH Server may not be properly configured."
     }
     Write-Verbose "  sshd service found: $($sshdService.Status)"
-    
-    # Reject LocalSystem account usage
-    if ($AuthCmdUser -eq "System") {
-        throw "Using LocalSystem as AuthorizedKeysCommandUser is not supported. Use 'opksshuser' instead."
-    }
     
     # Verify sshd_config exists
     $sshdConfigPath = "C:\ProgramData\ssh\sshd_config"
@@ -575,23 +557,21 @@ https://issuer.hello.coop app_xejobTKEsDNSRd5vofKB2iay_2rN 24h
     }
     
     # Grant opksshuser read access to config directory (inherited by files)
-    if ($AuthCmdUser -ne "System") {
-        $configAcl = Get-Acl $ConfigPath
-        $readRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
-            $AuthCmdUser, "ReadAndExecute", "ContainerInherit,ObjectInherit", "None", "Allow")
-        $configAcl.AddAccessRule($readRule)
-        Set-Acl -Path $ConfigPath -AclObject $configAcl
-        Write-Verbose "  Granted $AuthCmdUser read access to $ConfigPath"
+    $configAcl = Get-Acl $ConfigPath
+    $readRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+        $AuthCmdUser, "ReadAndExecute", "ContainerInherit,ObjectInherit", "None", "Allow")
+    $configAcl.AddAccessRule($readRule)
+    Set-Acl -Path $ConfigPath -AclObject $configAcl
+    Write-Verbose "  Granted $AuthCmdUser read access to $ConfigPath"
 
-        # Grant opksshuser write access to logs directory
-        $logsDir = Join-Path $ConfigPath "logs"
-        $logsAcl = Get-Acl $logsDir
-        $writeRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
-            $AuthCmdUser, "Modify", "ContainerInherit,ObjectInherit", "None", "Allow")
-        $logsAcl.AddAccessRule($writeRule)
-        Set-Acl -Path $logsDir -AclObject $logsAcl
-        Write-Verbose "  Granted $AuthCmdUser write access to $logsDir"
-    }
+    # Grant opksshuser write access to logs directory
+    $logsDir = Join-Path $ConfigPath "logs"
+    $logsAcl = Get-Acl $logsDir
+    $writeRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+        $AuthCmdUser, "Modify", "ContainerInherit,ObjectInherit", "None", "Allow")
+    $logsAcl.AddAccessRule($writeRule)
+    Set-Acl -Path $logsDir -AclObject $logsAcl
+    Write-Verbose "  Granted $AuthCmdUser write access to $logsDir"
 
     Write-Log "Configuration created successfully" -Level Success
     return $true
@@ -897,7 +877,6 @@ Binary Path: $BinaryPath
 Install Version Parameter: $($InstallParams.InstallVersion)
 Local Install File: $($InstallParams.InstallFrom)
 SSH Restarted: $(-not $InstallParams.NoRestart)
-Auth Command User: $($InstallParams.AuthCmdUser)
 Configuration Path: $($InstallParams.ConfigPath)
 PowerShell Version: $($PSVersionTable.PSVersion)
 OS Version: $([System.Environment]::OSVersion.VersionString)
@@ -928,6 +907,10 @@ function Install-OpksshServer {
     param()
     
     $ErrorActionPreference = 'Stop'
+
+    # The AuthorizedKeysCommand user is always 'opksshuser'.
+    # This matches the Go-side permissions model which hard-codes this user.
+    $AuthCmdUser = "opksshuser"
     
     try {
         Write-Host ""
@@ -970,14 +953,12 @@ function Install-OpksshServer {
         Write-Host "  Installed: $binaryPath" -ForegroundColor Green
 
         # Grant opksshuser read+execute access to the binary directory
-        if ($AuthCmdUser -ne "System") {
-            $binAcl = Get-Acl $InstallDir
-            $execRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
-                $AuthCmdUser, "ReadAndExecute", "ContainerInherit,ObjectInherit", "None", "Allow")
-            $binAcl.AddAccessRule($execRule)
-            Set-Acl -Path $InstallDir -AclObject $binAcl
-            Write-Verbose "  Granted $AuthCmdUser read+execute access to $InstallDir"
-        }
+        $binAcl = Get-Acl $InstallDir
+        $execRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+            $AuthCmdUser, "ReadAndExecute", "ContainerInherit,ObjectInherit", "None", "Allow")
+        $binAcl.AddAccessRule($execRule)
+        Set-Acl -Path $InstallDir -AclObject $binAcl
+        Write-Verbose "  Granted $AuthCmdUser read+execute access to $InstallDir"
 
         Write-Host ""
         
@@ -1057,7 +1038,6 @@ function Install-OpksshServer {
                                   InstallVersion = $InstallVersion
                                   InstallFrom = $InstallFrom
                                   NoRestart = $NoSshdRestart
-                                  AuthCmdUser = $AuthCmdUser
                                   ConfigPath = $ConfigPath
                               }
         Write-Host "  Installation log: $logPath" -ForegroundColor Green

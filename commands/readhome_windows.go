@@ -79,7 +79,10 @@ func ReadHome(username string) ([]byte, error) {
 	}
 	if !bytes.Equal(report.OwnerSID, expectedSID) {
 		// Convert SIDs to string form for a readable error message
-		expectedSIDStr := userObj.Uid // user.User.Uid is the SID on Windows
+		expectedSIDStr, sidErr := files.ConvertSidToString(expectedSID)
+		if sidErr != nil {
+			expectedSIDStr = userObj.Uid // fallback to user.User.Uid (SID on Windows)
+		}
 		actualSIDStr := report.OwnerSIDStr
 		if actualSIDStr == "" {
 			actualSIDStr = "<unknown>"

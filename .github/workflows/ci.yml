@@ -156,7 +156,6 @@ jobs:
       with:
         persist-credentials: false
     - name: Install Go
-      if: matrix.os != 'windows'
       uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
       with:
         go-version-file: 'go.mod'
@@ -164,12 +163,15 @@ jobs:
       if: matrix.os != 'windows'
       uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
     - name: Install dependencies
-      if: matrix.os != 'windows'
       run: go mod download
     - name: Run integration tests (Linux)
       if: matrix.os != 'windows'
       run: go test -tags=integration ./test/integration -timeout=15m -count=1 -parallel=2 -v
-    - name: Run integration tests (Windows)
+    - name: Run integration tests (Windows - Go)
+      if: matrix.os == 'windows'
+      shell: pwsh
+      run: go test -tags=integration ./test/integration -timeout=15m -count=1 -parallel=2 -v
+    - name: Run integration tests (Windows - Pester)
       if: matrix.os == 'windows'
       shell: pwsh
       run: Invoke-Pester -Path scripts/windows/test -Output Detailed
