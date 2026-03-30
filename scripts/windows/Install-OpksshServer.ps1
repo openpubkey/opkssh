@@ -562,7 +562,7 @@ https://issuer.hello.coop app_xejobTKEsDNSRd5vofKB2iay_2rN 24h
 "@
         
         if ($PSCmdlet.ShouldProcess($providersPath, "Create providers file")) {
-            Set-Content -Path $providersPath -Value $providersContent -NoNewline -Encoding UTF8
+            [System.IO.File]::WriteAllText($providersPath, $providersContent, [System.Text.UTF8Encoding]::new($false))
             Write-Verbose "  Created file: providers"
         }
     } else {

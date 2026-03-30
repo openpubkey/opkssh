@@ -29,6 +29,10 @@ type Table struct {
 
 // NewTable creates a new Table from the given content.
 func NewTable(content []byte) *Table {
+	// Strip UTF-8 BOM if present
+	if len(content) >= 3 && content[0] == 0xEF && content[1] == 0xBB && content[2] == 0xBF {
+		content = content[3:]
+	}
 	table := [][]string{}
 	rows := strings.Split(string(content), "\n")
 	for _, row := range rows {
