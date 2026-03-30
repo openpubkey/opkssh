@@ -822,8 +822,22 @@ function Add-OpksshToPath {
                 $newPath = [string]::Join([IO.Path]::PathSeparator, $orderedPathFolders)
                 $key.SetValue('Path', $newPath, 'ExpandString')
                 
+                # Broadcast WM_SETTINGCHANGE so that Explorer (and new console windows) pick up the change
+                if (-not ('Win32.NativeMethods' -as [type])) {
+                    Add-Type -Namespace Win32 -Name NativeMethods -MemberDefinition @'
+                        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+                        public static extern IntPtr SendMessageTimeout(
+                            IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam,
+                            uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);
+'@
+                }
+                $HWND_BROADCAST = [IntPtr]0xffff
+                $WM_SETTINGCHANGE = 0x1a
+                $result = [UIntPtr]::Zero
+                [Win32.NativeMethods]::SendMessageTimeout($HWND_BROADCAST, $WM_SETTINGCHANGE, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$result) | Out-Null
+                Write-Verbose "  Broadcast WM_SETTINGCHANGE to notify running processes"
+
                 Write-Log "  Added to system PATH: $InstallDir" -Level Success
-                Write-Warning "You may need to restart your PowerShell session for PATH changes to take effect"
                 return $true
             } finally {
                 if ($null -ne $key) {
@@ -1017,8 +1031,17 @@ function Install-OpksshServer {
         Write-Host "  sshd_config updated" -ForegroundColor Green
         Write-Host ""
         
-        # Step 10: Restart sshd service
-        Write-Host "[10/11] Restarting OpenSSH Server..." -ForegroundColor Yellow
+        # Step 10: Add to PATH
+        #   Must happen BEFORE restarting sshd so that the service process
+        #   picks up the new PATH. Older OpenSSH versions (8.x, shipped with
+        #   Windows Server 2022) cache the system environment at service start;
+        #   SSH sessions inherit that cached PATH.
+        Write-Host "[10/11] Adding to system PATH..." -ForegroundColor Yellow
+        Add-OpksshToPath -InstallDir $InstallDir | Out-Null
+        Write-Host ""
+        
+        # Step 11: Restart sshd service and log
+        Write-Host "[11/11] Restarting OpenSSH Server..." -ForegroundColor Yellow
         Restart-SshdService -NoRestart $NoSshdRestart | Out-Null
         if (-not $NoSshdRestart) {
             Write-Host "  Service restarted" -ForegroundColor Green
@@ -1026,10 +1049,6 @@ function Install-OpksshServer {
             Write-Host "  Service restart skipped" -ForegroundColor Yellow
         }
         Write-Host ""
-        
-        # Step 11: Add to PATH and log
-        Write-Host "[11/11] Finalizing installation..." -ForegroundColor Yellow
-        Add-OpksshToPath -InstallDir $InstallDir | Out-Null
         
         $logPath = Join-Path $ConfigPath "logs\opkssh-install.log"
         Write-InstallationLog -LogPath $logPath `
