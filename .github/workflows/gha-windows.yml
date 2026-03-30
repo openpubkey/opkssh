@@ -78,7 +78,6 @@ jobs:
         powershell -ExecutionPolicy Bypass -File "scripts/windows/Install-OpksshServer.ps1" `
           -InstallFrom "$PWD\opkssh.exe" `
           -NoSshdRestart `
-          -AuthCmdUser 'opksshuser' `
           -Verbose
     
     - name: Verify system PATH after install
