@@ -22,6 +22,7 @@ import (
 
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/openpubkey/verifier"
+	"github.com/openpubkey/opkssh/commands/config"
 	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/spf13/afero"
 )
@@ -69,10 +70,11 @@ func (p *ProviderPolicy) GetRows() []ProvidersRow {
 	return p.rows
 }
 
-func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
+func (p *ProviderPolicy) CreateVerifier(serverConfig *config.ServerConfig, fs afero.Fs) (*verifier.Verifier, error) {
 	pvs := []verifier.ProviderVerifier{}
 	var expirationPolicy verifier.ExpirationPolicy
 	var err error
+	cache := serverConfig.CreateCache(fs)
 	for _, row := range p.rows {
 		var provider verifier.ProviderVerifier
 		// TODO: We should handle this issuer matching in a more generic way
@@ -84,16 +86,25 @@ func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
 			opts := providers.GetDefaultGoogleOpOptions()
 			opts.Issuer = row.Issuer
 			opts.ClientID = row.ClientID
+			opts.Cache = cache
+			opts.StandardMaxAge = serverConfig.CacheConfig.StandardMaxAge
+			opts.FallbackMaxAge = serverConfig.CacheConfig.FallbackMaxAge
 			provider = providers.NewGoogleOpWithOptions(opts)
 		} else if strings.HasPrefix(row.Issuer, "https://login.microsoftonline.com") {
 			opts := providers.GetDefaultAzureOpOptions()
 			opts.Issuer = row.Issuer
 			opts.ClientID = row.ClientID
+			opts.Cache = cache
+			opts.StandardMaxAge = serverConfig.CacheConfig.StandardMaxAge
+			opts.FallbackMaxAge = serverConfig.CacheConfig.FallbackMaxAge
 			provider = providers.NewAzureOpWithOptions(opts)
 		} else if row.Issuer == "https://gitlab.com" {
 			opts := providers.GetDefaultGitlabOpOptions()
 			opts.Issuer = row.Issuer
 			opts.ClientID = row.ClientID
+			opts.Cache = cache
+			opts.StandardMaxAge = serverConfig.CacheConfig.StandardMaxAge
+			opts.FallbackMaxAge = serverConfig.CacheConfig.FallbackMaxAge
 			provider = providers.NewGitlabOpWithOptions(opts)
 		} else if row.Issuer == "https://token.actions.githubusercontent.com" {
 			provider = providers.NewGithubOp(row.Issuer, "")
@@ -101,6 +112,9 @@ func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
 			opts := providers.GetDefaultGoogleOpOptions()
 			opts.Issuer = row.Issuer
 			opts.ClientID = row.ClientID
+			opts.Cache = cache
+			opts.StandardMaxAge = serverConfig.CacheConfig.StandardMaxAge
+			opts.FallbackMaxAge = serverConfig.CacheConfig.FallbackMaxAge
 			provider = providers.NewGoogleOpWithOptions(opts)
 		}
 

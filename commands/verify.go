@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/openpubkey/openpubkey/discover"
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/openpubkey/verifier"
 	"github.com/openpubkey/opkssh/commands/config"
@@ -57,14 +58,15 @@ type VerifyCmd struct {
 	HttpClient *http.Client
 	// denyList is populated from ServerConfig after successful parsing
 	denyList policy.DenyList
+	// cache is populated from ServerConfig after successful parsing
+	Cache discover.DiscoveryCache
 }
 
 // NewVerifyCmd creates a new VerifyCmd instance with the provided arguments.
-func NewVerifyCmd(pktVerifier verifier.Verifier, checkPolicy PolicyEnforcerFunc, configPathArg string) *VerifyCmd {
+func NewVerifyCmd(checkPolicy PolicyEnforcerFunc, configPathArg string) *VerifyCmd {
 	fs := afero.NewOsFs()
 	return &VerifyCmd{
 		Fs:            fs,
-		PktVerifier:   pktVerifier,
 		CheckPolicy:   checkPolicy,
 		ConfigPathArg: configPathArg,
 		filePermChecker: files.PermsChecker{
@@ -144,30 +146,30 @@ func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, t
 
 // ReadFromServerConfig sets the environment variables specified in the server config file
 // and assigns configured deny lists to VerifyCmd's denyList
-func (v *VerifyCmd) ReadFromServerConfig() error {
+func (v *VerifyCmd) ReadFromServerConfig() (*config.ServerConfig, error) {
 	var configBytes []byte
 
 	// Load the file from the filesystem
 	afs := &afero.Afero{Fs: v.Fs}
 	configBytes, err := afs.ReadFile(v.ConfigPathArg)
 	if err != nil {
-		return fmt.Errorf("failed to read config file: %w", err)
+		return &config.ServerConfig{}, fmt.Errorf("failed to read config file: %w", err)
 	}
 
 	err = v.filePermChecker.CheckPerm(v.ConfigPathArg, []fs.FileMode{0640}, "root", "opksshuser")
 	if err != nil {
-		return err
+		return &config.ServerConfig{}, err
 	}
 
 	serverConfig, err := config.NewServerConfig(configBytes)
 	if err != nil {
-		return fmt.Errorf("failed to parse config file: %w", err)
+		return &config.ServerConfig{}, fmt.Errorf("failed to parse config file: %w", err)
 	}
 	v.denyList = policy.DenyList{
 		Emails: serverConfig.DenyEmails,
 		Users:  serverConfig.DenyUsers,
 	}
-	return serverConfig.SetEnvVars()
+	return serverConfig, serverConfig.SetEnvVars()
 }
 
 func (v *VerifyCmd) UserInfoLookup(ctx context.Context, pkt *pktoken.PKToken, accessToken string) (string, error) {
