@@ -20,8 +20,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/openpubkey/openpubkey/discover"
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/openpubkey/verifier"
+	"github.com/openpubkey/opkssh/commands/config"
 	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/spf13/afero"
 )
@@ -72,7 +74,7 @@ func (p *ProviderPolicy) GetRows() []ProvidersRow {
 // providerVerifierFromRow selects the OP verifier to use for a row in the
 // providers file. The OP type is determined by the configured issuer alone,
 // never by anything in the token being verified.
-func providerVerifierFromRow(row ProvidersRow) verifier.ProviderVerifier {
+func providerVerifierFromRow(row ProvidersRow, cacheCfg discover.DiscoveryCacheConfig) verifier.ProviderVerifier {
 	// TODO: We should handle this issuer matching in a more generic way
 	// oidc.local and localhost: are a test issuers
 	if row.Issuer == "https://accounts.google.com" ||
@@ -82,16 +84,19 @@ func providerVerifierFromRow(row ProvidersRow) verifier.ProviderVerifier {
 		opts := providers.GetDefaultGoogleOpOptions()
 		opts.Issuer = row.Issuer
 		opts.ClientID = row.ClientID
+		opts.CacheConfig = cacheCfg
 		return providers.NewGoogleOpWithOptions(opts)
 	} else if strings.HasPrefix(row.Issuer, "https://login.microsoftonline.com") {
 		opts := providers.GetDefaultAzureOpOptions()
 		opts.Issuer = row.Issuer
 		opts.ClientID = row.ClientID
+		opts.CacheConfig = cacheCfg
 		return providers.NewAzureOpWithOptions(opts)
 	} else if row.Issuer == "https://gitlab.com" {
 		opts := providers.GetDefaultGitlabOpOptions()
 		opts.Issuer = row.Issuer
 		opts.ClientID = row.ClientID
+		opts.CacheConfig = cacheCfg
 		return providers.NewGitlabOpWithOptions(opts)
 	} else if row.Issuer == "https://token.actions.githubusercontent.com" {
 		return providers.NewGithubOp(row.Issuer, "")
@@ -101,15 +106,22 @@ func providerVerifierFromRow(row ProvidersRow) verifier.ProviderVerifier {
 	opts := providers.GetDefaultGoogleOpOptions()
 	opts.Issuer = row.Issuer
 	opts.ClientID = row.ClientID
+	opts.CacheConfig = cacheCfg
 	return providers.NewGoogleOpWithOptions(opts)
 }
 
-func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
+func (p *ProviderPolicy) CreateVerifier(serverConfig *config.ServerConfig, fs afero.Fs) (*verifier.Verifier, error) {
 	pvs := []verifier.ProviderVerifier{}
 	var expirationPolicy verifier.ExpirationPolicy
 	var err error
+	cache := serverConfig.CreateCache(fs)
+	cacheCfg := discover.DiscoveryCacheConfig{
+		Cache: cache,
+		StandardMaxAge: serverConfig.CacheConfig.StandardMaxAge,
+		FallbackMaxAge: serverConfig.CacheConfig.FallbackMaxAge,
+	}
 	for _, row := range p.rows {
-		provider := providerVerifierFromRow(row)
+		provider := providerVerifierFromRow(row, cacheCfg)
 
 		expirationPolicy, err = row.GetExpirationPolicy()
 		if err != nil {

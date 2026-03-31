@@ -22,8 +22,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/openpubkey/openpubkey/discover"
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/openpubkey/verifier"
+	"github.com/openpubkey/opkssh/commands/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -80,7 +82,8 @@ func TestProviderPolicy_CreateVerifier_Google(t *testing.T) {
 		ClientID:         "test-google",
 		ExpirationPolicy: "12h",
 	})
-	ver, err := policy.CreateVerifier()
+	blankConfig, _ := config.NewServerConfig(nil)
+	ver, err := policy.CreateVerifier(blankConfig, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ver)
 }
@@ -93,7 +96,8 @@ func TestProviderPolicy_CreateVerifier_Azure(t *testing.T) {
 		ClientID:         "test-azure",
 		ExpirationPolicy: "48h",
 	})
-	ver, err := policy.CreateVerifier()
+	blankConfig, _ := config.NewServerConfig(nil)
+	ver, err := policy.CreateVerifier(blankConfig, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ver)
 }
@@ -105,7 +109,8 @@ func TestProviderPolicy_CreateVerifier_Gitlab(t *testing.T) {
 		ClientID:         "test-gitlab",
 		ExpirationPolicy: "24h",
 	})
-	ver, err := policy.CreateVerifier()
+	blankConfig, _ := config.NewServerConfig(nil)
+	ver, err := policy.CreateVerifier(blankConfig, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ver)
 }
@@ -118,7 +123,8 @@ func TestProviderPolicy_CreateVerifier_InvalidExpiration(t *testing.T) {
 		ClientID:         "test-google",
 		ExpirationPolicy: "invalid",
 	})
-	ver, err := policy.CreateVerifier()
+	blankConfig, _ := config.NewServerConfig(nil)
+	ver, err := policy.CreateVerifier(blankConfig, nil)
 	require.ErrorContains(t, err, "invalid expiration policy")
 	require.Nil(t, ver)
 }
@@ -126,7 +132,8 @@ func TestProviderPolicy_CreateVerifier_InvalidExpiration(t *testing.T) {
 // Test ProviderPolicy.CreateVerifier when no providers are configured.
 func TestProviderPolicy_CreateVerifier_NoProviders(t *testing.T) {
 	policy := &ProviderPolicy{}
-	ver, err := policy.CreateVerifier()
+	blankConfig, _ := config.NewServerConfig(nil)
+	ver, err := policy.CreateVerifier(blankConfig, nil)
 	require.ErrorContains(t, err, "no providers configured")
 	require.Nil(t, ver)
 }
@@ -203,7 +210,8 @@ func TestProviderPolicy_CreateVerifier_Forgejo(t *testing.T) {
 		ClientID:         "codeberg",
 		ExpirationPolicy: "oidc",
 	})
-	ver, err := policy.CreateVerifier()
+	blankConfig, _ := config.NewServerConfig(nil)
+	ver, err := policy.CreateVerifier(blankConfig, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ver)
 }
@@ -218,6 +226,7 @@ func TestProviderPolicy_CreateVerifier_Forgejo(t *testing.T) {
 // an issuer is not verified as GitHub or Forgejo, which are distinct types and
 // commit differently.
 func TestProviderVerifierFromRow(t *testing.T) {
+	blankCacheConfig := discover.DiscoveryCacheConfig{}
 	tests := []struct {
 		name       string
 		issuer     string
@@ -274,7 +283,7 @@ func TestProviderVerifierFromRow(t *testing.T) {
 				Issuer:           tt.issuer,
 				ClientID:         "client-id",
 				ExpirationPolicy: "oidc",
-			})
+			}, blankCacheConfig)
 			require.IsType(t, tt.wantOp, pv)
 			wantIssuer := tt.wantIssuer
 			if wantIssuer == "" {
