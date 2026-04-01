@@ -1,15 +1,24 @@
-name: Go Checks
+name: Coverage Report
 
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/staging.yml"
 
 permissions: {}
 
-jobs:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
+jobs:
   codecov:
-    name: Push to main test
+    if: github.repository == 'openpubkey/opkssh'
+    name: Push to main coverage
     runs-on: ubuntu-24.04
     permissions:
       contents: write

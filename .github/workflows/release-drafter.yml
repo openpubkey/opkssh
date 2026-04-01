@@ -6,11 +6,17 @@ on:
       - main
   pull_request:
     types: [opened, reopened, synchronize]
+
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   update_release_draft:
+    if: github.repository == 'openpubkey/opkssh'
     name: Update Release Draft
     permissions:
       contents: write
