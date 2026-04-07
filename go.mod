@@ -2,7 +2,7 @@ module github.com/openpubkey/opkssh
 
 go 1.24.0
 
-toolchain go1.24.12
+toolchain go1.26.2
 
 require (
 	github.com/docker/go-connections v0.5.0
@@ -103,7 +103,7 @@ require (
 	github.com/spf13/afero v1.14.0
 	golang.org/x/exp v0.0.0-20250717185816-542afb5b7346
 	golang.org/x/oauth2 v0.30.0 // indirect
-	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/sys v0.38.0
 	golang.org/x/text v0.31.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )
