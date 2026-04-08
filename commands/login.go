@@ -35,9 +35,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/openpubkey/openpubkey/client"
 	"github.com/openpubkey/openpubkey/client/choosers"
+	"github.com/openpubkey/openpubkey/jose"
 	"github.com/openpubkey/openpubkey/oidc"
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/openpubkey/providers"
@@ -106,7 +106,7 @@ type LoginCmd struct {
 	// Outputs
 	pkt        *pktoken.PKToken
 	signer     crypto.Signer
-	alg        jwa.SignatureAlgorithm
+	alg        jose.KeyAlgorithm
 	client     *client.OpkClient
 	principals []string
 
@@ -443,12 +443,12 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider, printIdToken bool, seckeyPath string) (*LoginCmd, error) {
 	var err error
 
-	var alg jwa.SignatureAlgorithm
+	var alg jose.KeyAlgorithm
 	switch l.KeyTypeArg {
 	case ECDSA:
-		alg = jwa.ES256
+		alg = jose.ES256
 	case ED25519:
-		alg = jwa.EdDSA
+		alg = jose.EdDSA
 	default:
 		return nil, fmt.Errorf("unsupported key type (%s); use -t <%s|%s>", l.KeyTypeArg.String(), ECDSA.String(), ED25519.String())
 	}
@@ -863,8 +863,7 @@ Check if your client config (~/.opk/config.yml) has the correct scopes configure
 Sub, issuer, audience:
 %s %s %s`, claims.Subject, claims.Issuer, claims.Audience), nil
 	} else {
-		return fmt.Sprintf(`Email, sub, issuer, audience: 
-%s %s %s %s`, claims.Email, claims.Subject, claims.Issuer, claims.Audience), nil
+		return fmt.Sprintf("Email, sub, issuer, audience: \n%s %s %s %s", claims.Email, claims.Subject, claims.Issuer, claims.Audience), nil
 	}
 }
 
