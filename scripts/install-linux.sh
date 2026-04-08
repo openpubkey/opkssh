@@ -652,7 +652,7 @@ configure_openssh_server() {
         (grep -Fxq 'Include /etc/ssh/sshd_config.d/*.conf' "$sshd_config" &&
             { ! grep -Eq '^AuthorizedKeysCommand|^AuthorizedKeysCommandUser' "$sshd_config" ||
                 ! grep -Eq '^AuthorizedKeysCommand|^AuthorizedKeysCommandUser' "$sshd_config_d"/*.conf 2>/dev/null; }); then
-        # Configuration should be put in /etc/ssh/sshd_config.d director
+        # Configuration should be put in /etc/ssh/sshd_config.d directory
         # Find active configuration file with the directives we're interested in (sorted numerically)
         active_config=$(find "$sshd_config_d"/*.conf -exec grep -l '^AuthorizedKeysCommand\|^AuthorizedKeysCommandUser' {} \; 2>/dev/null | sort -V | head -n 1)
 
@@ -662,6 +662,8 @@ configure_openssh_server() {
             sed -i '/^AuthorizedKeysCommandUser /s/^/#/' "$active_config"
             echo "$auth_key_cmd" >> "$active_config"
             echo "$auth_key_user" >> "$active_config"
+            echo "AuthorizedPrincipalsCommand /usr/bin/echo \"opkssh-client\"" >> "$active_config"
+            echo "AuthorizedPrincipalsCommandUser nobody" >> "$active_config"
         elif [[ "$(basename "$active_config")" =~ ^0+[^0-9]+ ]]; then
             # The active config starts with all zeros and is therefore the one with the
             # highest priority. We cannot add a new file with even higher priority.
@@ -679,6 +681,8 @@ configure_openssh_server() {
             new_config="${sshd_config_d}/${new_prefix}-$opk_config_suffix"
             echo "$auth_key_cmd" > "$new_config"
             echo "$auth_key_user" >> "$new_config"
+            echo "AuthorizedPrincipalsCommand /usr/bin/echo \"opkssh-client\"" >> "$new_config"
+            echo "AuthorizedPrincipalsCommandUser nobody" >> "$new_config"
         fi
     else
         # The directives in 'sshd_config' are active
@@ -686,6 +690,8 @@ configure_openssh_server() {
         sed -i '/^AuthorizedKeysCommandUser /s/^/#/' "$sshd_config"
         echo "$auth_key_cmd" >> "$sshd_config"
         echo "$auth_key_user" >> "$sshd_config"
+        echo "AuthorizedPrincipalsCommand /usr/bin/echo \"opkssh-client\"" >> "$sshd_config"
+        echo "AuthorizedPrincipalsCommandUser nobody" >> "$sshd_config"
     fi
 }
 

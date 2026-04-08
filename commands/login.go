@@ -480,7 +480,7 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 
 	// If principals is empty the server does not enforce any principal. The OPK
 	// verifier should use policy to make this decision.
-	principals := []string{}
+	principals := []string{"opkssh-client"} // TODO: Add to refresh flow as well
 	certBytes, seckeySshPem, err := createSSHCertWithAccessToken(pkt, accessToken, signer, principals)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate SSH cert: %w", err)
