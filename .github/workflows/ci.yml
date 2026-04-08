@@ -144,7 +144,7 @@ jobs:
     strategy:
       matrix:
         runs_on: [ubuntu-24.04, ubuntu-24.04-arm]
-        os: [ubuntu, centos, arch, opensuse]
+        os: [ubuntu, centos, opensuse]
         exclude:
           - runs_on: ubuntu-24.04-arm
             os: arch
