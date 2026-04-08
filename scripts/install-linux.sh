@@ -660,8 +660,10 @@ configure_openssh_server() {
             # Overwrite the configuration, either from a previous run of this script or because user request it for the currently active config
             sed -i '/^AuthorizedKeysCommand /s/^/#/' "$active_config"
             sed -i '/^AuthorizedKeysCommandUser /s/^/#/' "$active_config"
-            echo "$auth_key_cmd" >> "$active_config"
-            echo "$auth_key_user" >> "$active_config"
+            {
+                echo "$auth_key_cmd"
+                echo "$auth_key_user"
+            }>> "$active_config"
         elif [[ "$(basename "$active_config")" =~ ^0+[^0-9]+ ]]; then
             # The active config starts with all zeros and is therefore the one with the
             # highest priority. We cannot add a new file with even higher priority.
@@ -684,8 +686,10 @@ configure_openssh_server() {
         # The directives in 'sshd_config' are active
         sed -i '/^AuthorizedKeysCommand /s/^/#/' "$sshd_config"
         sed -i '/^AuthorizedKeysCommandUser /s/^/#/' "$sshd_config"
-        echo "$auth_key_cmd" >> "$sshd_config"
-        echo "$auth_key_user" >> "$sshd_config"
+        {
+            echo "$auth_key_cmd"
+            echo "$auth_key_user"
+        }>> "$sshd_config"
     fi
 }
 
