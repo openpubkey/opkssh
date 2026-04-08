@@ -127,10 +127,13 @@ func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, t
 			// is no CA.
 			pubkeyBytes := ssh.MarshalAuthorizedKey(cert.SshCert.SignatureKey)
 
-			// Extract principals from the cert to dynamically authorize them
 			principals := strings.Join(cert.SshCert.ValidPrincipals, ",")
 			if principals != "" {
-				// Tell sshd to explicitly trust the exact principal(s) embedded in the certificate
+				// Makes SSHd trust the principals in the certificate.
+				// This is needed to emulate SSH cert a principal wildcard. OpenSSH
+				// intentionally broke the old way of doing SSH cert principal
+				// wildcards that OPKSSH relied on used so we switched to this.
+				// See https://github.com/openpubkey/opkssh/pull/513
 				return fmt.Sprintf("cert-authority,principals=\"%s\" %s", principals, strings.TrimSpace(string(pubkeyBytes))), nil
 			}
 
