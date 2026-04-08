@@ -22,6 +22,17 @@ type ACE struct {
 type ExpectedACL struct {
 	Owner string
 	Mode  fs.FileMode // expected mode bits; 0 means ignore
+
+	// RequiredACEs lists ACE expectations that must be present.
+	// Used on Windows to verify that opksshuser has been granted read access.
+	RequiredACEs []ExpectedACE
+}
+
+// ExpectedACE describes a single required ACE.
+type ExpectedACE struct {
+	Principal string // e.g. "Administrators", "SYSTEM", "opksshuser"
+	Rights    string // e.g. "GENERIC_ALL", "GENERIC_READ"
+	Type      string // "allow"
 }
 
 // ACLReport is the structured result from verifying ACLs/ownership for a path

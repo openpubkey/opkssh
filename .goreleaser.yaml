@@ -20,10 +20,6 @@ builds:
     goarch:
       - amd64
       - arm64
-    # Ignore some builds until they are not tested
-    ignore:
-      - goos: windows
-        goarch: arm64
 
 # Make binaries available with the same naming format as before
 archives:
@@ -77,3 +73,7 @@ changelog:
 release:
   draft: true
   make_latest: true
+  extra_files:
+    - glob: scripts/windows/Install-OpksshServer.ps1
+    - glob: scripts/windows/Uninstall-OpksshServer.ps1
+    - glob: scripts/windows/Test-OpksshInstallation.ps1

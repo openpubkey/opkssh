@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lestrrat-go/jwx/v2/jwk"
+	"github.com/lestrrat-go/jwx/v3/jwk"
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/openpubkey/verifier"
 	"golang.org/x/crypto/ssh"
@@ -87,7 +87,7 @@ func NewFromAuthorizedKey(certType string, certB64 string) (*SshCertSmuggler, er
 	} else {
 		sshCert, ok := certPubkey.(*ssh.Certificate)
 		if !ok {
-			return nil, fmt.Errorf("parsed SSH authorized_key is not an SSH certificate")
+			return nil, fmt.Errorf("parsed SSH authorized_key is not an SSH certificate (got type %T, cert type %q)", certPubkey, certType)
 		}
 		opkcert := &SshCertSmuggler{
 			SshCert: sshCert,
@@ -148,10 +148,13 @@ func (s *SshCertSmuggler) VerifySshPktCert(ctx context.Context, pktVerifier veri
 	if err != nil {
 		return nil, err
 	}
-	upk := cic.PublicKey()
+	upk, err := jwk.Import(cic.PublicKey())
+	if err != nil {
+		return nil, err
+	}
 
 	cryptoCertKey := (s.SshCert.Key.(ssh.CryptoPublicKey)).CryptoPublicKey()
-	jwkCertKey, err := jwk.FromRaw(cryptoCertKey)
+	jwkCertKey, err := jwk.Import(cryptoCertKey)
 	if err != nil {
 		return nil, err
 	}
@@ -170,9 +173,5 @@ func sshPubkeyFromPKT(pkt *pktoken.PKToken) (ssh.PublicKey, error) {
 	}
 	upk := cic.PublicKey()
 
-	var rawkey any
-	if err := upk.Raw(&rawkey); err != nil {
-		return nil, err
-	}
-	return ssh.NewPublicKey(rawkey)
+	return ssh.NewPublicKey(upk)
 }

@@ -44,7 +44,7 @@ var RequiredPerms = struct {
 	SystemPolicy: PermInfo{
 		Mode:      ModeSystemPerms, // 0o640
 		Owner:     "Administrators",
-		Group:     "",
+		Group:     "opksshuser",
 		MustExist: true,
 	},
 	HomePolicy: PermInfo{
@@ -56,25 +56,25 @@ var RequiredPerms = struct {
 	Providers: PermInfo{
 		Mode:      ModeSystemPerms, // 0o640
 		Owner:     "Administrators",
-		Group:     "",
+		Group:     "opksshuser",
 		MustExist: false,
 	},
 	Config: PermInfo{
 		Mode:      ModeSystemPerms, // 0o640
 		Owner:     "Administrators",
-		Group:     "",
+		Group:     "opksshuser",
 		MustExist: false,
 	},
 	PluginsDir: PermInfo{
 		Mode:      0o750,
 		Owner:     "Administrators",
-		Group:     "",
+		Group:     "opksshuser",
 		MustExist: false,
 	},
 	PluginFile: PermInfo{
 		Mode:      ModeSystemPerms, // 0o640
 		Owner:     "Administrators",
-		Group:     "",
+		Group:     "opksshuser",
 		MustExist: false,
 	},
 }

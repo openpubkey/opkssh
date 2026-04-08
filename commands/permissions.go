@@ -363,41 +363,27 @@ func (p *PermissionsCmd) Fix() error {
 
 	// Verify ACLs after changes and apply ACE fixes on Windows if needed
 	if runtime.GOOS == "windows" {
-		// Pre-resolve commonly used SIDs to avoid repeated lookups and use SID-based trustees
-		adminSID, _, _ := files.ResolveAccountToSID("Administrators")
-		systemSID, _, _ := files.ResolveAccountToSID("SYSTEM")
-
-		report, err := p.FileSystem.VerifyACL(systemPolicy, files.ExpectedACLFromPerm(sp))
+		expected := files.ExpectedACLFromPerm(sp)
+		report, err := p.FileSystem.VerifyACL(systemPolicy, expected)
 		if err != nil {
 			errorsFound = append(errorsFound, "acl verify: "+err.Error())
 		} else {
-			// Ensure Administrators and SYSTEM have full control; if missing, apply via ApplyACE
-			needAdmin := true
-			needSystem := true
-			for _, a := range report.ACEs {
-				if a.Principal == "Administrators" && strings.Contains(a.Rights, "GENERIC_ALL") {
-					needAdmin = false
+			for _, reqACE := range expected.RequiredACEs {
+				found := false
+				for _, a := range report.ACEs {
+					if a.Principal == reqACE.Principal && strings.Contains(a.Rights, reqACE.Rights) {
+						found = true
+						break
+					}
 				}
-				if a.Principal == "SYSTEM" && strings.Contains(a.Rights, "GENERIC_ALL") {
-					needSystem = false
-				}
-			}
-			if needAdmin {
-				ace := files.ACE{Principal: "Administrators", Rights: "GENERIC_ALL", Type: "allow"}
-				if len(adminSID) > 0 {
-					ace.PrincipalSID = adminSID
-				}
-				if err := p.FileSystem.ApplyACE(systemPolicy, ace); err != nil {
-					errorsFound = append(errorsFound, "apply ACE Administrators:F: "+err.Error())
-				}
-			}
-			if needSystem {
-				ace := files.ACE{Principal: "SYSTEM", Rights: "GENERIC_ALL", Type: "allow"}
-				if len(systemSID) > 0 {
-					ace.PrincipalSID = systemSID
-				}
-				if err := p.FileSystem.ApplyACE(systemPolicy, ace); err != nil {
-					errorsFound = append(errorsFound, "apply ACE SYSTEM:F: "+err.Error())
+				if !found {
+					ace := files.ACE{Principal: reqACE.Principal, Rights: reqACE.Rights, Type: reqACE.Type}
+					if sid, _, _ := files.ResolveAccountToSID(reqACE.Principal); len(sid) > 0 {
+						ace.PrincipalSID = sid
+					}
+					if err := p.FileSystem.ApplyACE(systemPolicy, ace); err != nil {
+						errorsFound = append(errorsFound, fmt.Sprintf("apply ACE %s:%s: %s", reqACE.Principal, reqACE.Rights, err.Error()))
+					}
 				}
 			}
 		}
@@ -442,20 +428,24 @@ func (p *PermissionsCmd) Fix() error {
 				}
 				// On Windows, ensure ACLs for plugin files as well
 				if runtime.GOOS == "windows" {
-					if report, err := p.FileSystem.VerifyACL(path, files.ExpectedACLFromPerm(pf)); err == nil {
-						needAdmin := true
-						for _, a := range report.ACEs {
-							if a.Principal == "Administrators" && strings.Contains(a.Rights, "GENERIC_ALL") {
-								needAdmin = false
+					pfExpected := files.ExpectedACLFromPerm(pf)
+					if report, err := p.FileSystem.VerifyACL(path, pfExpected); err == nil {
+						for _, reqACE := range pfExpected.RequiredACEs {
+							found := false
+							for _, a := range report.ACEs {
+								if a.Principal == reqACE.Principal && strings.Contains(a.Rights, reqACE.Rights) {
+									found = true
+									break
+								}
 							}
-						}
-						if needAdmin {
-							ace := files.ACE{Principal: "Administrators", Rights: "GENERIC_ALL", Type: "allow"}
-							if adminSID, _, _ := files.ResolveAccountToSID("Administrators"); len(adminSID) > 0 {
-								ace.PrincipalSID = adminSID
-							}
-							if err := p.FileSystem.ApplyACE(path, ace); err != nil {
-								errorsFound = append(errorsFound, "apply ACE Administrators:F for "+path+": "+err.Error())
+							if !found {
+								ace := files.ACE{Principal: reqACE.Principal, Rights: reqACE.Rights, Type: reqACE.Type}
+								if sid, _, _ := files.ResolveAccountToSID(reqACE.Principal); len(sid) > 0 {
+									ace.PrincipalSID = sid
+								}
+								if err := p.FileSystem.ApplyACE(path, ace); err != nil {
+									errorsFound = append(errorsFound, fmt.Sprintf("apply ACE %s:%s for %s: %s", reqACE.Principal, reqACE.Rights, path, err.Error()))
+								}
 							}
 						}
 					} else {

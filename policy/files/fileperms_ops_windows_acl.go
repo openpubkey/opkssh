@@ -89,12 +89,9 @@ func (w *WindowsACLFilePermsOps) Chown(path string, owner string, group string) 
 		}
 	}
 
-	// Ensure Administrators and SYSTEM have full control via ApplyACE
+	// Ensure Administrators have full control via ApplyACE
 	if err := w.ApplyACE(path, ACE{Principal: "Administrators", Rights: "GENERIC_ALL", Type: "allow"}); err != nil {
 		return fmt.Errorf("ensure admin ACE failed: %v", err)
-	}
-	if err := w.ApplyACE(path, ACE{Principal: "SYSTEM", Rights: "GENERIC_ALL", Type: "allow"}); err != nil {
-		return fmt.Errorf("ensure system ACE failed: %v", err)
 	}
 
 	return nil
