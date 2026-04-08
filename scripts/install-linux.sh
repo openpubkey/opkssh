@@ -677,7 +677,7 @@ configure_openssh_server() {
                 new_prefix=$((prefix - 1))
             fi
             new_config="${sshd_config_d}/${new_prefix}-$opk_config_suffix"
-            echo "$auth_key_cmd" >> "$new_config"
+            echo "$auth_key_cmd" > "$new_config"
             echo "$auth_key_user" >> "$new_config"
         fi
     else
