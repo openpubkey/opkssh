@@ -171,7 +171,7 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 
-				expectedPubkeyList := "ecdsa-sha2-nistp256"
+				expectedPubkeyList := "cert-authority ecdsa-sha2-nistp256"
 				require.Contains(t, pubkeyList, expectedPubkeyList)
 			}
 		})
