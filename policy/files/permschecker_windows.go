@@ -31,7 +31,7 @@ import (
 // 3. A file without the read-only attribute will always show as 0666, not 0640
 //
 // For security on Windows, we rely on:
-// - NTFS ACLs set by the installer (Administrators and SYSTEM only)
+// - NTFS ACLs set by the installer (Administrators full control, opksshuser read)
 // - File system level security rather than permission bits
 //
 // This function validates the file exists and is accessible, but skips

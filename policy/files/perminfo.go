@@ -19,6 +19,7 @@ package files
 import (
 	"fmt"
 	"io/fs"
+	"runtime"
 )
 
 // PermInfo describes the expected filesystem permissions for a given resource
@@ -57,8 +58,21 @@ func (p PermInfo) String() string {
 
 // ExpectedACLFromPerm builds an ExpectedACL from a PermInfo.
 func ExpectedACLFromPerm(pi PermInfo) ExpectedACL {
-	return ExpectedACL{
+	ea := ExpectedACL{
 		Owner: pi.Owner,
 		Mode:  pi.Mode,
 	}
+	if runtime.GOOS == "windows" {
+		if pi.Owner != "" {
+			ea.RequiredACEs = append(ea.RequiredACEs, ExpectedACE{
+				Principal: pi.Owner, Rights: "GENERIC_ALL", Type: "allow",
+			})
+		}
+		if pi.Group != "" {
+			ea.RequiredACEs = append(ea.RequiredACEs, ExpectedACE{
+				Principal: pi.Group, Rights: "GENERIC_READ", Type: "allow",
+			})
+		}
+	}
+	return ea
 }

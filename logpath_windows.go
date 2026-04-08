@@ -17,18 +17,19 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package policy
+package main
 
 import (
-	"fmt"
+	"os"
+	"path/filepath"
 )
 
-// ReadWithSudoScript on Windows does not use sudo (which doesn't exist).
-// On Windows, home policy files are not supported. The verify process runs as
-// the dedicated opksshuser account, which only has read access to system policy
-// files. There is no privilege escalation mechanism on Windows.
-// This function just returns an error indicating home policy reading failed
-// and we should rely on the system policy.
-func ReadWithSudoScript(h *HomePolicyLoader, username string) ([]byte, error) {
-	return nil, fmt.Errorf("home policy file not supported on Windows, will use system policy only")
+// GetLogFilePath returns the path to the opkssh log file.
+// On Windows, this is %ProgramData%\opk\logs\opkssh.log
+func GetLogFilePath() string {
+	programData := os.Getenv("ProgramData")
+	if programData == "" {
+		programData = `C:\ProgramData`
+	}
+	return filepath.Join(programData, "opk", "logs", "opkssh.log")
 }

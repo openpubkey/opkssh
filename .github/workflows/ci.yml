@@ -87,6 +87,53 @@ jobs:
     - name: Run unit tests
       shell: pwsh
       run: go test ./...
+    - name: Run Pester tests
+      shell: pwsh
+      run: Invoke-Pester -Path scripts/windows/test -Output Detailed
+  
+  # Check that binary can be built natively on Windows ARM64
+  build-windows-arm64:
+    name: Build Windows ARM64
+    runs-on: windows-11-arm
+    timeout-minutes: 5
+    steps:
+    - name: Checkout
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      with:
+        persist-credentials: false
+    - name: Install Go
+      uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+      with:
+        go-version-file: 'go.mod'
+    - name: Install dependencies
+      run: go mod download
+    - name: Build Windows ARM64
+      shell: pwsh
+      run: go build -v -o opkssh-arm64.exe
+    - name: Test binary works
+      shell: pwsh
+      run: |
+        .\opkssh-arm64.exe --version
+  
+  # Run Windows ARM64 unit tests
+  test-windows-arm64:
+    name: 'Windows ARM64 Tests'
+    runs-on: windows-11-arm
+    timeout-minutes: 8
+    steps:
+    - name: Checkout
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      with:
+        persist-credentials: false
+    - name: Install Go
+      uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+      with:
+        go-version-file: 'go.mod'
+    - name: Install dependencies
+      run: go mod download
+    - name: Run unit tests
+      shell: pwsh
+      run: go test ./...
   
   # Run integration tests
   test:

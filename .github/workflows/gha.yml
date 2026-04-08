@@ -46,7 +46,7 @@ jobs:
       run: docker run -d -p 2222:22 sshserver:latest
 
     - name: Login
-      run: go run main.go login github --print-id-token
+      run: go run . login github --print-id-token
 
     - name: SSH into Container with opkssh
       run: |

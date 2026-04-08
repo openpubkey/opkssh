@@ -281,6 +281,18 @@ func TestRun(t *testing.T) {
 			wantExit:   1,
 		},
 		{
+			name:       "Login Help flag shows inspect-cert",
+			args:       []string{"opkssh", "login", "--help"},
+			wantOutput: "--inspect-cert",
+			wantExit:   0,
+		},
+		{
+			name:       "Login Help flag shows verbose",
+			args:       []string{"opkssh", "login", "--help"},
+			wantOutput: "-v, --verbose",
+			wantExit:   0,
+		},
+		{
 			name:       "Verify command fail on bad log file path",
 			args:       []string{"opkssh", "verify", "arg1", "arg2", "arg3"},
 			wantOutput: "Error opening log file:",
