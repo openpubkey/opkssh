@@ -478,8 +478,10 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 		}
 	}
 
-	// If principals is empty the server does not enforce any principal. The OPK
-	// verifier should use policy to make this decision.
+	// If principals field is empty sshd automatically rejects the SSH certificate.
+	// We use opkssh-wildcard as placeholder so that we can allow the OPK
+	// verifier to make this policy decision instead of sshd.
+	// See https://github.com/openpubkey/opkssh/pull/513
 	principals := []string{"opkssh-wildcard"}
 	certBytes, seckeySshPem, err := createSSHCertWithAccessToken(pkt, accessToken, signer, principals)
 	if err != nil {
