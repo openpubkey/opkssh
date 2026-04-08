@@ -652,7 +652,7 @@ configure_openssh_server() {
         (grep -Fxq 'Include /etc/ssh/sshd_config.d/*.conf' "$sshd_config" &&
             { ! grep -Eq '^AuthorizedKeysCommand|^AuthorizedKeysCommandUser' "$sshd_config" ||
                 ! grep -Eq '^AuthorizedKeysCommand|^AuthorizedKeysCommandUser' "$sshd_config_d"/*.conf 2>/dev/null; }); then
-        # Configuration should be put in /etc/ssh/sshd_config.d director
+        # Configuration should be put in /etc/ssh/sshd_config.d directory
         # Find active configuration file with the directives we're interested in (sorted numerically)
         active_config=$(find "$sshd_config_d"/*.conf -exec grep -l '^AuthorizedKeysCommand\|^AuthorizedKeysCommandUser' {} \; 2>/dev/null | sort -V | head -n 1)
 
