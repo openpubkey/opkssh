@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"strings"
 
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/openpubkey/verifier"
@@ -125,6 +126,14 @@ func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, t
 			// public key is key of the CA that signs the cert, in our setting there
 			// is no CA.
 			pubkeyBytes := ssh.MarshalAuthorizedKey(cert.SshCert.SignatureKey)
+
+			// Extract principals from the cert to dynamically authorize them
+			principals := strings.Join(cert.SshCert.ValidPrincipals, ",")
+			if principals != "" {
+				// Tell sshd to explicitly trust the exact principal(s) embedded in the certificate
+				return fmt.Sprintf("cert-authority,principals=\"%s\" %s", principals, strings.TrimSpace(string(pubkeyBytes))), nil
+			}
+
 			return "cert-authority " + string(pubkeyBytes), nil
 		}
 	}

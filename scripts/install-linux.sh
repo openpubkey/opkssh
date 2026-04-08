@@ -663,8 +663,6 @@ configure_openssh_server() {
             { 
                 echo "$auth_key_cmd"
                 echo "$auth_key_user"
-                echo "AuthorizedPrincipalsCommand /usr/bin/echo \"opkssh-client\"" 
-                echo "AuthorizedPrincipalsCommandUser nobody" 
             } >> "$active_config"
         elif [[ "$(basename "$active_config")" =~ ^0+[^0-9]+ ]]; then
             # The active config starts with all zeros and is therefore the one with the
@@ -684,8 +682,6 @@ configure_openssh_server() {
             {
                 echo "$auth_key_cmd"
                 echo "$auth_key_user"
-                echo "AuthorizedPrincipalsCommand /usr/bin/echo \"opkssh-client\""
-                echo "AuthorizedPrincipalsCommandUser nobody"
             } >> "$new_config"
         fi
     else
@@ -695,8 +691,6 @@ configure_openssh_server() {
         {
             echo "$auth_key_cmd"
             echo "$auth_key_user"
-            echo "AuthorizedPrincipalsCommand /usr/bin/echo \"opkssh-client\""
-            echo "AuthorizedPrincipalsCommandUser nobody"
         } >> "$sshd_config"
     fi
 }
