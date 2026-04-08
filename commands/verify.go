@@ -124,8 +124,7 @@ func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, t
 			// sshd expects the public key in the cert, not the cert itself. This
 			// public key is key of the CA that signs the cert, in our setting there
 			// is no CA.
-			// pubkeyBytes := ssh.MarshalAuthorizedKey(cert.SshCert.SignatureKey)
-			pubkeyBytes := ssh.MarshalAuthorizedKey(cert.SshCert.Key)
+			pubkeyBytes := ssh.MarshalAuthorizedKey(cert.SshCert.SignatureKey)
 			return string(pubkeyBytes), nil
 		}
 	}
