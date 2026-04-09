@@ -1,15 +1,21 @@
 name: CLI Docs
 
-# Runs CI when code merges to the CLI on main
+# Runs CI when code merges to the CLI on main.
 on:
   push:
     branches:
       - main
     paths:
       - "main.go"
+      - "commands/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check-updates:
+    if: github.repository == 'openpubkey/opkssh'
     name: Check for updates to the CLI docs
     runs-on: ubuntu-latest
     permissions:
