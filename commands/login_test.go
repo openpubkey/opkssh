@@ -30,8 +30,8 @@ import (
 
 	"golang.org/x/crypto/ed25519"
 
-	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/openpubkey/openpubkey/client"
+	"github.com/openpubkey/openpubkey/jose"
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/openpubkey/util"
@@ -61,15 +61,15 @@ const allProvidersStr = providerStr1 + ";" + providerStr2 + ";" + providerStr3
 
 func Mocks(t *testing.T, keyType KeyType, extraClaims ...map[string]any) (*pktoken.PKToken, crypto.Signer, providers.OpenIdProvider) {
 	var err error
-	var alg jwa.SignatureAlgorithm
+	var alg jose.KeyAlgorithm
 	var signer crypto.Signer
 
 	switch keyType {
 	case ECDSA:
-		alg = jwa.ES256
+		alg = jose.ES256
 		signer, err = util.GenKeyPair(alg)
 	case ED25519:
-		alg = jwa.EdDSA
+		alg = jose.EdDSA
 		_, signer, err = ed25519.GenerateKey(rand.Reader)
 	}
 	require.NoError(t, err)
@@ -332,7 +332,7 @@ func TestDetermineProvider(t *testing.T) {
 			wantIssuer:    "",
 			wantError:     false,
 			errorString:   "",
-			wantChooser:   `[{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"","GQSign":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"ExtraURLParamOpts":null}]`,
+			wantChooser:   `[{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"","GQSign":false,"DeviceFlow":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"CallbackHTML":"You may now close this window","ExtraURLParamOpts":{}}]`,
 		},
 		{
 			name:          "Good path with env vars many providers and no default",
@@ -341,7 +341,7 @@ func TestDetermineProvider(t *testing.T) {
 			providerAlias: "",
 			wantIssuer:    "",
 			wantError:     false,
-			wantChooser:   `[{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"","GQSign":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"ExtraURLParamOpts":null},{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"","GQSign":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"ExtraURLParamOpts":null},{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"","GQSign":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"ExtraURLParamOpts":null}]`,
+			wantChooser:   `[{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"","GQSign":false,"DeviceFlow":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"CallbackHTML":"You may now close this window","ExtraURLParamOpts":{}},{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"","GQSign":false,"DeviceFlow":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"CallbackHTML":"You may now close this window","ExtraURLParamOpts":{}},{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"","GQSign":false,"DeviceFlow":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"CallbackHTML":"You may now close this window","ExtraURLParamOpts":{}}]`,
 		},
 		{
 			name:          "Good path with env vars many providers and providerAlias",
@@ -365,7 +365,7 @@ func TestDetermineProvider(t *testing.T) {
 			providerArg:       "",
 			providerAlias:     "",
 			remoteRedirectURI: "https://example.com/login_callback",
-			wantChooser:       `[{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"https://example.com/login_callback","GQSign":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"ExtraURLParamOpts":null},{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"https://example.com/login_callback","GQSign":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"ExtraURLParamOpts":null},{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"https://example.com/login_callback","GQSign":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"ExtraURLParamOpts":null}]`,
+			wantChooser:       `[{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"https://example.com/login_callback","GQSign":false,"DeviceFlow":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"CallbackHTML":"You may now close this window","ExtraURLParamOpts":{}},{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"https://example.com/login_callback","GQSign":false,"DeviceFlow":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"CallbackHTML":"You may now close this window","ExtraURLParamOpts":{}},{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"https://example.com/login_callback","GQSign":false,"DeviceFlow":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"CallbackHTML":"You may now close this window","ExtraURLParamOpts":{}}]`,
 			wantError:         false,
 		},
 		{
