@@ -27,7 +27,12 @@ type Table struct {
 	rows [][]string
 }
 
+// NewTable creates a new Table from the given content.
 func NewTable(content []byte) *Table {
+	// Strip UTF-8 BOM if present
+	if len(content) >= 3 && content[0] == 0xEF && content[1] == 0xBB && content[2] == 0xBF {
+		content = content[3:]
+	}
 	table := [][]string{}
 	rows := strings.Split(string(content), "\n")
 	for _, row := range rows {
@@ -72,4 +77,44 @@ func (t Table) ToBytes() []byte {
 
 func (t Table) GetRows() [][]string {
 	return t.rows
+}
+
+type RowDetails struct {
+	Columns []string
+	Content string
+	Empty   bool
+	Error   error
+}
+
+// ReadRowsWithDetails reads rows from content, returning any parsing errors.
+// Useful for auditing and finding configuration problems.
+func ReadRowsWithDetails(content []byte) []RowDetails {
+	tableDetails := []RowDetails{}
+	rows := strings.Split(string(content), "\n")
+	for _, rowContent := range rows {
+		row := CleanRow(rowContent)
+		if row == "" {
+			tableDetails = append(tableDetails,
+				RowDetails{
+					Empty:   true,
+					Content: rowContent,
+				})
+			continue
+		}
+
+		columns, err := shellquote.Split(row)
+		if err != nil {
+			tableDetails = append(tableDetails, RowDetails{
+				Error:   err,
+				Content: rowContent,
+			})
+			log.Printf("Unable to parse: %s. (%s), skipping...\n", row, err)
+			continue
+		}
+		tableDetails = append(tableDetails, RowDetails{
+			Columns: columns,
+			Content: rowContent,
+		})
+	}
+	return tableDetails
 }

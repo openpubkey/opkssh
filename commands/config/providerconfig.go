@@ -32,28 +32,38 @@ const (
 )
 
 type ProviderConfig struct {
-	AliasList       []string `yaml:"alias"`
-	Issuer          string   `yaml:"issuer"`
-	ClientID        string   `yaml:"client_id"`
-	ClientSecret    string   `yaml:"client_secret,omitempty"`
-	Scopes          []string `yaml:"scopes"`
-	AccessType      string   `yaml:"access_type,omitempty"`
-	Prompt          string   `yaml:"prompt,omitempty"`
-	RedirectURIs    []string `yaml:"redirect_uris"`
-	SendAccessToken bool     `yaml:"send_access_token,omitempty"`
+	AliasList    []string `yaml:"alias"`
+	Issuer       string   `yaml:"issuer"`
+	ClientID     string   `yaml:"client_id"`
+	ClientSecret string   `yaml:"client_secret,omitempty"`
+	Scopes       []string `yaml:"scopes"`
+	AccessType   string   `yaml:"access_type,omitempty"`
+	Prompt       string   `yaml:"prompt,omitempty"`
+	RedirectURIs []string `yaml:"redirect_uris"`
+	// Optional field to enable the use of non-localhost redirect URI.
+	// This is an advanced option for embedding opkssh in server-side
+	// logic and should not be specified most of the time.
+	RemoteRedirectURI string `yaml:"remote_redirect_uri,omitempty"`
+	SendAccessToken   bool   `yaml:"send_access_token,omitempty"`
 }
 
 func (p *ProviderConfig) UnmarshalYAML(value *yaml.Node) error {
+
+	// We use tmp to handle lists as space-separated strings, e.g., scope: openid profile email offline_access.
 	var tmp struct {
-		AliasList       string   `yaml:"alias"`
-		Issuer          string   `yaml:"issuer"`
-		ClientID        string   `yaml:"client_id"`
-		ClientSecret    string   `yaml:"client_secret"`
-		Scopes          string   `yaml:"scopes"`
-		AccessType      string   `yaml:"access_type"`
-		Prompt          string   `yaml:"prompt"`
-		RedirectURIs    []string `yaml:"redirect_uris"`
-		SendAccessToken bool     `yaml:"send_access_token,omitempty"`
+		AliasList    string   `yaml:"alias"`
+		Issuer       string   `yaml:"issuer"`
+		ClientID     string   `yaml:"client_id"`
+		ClientSecret string   `yaml:"client_secret"`
+		Scopes       string   `yaml:"scopes"`
+		AccessType   string   `yaml:"access_type"`
+		Prompt       string   `yaml:"prompt"`
+		RedirectURIs []string `yaml:"redirect_uris"`
+		// Optional field to enable the use of non-localhost redirect URI.
+		// This is an advanced option for embedding opkssh in server-side
+		// logic and should not be specified most of the time.
+		RemoteRedirectURI string `yaml:"remote_redirect_uri,omitempty"`
+		SendAccessToken   bool   `yaml:"send_access_token,omitempty"`
 	}
 
 	// Set default values
@@ -70,15 +80,16 @@ func (p *ProviderConfig) UnmarshalYAML(value *yaml.Node) error {
 		return err
 	}
 	*p = ProviderConfig{
-		AliasList:       strings.Fields(tmp.AliasList),
-		Issuer:          tmp.Issuer,
-		ClientID:        tmp.ClientID,
-		ClientSecret:    tmp.ClientSecret,
-		Scopes:          strings.Fields(tmp.Scopes),
-		AccessType:      tmp.AccessType,
-		Prompt:          tmp.Prompt,
-		RedirectURIs:    tmp.RedirectURIs,
-		SendAccessToken: tmp.SendAccessToken,
+		AliasList:         strings.Fields(tmp.AliasList),
+		Issuer:            tmp.Issuer,
+		ClientID:          tmp.ClientID,
+		ClientSecret:      tmp.ClientSecret,
+		Scopes:            strings.Fields(tmp.Scopes),
+		AccessType:        tmp.AccessType,
+		Prompt:            tmp.Prompt,
+		RedirectURIs:      tmp.RedirectURIs,
+		RemoteRedirectURI: tmp.RemoteRedirectURI,
+		SendAccessToken:   tmp.SendAccessToken,
 	}
 	return nil
 }
@@ -189,6 +200,7 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 		opts.PromptType = p.Prompt
 		opts.AccessType = p.AccessType
 		opts.RedirectURIs = p.RedirectURIs
+		opts.RemoteRedirectURI = p.RemoteRedirectURI
 		opts.OpenBrowser = openBrowser
 		provider = providers.NewGoogleOpWithOptions(opts)
 	} else if strings.HasPrefix(p.Issuer, "https://login.microsoftonline.com") {
@@ -202,6 +214,7 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 		opts.PromptType = p.Prompt
 		opts.AccessType = p.AccessType
 		opts.RedirectURIs = p.RedirectURIs
+		opts.RemoteRedirectURI = p.RemoteRedirectURI
 		opts.OpenBrowser = openBrowser
 		provider = providers.NewAzureOpWithOptions(opts)
 	} else if strings.HasPrefix(p.Issuer, "https://gitlab.com") {
@@ -215,6 +228,7 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 		opts.PromptType = p.Prompt
 		opts.AccessType = p.AccessType
 		opts.RedirectURIs = p.RedirectURIs
+		opts.RemoteRedirectURI = p.RemoteRedirectURI
 		opts.OpenBrowser = openBrowser
 		provider = providers.NewGitlabOpWithOptions(opts)
 	} else if p.Issuer == "https://issuer.hello.coop" {
@@ -228,6 +242,7 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 		opts.PromptType = p.Prompt
 		opts.AccessType = p.AccessType
 		opts.RedirectURIs = p.RedirectURIs
+		opts.RemoteRedirectURI = p.RemoteRedirectURI
 		opts.OpenBrowser = openBrowser
 		provider = providers.NewHelloOpWithOptions(opts)
 	} else if strings.HasPrefix(p.Issuer, "https://token.actions.githubusercontent.com") {
@@ -243,6 +258,7 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 		opts.PromptType = p.Prompt
 		opts.AccessType = p.AccessType
 		opts.RedirectURIs = p.RedirectURIs
+		opts.RemoteRedirectURI = p.RemoteRedirectURI
 		opts.GQSign = false
 		if p.hasScopes() {
 			opts.Scopes = p.Scopes

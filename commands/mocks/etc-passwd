@@ -1,0 +1,12 @@
+root:x:0:0:root:/root:/bin/bash
+# Comment line
+dev:x:1001:1001::/home/dev:/bin/sh
+
+alice:x:995:981::/home/alice:/bin/sh
+bob:x:1002:1002::/home/bob:/bin/sh
+
+badline:too:few:colons
+badline:emptyhome:1002:1002:::/bin/sh
+
+
+carol:x:1003:1003::/home/carol:/bin/sh

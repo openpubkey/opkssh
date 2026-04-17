@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/openpubkey/openpubkey/pktoken"
@@ -103,8 +104,11 @@ func (s *checkedClaims) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// The default location for policy plugins
-const pluginPolicyDir = "/etc/opk/policy.d"
+// GetPluginPolicyDir returns the default location for policy plugins.
+// On Unix: /etc/opk/policy.d, On Windows: %ProgramData%\opk\policy.d
+func GetPluginPolicyDir() string {
+	return filepath.Join(GetSystemConfigBasePath(), "policy.d")
+}
 
 // EscapedSplit splits a string by a separator while ignoring the separator in quoted sections.
 // This is useful for strings that may contain the separator character as part of the string
@@ -159,7 +163,7 @@ func validateClaim(claims *checkedClaims, user *User) bool {
 // It is security critical to verify the pkt first before calling this function.
 // This is because if this function is called first, a timing channel exists which
 // allows an attacker check what identities and principals are allowed by the policy.F
-func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, userInfoJson string, sshCert string, keyType string, denyList DenyList) error {
+func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, userInfoJson string, sshCert string, keyType string, denyList DenyList, extraArgs []string) error {
 
 	var claims checkedClaims
 
@@ -184,8 +188,9 @@ func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, us
 	}
 
 	pluginPolicy := plugins.NewPolicyPluginEnforcer()
+	pluginPolicyDir := GetPluginPolicyDir()
 
-	results, err := pluginPolicy.CheckPolicies(pluginPolicyDir, pkt, userInfoJson, principalDesired, sshCert, keyType)
+	results, err := pluginPolicy.CheckPolicies(pluginPolicyDir, pkt, userInfoJson, principalDesired, sshCert, keyType, extraArgs)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			log.Println("Skipping policy plugins: no plugins found at " + pluginPolicyDir)

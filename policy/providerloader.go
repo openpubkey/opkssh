@@ -65,6 +65,10 @@ func (p *ProviderPolicy) AddRow(row ProvidersRow) {
 	p.rows = append(p.rows, row)
 }
 
+func (p *ProviderPolicy) GetRows() []ProvidersRow {
+	return p.rows
+}
+
 func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
 	pvs := []verifier.ProviderVerifier{}
 	var expirationPolicy verifier.ExpirationPolicy
@@ -132,6 +136,11 @@ func (p ProviderPolicy) ToString() string {
 	return sb.String()
 }
 
+// ProviderLoader defines the interface for loading provider policies
+type ProviderLoader interface {
+	LoadProviderPolicy(path string) (*ProviderPolicy, error)
+}
+
 type ProvidersFileLoader struct {
 	files.FileLoader
 	Path string
@@ -171,15 +180,14 @@ func (o *ProvidersFileLoader) FromTable(input []byte, path string) *ProviderPoli
 	policy := &ProviderPolicy{
 		rows: []ProvidersRow{},
 	}
-	for i, row := range table.GetRows() {
+	for _, row := range table.GetRows() {
 		// Error should not break everyone's ability to login, skip those rows
 		if len(row) != 3 {
 			configProblem := files.ConfigProblem{
-				Filepath:            path,
-				OffendingLine:       strings.Join(row, " "),
-				OffendingLineNumber: i,
-				ErrorMessage:        fmt.Sprintf("wrong number of arguments (expected=3, got=%d)", len(row)),
-				Source:              "providers policy file",
+				Filepath:      path,
+				OffendingLine: strings.Join(row, " "),
+				ErrorMessage:  fmt.Sprintf("wrong number of arguments (expected=3, got=%d)", len(row)),
+				Source:        "providers policy file",
 			}
 			files.ConfigProblems().RecordProblem(configProblem)
 			continue

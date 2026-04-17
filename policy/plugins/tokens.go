@@ -25,7 +25,7 @@ import (
 	"github.com/openpubkey/openpubkey/pktoken"
 )
 
-func PopulatePluginEnvVars(pkt *pktoken.PKToken, userInfoJson string, principal string, sshCert string, keyType string) (map[string]string, error) {
+func PopulatePluginEnvVars(pkt *pktoken.PKToken, userInfoJson string, principal string, sshCert string, keyType string, extraArgs []string) (map[string]string, error) {
 	pktCom, err := pkt.Compact()
 	if err != nil {
 		return nil, err
@@ -84,6 +84,16 @@ func PopulatePluginEnvVars(pkt *pktoken.PKToken, userInfoJson string, principal 
 		iatStr = fmt.Sprintf("%d", *claims.Iat)
 	}
 
+	extraArgsStr := ""
+	if len(extraArgs) > 0 {
+		extraArgsJson, err := json.Marshal(extraArgs)
+		if err != nil {
+			return nil, err
+		}
+
+		extraArgsStr = string(extraArgsJson)
+	}
+
 	tokens := map[string]string{
 		"OPKSSH_PLUGIN_U": principal,
 		"OPKSSH_PLUGIN_K": sshCert,
@@ -105,6 +115,8 @@ func PopulatePluginEnvVars(pkt *pktoken.PKToken, userInfoJson string, principal 
 		"OPKSSH_PLUGIN_PKT":      string(pktCom),                   // compact-encoded PK Token
 		"OPKSSH_PLUGIN_IDT":      string(pkt.OpToken),              // base64-encoded ID Token
 		"OPKSSH_PLUGIN_USERINFO": userInfoJson,                     // what the userinfo endpoint returned if an access token was supplied (by default this the empty string)
+
+		"OPKSSH_PLUGIN_EXTRA_ARGS": extraArgsStr,
 	}
 
 	return tokens, nil

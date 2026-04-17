@@ -1,10 +1,13 @@
 name: GitHub Actions Security Analysis with zizmor 🌈
 
+# Run security scanning on all branches (fork-friendly)
 on:
   push:
-    branches: ["main"]
+    branches:
+      - '**'  # Run on all branches
   pull_request:
-    branches: ["**"]
+    branches:
+      - '**'
 
 permissions: {}
 
@@ -21,4 +24,4 @@ jobs:
           persist-credentials: false
 
       - name: Run zizmor 🌈
-        uses: zizmorcore/zizmor-action@e639db99335bc9038abc0e066dfcd72e23d26fb4 # v0.3.0
+        uses: zizmorcore/zizmor-action@71321a20a9ded102f6e9ce5718a2fcec2c4f70d8 # v0.5.2

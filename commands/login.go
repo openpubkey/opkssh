@@ -35,9 +35,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/openpubkey/openpubkey/client"
 	"github.com/openpubkey/openpubkey/client/choosers"
+	"github.com/openpubkey/openpubkey/jose"
 	"github.com/openpubkey/openpubkey/oidc"
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/openpubkey/providers"
@@ -69,6 +69,14 @@ func (k KeyType) String() string {
 	}
 }
 
+// DefaultSSHKeyFileNames are the file names ssh key pairs that opkssh may
+// write to in ~/.ssh/ during login. These are used by both login and logout
+// so that if a new key type is added, logout will automatically pick it up.
+var DefaultSSHKeyFileNames = map[KeyType][]string{
+	ECDSA:   {"id_ecdsa", "id_ecdsa_sk"},
+	ED25519: {"id_ed25519", "id_ed25519_sk"},
+}
+
 // LoginCmd represents the login command that performs OIDC authentication and generates SSH certificates.
 type LoginCmd struct {
 	// Inputs
@@ -85,25 +93,32 @@ type LoginCmd struct {
 	ProviderArg           string // OpenID Provider specification in the format: <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes>
 	ProviderAliasArg      string
 	KeyTypeArg            KeyType
+	PrintKeyArg           bool // Print the raw private key and SSH cert to stdout instead of writing them to the filesystem
+	InspectCertArg        bool // Display a human-readable inspection of the generated SSH certificate (public information only)
 	SSHConfigured         bool
-	Verbosity             int                       // Default verbosity is 0, 1 is verbose, 2 is debug
-	overrideProvider      *providers.OpenIdProvider // Used in tests to override the provider to inject a mock provider
+	Verbosity             int // Default verbosity is 0, 1 is verbose, 2 is debug
+	RemoteRedirectURI     string
 
+	overrideProvider *providers.OpenIdProvider // Used in tests to override the provider to inject a mock provider
 	// State
 	Config *config.ClientConfig
 
 	// Outputs
 	pkt        *pktoken.PKToken
 	signer     crypto.Signer
-	alg        jwa.SignatureAlgorithm
+	alg        jose.KeyAlgorithm
 	client     *client.OpkClient
 	principals []string
+
+	// For testing
+	OutWriter io.Writer // Captures non-logged output that would normally be written to stdout
 }
 
 // NewLogin creates a new LoginCmd instance with the provided arguments.
 func NewLogin(autoRefreshArg bool, configPathArg string, createConfigArg bool, configureArg bool, logDirArg string,
 	sendAccessTokenArg bool, disableBrowserOpenArg bool, printIdTokenArg bool,
-	providerArg string, keyPathArg string, providerAliasArg string, keyTypeArg KeyType,
+	providerArg string, printKeyArg bool, keyPathArg string, providerAliasArg string, keyTypeArg KeyType,
+	remoteRedirectUri string, inspectCertArg bool,
 ) *LoginCmd {
 	return &LoginCmd{
 		Fs:                    afero.NewOsFs(),
@@ -117,8 +132,11 @@ func NewLogin(autoRefreshArg bool, configPathArg string, createConfigArg bool, c
 		PrintIdTokenArg:       printIdTokenArg,
 		KeyPathArg:            keyPathArg,
 		ProviderArg:           providerArg,
+		PrintKeyArg:           printKeyArg,
+		InspectCertArg:        inspectCertArg,
 		ProviderAliasArg:      providerAliasArg,
 		KeyTypeArg:            keyTypeArg,
+		RemoteRedirectURI:     remoteRedirectUri,
 	}
 }
 
@@ -344,6 +362,11 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 			return nil, nil, fmt.Errorf("error parsing provider argument: %w", err)
 		}
 
+		if l.RemoteRedirectURI != "" {
+			// Override the remote redirect URI
+			providerConfig.RemoteRedirectURI = l.RemoteRedirectURI
+		}
+
 		if provider, err = providerConfig.ToProvider(openBrowser); err != nil {
 			return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
 		} else {
@@ -385,6 +408,11 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 		if !ok {
 			return nil, nil, fmt.Errorf("error getting provider config for alias %s", defaultProviderAlias)
 		}
+		if l.RemoteRedirectURI != "" {
+			// Override the remote redirect URI
+			providerConfig.RemoteRedirectURI = l.RemoteRedirectURI
+		}
+
 		provider, err = providerConfig.ToProvider(openBrowser)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
@@ -394,6 +422,10 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 		// If the default provider is WEBCHOOSER, we need to create a chooser and return it
 		var providerList []providers.BrowserOpenIdProvider
 		for _, providerConfig := range providerConfigs {
+			if l.RemoteRedirectURI != "" {
+				// Override the remote redirect URI
+				providerConfig.RemoteRedirectURI = l.RemoteRedirectURI
+			}
 			op, err := providerConfig.ToProvider(openBrowser)
 			if err != nil {
 				return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
@@ -411,12 +443,12 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider, printIdToken bool, seckeyPath string) (*LoginCmd, error) {
 	var err error
 
-	var alg jwa.SignatureAlgorithm
+	var alg jose.KeyAlgorithm
 	switch l.KeyTypeArg {
 	case ECDSA:
-		alg = jwa.ES256
+		alg = jose.ES256
 	case ED25519:
-		alg = jwa.EdDSA
+		alg = jose.EdDSA
 	default:
 		return nil, fmt.Errorf("unsupported key type (%s); use -t <%s|%s>", l.KeyTypeArg.String(), ECDSA.String(), ED25519.String())
 	}
@@ -446,16 +478,22 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 		}
 	}
 
-	// If principals is empty the server does not enforce any principal. The OPK
-	// verifier should use policy to make this decision.
-	principals := []string{}
+	// If principals field is empty sshd automatically rejects the SSH certificate.
+	// We use opkssh-wildcard as placeholder so that we can allow the OPK
+	// verifier to make this policy decision instead of sshd.
+	// See https://github.com/openpubkey/opkssh/pull/513
+	principals := []string{"opkssh-wildcard"}
 	certBytes, seckeySshPem, err := createSSHCertWithAccessToken(pkt, accessToken, signer, principals)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate SSH cert: %w", err)
 	}
 
 	// Write ssh secret key and public key to filesystem
-	if seckeyPath != "" {
+	if l.PrintKeyArg {
+		w := l.out()
+		fmt.Fprintln(w, string(certBytes))    // Base64 encoded SSH cert
+		fmt.Fprintln(w, string(seckeySshPem)) // SSH private key in OpenSSH native format
+	} else if seckeyPath != "" {
 		// If we have set seckeyPath then write it there
 		if err := l.writeKeys(seckeyPath, seckeyPath+"-cert.pub", seckeySshPem, certBytes); err != nil {
 			return nil, fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
@@ -477,7 +515,14 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 			return nil, fmt.Errorf("failed to format ID Token: %w", err)
 		}
 
-		fmt.Printf("id_token:\n%s\n", idTokenStr)
+		fmt.Fprintf(l.out(), "id_token:\n%s\n", idTokenStr)
+	}
+
+	if l.InspectCertArg {
+		inspect := NewInspectCmd(string(certBytes), l.out())
+		if err := inspect.Run(); err != nil {
+			return nil, fmt.Errorf("failed to inspect SSH cert: %w", err)
+		}
 	}
 
 	idStr, err := IdentityString(*pkt)
@@ -578,6 +623,13 @@ func (l *LoginCmd) LoginWithRefresh(ctx context.Context, provider providers.Refr
 			}
 		}
 	}
+}
+
+func (l *LoginCmd) out() io.Writer {
+	if l.OutWriter != nil {
+		return l.OutWriter
+	}
+	return os.Stdout
 }
 
 func createSSHCert(pkt *pktoken.PKToken, signer crypto.Signer, principals []string) ([]byte, []byte, error) {
@@ -701,13 +753,8 @@ func (l *LoginCmd) writeKeysToSSHDir(seckeySshPem []byte, certBytes []byte) erro
 	// generated by openpubkey  which we check by looking at the associated
 	// comment. If the comment is equal to "openpubkey", we overwrite the file
 	// with a new key.
-	var keyFileNames []string
-	switch l.KeyTypeArg {
-	case ECDSA:
-		keyFileNames = []string{"id_ecdsa", "id_ecdsa_sk"}
-	case ED25519:
-		keyFileNames = []string{"id_ed25519", "id_ed25519_sk"}
-	default:
+	keyFileNames, ok := DefaultSSHKeyFileNames[l.KeyTypeArg]
+	if !ok {
 		return fmt.Errorf("key type (%s) has no default output file name; use -i <filePath>", l.KeyTypeArg.String())
 	}
 
@@ -818,8 +865,7 @@ Check if your client config (~/.opk/config.yml) has the correct scopes configure
 Sub, issuer, audience:
 %s %s %s`, claims.Subject, claims.Issuer, claims.Audience), nil
 	} else {
-		return fmt.Sprintf(`Email, sub, issuer, audience: 
-%s %s %s %s`, claims.Email, claims.Subject, claims.Issuer, claims.Audience), nil
+		return fmt.Sprintf("Email, sub, issuer, audience: \n%s %s %s %s", claims.Email, claims.Subject, claims.Issuer, claims.Audience), nil
 	}
 }
 
@@ -829,7 +875,7 @@ func PrettyIdToken(pkt pktoken.PKToken) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	idtJson, err := json.MarshalIndent(idt.GetClaims(), "", "    ")
+	idtJson, err := json.MarshalIndent(idt.GetClaims(), "", "  ")
 	if err != nil {
 		return "", err
 	}

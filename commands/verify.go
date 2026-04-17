@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"strings"
 
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/openpubkey/verifier"
@@ -34,7 +35,7 @@ import (
 
 // PolicyEnforcerFunc returns nil if the supplied PK token is permitted to login as
 // username. Otherwise, an error is returned indicating the reason for rejection
-type PolicyEnforcerFunc func(username string, pkt *pktoken.PKToken, userInfo string, sshCert string, keyType string, denyList policy.DenyList) error
+type PolicyEnforcerFunc func(username string, pkt *pktoken.PKToken, userInfo string, sshCert string, keyType string, denyList policy.DenyList, extraArgs []string) error
 
 // VerifyCmd provides functionality to verify OPK tokens contained in SSH
 // certificates and authorize requests to SSH as a specific username using a
@@ -100,7 +101,7 @@ func NewVerifyCmd(pktVerifier verifier.Verifier, checkPolicy PolicyEnforcerFunc,
 // format string is returned (i.e. the expected line to produce on standard
 // output when using sshd's AuthorizedKeysCommand feature). Otherwise, a non-nil
 // error is returned.
-func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, typArg string, certB64Arg string) (string, error) {
+func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, typArg string, certB64Arg string, extraArgs []string) (string, error) {
 	// Parse the b64 pubkey and expect it to be an ssh certificate
 	cert, err := sshcert.NewFromAuthorizedKey(typArg, certB64Arg)
 	if err != nil {
@@ -118,14 +119,25 @@ func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, t
 			}
 		}
 
-		if err := v.CheckPolicy(userArg, pkt, userInfo, certB64Arg, typArg, v.denyList); err != nil {
+		if err := v.CheckPolicy(userArg, pkt, userInfo, certB64Arg, typArg, v.denyList, extraArgs); err != nil {
 			return "", err
 		} else { // Success!
 			// sshd expects the public key in the cert, not the cert itself. This
 			// public key is key of the CA that signs the cert, in our setting there
 			// is no CA.
-			pubkeyBytes := ssh.MarshalAuthorizedKey(cert.SshCert.SignatureKey)
-			return "cert-authority " + string(pubkeyBytes), nil
+			pubkeyBytes := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(cert.SshCert.SignatureKey)))
+
+			principals := strings.Join(cert.SshCert.ValidPrincipals, ",")
+			if principals != "" {
+				// Makes sshd trust the principals in the certificate.
+				// This is needed to emulate a principal wildcard in an SSH cert.
+				// OpenSSH intentionally broke the old way of doing SSH cert principal
+				// wildcards requiring OPKSSH to use this approach instead.
+				// See https://github.com/openpubkey/opkssh/pull/513
+				return fmt.Sprintf("cert-authority,principals=\"%s\" %s", principals, pubkeyBytes), nil
+			}
+
+			return fmt.Sprintf("cert-authority %s", pubkeyBytes), nil
 		}
 	}
 }

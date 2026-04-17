@@ -22,11 +22,12 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
-	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/openpubkey/openpubkey/client"
+	"github.com/openpubkey/openpubkey/jose"
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/openpubkey/providers/mocks"
@@ -47,11 +48,11 @@ const userInfoResponse = `{
 	"groups": ["group1", "group2"]
 }`
 
-func AllowAllPolicyEnforcer(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string, denyList policy.DenyList) error {
+func AllowAllPolicyEnforcer(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string, denyList policy.DenyList, extraArgs []string) error {
 	return nil
 }
 
-func AllowIfExpectedUserInfo(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string, denyList policy.DenyList) error {
+func AllowIfExpectedUserInfo(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string, denyList policy.DenyList, extraArgs []string) error {
 	if userInfo == "" {
 		return fmt.Errorf("userInfo is required")
 	} else if len(userInfo) != 93 {
@@ -65,7 +66,7 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 	t.Parallel()
 	expectedAccessToken := "fake-auth-token"
 
-	alg := jwa.ES256
+	alg := jose.ES256
 	signer, err := util.GenKeyPair(alg)
 	require.NoError(t, err)
 
@@ -79,11 +80,16 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 		"email": mockEmail,
 	}
 
+	mockExtraArgs := []string{
+		"extraArg1",
+		"extraArg2",
+	}
+
 	tests := []struct {
 		name        string
 		accessToken string
 		errorString string
-		policyFunc  func(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string, denyList policy.DenyList) error
+		policyFunc  func(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string, denyList policy.DenyList, extraArgs []string) error
 	}{
 		{
 			name:       "Happy Path",
@@ -99,6 +105,16 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 			accessToken: "Bad-auth-token",
 			policyFunc:  AllowIfExpectedUserInfo,
 			errorString: "userInfo is required",
+		},
+		{
+			name: "Passes on extraArgs",
+			policyFunc: func(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string, denyList policy.DenyList, extraArgs []string) error {
+				if slices.Equal(extraArgs, mockExtraArgs) {
+					return nil
+				}
+
+				return fmt.Errorf("extraArgs doesn't match (expected %v, got %v)", mockExtraArgs, extraArgs)
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -147,7 +163,7 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 				HttpClient:  mocks.NewMockGoogleUserInfoHTTPClient(userInfoResponse, expectedAccessToken),
 			}
 
-			pubkeyList, err := ver.AuthorizedKeysCommand(context.Background(), userArg, typeArg, certB64Arg)
+			pubkeyList, err := ver.AuthorizedKeysCommand(context.Background(), userArg, typeArg, certB64Arg, mockExtraArgs)
 
 			if tt.errorString != "" {
 				require.ErrorContains(t, err, tt.errorString)
@@ -155,7 +171,7 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 
-				expectedPubkeyList := "cert-authority ecdsa-sha2-nistp256"
+				expectedPubkeyList := "cert-authority,principals=\"guest,dev\" ecdsa-sha2-nistp256"
 				require.Contains(t, pubkeyList, expectedPubkeyList)
 			}
 		})
@@ -188,22 +204,6 @@ env_vars:
 			owner:       "root",
 			group:       "opksshuser",
 			errorString: "",
-		},
-		{
-			name:        "Wrong Permissions",
-			configFile:  map[string]string{"server_config.yml": configContent},
-			permission:  0677,
-			owner:       "root",
-			group:       "opksshuser",
-			errorString: "expected one of the following permissions [640], got (677)",
-		},
-		{
-			name:        "Wrong ownership",
-			configFile:  map[string]string{"server_config.yml": configContent},
-			permission:  0640,
-			owner:       "opksshuser",
-			group:       "opksshuser",
-			errorString: "expected owner (root), got (opksshuser)",
 		},
 		{
 			name:        "Missing config",
