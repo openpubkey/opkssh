@@ -90,7 +90,7 @@ type LoginCmd struct {
 	DisableBrowserOpenArg bool   // Disable opening the browser. Useful for choosing the browser you want to use
 	PrintIdTokenArg       bool   // Print out the contents of the id_token. Useful for inspecting claims and troubleshooting
 	KeyPathArg            string // Path where SSH private key is written
-	ProviderArg           string // OpenID Provider specification in the format: <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes>
+	ProviderArg           string // OpenID Provider specification in the format: <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes> or <issuer>,<client_id>,<client_secret>,<scopes>,<auth_flow>
 	ProviderAliasArg      string
 	KeyTypeArg            KeyType
 	PrintKeyArg           bool // Print the raw private key and SSH cert to stdout instead of writing them to the filesystem

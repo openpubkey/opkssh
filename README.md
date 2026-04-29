@@ -416,6 +416,12 @@ or in the rare case that a client secret is required by the OpenID Provider:
 opkssh login --provider="<issuer>,<client_id>,<client_secret>,<scopes>"
 ```
 
+To use OAuth2 client credentials flow (machine identity) with a generic provider such as Keycloak:
+
+```bash
+opkssh login --provider="<issuer>,<client_id>,<client_secret>,<scopes>,client_credentials"
+```
+
 where issuer, client_id and client_secret correspond to the issuer client ID and client secret of the custom OpenID Provider.
 
 For example if the issuer is `https://authentik.local/application/o/opkssh/` and the client ID was `ClientID123`:
@@ -507,8 +513,8 @@ providers:
 
 Instead of using the `opkssh login --provider` flag you can also configure the providers to use with environment variables.
 
-The OPKSSH_PROVIDERS variable follow the standard format with `;` delimiting each provider and `,` delimiting fields with a provider for instance:
-`{alias},{issuer},{client_id},{client_secret},{scope};{alias},{issuer},{client_id},{client_secret},{scope}...`
+The OPKSSH_PROVIDERS variable follows the standard format with `;` delimiting each provider and `,` delimiting fields with a provider for instance:
+`{alias},{issuer},{client_id},{client_secret},{scope},{auth_flow};{alias},{issuer},{client_id},{client_secret},{scope},{auth_flow}...`
 
 You can set them in your [`.bashrc` file](https://www.gnu.org/software/bash/manual/html_node/Bash-Startup-Files.html) so you don't have to type custom settings each time you run `opkssh login`.
 
@@ -516,6 +522,7 @@ You can set them in your [`.bashrc` file](https://www.gnu.org/software/bash/manu
 export OPKSSH_DEFAULT=WEBCHOOSER
 export OPKSSH_PROVIDERS=google,https://accounts.google.com,206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com,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;microsoft,https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0,096ce0a3-5e72-4da8-9c86-12924b294a01;gitlab,https://gitlab.com,8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923
 export OPKSSH_PROVIDERS=$OPKSSH_PROVIDERS;authentik,https://authentik.io/application/o/opkssh/,client_id,,openid profile email
+export OPKSSH_PROVIDERS=$OPKSSH_PROVIDERS;keycloak-ci,https://keycloak.example.com/realms/myrealm,opkssh-client,replace-with-real-secret,openid,client_credentials
 ```
 
 The OPKSSH_DEFAULT can be set to one of the provider's alias to set the default provider to use when running `opkssh login`.

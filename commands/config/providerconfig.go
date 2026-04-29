@@ -37,6 +37,7 @@ type ProviderConfig struct {
 	ClientID     string   `yaml:"client_id"`
 	ClientSecret string   `yaml:"client_secret,omitempty"`
 	Scopes       []string `yaml:"scopes"`
+	AuthFlow     string   `yaml:"auth_flow,omitempty"`
 	AccessType   string   `yaml:"access_type,omitempty"`
 	Prompt       string   `yaml:"prompt,omitempty"`
 	RedirectURIs []string `yaml:"redirect_uris"`
@@ -56,6 +57,7 @@ func (p *ProviderConfig) UnmarshalYAML(value *yaml.Node) error {
 		ClientID     string   `yaml:"client_id"`
 		ClientSecret string   `yaml:"client_secret"`
 		Scopes       string   `yaml:"scopes"`
+		AuthFlow     string   `yaml:"auth_flow"`
 		AccessType   string   `yaml:"access_type"`
 		Prompt       string   `yaml:"prompt"`
 		RedirectURIs []string `yaml:"redirect_uris"`
@@ -68,6 +70,7 @@ func (p *ProviderConfig) UnmarshalYAML(value *yaml.Node) error {
 
 	// Set default values
 	tmp.Scopes = "openid profile email"
+	tmp.AuthFlow = "authorization_code"
 	tmp.AccessType = "offline"
 	tmp.Prompt = "consent"
 	tmp.RedirectURIs = []string{
@@ -85,6 +88,7 @@ func (p *ProviderConfig) UnmarshalYAML(value *yaml.Node) error {
 		ClientID:          tmp.ClientID,
 		ClientSecret:      tmp.ClientSecret,
 		Scopes:            strings.Fields(tmp.Scopes),
+		AuthFlow:          tmp.AuthFlow,
 		AccessType:        tmp.AccessType,
 		Prompt:            tmp.Prompt,
 		RedirectURIs:      tmp.RedirectURIs,
@@ -102,6 +106,7 @@ func DefaultProviderConfig() ProviderConfig {
 		ClientID:     "",
 		ClientSecret: "",
 		Scopes:       []string{"openid", "email"},
+		AuthFlow:     "authorization_code",
 		AccessType:   "offline",
 		RedirectURIs: []string{
 			"http://localhost:3000/login-callback",
@@ -122,7 +127,7 @@ func GitHubProviderConfig() ProviderConfig {
 }
 
 // NewProviderConfigFromString is a function to create the provider config from a string of the format
-// {alias},{provider_url},{client_id},{client_secret},{scopes}
+// {alias},{provider_url},{client_id},{client_secret},{scopes},{auth_flow}
 func NewProviderConfigFromString(configStr string, hasAlias bool) (ProviderConfig, error) {
 	parts := strings.Split(configStr, ",")
 	alias := ""
@@ -133,9 +138,9 @@ func NewProviderConfigFromString(configStr string, hasAlias bool) (ProviderConfi
 	}
 	if len(parts) < 2 {
 		if hasAlias {
-			return ProviderConfig{}, fmt.Errorf("invalid provider config string. Expected format <alias>,<issuer>,<client_id> or <alias>,<issuer>,<client_id>,<client_secret> or <alias>,<issuer>,<client_id>,<client_secret>,<scopes>")
+			return ProviderConfig{}, fmt.Errorf("invalid provider config string. Expected format <alias>,<issuer>,<client_id> or <alias>,<issuer>,<client_id>,<client_secret> or <alias>,<issuer>,<client_id>,<client_secret>,<scopes> or <alias>,<issuer>,<client_id>,<client_secret>,<scopes>,<auth_flow>")
 		}
-		return ProviderConfig{}, fmt.Errorf("invalid provider config string. Expected format <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes>")
+		return ProviderConfig{}, fmt.Errorf("invalid provider config string. Expected format <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes> or <issuer>,<client_id>,<client_secret>,<scopes>,<auth_flow>")
 	}
 
 	providerConfig := DefaultProviderConfig()
@@ -157,6 +162,27 @@ func NewProviderConfigFromString(configStr string, hasAlias bool) (ProviderConfi
 		providerConfig.Scopes = strings.Split(parts[3], " ")
 	} else {
 		providerConfig.Scopes = []string{"openid", "email"}
+	}
+
+	if len(parts) > 4 {
+		extraField := strings.TrimSpace(parts[4])
+		if extraField != "" {
+			if strings.Contains(extraField, " ") {
+				// Backward compatibility for strings that accidentally had one extra comma
+				// before the scopes field, e.g. issuer,client_id,,,openid profile email.
+				if strings.TrimSpace(parts[3]) == "" {
+					providerConfig.Scopes = strings.Split(extraField, " ")
+				} else {
+					providerConfig.AuthFlow = extraField
+				}
+			} else {
+				providerConfig.AuthFlow = extraField
+			}
+		}
+	}
+
+	if err := providerConfig.validateAuthFlow(); err != nil {
+		return ProviderConfig{}, err
 	}
 
 	if strings.HasPrefix(providerConfig.Issuer, "https://accounts.google.com") {
@@ -186,6 +212,21 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 	if p.ClientID == "" {
 		return nil, fmt.Errorf("invalid provider client-ID value got (%s)", p.ClientID)
 	}
+
+	if err := p.validateAuthFlow(); err != nil {
+		return nil, err
+	}
+
+	if p.isClientCredentialsFlow() {
+		if strings.HasPrefix(p.Issuer, "https://accounts.google.com") ||
+			strings.HasPrefix(p.Issuer, "https://login.microsoftonline.com") ||
+			strings.HasPrefix(p.Issuer, "https://gitlab.com") ||
+			p.Issuer == "https://issuer.hello.coop" ||
+			strings.HasPrefix(p.Issuer, "https://token.actions.githubusercontent.com") {
+			return nil, fmt.Errorf("client credentials flow is only supported for generic providers (for example keycloak) and not provider shortcuts")
+		}
+	}
+
 	var provider providers.OpenIdProvider
 
 	if strings.HasPrefix(p.Issuer, "https://accounts.google.com") {
@@ -259,15 +300,31 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 		opts.AccessType = p.AccessType
 		opts.RedirectURIs = p.RedirectURIs
 		opts.RemoteRedirectURI = p.RemoteRedirectURI
-		opts.GQSign = false
+		opts.ClientCredentialsFlow = p.isClientCredentialsFlow()
+		opts.GQSign = p.isClientCredentialsFlow()
 		if p.hasScopes() {
 			opts.Scopes = p.Scopes
 		}
-		opts.OpenBrowser = openBrowser
+		opts.OpenBrowser = openBrowser && !opts.ClientCredentialsFlow
+		if opts.ClientCredentialsFlow && opts.ClientSecret == "" {
+			return nil, fmt.Errorf("client credentials flow requires client_secret")
+		}
 		provider = providers.NewStandardOpWithOptions(opts)
 	}
 
 	return provider, nil
+}
+
+func (p *ProviderConfig) isClientCredentialsFlow() bool {
+	return strings.EqualFold(p.AuthFlow, "client_credentials")
+}
+
+func (p *ProviderConfig) validateAuthFlow() error {
+	flow := strings.TrimSpace(p.AuthFlow)
+	if flow == "" || strings.EqualFold(flow, "authorization_code") || strings.EqualFold(flow, "client_credentials") {
+		return nil
+	}
+	return fmt.Errorf("invalid auth_flow value (%s). Supported values are authorization_code or client_credentials", p.AuthFlow)
 }
 
 func (p *ProviderConfig) hasScopes() bool {
@@ -276,7 +333,7 @@ func (p *ProviderConfig) hasScopes() bool {
 
 // GetProvidersConfigFromEnv is a function to retrieve the config from the env variables
 // OPKSSH_DEFAULT can be set to an alias
-// OPKSSH_PROVIDERS is a ; separated list of providers of the format <alias>,<issuer>,<client_id>,<client_secret>,<scopes>;<alias>,<issuer>,<client_id>,<client_secret>,<scopes>
+// OPKSSH_PROVIDERS is a ; separated list of providers of the format <alias>,<issuer>,<client_id>,<client_secret>,<scopes>,<auth_flow>;<alias>,<issuer>,<client_id>,<client_secret>,<scopes>,<auth_flow>
 func GetProvidersConfigFromEnv() ([]ProviderConfig, error) {
 	// Get the providers from the env variable
 	providerList, ok := os.LookupEnv(OPKSSH_PROVIDERS_ENVVAR)

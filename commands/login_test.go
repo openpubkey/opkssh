@@ -443,7 +443,9 @@ func TestDetermineProvider(t *testing.T) {
 					require.NotNil(t, chooser.OpList, "Chooser OpList should not be nil")
 					jsonBytes, err := json.Marshal(chooser.OpList)
 					require.NoError(t, err)
-					require.Equal(t, tt.wantChooser, string(jsonBytes))
+					actualChooser := strings.ReplaceAll(string(jsonBytes), "\"ClientCredentialsFlow\":false,", "")
+					expectedChooser := strings.ReplaceAll(tt.wantChooser, "\"ClientCredentialsFlow\":false,", "")
+					require.Equal(t, expectedChooser, actualChooser)
 				}
 
 			}
