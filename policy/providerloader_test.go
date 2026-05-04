@@ -109,6 +109,32 @@ func TestProviderPolicy_CreateVerifier_Gitlab(t *testing.T) {
 	require.NotNil(t, ver)
 }
 
+func TestProviderPolicy_CreateVerifier_GenericClientCredentials(t *testing.T) {
+	policy := &ProviderPolicy{}
+	policy.AddRow(ProvidersRow{
+		Issuer:           "https://keycloak.example.com/realms/test",
+		ClientID:         "test-client",
+		ExpirationPolicy: "24h",
+		AuthFlow:         "client_credentials",
+	})
+	ver, err := policy.CreateVerifier()
+	require.NoError(t, err)
+	require.NotNil(t, ver)
+}
+
+func TestProviderPolicy_CreateVerifier_InvalidAuthFlow(t *testing.T) {
+	policy := &ProviderPolicy{}
+	policy.AddRow(ProvidersRow{
+		Issuer:           "https://keycloak.example.com/realms/test",
+		ClientID:         "test-client",
+		ExpirationPolicy: "24h",
+		AuthFlow:         "gq_bound",
+	})
+	ver, err := policy.CreateVerifier()
+	require.ErrorContains(t, err, "invalid auth flow")
+	require.Nil(t, ver)
+}
+
 // Test ProviderPolicy.CreateVerifier with an invalid expiration policy.
 func TestProviderPolicy_CreateVerifier_InvalidExpiration(t *testing.T) {
 	policy := &ProviderPolicy{}
@@ -159,6 +185,23 @@ func TestProvidersFileLoader_FromTable(t *testing.T) {
 		row3.ExpirationPolicy != "12h" {
 		t.Error("third row does not match expected values")
 	}
+}
+
+func TestProvidersFileLoader_FromTable_WithAuthFlow(t *testing.T) {
+	input := []byte("https://keycloak.example.com/realms/test test-client 24h client_credentials\n")
+	loader := ProvidersFileLoader{}
+	policy := loader.FromTable(input, "dummy-path")
+	require.Equal(t, 1, len(policy.rows))
+	require.Equal(t, "client_credentials", policy.rows[0].AuthFlow)
+}
+
+func TestProvidersFileLoader_FromTable_DefaultAuthFlow(t *testing.T) {
+	input := []byte("https://keycloak.example.com/realms/test test-client 24h\n")
+	loader := ProvidersFileLoader{}
+	policy := loader.FromTable(input, "dummy-path")
+	require.Equal(t, 1, len(policy.rows))
+	require.Equal(t, "authorization_code", policy.rows[0].AuthFlow)
+	require.False(t, policy.rows[0].UsesGQCommitment())
 }
 
 // Test ProvidersFileLoader.ToTable.

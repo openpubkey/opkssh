@@ -27,6 +27,7 @@ The client config can be used to configure the following values:
 
 - **providers** This allows you to configure all the OpenID Providers you wish to use. See example below.
   - **send_access_token** Is a boolean value scoped to a particular provider. It determines if opkssh should put the user's access token into the SSH public key (SSH Certificate). This is useful for allowing the opkssh verifier to read claims not available in the ID Token that can only be read from the OpenID Provider's [userinfo endpoint](https://openid.net/specs/openid-connect-core-1_0.html#UserInfo). The opkssh verifier on the SSH server will use the access token to make a call to the OpenID Provider's userinfo endpoint. Configuration option false by default as SSH will send SSH Public Keys to any host you are attempting to SSH into. Before setting this to true carefully consider the security implications of including the access token in the SSH Public key.
+  - **auth_flow** Optional. Supported values are `authorization_code` (default) and `client_credentials`. Use `client_credentials` for machine identities on generic providers (for example Keycloak). This requires a `client_secret` and enables GQ-bound tokens.
 
 ```yaml
 ---
@@ -57,6 +58,13 @@ providers:
       - http://localhost:3000/login-callback
       - http://localhost:10001/login-callback
       - http://localhost:11110/login-callback
+
+  - alias: keycloak-ci
+    issuer: https://keycloak.example.com/realms/myrealm
+    client_id: opkssh-client
+    client_secret: replace-with-real-secret
+    scopes: openid
+    auth_flow: client_credentials
 
 
 ```

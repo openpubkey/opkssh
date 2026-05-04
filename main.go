@@ -169,11 +169,11 @@ Login generates a key pair, then opens a browser to authenticate the user with t
 
 Users can then SSH into servers configured to use opkssh as the AuthorizedKeysCommand. The server verifies the PK token and grants access if the token is valid and the user is authorized per the auth_id policy.
 Arguments:
-  alias      The provider alias to use. If not specified, the OPKSSH_DEFAULT provider will be used. The aliases are defined by the OPKSSH_PROVIDERS environment variable. The format is <alias>,<issuer>,<client_id>,<client_secret>,<scopes>
+	alias      The provider alias to use. If not specified, the OPKSSH_DEFAULT provider will be used. The aliases are defined by the OPKSSH_PROVIDERS environment variable. The format is <alias>,<issuer>,<client_id>,<client_secret>,<scopes>,<auth_flow>
 `,
 		Example: `  opkssh login
   opkssh login google
-  opkssh login --provider=<issuer>,<client_id>,<client_secret>,<scopes>`,
+	opkssh login --provider=<issuer>,<client_id>,<client_secret>,<scopes>,<auth_flow>`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -214,7 +214,7 @@ Arguments:
 	loginCmd.Flags().BoolVar(&disableBrowserOpenArg, "disable-browser-open", false, "Set this flag to disable opening the browser. Useful for choosing the browser you want to use")
 	loginCmd.Flags().BoolVar(&printIdTokenArg, "print-id-token", false, "Set this flag to print out the contents of the id_token. Useful for inspecting claims")
 	loginCmd.Flags().BoolVar(&sendAccessTokenArg, "send-access-token", false, "Set this flag to send the Access Token as well as the PK Token in the SSH cert. The Access Token is used to call the userinfo endpoint to get claims not included in the ID Token")
-	loginCmd.Flags().StringVar(&providerArg, "provider", "", "OpenID Provider specification in the format: <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes>")
+	loginCmd.Flags().StringVar(&providerArg, "provider", "", "OpenID Provider specification in the format: <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes> or <issuer>,<client_id>,<client_secret>,<scopes>,<auth_flow>")
 	loginCmd.Flags().BoolVarP(&printKeyArg, "print-key", "p", false, "Print the raw private key and SSH cert to stdout instead of writing them to the filesystem")
 	loginCmd.Flags().BoolVar(&inspectCertArg, "inspect-cert", false, "Print a human-readable inspection of the generated SSH certificate (public information only)")
 	loginCmd.Flags().BoolVarP(&verboseArg, "verbose", "v", false, "Enable verbose output")

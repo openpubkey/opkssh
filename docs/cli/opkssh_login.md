@@ -10,7 +10,7 @@ Login generates a key pair, then opens a browser to authenticate the user with t
 
 Users can then SSH into servers configured to use opkssh as the AuthorizedKeysCommand. The server verifies the PK token and grants access if the token is valid and the user is authorized per the auth_id policy.
 Arguments:
-  alias      The provider alias to use. If not specified, the OPKSSH_DEFAULT provider will be used. The aliases are defined by the OPKSSH_PROVIDERS environment variable. The format is <alias>,<issuer>,<client_id>,<client_secret>,<scopes>
+  alias      The provider alias to use. If not specified, the OPKSSH_DEFAULT provider will be used. The aliases are defined by the OPKSSH_PROVIDERS environment variable. The format is <alias>,<issuer>,<client_id>,<client_secret>,<scopes>,<auth_flow>
 
 
 ```
@@ -22,7 +22,7 @@ opkssh login [alias] [flags]
 ```
   opkssh login
   opkssh login google
-  opkssh login --provider=<issuer>,<client_id>,<client_secret>,<scopes>
+  opkssh login --provider=<issuer>,<client_id>,<client_secret>,<scopes>,<auth_flow>
 ```
 
 ### Options
@@ -40,7 +40,7 @@ opkssh login [alias] [flags]
       --print-id-token               Set this flag to print out the contents of the id_token. Useful for inspecting claims
   -p, --print-key                    Print the raw private key and SSH cert to stdout instead of writing them to the filesystem
   -i, --private-key-file string      Path where private keys is written
-      --provider string              OpenID Provider specification in the format: <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes>
+      --provider string              OpenID Provider specification in the format: <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes> or <issuer>,<client_id>,<client_secret>,<scopes>,<auth_flow>
       --remote-redirect-uri string   Remote redirect URI used for non-localhost redirects. This is an advanced option for embedding opkssh in server-side logic.
       --send-access-token            Set this flag to send the Access Token as well as the PK Token in the SSH cert. The Access Token is used to call the userinfo endpoint to get claims not included in the ID Token
   -v, --verbose                      Enable verbose output
