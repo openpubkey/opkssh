@@ -8,6 +8,7 @@ permissions: {}
 
 jobs:
   goreleaser-release:
+    if: github.repository == 'openpubkey/opkssh'
     name: Build and release opkssh with GoReleaser
     runs-on: ubuntu-24.04
     permissions:
@@ -23,7 +24,6 @@ jobs:
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
           go-version-file: 'go.mod'
-          cache: false
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29 # v7.0.0
         with:

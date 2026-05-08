@@ -1,15 +1,25 @@
 name: GitHub Actions Security Analysis with zizmor 🌈
 
-# Run security scanning on all branches (fork-friendly)
+# Run security scanning only when workflow automation changes.
 on:
   push:
     branches:
       - '**'  # Run on all branches
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
   pull_request:
     branches:
       - '**'
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
 
 permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   zizmor:
