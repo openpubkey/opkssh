@@ -15,7 +15,7 @@ opkssh client provider list [flags]
 ### Options
 
 ```
-      --config-path string   Path to the client config file. Default: ~/.opk/config.yml on linux and %APPDATA%\.opk\config.yml on windows.
+      --config-path string   Path to the client config file. Default: ~/.opk/config.yml on linux and %USERPROFILE%\.opk\config.yml on windows.
   -h, --help                 help for list
 ```
 
