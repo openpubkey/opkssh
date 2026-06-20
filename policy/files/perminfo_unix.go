@@ -36,13 +36,13 @@ var RequiredPerms = struct {
 	Config PermInfo
 	// PluginsDir is the directory containing policy plugin definitions
 	// (e.g. /etc/opk/policy.d).
-        // As this is read by "opkssh verify" running as user "opksshuser"
-        // the group needs to be "opksshuser". Empty "Group" defaults to "root"
+	// As this is read by "opkssh verify" running as user "opksshuser"
+	// the group needs to be "opksshuser". Empty "Group" defaults to "root"
 	PluginsDir PermInfo
 	// PluginFile is an individual plugin YAML file inside the plugins
 	// directory.
-        // As this is read by "opkssh verify" running as user "opksshuser"
-        // the group needs to be "opksshuser". Empty "Group" defaults to "root"
+	// As this is read by "opkssh verify" running as user "opksshuser"
+	// the group needs to be "opksshuser". Empty "Group" defaults to "root"
 	PluginFile PermInfo
 }{
 	SystemPolicy: PermInfo{
