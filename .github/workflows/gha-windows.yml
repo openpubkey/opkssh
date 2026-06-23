@@ -32,8 +32,21 @@ jobs:
     steps:
     - name: Install OpenSSH Server
       run: |
+        # 1. Ensure the Windows Update service is allowed to run
+        Set-Service -Name wuauserv -StartupType Manual
+        
+        # 2. Force Windows Update to bypass any local WSUS and hit Microsoft directly
+        $auPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU"
+        if (!(Test-Path $auPath)) { 
+            New-Item -Path $auPath -Force | Out-Null 
+        }
+        Set-ItemProperty -Path $auPath -Name "UseWUServer" -Value 0
+        
+        # 3. Restart the service to apply changes
+        Restart-Service -Name wuauserv -Force
+        
+        # 4. Install the OpenSSH Server capability
         Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
-    
     - name: Create default OpenSSH config files
       run: |
         Start-Service sshd
