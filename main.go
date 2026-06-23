@@ -158,6 +158,7 @@ Arguments:
 	var keyPathArg string
 	var keyTypeArg commands.KeyType
 	var remoteRedirectURIArg string
+	var principalsArg []string
 
 	loginCmd := &cobra.Command{
 		SilenceUsage: true,
@@ -195,7 +196,7 @@ Arguments:
 
 			login := commands.NewLogin(autoRefreshArg, configPathArg, createConfigArg, configureArg, logDirArg,
 				sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, printKeyArg, keyPathArg,
-				providerAliasArg, keyTypeArg, remoteRedirectURIArg, inspectCertArg)
+				providerAliasArg, keyTypeArg, remoteRedirectURIArg, inspectCertArg, principalsArg)
 			if err := login.Run(ctx); err != nil {
 				log.Println("Error executing login command:", err)
 				return err
@@ -221,6 +222,7 @@ Arguments:
 	loginCmd.Flags().StringVarP(&keyPathArg, "private-key-file", "i", "", "Path where private keys is written")
 	loginCmd.Flags().StringVar(&remoteRedirectURIArg, "remote-redirect-uri", "", "Remote redirect URI used for non-localhost redirects. This is an advanced option for embedding opkssh in server-side logic.")
 	loginCmd.Flags().VarP(enumflag.New(&keyTypeArg, "Key Type", map[commands.KeyType][]string{commands.ECDSA: {commands.ECDSA.String()}, commands.ED25519: {commands.ED25519.String()}}, enumflag.EnumCaseInsensitive), "key-type", "t", "Type of key to generate")
+	loginCmd.Flags().StringSliceVar(&principalsArg, "principals", nil, "Comma separated list of principals to include in the generated SSH certificate. If not specified it will work for any principal. Do not use unless you know what you are doing.")
 	rootCmd.AddCommand(loginCmd)
 
 	var logoutKeyPathArg string
