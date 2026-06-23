@@ -98,17 +98,17 @@ type LoginCmd struct {
 	SSHConfigured         bool
 	Verbosity             int // Default verbosity is 0, 1 is verbose, 2 is debug
 	RemoteRedirectURI     string
+	PrincipalsArg         []string // The principals that will be included in the generated SSH cert. If not specified, it functions as a wildcard and will work for any principals.
 
 	overrideProvider *providers.OpenIdProvider // Used in tests to override the provider to inject a mock provider
 	// State
 	Config *config.ClientConfig
 
 	// Outputs
-	pkt        *pktoken.PKToken
-	signer     crypto.Signer
-	alg        jose.KeyAlgorithm
-	client     *client.OpkClient
-	principals []string
+	pkt    *pktoken.PKToken
+	signer crypto.Signer
+	alg    jose.KeyAlgorithm
+	client *client.OpkClient
 
 	// For testing
 	OutWriter io.Writer // Captures non-logged output that would normally be written to stdout
@@ -118,7 +118,7 @@ type LoginCmd struct {
 func NewLogin(autoRefreshArg bool, configPathArg string, createConfigArg bool, configureArg bool, logDirArg string,
 	sendAccessTokenArg bool, disableBrowserOpenArg bool, printIdTokenArg bool,
 	providerArg string, printKeyArg bool, keyPathArg string, providerAliasArg string, keyTypeArg KeyType,
-	remoteRedirectUri string, inspectCertArg bool,
+	remoteRedirectUri string, inspectCertArg bool, principalsArg []string,
 ) *LoginCmd {
 	return &LoginCmd{
 		Fs:                    afero.NewOsFs(),
@@ -137,6 +137,7 @@ func NewLogin(autoRefreshArg bool, configPathArg string, createConfigArg bool, c
 		ProviderAliasArg:      providerAliasArg,
 		KeyTypeArg:            keyTypeArg,
 		RemoteRedirectURI:     remoteRedirectUri,
+		PrincipalsArg:         principalsArg,
 	}
 }
 
@@ -478,10 +479,15 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 		}
 	}
 
-	// If principals is empty the server does not enforce any principal. The OPK
-	// verifier should use policy to make this decision.
-	principals := []string{}
-	certBytes, seckeySshPem, err := createSSHCertWithAccessToken(pkt, accessToken, signer, principals)
+	if l.PrincipalsArg == nil {
+		// If principals field is empty sshd automatically rejects the SSH certificate.
+		// We use opkssh-wildcard as placeholder so that we can allow the OPK
+		// verifier to make this policy decision instead of sshd.
+		// See https://github.com/openpubkey/opkssh/pull/513
+		l.PrincipalsArg = []string{"opkssh-wildcard"}
+	}
+
+	certBytes, seckeySshPem, err := createSSHCertWithAccessToken(pkt, accessToken, signer, l.PrincipalsArg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate SSH cert: %w", err)
 	}
@@ -530,11 +536,11 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 	fmt.Printf("Keys generated for identity\n%s\n", idStr)
 
 	return &LoginCmd{
-		pkt:        pkt,
-		signer:     signer,
-		client:     opkClient,
-		alg:        alg,
-		principals: principals,
+		pkt:           pkt,
+		signer:        signer,
+		client:        opkClient,
+		alg:           alg,
+		PrincipalsArg: l.PrincipalsArg,
 	}, nil
 }
 
@@ -587,7 +593,7 @@ func (l *LoginCmd) LoginWithRefresh(ctx context.Context, provider providers.Refr
 				}
 			}
 
-			certBytes, seckeySshPem, err := createSSHCertWithAccessToken(loginResult.pkt, accessToken, loginResult.signer, loginResult.principals)
+			certBytes, seckeySshPem, err := createSSHCertWithAccessToken(loginResult.pkt, accessToken, loginResult.signer, loginResult.PrincipalsArg)
 			if err != nil {
 				return fmt.Errorf("failed to generate SSH cert: %w", err)
 			}
