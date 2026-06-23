@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"strings"
 
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/openpubkey/verifier"
@@ -124,8 +125,19 @@ func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, t
 			// sshd expects the public key in the cert, not the cert itself. This
 			// public key is key of the CA that signs the cert, in our setting there
 			// is no CA.
-			pubkeyBytes := ssh.MarshalAuthorizedKey(cert.SshCert.SignatureKey)
-			return "cert-authority " + string(pubkeyBytes), nil
+			pubkeyBytes := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(cert.SshCert.SignatureKey)))
+
+			principals := strings.Join(cert.SshCert.ValidPrincipals, ",")
+			if principals != "" {
+				// Makes sshd trust the principals in the certificate.
+				// This is needed to emulate a principal wildcard in an SSH cert.
+				// OpenSSH intentionally broke the old way of doing SSH cert principal
+				// wildcards requiring OPKSSH to use this approach instead.
+				// See https://github.com/openpubkey/opkssh/pull/513
+				return fmt.Sprintf("cert-authority,principals=\"%s\" %s", principals, pubkeyBytes), nil
+			}
+
+			return fmt.Sprintf("cert-authority %s", pubkeyBytes), nil
 		}
 	}
 }

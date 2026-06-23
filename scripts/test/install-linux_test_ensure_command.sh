@@ -58,6 +58,7 @@ test_ensure_command_missing_redhat_with_dnf() {
     mock_command_exists=false
     # Also mock dnf existence
     # shellcheck disable=2317
+    # shellcheck disable=2329
     command() {
         if [[ "$1" == "-v" && "$2" == "dnf" ]]; then
             return 0  # dnf exists
@@ -79,6 +80,7 @@ test_ensure_command_missing_redhat_without_dnf() {
     mock_command_exists=false
     # Also mock dnf existence
     # shellcheck disable=2317
+    # shellcheck disable=2329
     command() {
         if [[ "$1" == "-v" && "$2" == "dnf" ]]; then
             return 1  # dnf is missing
