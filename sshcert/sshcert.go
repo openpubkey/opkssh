@@ -34,13 +34,6 @@ type SshCertSmuggler struct {
 }
 
 func New(pkt *pktoken.PKToken, accessToken []byte, principals []string) (*SshCertSmuggler, error) {
-	if principals == nil {
-		// If principals field is empty sshd automatically rejects the SSH certificate.
-		// We use opkssh-wildcard as placeholder so that we can allow the OPK
-		// verifier to make this policy decision instead of sshd.
-		// See https://github.com/openpubkey/opkssh/pull/513
-		principals = []string{"opkssh-wildcard"}
-	}
 
 	// TODO: assumes email exists in ID Token,
 	// this will break for OPs like Azure that do not have email as a claim

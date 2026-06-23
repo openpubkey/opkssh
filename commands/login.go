@@ -479,6 +479,14 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 		}
 	}
 
+	if l.PrincipalsArg == nil {
+		// If principals field is empty sshd automatically rejects the SSH certificate.
+		// We use opkssh-wildcard as placeholder so that we can allow the OPK
+		// verifier to make this policy decision instead of sshd.
+		// See https://github.com/openpubkey/opkssh/pull/513
+		l.PrincipalsArg = []string{"opkssh-wildcard"}
+	}
+
 	certBytes, seckeySshPem, err := createSSHCertWithAccessToken(pkt, accessToken, signer, l.PrincipalsArg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate SSH cert: %w", err)
@@ -528,10 +536,11 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 	fmt.Printf("Keys generated for identity\n%s\n", idStr)
 
 	return &LoginCmd{
-		pkt:    pkt,
-		signer: signer,
-		client: opkClient,
-		alg:    alg,
+		pkt:           pkt,
+		signer:        signer,
+		client:        opkClient,
+		alg:           alg,
+		PrincipalsArg: l.PrincipalsArg,
 	}, nil
 }
 
