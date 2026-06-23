@@ -156,6 +156,39 @@ func TestLoginCmd(t *testing.T) {
 			wantError: false,
 		},
 		{
+			name:    "Good path PrincipalsArg set to nil",
+			envVars: map[string]string{},
+			loginCmd: LoginCmd{
+				Verbosity:     0,
+				PrintKeyArg:   true,
+				LogDirArg:     logDir,
+				PrincipalsArg: nil,
+			},
+			wantError: false,
+		},
+		{
+			name:    "Good path PrincipalsArg set to empty",
+			envVars: map[string]string{},
+			loginCmd: LoginCmd{
+				Verbosity:     0,
+				PrintKeyArg:   true,
+				LogDirArg:     logDir,
+				PrincipalsArg: []string{},
+			},
+			wantError: false,
+		},
+		{
+			name:    "Good path PrincipalsArg set to specific principals",
+			envVars: map[string]string{},
+			loginCmd: LoginCmd{
+				Verbosity:     0,
+				PrintKeyArg:   true,
+				LogDirArg:     logDir,
+				PrincipalsArg: []string{"alice", "bob", "root"},
+			},
+			wantError: false,
+		},
+		{
 			name:    "Good path InspectCert",
 			envVars: map[string]string{},
 			loginCmd: LoginCmd{
@@ -275,6 +308,16 @@ func TestLoginCmd(t *testing.T) {
 					}
 					certSmug, err := sshcert.NewFromAuthorizedKey("fake-cert-type", string(pubKeyBytes))
 					require.NoError(t, err)
+
+					if tt.loginCmd.PrincipalsArg == nil {
+						// We use the wildcard principal when PrincipalsArg is nil
+						require.Equal(t, []string{"opkssh-wildcard"}, certSmug.SshCert.ValidPrincipals)
+					} else if len(tt.loginCmd.PrincipalsArg) == 0 {
+						// A list of length 0 gets deserialized as nil in an sshCert
+						require.Nil(t, certSmug.SshCert.ValidPrincipals)
+					} else {
+						require.Equal(t, tt.loginCmd.PrincipalsArg, certSmug.SshCert.ValidPrincipals)
+					}
 
 					accToken := certSmug.GetAccessToken()
 					if tt.wantAccessToken {
@@ -466,9 +509,10 @@ func TestNewLogin(t *testing.T) {
 	keyAsOutputArg := false
 	keyTypeArg := ECDSA
 	remoteRedirectURIArg := ""
+	var principalsDesired []string = nil
 
 	loginCmd := NewLogin(autoRefresh, configPathArg, createConfig, configureArg, logDir,
-		sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, keyAsOutputArg, keyPathArg, providerAlias, keyTypeArg, remoteRedirectURIArg, false)
+		sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, keyAsOutputArg, keyPathArg, providerAlias, keyTypeArg, remoteRedirectURIArg, false, principalsDesired)
 	require.NotNil(t, loginCmd)
 }
 
