@@ -40,6 +40,25 @@ Exit Code: 0 (no issues detected)
 * The audit command currently only checks server side configurations. It does not report on client-side configurations.
 * The audit command does not currently support checking [policy plugins](policyplugins.m) or openssh server config (`sshd_config`).
 
+## audit vs permissions
+
+The `opkssh audit` and `opkssh permissions` commands are related but serve different purposes:
+
+| | `opkssh audit` | `opkssh permissions check` |
+|---|---|---|
+| **Purpose** | Validate policy file *contents* against provider definitions | Check and *fix* filesystem permissions/ACLs |
+| **Focus** | Are issuers valid? Do entries match providers? | Are file modes, ownership and ACLs correct? |
+| **User home dirs** | Enumerates and audits all user `~/.opk/auth_id` files | Does **not** check user policy files |
+| **Modifies files** | Never (read-only) | `permissions fix` can repair permissions |
+| **Output** | Human-readable table or JSON (`--json`) | Problem list or planned actions |
+
+**When to use which:**
+
+* **`opkssh audit`** — Run after editing policy or provider files to verify the configuration is correct. Also useful for generating a JSON report for bug reports.
+* **`opkssh permissions check`** — Run after installation or upgrades to verify that file permissions and ACLs are correct. If problems are found, run `opkssh permissions fix` to repair them.
+
+Both commands check the permissions on the system policy file (`/etc/opk/auth_id` on Linux, `%ProgramData%\opk\auth_id` on Windows) using the same shared logic, so their permission-related findings will be consistent.
+
 ## JSON output
 
 To get the full audit report use the `--json` flag:

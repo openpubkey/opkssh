@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"path"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -84,6 +85,10 @@ func CreateAuthIdFile(t *testing.T, container testcontainers.Container, filePath
 }
 
 func TestAdd(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Docker-based integration tests are not supported on Windows")
+	}
+
 	// Test adding an allowed principal to an opkssh policy
 	issuer := fmt.Sprintf("http://oidc.local:%s/", issuerPort)
 

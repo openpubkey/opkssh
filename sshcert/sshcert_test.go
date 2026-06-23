@@ -24,7 +24,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lestrrat-go/jwx/v2/jwk"
+	"github.com/lestrrat-go/jwx/v3/jwk"
 	"github.com/openpubkey/openpubkey/client"
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/openpubkey/providers"
@@ -207,10 +207,11 @@ func TestSshCertCreation(t *testing.T) {
 
 			cic, err := pktExt.GetCicValues()
 			require.NoError(t, err)
-			upk := cic.PublicKey()
+			upk, err := jwk.PublicKeyOf(cic.PublicKey())
+			require.NoError(t, err)
 
 			cryptoCertKey := (sshCert.Key.(ssh.CryptoPublicKey)).CryptoPublicKey()
-			jwkCertKey, err := jwk.FromRaw(cryptoCertKey)
+			jwkCertKey, err := jwk.PublicKeyOf(cryptoCertKey)
 			require.NoError(t, err)
 			if !jwk.Equal(upk, jwkCertKey) {
 				t.Error(fmt.Errorf("expected upk to be equal to the value in sshCert.Key"))

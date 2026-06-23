@@ -33,6 +33,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -228,6 +229,10 @@ func createZitadelOPKSshProvider(oidcContainerMappedPort int, authCallbackServer
 // Test cleanup functions are registered to cleanup the containers after the
 // test finishes.
 func spawnTestContainers(t *testing.T) (oidcContainer *testprovider.ExampleOpContainer, authCallbackRedirectPort int, serverContainer *ssh_server.SshServerContainer) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Docker-based integration tests are not supported on Windows")
+	}
+
 	// Create local Docker network so that the example OIDC container and the
 	// linux container (with SSH) can communicate with each other
 	newNetwork, err := testcontainers.GenericNetwork(TestCtx, testcontainers.GenericNetworkRequest{

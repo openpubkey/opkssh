@@ -21,6 +21,7 @@ package integration
 import (
 	"fmt"
 	"io"
+	"runtime"
 	"strings"
 	"testing"
 	"unicode"
@@ -39,6 +40,10 @@ type OpenSSHVersionTest struct {
 }
 
 func TestOpenSSHVersionDetection(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Docker-based integration tests are not supported on Windows")
+	}
+
 	tests := []OpenSSHVersionTest{
 		{
 			name:           "Debian/Ubuntu",

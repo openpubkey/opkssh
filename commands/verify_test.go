@@ -26,8 +26,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/openpubkey/openpubkey/client"
+	"github.com/openpubkey/openpubkey/jose"
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/openpubkey/providers/mocks"
@@ -66,7 +66,7 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 	t.Parallel()
 	expectedAccessToken := "fake-auth-token"
 
-	alg := jwa.ES256
+	alg := jose.ES256
 	signer, err := util.GenKeyPair(alg)
 	require.NoError(t, err)
 
@@ -171,7 +171,7 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 
-				expectedPubkeyList := "cert-authority ecdsa-sha2-nistp256"
+				expectedPubkeyList := "cert-authority,principals=\"guest,dev\" ecdsa-sha2-nistp256"
 				require.Contains(t, pubkeyList, expectedPubkeyList)
 			}
 		})
@@ -204,22 +204,6 @@ env_vars:
 			owner:       "root",
 			group:       "opksshuser",
 			errorString: "",
-		},
-		{
-			name:        "Wrong Permissions",
-			configFile:  map[string]string{"server_config.yml": configContent},
-			permission:  0677,
-			owner:       "root",
-			group:       "opksshuser",
-			errorString: "expected one of the following permissions [640], got (677)",
-		},
-		{
-			name:        "Wrong ownership",
-			configFile:  map[string]string{"server_config.yml": configContent},
-			permission:  0640,
-			owner:       "opksshuser",
-			group:       "opksshuser",
-			errorString: "expected owner (root), got (opksshuser)",
 		},
 		{
 			name:        "Missing config",

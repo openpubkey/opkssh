@@ -18,6 +18,7 @@ package sysdetails
 
 import (
 	"os"
+	"runtime"
 	"strings"
 )
 
@@ -31,10 +32,16 @@ const (
 	OSTypeDebian  OSType = "debian"
 	OSTypeArch    OSType = "arch"
 	OSTypeSUSE    OSType = "suse"
+	OSTypeWindows OSType = "windows"
 )
 
 // DetectOS determines the type of operating system.
 func DetectOS() OSType {
+	// Check for Windows using runtime.GOOS
+	if runtime.GOOS == "windows" {
+		return OSTypeWindows
+	}
+
 	// Check for RedHat-based systems
 	if _, err := os.Stat("/etc/redhat-release"); err == nil {
 		return OSTypeRHEL

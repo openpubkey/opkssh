@@ -78,6 +78,15 @@ func TestToTable(t *testing.T) {
 			reverse: "https://accounts.google.com 206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com 24h\n" +
 				"https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0 096ce0a3-5e72-4da8-9c86-12924b294a01 24h\n",
 		},
+		{
+			name: "input with UTF-8 BOM",
+			input: "\xEF\xBB\xBF# Issuer Client-ID expiration-policy\n" +
+				"https://accounts.google.com 206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com 24h\n",
+			output: [][]string{
+				{"https://accounts.google.com", "206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com", "24h"},
+			},
+			reverse: "https://accounts.google.com 206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com 24h\n",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
