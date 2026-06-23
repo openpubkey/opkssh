@@ -234,14 +234,6 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		}
 	}
 
-	if l.PrincipalsArg == nil {
-		// If principals field is empty sshd automatically rejects the SSH certificate.
-		// We use opkssh-wildcard as placeholder so that we can allow the OPK
-		// verifier to make this policy decision instead of sshd.
-		// See https://github.com/openpubkey/opkssh/pull/513
-		l.PrincipalsArg = []string{"opkssh-wildcard"}
-	}
-
 	// Execute login command
 	if l.AutoRefreshArg {
 		if providerRefreshable, ok := provider.(providers.RefreshableOpenIdProvider); ok {
