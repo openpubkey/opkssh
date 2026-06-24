@@ -20,17 +20,21 @@ jobs:
             runner: windows-2022
             timeout: 10
             cache: true
+            openssh-source: windows-capability
           - name: Windows Server 2025
             runner: windows-2025
             timeout: 10
             cache: true
+            openssh-source: windows-capability
           - name: Windows 11 ARM64
             runner: windows-11-arm
             timeout: 15
             cache: false
+            openssh-source: github-release
 
     steps:
     - name: Install OpenSSH Server
+      if: matrix.openssh-source == 'windows-capability'
       run: |
         # 1. Ensure the Windows Update service is allowed to run
         Set-Service -Name wuauserv -StartupType Manual
@@ -47,6 +51,45 @@ jobs:
         
         # 4. Install the OpenSSH Server capability
         Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+
+    - name: Install OpenSSH Server from ARM64 package
+      if: matrix.openssh-source == 'github-release'
+      run: |
+        if (Get-Service sshd -ErrorAction SilentlyContinue) {
+          Write-Host "OpenSSH Server is already installed"
+          exit 0
+        }
+
+        $version = '10.0.0.0p2-Preview'
+        $url = "https://github.com/PowerShell/Win32-OpenSSH/releases/download/$version/OpenSSH-ARM64.zip"
+        $expectedHash = '698c6aec31c1dd0fb996206e8741f4531a97355686b5431ef347d531b07fcd42'
+        $zipPath = Join-Path $env:RUNNER_TEMP 'OpenSSH-ARM64.zip'
+        $extractPath = Join-Path $env:RUNNER_TEMP 'OpenSSH-ARM64'
+        $installDir = 'C:\Program Files\OpenSSH'
+        $installScript = Join-Path $installDir 'install-sshd.ps1'
+        $sshdPath = Join-Path $installDir 'sshd.exe'
+
+        Invoke-WebRequest -Uri $url -OutFile $zipPath
+        $actualHash = (Get-FileHash -Algorithm SHA256 -Path $zipPath).Hash.ToLowerInvariant()
+        if ($actualHash -ne $expectedHash) {
+          throw "OpenSSH ARM64 package hash mismatch. Expected $expectedHash but got $actualHash"
+        }
+
+        Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
+        $sshd = Get-ChildItem -Path $extractPath -Recurse -Filter sshd.exe | Select-Object -First 1
+        if (-not $sshd) {
+          throw 'OpenSSH ARM64 package did not contain sshd.exe'
+        }
+
+        New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+        Copy-Item -Path (Join-Path $sshd.DirectoryName '*') -Destination $installDir -Recurse -Force
+        Get-ChildItem -Path $installDir -File -Recurse | Unblock-File
+        powershell.exe -ExecutionPolicy Bypass -File $installScript
+
+        Add-Content -Path $env:GITHUB_PATH -Value $installDir
+        Get-Service sshd -ErrorAction Stop
+        Get-Command $sshdPath -ErrorAction Stop
+
     - name: Create default OpenSSH config files
       run: |
         Start-Service sshd
