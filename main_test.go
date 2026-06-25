@@ -247,7 +247,7 @@ func TestRun(t *testing.T) {
 		{
 			name:       "Login command with provider bad provider value",
 			args:       []string{"opkssh", "login", "--provider=badvalue"},
-			wantOutput: "error parsing provider argument: invalid provider config string. Expected format <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes>",
+			wantOutput: "error parsing provider argument: invalid provider config string. Expected format <issuer>,<client_id> or <issuer>,<client_id>,<client_secret> or <issuer>,<client_id>,<client_secret>,<scopes> or <issuer>,<client_id>,<client_secret>,<scopes>,<auth_flow>",
 			wantExit:   1,
 		},
 		{
@@ -348,7 +348,7 @@ func TestWithEnvVars(t *testing.T) {
 			envVar:     "OPKSSH_PROVIDERS",
 			envValue:   "badvalue",
 			args:       []string{"opkssh", "login", "--config-path", "/foo/bar"},
-			wantOutput: "Expected format <alias>,<issuer>,<client_id> or <alias>,<issuer>,<client_id>,<client_secret> or <alias>,<issuer>,<client_id>,<client_secret>,<scopes>",
+			wantOutput: "Expected format <alias>,<issuer>,<client_id> or <alias>,<issuer>,<client_id>,<client_secret> or <alias>,<issuer>,<client_id>,<client_secret>,<scopes> or <alias>,<issuer>,<client_id>,<client_secret>,<scopes>,<auth_flow>",
 			wantExit:   1,
 		},
 		{

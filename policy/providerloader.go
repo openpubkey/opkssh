@@ -30,7 +30,13 @@ type ProvidersRow struct {
 	Issuer           string
 	ClientID         string
 	ExpirationPolicy string
+	AuthFlow         string
 }
+
+const (
+	AuthFlowAuthorizationCode = "authorization_code"
+	AuthFlowClientCredentials = "client_credentials"
+)
 
 func (p ProvidersRow) GetExpirationPolicy() (verifier.ExpirationPolicy, error) {
 	switch p.ExpirationPolicy {
@@ -54,7 +60,28 @@ func (p ProvidersRow) GetExpirationPolicy() (verifier.ExpirationPolicy, error) {
 }
 
 func (p ProvidersRow) ToString() string {
+	if p.AuthFlow != "" && p.AuthFlow != AuthFlowAuthorizationCode {
+		return p.Issuer + " " + p.ClientID + " " + p.ExpirationPolicy + " " + p.AuthFlow
+	}
 	return p.Issuer + " " + p.ClientID + " " + p.ExpirationPolicy
+}
+
+func (p ProvidersRow) IsClientCredentialsFlow() bool {
+	return strings.EqualFold(strings.TrimSpace(p.AuthFlow), AuthFlowClientCredentials)
+}
+
+func (p ProvidersRow) UsesGQCommitment() bool {
+	return p.IsClientCredentialsFlow()
+}
+
+func (p ProvidersRow) ValidateAuthFlow() error {
+	flow := strings.TrimSpace(p.AuthFlow)
+	if flow == "" ||
+		strings.EqualFold(flow, AuthFlowAuthorizationCode) ||
+		strings.EqualFold(flow, AuthFlowClientCredentials) {
+		return nil
+	}
+	return fmt.Errorf("invalid auth flow: %s", p.AuthFlow)
 }
 
 type ProviderPolicy struct {
@@ -75,6 +102,9 @@ func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
 	var err error
 	for _, row := range p.rows {
 		var provider verifier.ProviderVerifier
+		if err := row.ValidateAuthFlow(); err != nil {
+			return nil, err
+		}
 		// TODO: We should handle this issuer matching in a more generic way
 		// oidc.local and localhost: are a test issuers
 		if row.Issuer == "https://accounts.google.com" ||
@@ -98,10 +128,12 @@ func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
 		} else if row.Issuer == "https://token.actions.githubusercontent.com" {
 			provider = providers.NewGithubOp(row.Issuer, "")
 		} else {
-			opts := providers.GetDefaultGoogleOpOptions()
+			opts := providers.GetDefaultStandardOpOptions(row.Issuer, row.ClientID)
 			opts.Issuer = row.Issuer
 			opts.ClientID = row.ClientID
-			provider = providers.NewGoogleOpWithOptions(opts)
+			opts.ClientCredentialsFlow = row.UsesGQCommitment()
+			opts.GQSign = row.UsesGQCommitment()
+			provider = providers.NewStandardOpWithOptions(opts)
 		}
 
 		expirationPolicy, err = row.GetExpirationPolicy()
@@ -168,7 +200,11 @@ func (o *ProvidersFileLoader) LoadProviderPolicy(path string) (*ProviderPolicy, 
 func (o ProvidersFileLoader) ToTable(opPolicies ProviderPolicy) files.Table {
 	table := files.Table{}
 	for _, opPolicy := range opPolicies.rows {
-		table.AddRow(opPolicy.Issuer, opPolicy.ClientID, opPolicy.ExpirationPolicy)
+		if opPolicy.AuthFlow != "" {
+			table.AddRow(opPolicy.Issuer, opPolicy.ClientID, opPolicy.ExpirationPolicy, opPolicy.AuthFlow)
+		} else {
+			table.AddRow(opPolicy.Issuer, opPolicy.ClientID, opPolicy.ExpirationPolicy)
+		}
 	}
 	return table
 }
@@ -182,20 +218,25 @@ func (o *ProvidersFileLoader) FromTable(input []byte, path string) *ProviderPoli
 	}
 	for _, row := range table.GetRows() {
 		// Error should not break everyone's ability to login, skip those rows
-		if len(row) != 3 {
+		if len(row) != 3 && len(row) != 4 {
 			configProblem := files.ConfigProblem{
 				Filepath:      path,
 				OffendingLine: strings.Join(row, " "),
-				ErrorMessage:  fmt.Sprintf("wrong number of arguments (expected=3, got=%d)", len(row)),
+				ErrorMessage:  fmt.Sprintf("wrong number of arguments (expected=3 or 4, got=%d)", len(row)),
 				Source:        "providers policy file",
 			}
 			files.ConfigProblems().RecordProblem(configProblem)
 			continue
 		}
+		authFlow := AuthFlowAuthorizationCode
+		if len(row) == 4 {
+			authFlow = row[3]
+		}
 		policyRow := ProvidersRow{
 			Issuer:           row[0],
 			ClientID:         row[1],
 			ExpirationPolicy: row[2], // TODO: Validate this so that we can determine the line number that has the error
+			AuthFlow:         authFlow,
 		}
 		policy.AddRow(policyRow)
 	}

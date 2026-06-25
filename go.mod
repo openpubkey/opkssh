@@ -113,3 +113,5 @@ require (
 	golang.org/x/text v0.38.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )
+
+replace github.com/openpubkey/openpubkey v0.23.0 => github.com/gautierrog/openpubkey v0.0.0-20260421123902-e85fbcabf40e

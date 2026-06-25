@@ -20,6 +20,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/openpubkey/openpubkey/providers"
 	"github.com/stretchr/testify/require"
 )
 
@@ -201,4 +202,39 @@ func TestProviderConfigFromString(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestProviderConfigClientCredentialsFlow(t *testing.T) {
+	providerConfig, err := NewProviderConfigFromString("https://keycloak.example.com/realms/test,client-id,client-secret,openid,client_credentials", false)
+	require.NoError(t, err)
+	require.Equal(t, "client_credentials", providerConfig.AuthFlow)
+
+	op, err := providerConfig.ToProvider(false)
+	require.NoError(t, err)
+	stdOp, ok := op.(*providers.StandardOp)
+	require.True(t, ok)
+	require.True(t, stdOp.ClientCredentialsFlow)
+	require.True(t, stdOp.GQSign)
+	require.False(t, stdOp.OpenBrowser)
+}
+
+func TestProviderConfigInvalidAuthFlow(t *testing.T) {
+	_, err := NewProviderConfigFromString("https://keycloak.example.com/realms/test,client-id,client-secret,openid,password", false)
+	require.ErrorContains(t, err, "invalid auth_flow value")
+}
+
+func TestProviderConfigClientCredentialsRequiresSecret(t *testing.T) {
+	providerConfig, err := NewProviderConfigFromString("https://keycloak.example.com/realms/test,client-id,,openid,client_credentials", false)
+	require.NoError(t, err)
+
+	_, err = providerConfig.ToProvider(false)
+	require.ErrorContains(t, err, "client credentials flow requires client_secret")
+}
+
+func TestProviderConfigClientCredentialsRejectsProviderShortcuts(t *testing.T) {
+	providerConfig, err := NewProviderConfigFromString("https://accounts.google.com,client-id,client-secret,openid,client_credentials", false)
+	require.NoError(t, err)
+
+	_, err = providerConfig.ToProvider(false)
+	require.ErrorContains(t, err, "client credentials flow is only supported for generic providers")
 }
