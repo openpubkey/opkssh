@@ -21,6 +21,7 @@ package policy
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 )
@@ -36,6 +37,13 @@ import (
 // AuthorizedKeysCommand, the new opkssh process we use to perform the read
 // would not be compromised. Thus, the compromised opkssh process could not assume
 // full root privileges.
+//
+// In scenarios with user home directories in NFS and root_squash active, in this case
+// root accesses the user home directory as user "nobody" and can not read the
+// `~/.opk/auth_id` file. As the username is known, the sudo is using this username
+// to read the file as the user instead of root.
+// REMINDER: for users defined outside /etc/passwd you need to set CGO_ENABLED=1
+// before building opkssh.
 func ReadWithSudoScript(h *HomePolicyLoader, username string) ([]byte, error) {
 	// opkssh readhome ensures the file is not a symlink and has the permissions/ownership.
 	// The default path is /usr/local/bin/opkssh
@@ -43,7 +51,13 @@ func ReadWithSudoScript(h *HomePolicyLoader, username string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error getting opkssh executable path: %w", err)
 	}
-	cmd := exec.Command("sudo", "-n", opkBin, "readhome", username)
+	var cmd *exec.Cmd
+	if username == "" {
+		cmd = exec.Command("sudo", "-n", opkBin, "readhome", username)
+	} else {
+		log.Println("sudo with username:", username)
+		cmd = exec.Command("sudo", "-n", "-u", username, opkBin, "readhome", username)
+	}
 
 	homePolicyFileBytes, err := cmd.CombinedOutput()
 	if err != nil {
