@@ -202,6 +202,10 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		l.Config.Providers = append(l.Config.Providers, config.GitHubProviderConfig())
 	}
 
+	if isGitLabCiEnvironment() {
+		l.Config.Providers = append(l.Config.Providers, config.GitLabCiProviderConfig())
+	}
+
 	var provider providers.OpenIdProvider
 	if l.overrideProvider != nil {
 		provider = *l.overrideProvider
@@ -431,7 +435,15 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 			if err != nil {
 				return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
 			}
-			providerList = append(providerList, op.(providers.BrowserOpenIdProvider))
+			browserOp, ok := op.(providers.BrowserOpenIdProvider)
+			if !ok {
+				continue
+			}
+			providerList = append(providerList, browserOp)
+		}
+
+		if len(providerList) == 0 {
+			return nil, nil, fmt.Errorf("no browser-compatible providers specified")
 		}
 
 		chooser := choosers.NewWebChooser(
@@ -889,6 +901,10 @@ func PrettyIdToken(pkt pktoken.PKToken) (string, error) {
 func isGitHubEnvironment() bool {
 	return os.Getenv("ACTIONS_ID_TOKEN_REQUEST_URL") != "" &&
 		os.Getenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN") != ""
+}
+
+func isGitLabCiEnvironment() bool {
+	return os.Getenv("GITLAB_CI") == "true" && os.Getenv("OPENPUBKEY_JWT") != ""
 }
 
 // payloadFromCompactPkt extracts the payload from a compact PK Token which

@@ -20,6 +20,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/openpubkey/openpubkey/providers"
 	"github.com/stretchr/testify/require"
 )
 
@@ -54,6 +55,15 @@ func TestProvidersConfigFromStrings(t *testing.T) {
 	providerConfigs, err = ProvidersConfigListFromStrings(providersStringInvalidFormat)
 	require.ErrorContains(t, err, "invalid provider config string")
 	require.Nil(t, providerConfigs)
+}
+
+func TestGitLabCiProviderConfigToProvider(t *testing.T) {
+	providerConfig := GitLabCiProviderConfig()
+	provider, err := providerConfig.ToProvider(false)
+
+	require.NoError(t, err)
+	require.IsType(t, &providers.GitlabCiOp{}, provider)
+	require.Equal(t, "https://gitlab.com", provider.Issuer())
 }
 
 func TestProvidersConfigFromEnv(t *testing.T) {
