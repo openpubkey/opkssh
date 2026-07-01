@@ -19,6 +19,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/openpubkey/openpubkey/providers"
@@ -290,12 +291,7 @@ func (p *ProviderConfig) hasScopes() bool {
 }
 
 func (p *ProviderConfig) hasAlias(alias string) bool {
-	for _, providerAlias := range p.AliasList {
-		if providerAlias == alias {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(p.AliasList, alias)
 }
 
 // GetProvidersConfigFromEnv is a function to retrieve the config from the env variables
