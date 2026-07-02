@@ -192,8 +192,11 @@ func providerVerifierFromRow(row ProvidersRow) verifier.ProviderVerifier {
 		opts.Issuer = row.Issuer
 		opts.ClientID = row.ClientID
 		return providers.NewAzureOpWithOptions(opts)
-	} else if row.Issuer == "https://gitlab.com" && row.isGitLabCi() {
-		return providers.NewGitlabCiOpFromEnvironmentDefault()
+	} else if row.isGitLabCi() {
+		if row.Issuer == "https://gitlab.com" {
+			return providers.NewGitlabCiOpFromEnvironmentDefault()
+		}
+		return providers.NewGitlabCiOp(row.Issuer, "OPENPUBKEY_JWT")
 	} else if row.Issuer == "https://gitlab.com" {
 		opts := providers.GetDefaultGitlabOpOptions()
 		opts.Issuer = row.Issuer

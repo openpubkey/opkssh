@@ -162,6 +162,18 @@ func TestAddProviderVerifier_DuplicateGitLabIssuerCombinesProviders(t *testing.T
 	require.IsType(t, &providers.GitlabCiOp{}, combinedProvider.providers[1])
 }
 
+func TestProviderVerifierFromRow_GitLabCiCustomIssuer(t *testing.T) {
+	customIssuer := "https://gitlab.example.com"
+	provider := providerVerifierFromRow(ProvidersRow{
+		Issuer:           customIssuer,
+		ClientID:         gitlabCiClientID,
+		ExpirationPolicy: "24h",
+	})
+
+	require.IsType(t, &providers.GitlabCiOp{}, provider)
+	require.Equal(t, customIssuer, provider.Issuer())
+}
+
 func TestProviderVerifierFromRow_GitLabCi(t *testing.T) {
 	tests := []struct {
 		name     string
