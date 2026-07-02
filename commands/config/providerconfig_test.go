@@ -66,6 +66,18 @@ func TestGitLabCiProviderConfigToProvider(t *testing.T) {
 	require.Equal(t, "https://gitlab.com", provider.Issuer())
 }
 
+func TestGitLabCiProviderConfigWithCustomIssuerToProvider(t *testing.T) {
+	customIssuer := "https://gitlab.example.com"
+	t.Setenv("OPKSSH_GITLAB_CI_ISSUER", customIssuer)
+
+	providerConfig := GitLabCiProviderConfig()
+	provider, err := providerConfig.ToProvider(false)
+
+	require.NoError(t, err)
+	require.IsType(t, &providers.GitlabCiOp{}, provider)
+	require.Equal(t, customIssuer, provider.Issuer())
+}
+
 func TestProvidersConfigFromEnv(t *testing.T) {
 
 	tests := []struct {

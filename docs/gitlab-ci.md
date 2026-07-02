@@ -32,6 +32,12 @@ Or using the explicit audience from the GitLab CI token:
 echo "https://gitlab.com OPENPUBKEY-PKTOKEN:ssh-deploy-prod 24h" | sudo tee -a /etc/opk/providers
 ```
 
+For self-managed GitLab, use your GitLab instance URL as the issuer instead:
+
+```bash
+echo "https://gitlab.example.com gitlab-ci 24h" | sudo tee -a /etc/opk/providers
+```
+
 If you also want to allow normal interactive GitLab logins, keep the normal GitLab provider entry as well:
 
 ```text
@@ -45,6 +51,8 @@ or:
 https://gitlab.com 8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923 24h
 https://gitlab.com OPENPUBKEY-PKTOKEN:ssh-deploy-prod 24h
 ```
+
+For self-managed GitLab, use the same issuer in `/etc/opk/auth_id` as in `/etc/opk/providers`.
 
 ### 3. Authorize a GitLab project and ref
 
@@ -64,6 +72,12 @@ This adds a line like this to `/etc/opk/auth_id`:
 
 ```text
 root project_path:cgroschupp/opkssh-test:ref_type:branch:ref:main https://gitlab.com
+```
+
+For self-managed GitLab, use your instance issuer:
+
+```bash
+sudo opkssh add root "project_path:mygroup/myproject:ref_type:branch:ref:main" "https://gitlab.example.com"
 ```
 
 Validate the server configuration:
@@ -100,11 +114,31 @@ test-ssh:
 
 The example downloads the latest Linux amd64 opkssh binary from the official GitHub release. For other architectures, use the matching asset from the [latest release](https://github.com/openpubkey/opkssh/releases/latest).
 
+For self-managed GitLab, set `OPKSSH_GITLAB_CI_ISSUER` to your GitLab issuer URL before running `opkssh login gitlab-ci`:
+
+```yaml
+test-ssh:
+  variables:
+    OPKSSH_GITLAB_CI_ISSUER: https://gitlab.example.com
+  id_tokens:
+    OPENPUBKEY_JWT:
+      aud: OPENPUBKEY-PKTOKEN:ssh-deploy-prod
+  image: ubuntu
+  stage: test
+  script:
+    - apt-get update && apt-get install -y curl openssh-client
+    - curl -L -o /usr/local/bin/opkssh https://github.com/openpubkey/opkssh/releases/latest/download/opkssh-linux-amd64
+    - chmod +x /usr/local/bin/opkssh
+    - opkssh login gitlab-ci
+    - ssh -o StrictHostKeyChecking=accept-new root@your-server.example.com "echo 'Hello from GitLab CI'"
+```
+
 ### Key workflow requirements
 
 - **`id_tokens.OPENPUBKEY_JWT`**: This must be configured so GitLab creates an OIDC ID token and exposes it as the `OPENPUBKEY_JWT` environment variable.
 - **Audience must match server policy**: If the job uses `aud: OPENPUBKEY-PKTOKEN:ssh-deploy-prod`, the server should have either `https://gitlab.com OPENPUBKEY-PKTOKEN:ssh-deploy-prod 24h` or `https://gitlab.com gitlab-ci 24h` in `/etc/opk/providers`.
 - **`opkssh login gitlab-ci`**: The `gitlab-ci` argument tells opkssh to use the GitLab CI provider. It reads `OPENPUBKEY_JWT` from the environment.
+- **`OPKSSH_GITLAB_CI_ISSUER`**: Optional. Set this to your self-managed GitLab issuer URL, such as `https://gitlab.example.com`. If unset, opkssh uses `https://gitlab.com`.
 - **Server-side identity**: The identity in `/etc/opk/auth_id` must match the token's `sub` claim.
 
 ## Identity format
@@ -138,7 +172,7 @@ Issuer:  https://gitlab.com
 ## Troubleshooting
 
 **Login fails in GitLab CI**
-Make sure the job defines `id_tokens.OPENPUBKEY_JWT` and runs `opkssh login gitlab-ci` inside GitLab CI. The environment must contain `GITLAB_CI=true` and `OPENPUBKEY_JWT`.
+Make sure the job defines `id_tokens.OPENPUBKEY_JWT` and runs `opkssh login gitlab-ci` inside GitLab CI. The environment must contain `GITLAB_CI=true` and `OPENPUBKEY_JWT`. For self-managed GitLab, also set `OPKSSH_GITLAB_CI_ISSUER` to the issuer URL used by your GitLab instance.
 
 **SSH connection rejected**
 Check the server policy and provider configuration:
