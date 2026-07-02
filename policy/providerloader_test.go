@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/openpubkey/verifier"
 	"github.com/stretchr/testify/require"
 )
@@ -107,6 +108,98 @@ func TestProviderPolicy_CreateVerifier_Gitlab(t *testing.T) {
 	ver, err := policy.CreateVerifier()
 	require.NoError(t, err)
 	require.NotNil(t, ver)
+}
+
+func TestProviderPolicy_CreateVerifier_DuplicateGitLabIssuer(t *testing.T) {
+	policy := &ProviderPolicy{}
+	policy.AddRow(ProvidersRow{
+		Issuer:           "https://gitlab.com",
+		ClientID:         "8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923",
+		ExpirationPolicy: "24h",
+	})
+	policy.AddRow(ProvidersRow{
+		Issuer:           "https://gitlab.com",
+		ClientID:         "OPENPUBKEY-PKTOKEN:ssh-deploy-prod",
+		ExpirationPolicy: "24h",
+	})
+
+	ver, err := policy.CreateVerifier()
+	require.NoError(t, err)
+	require.NotNil(t, ver)
+}
+
+func TestAddProviderVerifier_DuplicateGitLabIssuerCombinesProviders(t *testing.T) {
+	providerIndexes := make(map[string]int)
+	pvs := []verifier.ProviderVerifier{}
+
+	normalGitLab := verifier.ProviderVerifierExpires{
+		ProviderVerifier: providerVerifierFromRow(ProvidersRow{
+			Issuer:           "https://gitlab.com",
+			ClientID:         "8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923",
+			ExpirationPolicy: "24h",
+		}),
+		Expiration: verifier.ExpirationPolicies.MAX_AGE_24HOURS,
+	}
+	gitLabCi := verifier.ProviderVerifierExpires{
+		ProviderVerifier: providerVerifierFromRow(ProvidersRow{
+			Issuer:           "https://gitlab.com",
+			ClientID:         "OPENPUBKEY-PKTOKEN:ssh-deploy-prod",
+			ExpirationPolicy: "24h",
+		}),
+		Expiration: verifier.ExpirationPolicies.MAX_AGE_24HOURS,
+	}
+
+	pvs = addProviderVerifier(pvs, providerIndexes, normalGitLab)
+	pvs = addProviderVerifier(pvs, providerIndexes, gitLabCi)
+
+	require.Len(t, pvs, 1)
+	providerWithExpiration, ok := pvs[0].(verifier.ProviderVerifierExpires)
+	require.True(t, ok)
+	combinedProvider, ok := providerWithExpiration.ProviderVerifier.(multiProviderVerifier)
+	require.True(t, ok)
+	require.Equal(t, "https://gitlab.com", combinedProvider.Issuer())
+	require.Len(t, combinedProvider.providers, 2)
+	require.IsType(t, &providers.GitlabCiOp{}, combinedProvider.providers[1])
+}
+
+func TestProviderVerifierFromRow_GitLabCiCustomIssuer(t *testing.T) {
+	customIssuer := "https://gitlab.example.com"
+	provider := providerVerifierFromRow(ProvidersRow{
+		Issuer:           customIssuer,
+		ClientID:         gitlabCiClientID,
+		ExpirationPolicy: "24h",
+	})
+
+	require.IsType(t, &providers.GitlabCiOp{}, provider)
+	require.Equal(t, customIssuer, provider.Issuer())
+}
+
+func TestProviderVerifierFromRow_GitLabCi(t *testing.T) {
+	tests := []struct {
+		name     string
+		clientID string
+	}{
+		{
+			name:     "gitlab-ci marker",
+			clientID: gitlabCiClientID,
+		},
+		{
+			name:     "OpenPubkey PKToken audience",
+			clientID: "OPENPUBKEY-PKTOKEN:ssh-deploy-prod",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			provider := providerVerifierFromRow(ProvidersRow{
+				Issuer:           "https://gitlab.com",
+				ClientID:         tt.clientID,
+				ExpirationPolicy: "24h",
+			})
+			require.IsType(t, &providers.GitlabCiOp{}, provider)
+			require.Equal(t, "https://gitlab.com", provider.Issuer())
+		})
+	}
 }
 
 // Test ProviderPolicy.CreateVerifier with an invalid expiration policy.
