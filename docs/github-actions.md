@@ -41,6 +41,9 @@ opkssh add deploy "repo:myorg/myrepo:ref:refs/tags/v1.0.0" "https://token.action
 # Authorize all single word and staging branches
 opkssh add deploy "repo:myorg/myrepo:ref:refs/heads/*" "https://token.actions.githubusercontent.com"
 opkssh add deploy "repo:myorg/myrepo:ref:refs/heads/staging/*" "https://token.actions.githubusercontent.com"
+
+# Authorize pull requests
+opkssh add deploy "repo:myrepo/myrepo:pull_request" https://token.actions.githubusercontent.com
 ```
 
 `**` is not supported, the glob patterns follow [go's file Match](https://pkg.go.dev/path#Match).
