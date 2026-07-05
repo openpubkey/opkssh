@@ -24,11 +24,11 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/opkssh/policy/plugins"
-	"golang.org/x/exp/slices"
 )
 
 const (
