@@ -227,11 +227,12 @@ Second, we use the `AuthorizedKeysCommand` configuration option in `sshd_config`
 
 ### Client support
 
-| OS        | Supported | Tested  | Version Tested          |
-| --------- | --------  | ------- | ----------------------- |
-| Linux     | ✅        | ✅      |  Ubuntu 24.04.1 LTS     |
-| macOS     | ✅        | ✅      |  macOS 15.3.2 (Sequoia) |
-| Windows 11 | ✅        | ✅      |  Windows 11             |
+| OS         | Supported    | Tested  | Version Tested          |
+| ---------  | --------     | ------- | ----------------------- |
+| Linux      | ✅           | ✅      | Ubuntu 24.04.1 LTS      |
+| macOS      | ✅           | ✅      | macOS 15.3.2 (Sequoia)  |
+| Windows 11 | ✅           | ✅      | Windows 11              |
+| Android    | Experimental | ✅      | Termux                  |
 
 ### Server support
 
