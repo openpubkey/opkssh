@@ -584,6 +584,76 @@ func TestWildcardMatchEntry(t *testing.T) {
 	require.Error(t, err, "user should not have access")
 }
 
+func TestSubClaimWildcardMatching(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name              string
+		identityAttribute string
+		subClaim          string
+		shouldMatch       bool
+	}{
+		{
+			name:              "asterisk wildcard does not match across separator",
+			identityAttribute: "repo:organization/repository:ref:*",
+			subClaim:          "repo:organization/repository:ref:refs/heads/pytest",
+			shouldMatch:       false,
+		},
+		{
+			name:              "asterisk wildcard matches partial ref",
+			identityAttribute: "repo:organization/repository:ref:refs/heads/*",
+			subClaim:          "repo:organization/repository:ref:refs/heads/main",
+			shouldMatch:       true,
+		},
+		{
+			name:              "asterisk wildcard does not match different ref",
+			identityAttribute: "repo:organization/repository:ref:refs/tags/*",
+			subClaim:          "repo:organization/repository:ref:refs/heads/v1.0.0",
+			shouldMatch:       false,
+		},
+		{
+			name:              "asterisk wildcard does match any repo",
+			identityAttribute: "repo:organization/*:ref:refs/heads/main",
+			subClaim:          "repo:organization/repository:ref:refs/heads/main",
+			shouldMatch:       true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			op := NewMockOpenIdSubProvider(t, tt.subClaim)
+			opkClient, err := client.New(op)
+			require.NoError(t, err)
+			pkt, err := opkClient.Auth(context.Background())
+			require.NoError(t, err)
+
+			testPolicy := &policy.Policy{
+				Users: []policy.User{
+					{
+						IdentityAttribute: tt.identityAttribute,
+						Principals:        []string{"test"},
+						Issuer:            "https://accounts.example.com",
+					},
+				},
+			}
+
+			policyEnforcer := &policy.Enforcer{
+				PolicyLoader: &MockPolicyLoader{Policy: testPolicy},
+			}
+
+			err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa", policy.DenyList{}, nil)
+			if tt.shouldMatch {
+				require.NoError(t, err, "expected pattern %q to match sub %q", tt.identityAttribute, tt.subClaim)
+			} else {
+				require.Error(t, err, "expected pattern %q to not match sub %q", tt.identityAttribute, tt.subClaim)
+			}
+		})
+	}
+}
+
 func TestLocalProvider(t *testing.T) {
 	t.Parallel()
 
