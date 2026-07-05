@@ -22,12 +22,13 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/opkssh/policy/plugins"
-	"golang.org/x/exp/slices"
 )
 
 const (
@@ -150,6 +151,16 @@ func validateClaim(claims *checkedClaims, user *User) bool {
 			wildCardEmailMatch = true
 		}
 	}
+
+	// Should we match on a glob pattern for the sub claim?
+	if strings.HasPrefix(user.IdentityAttribute, "repo:") {
+		if matched, err := path.Match(user.IdentityAttribute, string(claims.Sub)); err != nil {
+			log.Printf("warning: invalid glob pattern %q in policy: %v", user.IdentityAttribute, err)
+		} else if matched {
+			return true
+		}
+	}
+
 	// email should be a case-insensitive check
 	// sub should be a case-sensitive check
 	return wildCardEmailMatch || strings.EqualFold(claims.Email, user.IdentityAttribute) || string(claims.Sub) == user.IdentityAttribute

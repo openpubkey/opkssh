@@ -130,6 +130,9 @@ or
 
 Before you begin, ensure you have [GoReleaser installed](https://goreleaser.com/install/) using one of the available installation methods.
 
+> [!NOTE]
+> Android binaries requires setting up the `ANDROID_NDK_HOME` env var to be generated
+
 To build binaries only, run the following command:
 
 ```bash
