@@ -20,10 +20,10 @@ import (
 	"fmt"
 	"os/user"
 	"path/filepath"
+	"slices"
 
 	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/spf13/afero"
-	"golang.org/x/exp/slices"
 )
 
 // SystemDefaultPolicyPath is the default filepath where opkssh policy is
