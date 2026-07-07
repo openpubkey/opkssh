@@ -21,6 +21,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -50,6 +51,9 @@ var (
 	// go build -v -o /usr/local/bin/opkssh -ldflags "-X main.Version=version"
 	Version = "unversioned"
 )
+
+// special error handling for failed readhome
+var ErrorReadhome = errors.New(fmt.Sprintf("ErrorReadhome %d", policy.ExitCodeReadHome))
 
 func main() {
 	os.Exit(run())
@@ -269,7 +273,7 @@ You should not call this command directly. It is called by the opkssh verify com
 			userArg := os.Args[2]
 			if fileBytes, err := commands.ReadHome(userArg); err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to read user's home policy file: %v\n", err)
-				return err
+				return ErrorReadhome
 			} else {
 				fmt.Fprint(os.Stdout, string(fileBytes))
 				return nil
@@ -514,11 +518,17 @@ Exit code: 0 if all entries are valid, 1 if any warnings or errors are found.`,
 	}
 	rootCmd.AddCommand(genDocsCmd)
 
-	err := rootCmd.Execute()
-	if err != nil {
-		return 1
+	if err := rootCmd.Execute(); err != nil {
+		// detect error from readhome
+		if errors.Is(err, ErrorReadhome) {
+			// failed readhome returns specific exit code
+			return policy.ExitCodeReadHome
+		} else {
+			return 1
+		}
+	} else {
+		return 0
 	}
-	return 0
 }
 
 func printConfigProblems() {
