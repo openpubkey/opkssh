@@ -28,9 +28,6 @@ import (
 	"syscall"
 )
 
-// ExitCodeReadHome constant is used in ReadHome to specify a ExitCode on failure
-const ExitCodeReadHome int = 128
-
 // ReadWithSudoScript specifies additional way of loading the policy in the
 // user's home directory (`~/.opk/auth_id`). This is needed when the
 // AuthorizedKeysCommand user does not have privileges to transverse the user's
