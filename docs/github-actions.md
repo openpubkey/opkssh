@@ -32,15 +32,21 @@ For example, to allow the `main` branch of `myorg/myrepo` to log in as the `depl
 opkssh add deploy "repo:myorg/myrepo:ref:refs/heads/main" "https://token.actions.githubusercontent.com"
 ```
 
-You can also authorize all branches by omitting the ref portion, or match a specific tag:
+You can also authorize a specific reference, or glob within separators:
 
 ```bash
-# Authorize all refs
-opkssh add deploy "repo:myorg/myrepo:ref:*" "https://token.actions.githubusercontent.com"
-
 # Authorize a specific tag
 opkssh add deploy "repo:myorg/myrepo:ref:refs/tags/v1.0.0" "https://token.actions.githubusercontent.com"
+
+# Authorize all single word and staging branches
+opkssh add deploy "repo:myorg/myrepo:ref:refs/heads/*" "https://token.actions.githubusercontent.com"
+opkssh add deploy "repo:myorg/myrepo:ref:refs/heads/staging/*" "https://token.actions.githubusercontent.com"
+
+# Authorize pull requests
+opkssh add deploy "repo:myrepo/myrepo:pull_request" https://token.actions.githubusercontent.com
 ```
+
+`**` is not supported, the glob patterns follow [go's file Match](https://pkg.go.dev/path#Match).
 
 ## GitHub Actions workflow
 

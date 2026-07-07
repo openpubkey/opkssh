@@ -1,5 +1,5 @@
 # Stage 1: Build the Go binary
-FROM golang:1.26.4@sha256:32c0e6e5c4f6707717051091b4d0b077464a679eaab563e11474efc5328e2aa5 as builder
+FROM golang:1.26.4@sha256:f96cc555eb8db430159a3aa6797cd5bae561945b7b0fe7d0e284c63a3b291609 as builder
 
 # Set destination for COPY
 WORKDIR /app
