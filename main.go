@@ -53,7 +53,7 @@ var (
 )
 
 // special error handling for failed readhome
-var ErrorReadhome = errors.New(fmt.Sprintf("ErrorReadhome %d", policy.ExitCodeReadHome))
+var ErrorReadhome = fmt.Errorf("ErrorReadhome %d", policy.ExitCodeReadHome)
 
 func main() {
 	os.Exit(run())
