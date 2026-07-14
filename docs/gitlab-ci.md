@@ -124,6 +124,7 @@ test-ssh:
 
 - **`id_tokens.OPENPUBKEY_JWT`**: This must be configured so GitLab creates an OIDC ID token and exposes it as the `OPENPUBKEY_JWT` environment variable.
 - **Audience must match server policy**: If the job uses `aud: OPENPUBKEY-PKTOKEN:ssh-deploy-prod`, the server should have `https://gitlab.com OPENPUBKEY-PKTOKEN:ssh-deploy-prod 24h` in `/etc/opk/providers`.
+- **GitLab CI claims are required**: The token must include GitLab CI-specific claims (`ci_config_ref_uri`, `job_id`, `job_project_path`, and `pipeline_id`). These claims distinguish GitLab CI tokens from normal interactive GitLab login tokens that share the same issuer.
 - **`opkssh login gitlab-ci`**: The `gitlab-ci` argument tells opkssh to use the GitLab CI provider. It reads `OPENPUBKEY_JWT` from the environment.
 - **`OPKSSH_GITLAB_CI_ISSUER`**: Optional. Set this to your self-managed GitLab issuer URL, such as `https://gitlab.example.com`. If unset, opkssh uses `https://gitlab.com`.
 - **Server-side identity**: The identity in `/etc/opk/auth_id` must match the token's `sub` claim.
@@ -180,7 +181,7 @@ https://gitlab.com OPENPUBKEY-PKTOKEN:ssh-deploy-prod 24h
 ```
 
 **Normal GitLab login works but GitLab CI fails**
-Normal GitLab logins use the browser/OIDC nonce flow. GitLab CI uses GQ-bound tokens (`GQ256`). Ensure the server has a GitLab CI provider line with an explicit `OPENPUBKEY-PKTOKEN:*` audience in `/etc/opk/providers`.
+Normal GitLab logins use the browser/OIDC nonce flow. GitLab CI uses GQ-bound tokens (`GQ256`). Ensure the server has a GitLab CI provider line with an explicit `OPENPUBKEY-PKTOKEN:*` audience in `/etc/opk/providers`. The GitLab CI token must also include the required CI claims: `ci_config_ref_uri`, `job_id`, `job_project_path`, and `pipeline_id`.
 
 **Verify fails during SSH authentication**
 Check the opkssh server log:
