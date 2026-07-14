@@ -109,7 +109,7 @@ func RunOpkSshContainer(ctx context.Context, issuerHostIp string, issuerPort str
 	return &SshServerContainer{
 		Container: container,
 		Host:      hostIP,
-		Port:      mappedPort.Int(),
+		Port:      int(mappedPort.Num()),
 		User:      "test",
 		Password:  "test",
 	}, nil
@@ -145,7 +145,7 @@ func RunUbuntuContainer(ctx context.Context) (*SshServerContainer, error) {
 	return &SshServerContainer{
 		Container: container,
 		Host:      hostIP,
-		Port:      mappedPort.Int(),
+		Port:      int(mappedPort.Num()),
 		User:      "test",
 		Password:  "test",
 	}, nil
