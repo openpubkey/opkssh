@@ -28,8 +28,6 @@ import (
 	"github.com/spf13/afero"
 )
 
-const gitlabCiClientID = "gitlab-ci"
-
 type ProvidersRow struct {
 	Issuer           string
 	ClientID         string
@@ -213,7 +211,7 @@ func providerVerifierFromRow(row ProvidersRow) verifier.ProviderVerifier {
 }
 
 func (p ProvidersRow) isGitLabCi() bool {
-	return p.ClientID == gitlabCiClientID || strings.HasPrefix(p.ClientID, "OPENPUBKEY-PKTOKEN:")
+	return strings.HasPrefix(p.ClientID, "OPENPUBKEY-PKTOKEN:")
 }
 
 func (p ProviderPolicy) ToString() string {

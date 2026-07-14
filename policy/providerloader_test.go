@@ -162,11 +162,57 @@ func TestAddProviderVerifier_DuplicateGitLabIssuerCombinesProviders(t *testing.T
 	require.IsType(t, &providers.GitlabCiOp{}, combinedProvider.providers[1])
 }
 
+func TestAddProviderVerifier_MixedProvidersCombinesOnlyDuplicateGitLabIssuer(t *testing.T) {
+	providerIndexes := make(map[string]int)
+	pvs := []verifier.ProviderVerifier{}
+
+	google := verifier.ProviderVerifierExpires{
+		ProviderVerifier: providerVerifierFromRow(ProvidersRow{
+			Issuer:           "https://accounts.google.com",
+			ClientID:         "google-client-id",
+			ExpirationPolicy: "24h",
+		}),
+		Expiration: verifier.ExpirationPolicies.MAX_AGE_24HOURS,
+	}
+	normalGitLab := verifier.ProviderVerifierExpires{
+		ProviderVerifier: providerVerifierFromRow(ProvidersRow{
+			Issuer:           "https://gitlab.com",
+			ClientID:         "8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923",
+			ExpirationPolicy: "24h",
+		}),
+		Expiration: verifier.ExpirationPolicies.MAX_AGE_24HOURS,
+	}
+	gitLabCi := verifier.ProviderVerifierExpires{
+		ProviderVerifier: providerVerifierFromRow(ProvidersRow{
+			Issuer:           "https://gitlab.com",
+			ClientID:         "OPENPUBKEY-PKTOKEN:ssh-deploy-prod",
+			ExpirationPolicy: "24h",
+		}),
+		Expiration: verifier.ExpirationPolicies.MAX_AGE_24HOURS,
+	}
+
+	pvs = addProviderVerifier(pvs, providerIndexes, google)
+	pvs = addProviderVerifier(pvs, providerIndexes, normalGitLab)
+	pvs = addProviderVerifier(pvs, providerIndexes, gitLabCi)
+
+	require.Len(t, pvs, 2)
+	require.Equal(t, "https://accounts.google.com", pvs[0].Issuer())
+	require.Equal(t, "https://gitlab.com", pvs[1].Issuer())
+
+	providerWithExpiration, ok := pvs[1].(verifier.ProviderVerifierExpires)
+	require.True(t, ok)
+	combinedProvider, ok := providerWithExpiration.ProviderVerifier.(multiProviderVerifier)
+	require.True(t, ok)
+	require.Equal(t, "https://gitlab.com", combinedProvider.Issuer())
+	require.Len(t, combinedProvider.providers, 2)
+	require.IsType(t, &providers.GitlabCiOp{}, combinedProvider.providers[1])
+}
+
 func TestProviderVerifierFromRow_GitLabCiCustomIssuer(t *testing.T) {
 	customIssuer := "https://gitlab.example.com"
 	provider := providerVerifierFromRow(ProvidersRow{
 		Issuer:           customIssuer,
-		ClientID:         gitlabCiClientID,
+		ClientID:         "OPENPUBKEY-PKTOKEN:ssh-deploy-prod",
 		ExpirationPolicy: "24h",
 	})
 
@@ -175,31 +221,14 @@ func TestProviderVerifierFromRow_GitLabCiCustomIssuer(t *testing.T) {
 }
 
 func TestProviderVerifierFromRow_GitLabCi(t *testing.T) {
-	tests := []struct {
-		name     string
-		clientID string
-	}{
-		{
-			name:     "gitlab-ci marker",
-			clientID: gitlabCiClientID,
-		},
-		{
-			name:     "OpenPubkey PKToken audience",
-			clientID: "OPENPUBKEY-PKTOKEN:ssh-deploy-prod",
-		},
-	}
+	provider := providerVerifierFromRow(ProvidersRow{
+		Issuer:           "https://gitlab.com",
+		ClientID:         "OPENPUBKEY-PKTOKEN:ssh-deploy-prod",
+		ExpirationPolicy: "24h",
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			provider := providerVerifierFromRow(ProvidersRow{
-				Issuer:           "https://gitlab.com",
-				ClientID:         tt.clientID,
-				ExpirationPolicy: "24h",
-			})
-			require.IsType(t, &providers.GitlabCiOp{}, provider)
-			require.Equal(t, "https://gitlab.com", provider.Issuer())
-		})
-	}
+	require.IsType(t, &providers.GitlabCiOp{}, provider)
+	require.Equal(t, "https://gitlab.com", provider.Issuer())
 }
 
 // Test ProviderPolicy.CreateVerifier with an invalid expiration policy.
@@ -224,6 +253,18 @@ func TestProviderPolicy_CreateVerifier_NoProviders(t *testing.T) {
 }
 
 // Test ProvidersFileLoader.FromTable with valid and invalid rows.
+func TestProviderVerifierFromRow_GitLabCiMarkerUsesNormalGitLabProvider(t *testing.T) {
+	provider := providerVerifierFromRow(ProvidersRow{
+		Issuer:           "https://gitlab.com",
+		ClientID:         "gitlab-ci",
+		ExpirationPolicy: "24h",
+	})
+
+	_, isGitLabCiProvider := provider.(*providers.GitlabCiOp)
+	require.False(t, isGitLabCiProvider)
+	require.Equal(t, "https://gitlab.com", provider.Issuer())
+}
+
 func TestProvidersFileLoader_FromTable(t *testing.T) {
 	// Input with two valid rows and one invalid row.
 	input := []byte("https://accounts.google.com test-google 24h\n" +
