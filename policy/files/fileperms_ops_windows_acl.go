@@ -224,7 +224,7 @@ func (w *WindowsACLFilePermsOps) ApplyACE(path string, ace ACE) error {
 		return fmt.Errorf("GetNamedSecurityInfoW failed: %d", ret)
 	}
 	if pSD != 0 {
-		defer procLocalFree.Call(pSD)
+		defer procLocalFree.Call(pSD) //nolint:errcheck // free failure not worth handling
 	}
 
 	// Build EXPLICIT_ACCESS
@@ -284,7 +284,7 @@ func (w *WindowsACLFilePermsOps) ApplyACE(path string, ace ACE) error {
 	if pNewAcl == 0 {
 		return fmt.Errorf("SetEntriesInAclW returned nil ACL")
 	}
-	defer procLocalFree.Call(pNewAcl)
+	defer procLocalFree.Call(pNewAcl) //nolint:errcheck // free failure not worth handling
 
 	// Apply new DACL to the file
 	ret3, _, err := procSetNamedSecurityInfo.Call(

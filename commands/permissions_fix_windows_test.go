@@ -11,17 +11,24 @@ import (
 	"github.com/openpubkey/opkssh/policy"
 	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/spf13/afero"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRunPermissionsFix_AppliesRequiredACEs_Windows(t *testing.T) {
 	// Setup in-memory fs with system policy file
 	mem := afero.NewMemMapFs()
 	systemPolicy := policy.SystemDefaultPolicyPath
-	afero.WriteFile(mem, systemPolicy, []byte("x"), 0o644)
+	err := afero.WriteFile(mem, systemPolicy, []byte("x"), 0o644)
+	require.NoError(t, err, "Failed to write system policy file")
+
 	// ensure plugins dir exists but no ACEs present
 	pluginsDir := policy.GetSystemConfigBasePath() + "/policy.d"
-	mem.MkdirAll(pluginsDir, 0o750)
-	afero.WriteFile(mem, pluginsDir+"/plugin.yml", []byte("a"), 0o644)
+	err = mem.MkdirAll(pluginsDir, 0o750)
+	if err != nil {
+		t.Fatalf("Failed to create plugins dir: %v", err)
+	}
+	err = afero.WriteFile(mem, pluginsDir+"/plugin.yml", []byte("a"), 0o644)
+	require.NoError(t, err, "Failed to write plugin file")
 
 	mfs := &mockFileSystem{
 		fs:        mem,
@@ -37,7 +44,7 @@ func TestRunPermissionsFix_AppliesRequiredACEs_Windows(t *testing.T) {
 		Yes:           true,
 	}
 
-	err := p.Fix()
+	err = p.Fix()
 	if err != nil {
 		t.Fatalf("Fix failed: %v", err)
 	}
@@ -68,7 +75,8 @@ func TestRunPermissionsFix_SkipsExistingACEs_Windows(t *testing.T) {
 	// Setup in-memory fs with system policy file, ACEs already present
 	mem := afero.NewMemMapFs()
 	systemPolicy := policy.SystemDefaultPolicyPath
-	afero.WriteFile(mem, systemPolicy, []byte("x"), 0o644)
+	err := afero.WriteFile(mem, systemPolicy, []byte("x"), 0o644)
+	require.NoError(t, err, "Failed to write system policy file")
 
 	mfs := &mockFileSystem{
 		fs: mem,
@@ -91,7 +99,7 @@ func TestRunPermissionsFix_SkipsExistingACEs_Windows(t *testing.T) {
 		Yes:           true,
 	}
 
-	err := p.Fix()
+	err = p.Fix()
 	if err != nil {
 		t.Fatalf("Fix failed: %v", err)
 	}
@@ -108,7 +116,8 @@ func TestRunPermissionsFix_NoSystemACE_Windows(t *testing.T) {
 	// Verify that SYSTEM:F ACE is never applied
 	mem := afero.NewMemMapFs()
 	systemPolicy := policy.SystemDefaultPolicyPath
-	afero.WriteFile(mem, systemPolicy, []byte("x"), 0o644)
+	err := afero.WriteFile(mem, systemPolicy, []byte("x"), 0o644)
+	require.NoError(t, err, "Failed to write system policy file")
 
 	mfs := &mockFileSystem{
 		fs:        mem,
@@ -124,7 +133,7 @@ func TestRunPermissionsFix_NoSystemACE_Windows(t *testing.T) {
 		Yes:           true,
 	}
 
-	err := p.Fix()
+	err = p.Fix()
 	if err != nil {
 		t.Fatalf("Fix failed: %v", err)
 	}
