@@ -172,7 +172,7 @@ func (c *FilesystemDiscoveryCache) Write(issuer string, value []byte) error {
 
 // Expire deletes any files from the cache that are older than maxAge
 func (c *FilesystemDiscoveryCache) Expire(ctx context.Context, maxAge time.Duration) (int, error) {
-	var numDeleted int = 0
+	var numDeleted = 0
 	afs := afero.Afero{Fs: c.Fs}
 	chErr := make(chan error)
 	go func() {
