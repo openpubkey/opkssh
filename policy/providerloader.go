@@ -116,7 +116,7 @@ func (p *ProviderPolicy) CreateVerifier(serverConfig *config.ServerConfig, fs af
 	var err error
 	cache := serverConfig.CreateCache(fs)
 	cacheCfg := discover.DiscoveryCacheConfig{
-		Cache: cache,
+		Cache:          cache,
 		StandardMaxAge: serverConfig.CacheConfig.StandardMaxAge,
 		FallbackMaxAge: serverConfig.CacheConfig.FallbackMaxAge,
 	}
