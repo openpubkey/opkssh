@@ -193,3 +193,16 @@ func TestProvidersFileLoader_ToTable(t *testing.T) {
 		t.Error("third row in table does not match expected values")
 	}
 }
+
+// Test ProviderPolicy.CreateVerifier with a Forgejo Actions issuer (e.g. Codeberg).
+func TestProviderPolicy_CreateVerifier_Forgejo(t *testing.T) {
+	policy := &ProviderPolicy{}
+	policy.AddRow(ProvidersRow{
+		Issuer:           "https://codeberg.org/api/actions",
+		ClientID:         "codeberg",
+		ExpirationPolicy: "oidc",
+	})
+	ver, err := policy.CreateVerifier()
+	require.NoError(t, err)
+	require.NotNil(t, ver)
+}

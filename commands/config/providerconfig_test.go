@@ -202,3 +202,46 @@ func TestProviderConfigFromString(t *testing.T) {
 		})
 	}
 }
+
+func TestForgejoProviderConfig(t *testing.T) {
+	providerConfig := ForgejoProviderConfig("https://codeberg.org/api/actions")
+	require.Equal(t, []string{"forgejo", "codeberg"}, providerConfig.AliasList)
+	require.Equal(t, "https://codeberg.org/api/actions", providerConfig.Issuer)
+	require.Equal(t, "unused", providerConfig.ClientID)
+}
+
+func TestIsCICDProvider(t *testing.T) {
+	require.True(t, IsCICDProvider("https://token.actions.githubusercontent.com"))
+	require.True(t, IsCICDProvider("https://codeberg.org/api/actions"))
+	require.True(t, IsCICDProvider("https://git.example.com/forgejo/api/actions"))
+	require.False(t, IsCICDProvider("https://accounts.google.com"))
+	require.False(t, IsCICDProvider("https://gitlab.com"))
+}
+
+func TestForgejoToProvider(t *testing.T) {
+	t.Setenv("ACTIONS_ID_TOKEN_REQUEST_URL", "https://codeberg.org/api/actions/_apis/pipelines/workflows/42/idtoken?placeholder=true")
+	t.Setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "runner-token")
+
+	providerConfig := ForgejoProviderConfig("https://codeberg.org/api/actions")
+	provider, err := providerConfig.ToProvider(false)
+	require.NoError(t, err)
+	require.Equal(t, "https://codeberg.org/api/actions", provider.Issuer())
+}
+
+func TestForgejoToProviderIssuerMismatch(t *testing.T) {
+	t.Setenv("ACTIONS_ID_TOKEN_REQUEST_URL", "https://codeberg.org/api/actions/_apis/pipelines/workflows/42/idtoken?placeholder=true")
+	t.Setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "runner-token")
+
+	providerConfig := ForgejoProviderConfig("https://git.example.com/api/actions")
+	_, err := providerConfig.ToProvider(false)
+	require.ErrorContains(t, err, "issuer mismatch")
+}
+
+func TestForgejoToProviderOutsideActionsEnvironment(t *testing.T) {
+	t.Setenv("ACTIONS_ID_TOKEN_REQUEST_URL", "")
+	t.Setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "")
+
+	providerConfig := ForgejoProviderConfig("https://codeberg.org/api/actions")
+	_, err := providerConfig.ToProvider(false)
+	require.ErrorContains(t, err, "error creating forgejo op")
+}

@@ -1,0 +1,88 @@
+# End-to-end test for the Forgejo Actions provider (docs/forgejo-actions.md).
+#
+# This workflow only runs on a Forgejo instance (e.g. Codeberg); GitHub
+# ignores the .forgejo/workflows directory. It builds opkssh from source,
+# installs it as SSH server verifier inside the job container, logs in via
+# the Forgejo Actions OIDC token and then SSHes into localhost using the
+# resulting certificate.
+name: Test Forgejo Provider
+
+on:
+  push:
+
+enable-openid-connect: true
+
+jobs:
+  e2e:
+    # Adjust the label to one offered by your instance's runners
+    # (see repository settings -> Actions -> Runners).
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.26-bookworm
+    timeout-minutes: 10
+    steps:
+      # Manual checkout instead of actions/checkout: JavaScript actions
+      # require Node.js inside the job container, which the golang image
+      # does not ship. This keeps the workflow independent of the image.
+      - name: Checkout
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          HOST="${GITHUB_SERVER_URL#https://}"
+          git clone "https://oauth2:${TOKEN}@${HOST}/${GITHUB_REPOSITORY}.git" .
+          git checkout "${GITHUB_SHA}"
+
+      - name: Install SSH server
+        run: |
+          apt-get update -y
+          apt-get install -y openssh-server openssh-client sudo jq
+          useradd -rm -d /home/test -s /bin/bash test
+          # The runner container may use a permissive umask; sshd refuses
+          # to start unless its privilege separation directory is 0755
+          mkdir -p /run/sshd
+          chown root:root /run/sshd
+          chmod 0755 /run/sshd
+
+      - name: Build and install opkssh
+        run: |
+          go build -v -o opksshbuild
+          bash ./scripts/install-linux.sh --install-from=opksshbuild --no-sshd-restart
+
+      - name: Configure server policy
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUER="${GITHUB_SERVER_URL%/}/api/actions"
+          echo "$ISSUER forgejo oidc" >> /etc/opk/providers
+          # Current Forgejo appends the immutable owner/repo IDs to the sub
+          # claim (repo:<owner>-<ownerID>/<repo>-<repoID>:ref:<ref>); older
+          # instances and repos on the legacy subject format omit them.
+          # Authorize both so the test works on either format.
+          REPO_INFO=$(curl -sSf -H "Authorization: token ${TOKEN}" "${GITHUB_SERVER_URL%/}/api/v1/repos/${GITHUB_REPOSITORY}")
+          OWNER_ID=$(echo "$REPO_INFO" | jq -r '.owner.id')
+          REPO_ID=$(echo "$REPO_INFO" | jq -r '.id')
+          opkssh add test "repo:${GITHUB_REPOSITORY_OWNER}-${OWNER_ID}/${GITHUB_REPOSITORY#*/}-${REPO_ID}:ref:${GITHUB_REF}" "$ISSUER"
+          opkssh add test "repo:${GITHUB_REPOSITORY}:ref:${GITHUB_REF}" "$ISSUER"
+          cat /etc/opk/providers
+          cat /etc/opk/auth_id
+
+      - name: Start SSH server
+        run: /usr/sbin/sshd
+
+      - name: Login with the Forgejo Actions provider
+        run: opkssh login forgejo --print-id-token
+
+      - name: SSH into localhost using the opkssh certificate
+        run: |
+          ssh -o StrictHostKeyChecking=no test@localhost whoami
+
+      - name: Debug - dump opkssh config and logs
+        run: |
+          cat /etc/opk/providers || true
+          cat /etc/opk/auth_id || true
+          # Run the verifier directly to surface its exact error
+          KEY_TYPE=$(awk '{print $1}' /root/.ssh/id_ecdsa-cert.pub)
+          KEY_B64=$(awk '{print $2}' /root/.ssh/id_ecdsa-cert.pub)
+          opkssh verify test "$KEY_B64" "$KEY_TYPE" || true
+          cat /var/log/opkssh.log || true
+        if: always()

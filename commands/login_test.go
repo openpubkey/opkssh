@@ -583,3 +583,62 @@ func TestPrettyPrintIdToken(t *testing.T) {
 	require.NotNil(t, pktStr)
 	require.Contains(t, pktStr, iss)
 }
+
+func TestDetermineProviderCICDAliasErrors(t *testing.T) {
+	defaultConfig, err := config.NewClientConfig(config.DefaultClientConfig)
+	require.NoError(t, err)
+
+	forgejoTokenURL := "https://codeberg.org/api/actions/_apis/pipelines/workflows/42/idtoken?placeholder=true"
+	githubTokenURL := "https://pipelines.actions.githubusercontent.com/abc/_apis/pipelines/1/runs/2/idtoken?api-version=2.0"
+
+	tests := []struct {
+		name            string
+		alias           string
+		tokenRequestURL string
+		errorString     string
+	}{
+		{
+			name:        "forgejo alias outside an Actions environment",
+			alias:       "forgejo",
+			errorString: "only works inside a Forgejo Actions workflow",
+		},
+		{
+			name:        "codeberg alias outside an Actions environment",
+			alias:       "codeberg",
+			errorString: "only works inside a Forgejo Actions workflow",
+		},
+		{
+			name:        "github alias outside an Actions environment",
+			alias:       "github",
+			errorString: "only works inside a GitHub Actions workflow",
+		},
+		{
+			name:            "forgejo alias in a GitHub Actions environment",
+			alias:           "forgejo",
+			tokenRequestURL: githubTokenURL,
+			errorString:     "use `opkssh login github` instead",
+		},
+		{
+			name:            "github alias in a Forgejo Actions environment",
+			alias:           "github",
+			tokenRequestURL: forgejoTokenURL,
+			errorString:     "use `opkssh login forgejo` instead",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			requestToken := ""
+			if tt.tokenRequestURL != "" {
+				requestToken = "runner-token"
+			}
+			t.Setenv("OPKSSH_DEFAULT", "")
+			t.Setenv("OPKSSH_PROVIDERS", "")
+			t.Setenv("ACTIONS_ID_TOKEN_REQUEST_URL", tt.tokenRequestURL)
+			t.Setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", requestToken)
+
+			login := LoginCmd{Config: defaultConfig, ProviderAliasArg: tt.alias}
+			_, _, err := login.determineProvider()
+			require.ErrorContains(t, err, tt.errorString)
+		})
+	}
+}

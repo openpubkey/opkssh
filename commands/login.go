@@ -198,8 +198,14 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		l.checkSSHConfigured()
 	}
 
-	if isGitHubEnvironment() {
-		l.Config.Providers = append(l.Config.Providers, config.GitHubProviderConfig())
+	if isActionsEnvironment() {
+		// Both GitHub Actions and Forgejo Actions inject the same environment
+		// variables; the shape of the token request URL tells them apart.
+		if forgejoIssuer, err := providers.ForgejoIssuerFromTokenRequestURL(os.Getenv(envActionsTokenRequestURL)); err == nil {
+			l.Config.Providers = append(l.Config.Providers, config.ForgejoProviderConfig(forgejoIssuer))
+		} else {
+			l.Config.Providers = append(l.Config.Providers, config.GitHubProviderConfig())
+		}
 	}
 
 	var provider providers.OpenIdProvider
@@ -407,6 +413,25 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 		}
 		providerConfig, ok := providerMap[defaultProviderAlias]
 		if !ok {
+			// The CI/CD aliases are only registered when the corresponding
+			// Actions environment is detected, so explain why they are missing
+			_, notForgejoEnv := providers.ForgejoIssuerFromTokenRequestURL(os.Getenv(envActionsTokenRequestURL))
+			isForgejoEnv := isActionsEnvironment() && notForgejoEnv == nil
+			isGithubEnv := isActionsEnvironment() && notForgejoEnv != nil
+			switch strings.ToLower(defaultProviderAlias) {
+			case "github":
+				if isForgejoEnv {
+					return nil, nil, fmt.Errorf("this looks like a Forgejo Actions environment, use `opkssh login forgejo` instead")
+				} else if !isGithubEnv {
+					return nil, nil, fmt.Errorf("the %s provider only works inside a GitHub Actions workflow with the `id-token: write` permission (%s and %s are not set)", defaultProviderAlias, envActionsTokenRequestURL, envActionsTokenRequestToken)
+				}
+			case "forgejo", "codeberg":
+				if isGithubEnv {
+					return nil, nil, fmt.Errorf("this looks like a GitHub Actions environment, use `opkssh login github` instead")
+				} else if !isForgejoEnv {
+					return nil, nil, fmt.Errorf("the %s provider only works inside a Forgejo Actions workflow with `enable-openid-connect: true` (%s and %s are not set)", defaultProviderAlias, envActionsTokenRequestURL, envActionsTokenRequestToken)
+				}
+			}
 			return nil, nil, fmt.Errorf("error getting provider config for alias %s", defaultProviderAlias)
 		}
 		if l.RemoteRedirectURI != "" {
@@ -423,6 +448,11 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 		// If the default provider is WEBCHOOSER, we need to create a chooser and return it
 		var providerList []providers.BrowserOpenIdProvider
 		for _, providerConfig := range providerConfigs {
+			// CI/CD providers (GitHub/Forgejo Actions) are not browser-based
+			// and cannot be offered by the chooser
+			if config.IsCICDProvider(providerConfig.Issuer) {
+				continue
+			}
 			if l.RemoteRedirectURI != "" {
 				// Override the remote redirect URI
 				providerConfig.RemoteRedirectURI = l.RemoteRedirectURI
@@ -431,7 +461,11 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 			if err != nil {
 				return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
 			}
-			providerList = append(providerList, op.(providers.BrowserOpenIdProvider))
+			browserOp, ok := op.(providers.BrowserOpenIdProvider)
+			if !ok {
+				return nil, nil, fmt.Errorf("provider for issuer %s does not support browser-based login", providerConfig.Issuer)
+			}
+			providerList = append(providerList, browserOp)
 		}
 
 		chooser := choosers.NewWebChooser(
@@ -886,9 +920,18 @@ func PrettyIdToken(pkt pktoken.PKToken) (string, error) {
 	return string(idtJson[:]), nil
 }
 
-func isGitHubEnvironment() bool {
-	return os.Getenv("ACTIONS_ID_TOKEN_REQUEST_URL") != "" &&
-		os.Getenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN") != ""
+// GitHub Actions and Forgejo Actions runners both inject these variables to
+// let a workflow request an OIDC ID Token.
+const (
+	envActionsTokenRequestURL   = "ACTIONS_ID_TOKEN_REQUEST_URL"
+	envActionsTokenRequestToken = "ACTIONS_ID_TOKEN_REQUEST_TOKEN"
+)
+
+// isActionsEnvironment detects a CI/CD workload identity environment
+// (GitHub Actions or Forgejo Actions); both inject the same variables.
+func isActionsEnvironment() bool {
+	return os.Getenv(envActionsTokenRequestURL) != "" &&
+		os.Getenv(envActionsTokenRequestToken) != ""
 }
 
 // payloadFromCompactPkt extracts the payload from a compact PK Token which

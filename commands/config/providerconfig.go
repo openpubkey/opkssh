@@ -121,6 +121,27 @@ func GitHubProviderConfig() ProviderConfig {
 	}
 }
 
+// ForgejoProviderConfig returns the provider config for logging in from a
+// Forgejo Actions workflow (e.g. Codeberg). The issuer is instance-specific
+// (<instance URL>/api/actions) and is typically derived from the token
+// request URL the Forgejo runner injects into the environment.
+func ForgejoProviderConfig(issuer string) ProviderConfig {
+	return ProviderConfig{
+		AliasList: []string{"forgejo", "codeberg"},
+		Issuer:    issuer,
+		// This is required, but is not used for this provider.
+		ClientID: "unused",
+	}
+}
+
+// IsCICDProvider reports whether the issuer belongs to a CI/CD workload
+// identity provider (GitHub Actions or Forgejo Actions) rather than a
+// browser-based OpenID Provider.
+func IsCICDProvider(issuer string) bool {
+	return strings.HasPrefix(issuer, "https://token.actions.githubusercontent.com") ||
+		providers.IsForgejoIssuer(issuer)
+}
+
 // NewProviderConfigFromString is a function to create the provider config from a string of the format
 // {alias},{provider_url},{client_id},{client_secret},{scopes}
 func NewProviderConfigFromString(configStr string, hasAlias bool) (ProviderConfig, error) {
@@ -251,6 +272,15 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 			return nil, fmt.Errorf("error creating github op: %w", err)
 		}
 		provider = githubOp
+	} else if providers.IsForgejoIssuer(p.Issuer) {
+		forgejoOp, err := providers.NewForgejoOpFromEnvironment()
+		if err != nil {
+			return nil, fmt.Errorf("error creating forgejo op: %w", err)
+		}
+		if forgejoOp.Issuer() != strings.TrimSuffix(p.Issuer, "/") {
+			return nil, fmt.Errorf("forgejo issuer mismatch: configured issuer is %s but the Forgejo Actions environment issues tokens for %s", p.Issuer, forgejoOp.Issuer())
+		}
+		provider = forgejoOp
 	} else {
 		// Generic provider
 		opts := providers.GetDefaultStandardOpOptions(p.Issuer, p.ClientID)
