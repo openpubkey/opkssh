@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/openpubkey/openpubkey/verifier"
+	"github.com/openpubkey/opkssh/commands/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -79,7 +80,8 @@ func TestProviderPolicy_CreateVerifier_Google(t *testing.T) {
 		ClientID:         "test-google",
 		ExpirationPolicy: "12h",
 	})
-	ver, err := policy.CreateVerifier()
+	blankConfig, _ := config.NewServerConfig(nil)
+	ver, err := policy.CreateVerifier(blankConfig, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ver)
 }
@@ -92,7 +94,8 @@ func TestProviderPolicy_CreateVerifier_Azure(t *testing.T) {
 		ClientID:         "test-azure",
 		ExpirationPolicy: "48h",
 	})
-	ver, err := policy.CreateVerifier()
+	blankConfig, _ := config.NewServerConfig(nil)
+	ver, err := policy.CreateVerifier(blankConfig, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ver)
 }
@@ -104,7 +107,8 @@ func TestProviderPolicy_CreateVerifier_Gitlab(t *testing.T) {
 		ClientID:         "test-gitlab",
 		ExpirationPolicy: "24h",
 	})
-	ver, err := policy.CreateVerifier()
+	blankConfig, _ := config.NewServerConfig(nil)
+	ver, err := policy.CreateVerifier(blankConfig, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ver)
 }
@@ -117,7 +121,8 @@ func TestProviderPolicy_CreateVerifier_InvalidExpiration(t *testing.T) {
 		ClientID:         "test-google",
 		ExpirationPolicy: "invalid",
 	})
-	ver, err := policy.CreateVerifier()
+	blankConfig, _ := config.NewServerConfig(nil)
+	ver, err := policy.CreateVerifier(blankConfig, nil)
 	require.ErrorContains(t, err, "invalid expiration policy")
 	require.Nil(t, ver)
 }
@@ -125,7 +130,8 @@ func TestProviderPolicy_CreateVerifier_InvalidExpiration(t *testing.T) {
 // Test ProviderPolicy.CreateVerifier when no providers are configured.
 func TestProviderPolicy_CreateVerifier_NoProviders(t *testing.T) {
 	policy := &ProviderPolicy{}
-	ver, err := policy.CreateVerifier()
+	blankConfig, _ := config.NewServerConfig(nil)
+	ver, err := policy.CreateVerifier(blankConfig, nil)
 	require.ErrorContains(t, err, "no providers configured")
 	require.Nil(t, ver)
 }
