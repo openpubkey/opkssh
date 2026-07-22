@@ -19,6 +19,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/openpubkey/openpubkey/providers"
@@ -121,6 +122,19 @@ func GitHubProviderConfig() ProviderConfig {
 	}
 }
 
+func GitLabCiProviderConfig() ProviderConfig {
+	issuer := os.Getenv("OPKSSH_GITLAB_CI_ISSUER")
+	if issuer == "" {
+		issuer = "https://gitlab.com"
+	}
+	return ProviderConfig{
+		AliasList: []string{"gitlab-ci"},
+		Issuer:    issuer,
+		// This is required, but is not used for this provider.
+		ClientID: "unused",
+	}
+}
+
 // NewProviderConfigFromString is a function to create the provider config from a string of the format
 // {alias},{provider_url},{client_id},{client_secret},{scopes}
 func NewProviderConfigFromString(configStr string, hasAlias bool) (ProviderConfig, error) {
@@ -188,7 +202,13 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 	}
 	var provider providers.OpenIdProvider
 
-	if strings.HasPrefix(p.Issuer, "https://accounts.google.com") {
+	if p.hasAlias("gitlab-ci") {
+		if p.Issuer == "https://gitlab.com" {
+			provider = providers.NewGitlabCiOpFromEnvironmentDefault()
+		} else {
+			provider = providers.NewGitlabCiOp(p.Issuer, "OPENPUBKEY_JWT")
+		}
+	} else if strings.HasPrefix(p.Issuer, "https://accounts.google.com") {
 		opts := providers.GetDefaultGoogleOpOptions()
 		opts.Issuer = p.Issuer
 		opts.ClientID = p.ClientID
@@ -272,6 +292,10 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 
 func (p *ProviderConfig) hasScopes() bool {
 	return len(p.Scopes) > 0 && (len(p.Scopes) > 1 || p.Scopes[0] != "")
+}
+
+func (p *ProviderConfig) hasAlias(alias string) bool {
+	return slices.Contains(p.AliasList, alias)
 }
 
 // GetProvidersConfigFromEnv is a function to retrieve the config from the env variables
