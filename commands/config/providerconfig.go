@@ -19,6 +19,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/openpubkey/openpubkey/providers"
@@ -29,6 +30,21 @@ const (
 	WEBCHOOSER_ALIAS        = "WEBCHOOSER"
 	OPKSSH_DEFAULT_ENVVAR   = "OPKSSH_DEFAULT"
 	OPKSSH_PROVIDERS_ENVVAR = "OPKSSH_PROVIDERS"
+
+	// cicdUnusedClientID marks a config built by GitHubProviderConfig,
+	// ForgejoProviderConfig, or GitlabCiProviderConfig; real OPs need a real client ID.
+	cicdUnusedClientID = "unused"
+
+	// gitlabCiAlias tells GitlabCiProviderConfig apart from the browser
+	// GitLab OP, since both share the same issuer.
+	gitlabCiAlias = "gitlab-ci"
+
+	gitlabIssuer = "https://gitlab.com"
+	envGitlabCI  = "GITLAB_CI"
+
+	// gitlabCiTokenEnvVar is the env var GitLab CI/CD's `id_tokens:` config
+	// must request the ID token under (see GitlabCiProviderConfig).
+	gitlabCiTokenEnvVar = "OPENPUBKEY_JWT"
 )
 
 type ProviderConfig struct {
@@ -117,8 +133,44 @@ func GitHubProviderConfig() ProviderConfig {
 		AliasList: []string{"github"},
 		Issuer:    "https://token.actions.githubusercontent.com",
 		// This is required, but is not used for this provider.
-		ClientID: "unused",
+		ClientID: cicdUnusedClientID,
 	}
+}
+
+// ForgejoProviderConfig returns the provider config for logging in from a
+// Forgejo Actions workflow (e.g. Codeberg). The issuer is instance-specific
+// (<instance URL>/api/actions) and is typically derived from the token
+// request URL the Forgejo runner injects into the environment.
+func ForgejoProviderConfig(issuer string) ProviderConfig {
+	return ProviderConfig{
+		AliasList: []string{"forgejo", "codeberg"},
+		Issuer:    issuer,
+		// This is required, but is not used for this provider.
+		ClientID: cicdUnusedClientID,
+	}
+}
+
+// GitlabCiProviderConfig returns the provider config for a GitLab CI/CD
+// pipeline. issuer is the GitLab instance URL (gitlab.com or self-hosted,
+// from CI_SERVER_URL). Requires an `id_tokens: OPENPUBKEY_JWT: ...` entry in
+// .gitlab-ci.yml.
+func GitlabCiProviderConfig(issuer string) ProviderConfig {
+	return ProviderConfig{
+		AliasList: []string{gitlabCiAlias},
+		Issuer:    issuer,
+		// This is required, but is not used for this provider.
+		ClientID: cicdUnusedClientID,
+	}
+}
+
+// IsCICDProvider reports whether p is a CI/CD provider rather than a
+// browser-based one. GitLab CI/CD is checked by alias, not issuer, since it
+// shares its issuer with the browser-based GitLab OP.
+func IsCICDProvider(p ProviderConfig) bool {
+	if strings.HasPrefix(p.Issuer, "https://token.actions.githubusercontent.com") || providers.IsForgejoIssuer(p.Issuer) {
+		return true
+	}
+	return slices.Contains(p.AliasList, gitlabCiAlias)
 }
 
 // NewProviderConfigFromString is a function to create the provider config from a string of the format
@@ -217,7 +269,12 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 		opts.RemoteRedirectURI = p.RemoteRedirectURI
 		opts.OpenBrowser = openBrowser
 		provider = providers.NewAzureOpWithOptions(opts)
-	} else if strings.HasPrefix(p.Issuer, "https://gitlab.com") {
+	} else if p.ClientID == cicdUnusedClientID && slices.Contains(p.AliasList, gitlabCiAlias) {
+		if os.Getenv(envGitlabCI) != "true" {
+			return nil, fmt.Errorf("error creating gitlab ci op: not running inside a GitLab CI/CD pipeline (%s environment variable is not \"true\")", envGitlabCI)
+		}
+		provider = providers.NewGitlabCiOp(p.Issuer, gitlabCiTokenEnvVar)
+	} else if strings.HasPrefix(p.Issuer, gitlabIssuer) {
 		opts := providers.GetDefaultGitlabOpOptions()
 		opts.Issuer = p.Issuer
 		opts.ClientID = p.ClientID
@@ -251,6 +308,17 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 			return nil, fmt.Errorf("error creating github op: %w", err)
 		}
 		provider = githubOp
+	} else if providers.IsForgejoIssuer(p.Issuer) && p.ClientID == cicdUnusedClientID {
+		// ClientID check avoids misrouting an unrelated OP whose issuer
+		// happens to end in "/api/actions".
+		forgejoOp, err := providers.NewForgejoOpFromEnvironment()
+		if err != nil {
+			return nil, fmt.Errorf("error creating forgejo op: %w", err)
+		}
+		if forgejoOp.Issuer() != strings.TrimSuffix(p.Issuer, "/") {
+			return nil, fmt.Errorf("forgejo issuer mismatch: configured issuer is %s but the Forgejo Actions environment issues tokens for %s", p.Issuer, forgejoOp.Issuer())
+		}
+		provider = forgejoOp
 	} else {
 		// Generic provider
 		opts := providers.GetDefaultStandardOpOptions(p.Issuer, p.ClientID)

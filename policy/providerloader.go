@@ -97,6 +97,8 @@ func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
 			provider = providers.NewGitlabOpWithOptions(opts)
 		} else if row.Issuer == "https://token.actions.githubusercontent.com" {
 			provider = providers.NewGithubOp(row.Issuer, "")
+		} else if providers.IsForgejoIssuer(row.Issuer) {
+			provider = providers.NewForgejoOp(row.Issuer, "", "")
 		} else {
 			opts := providers.GetDefaultGoogleOpOptions()
 			opts.Issuer = row.Issuer

@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -198,8 +199,14 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		l.checkSSHConfigured()
 	}
 
-	if isGitHubEnvironment() {
+	if kind, forgejoIssuer := detectActionsEnvironment(); kind == actionsEnvForgejo {
+		l.Config.Providers = append(l.Config.Providers, config.ForgejoProviderConfig(forgejoIssuer))
+	} else if kind == actionsEnvGithub {
 		l.Config.Providers = append(l.Config.Providers, config.GitHubProviderConfig())
+	}
+
+	if os.Getenv(envGitlabCI) == "true" {
+		l.Config.Providers = append(l.Config.Providers, config.GitlabCiProviderConfig(gitlabCiIssuer()))
 	}
 
 	var provider providers.OpenIdProvider
@@ -407,6 +414,29 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 		}
 		providerConfig, ok := providerMap[defaultProviderAlias]
 		if !ok {
+			// The CI/CD aliases are only registered when the corresponding
+			// Actions environment is detected, so explain why they are missing
+			kind, _ := detectActionsEnvironment()
+			isForgejoEnv := kind == actionsEnvForgejo
+			isGithubEnv := kind == actionsEnvGithub
+			switch strings.ToLower(defaultProviderAlias) {
+			case "github":
+				if isForgejoEnv {
+					return nil, nil, fmt.Errorf("this looks like a Forgejo Actions environment, use `opkssh login forgejo` instead")
+				} else if !isGithubEnv {
+					return nil, nil, fmt.Errorf("the %s provider only works inside a GitHub Actions workflow with the `id-token: write` permission (%s and %s are not set)", defaultProviderAlias, envActionsTokenRequestURL, envActionsTokenRequestToken)
+				}
+			case "forgejo", "codeberg":
+				if isGithubEnv {
+					return nil, nil, fmt.Errorf("this looks like a GitHub Actions environment, use `opkssh login github` instead")
+				} else if !isForgejoEnv {
+					return nil, nil, fmt.Errorf("the %s provider only works inside a Forgejo Actions workflow with `enable-openid-connect: true` (%s and %s are not set)", defaultProviderAlias, envActionsTokenRequestURL, envActionsTokenRequestToken)
+				}
+			case "gitlab-ci":
+				if os.Getenv(envGitlabCI) != "true" {
+					return nil, nil, fmt.Errorf("the %s provider only works inside a GitLab CI/CD pipeline (%s is not set to \"true\")", defaultProviderAlias, envGitlabCI)
+				}
+			}
 			return nil, nil, fmt.Errorf("error getting provider config for alias %s", defaultProviderAlias)
 		}
 		if l.RemoteRedirectURI != "" {
@@ -423,6 +453,11 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 		// If the default provider is WEBCHOOSER, we need to create a chooser and return it
 		var providerList []providers.BrowserOpenIdProvider
 		for _, providerConfig := range providerConfigs {
+			// CI/CD providers (GitHub/Forgejo Actions) are not browser-based
+			// and cannot be offered by the chooser
+			if config.IsCICDProvider(providerConfig) {
+				continue
+			}
 			if l.RemoteRedirectURI != "" {
 				// Override the remote redirect URI
 				providerConfig.RemoteRedirectURI = l.RemoteRedirectURI
@@ -431,7 +466,11 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 			if err != nil {
 				return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
 			}
-			providerList = append(providerList, op.(providers.BrowserOpenIdProvider))
+			browserOp, ok := op.(providers.BrowserOpenIdProvider)
+			if !ok {
+				return nil, nil, fmt.Errorf("provider for issuer %s does not support browser-based login", providerConfig.Issuer)
+			}
+			providerList = append(providerList, browserOp)
 		}
 
 		chooser := choosers.NewWebChooser(
@@ -886,9 +925,60 @@ func PrettyIdToken(pkt pktoken.PKToken) (string, error) {
 	return string(idtJson[:]), nil
 }
 
-func isGitHubEnvironment() bool {
-	return os.Getenv("ACTIONS_ID_TOKEN_REQUEST_URL") != "" &&
-		os.Getenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN") != ""
+// GitHub Actions and Forgejo Actions runners both inject
+// envActionsTokenRequestURL/Token to let a workflow request an OIDC ID
+// Token. envGitlabCI and envCIServerURL are GitLab CI/CD's equivalent
+// markers, and githubActionsTokenRequestHostSuffix is the host of GitHub's
+// ACTIONS_ID_TOKEN_REQUEST_URL, e.g. pipelines.actions.githubusercontent.com.
+const (
+	envActionsTokenRequestURL           = "ACTIONS_ID_TOKEN_REQUEST_URL"
+	envActionsTokenRequestToken         = "ACTIONS_ID_TOKEN_REQUEST_TOKEN"
+	envGitlabCI                         = "GITLAB_CI"
+	envCIServerURL                      = "CI_SERVER_URL"
+	githubActionsTokenRequestHostSuffix = "actions.githubusercontent.com"
+)
+
+// isActionsEnvironment detects a CI/CD workload identity environment
+// (GitHub Actions or Forgejo Actions); both inject the same variables.
+func isActionsEnvironment() bool {
+	return os.Getenv(envActionsTokenRequestURL) != "" &&
+		os.Getenv(envActionsTokenRequestToken) != ""
+}
+
+type actionsEnvKind int
+
+const (
+	actionsEnvNone actionsEnvKind = iota
+	actionsEnvGithub
+	actionsEnvForgejo
+)
+
+// detectActionsEnvironment identifies which Actions-compatible CI/CD
+// environment is active. GitHub and Forgejo Actions inject the same env
+// vars, so each is identified positively rather than by ruling out the
+// other, which would misreport a third runner as GitHub.
+func detectActionsEnvironment() (kind actionsEnvKind, forgejoIssuer string) {
+	if !isActionsEnvironment() {
+		return actionsEnvNone, ""
+	}
+	tokenRequestURL := os.Getenv(envActionsTokenRequestURL)
+	if issuer, err := providers.ForgejoIssuerFromTokenRequestURL(tokenRequestURL); err == nil {
+		return actionsEnvForgejo, issuer
+	}
+	if parsedURL, err := url.Parse(tokenRequestURL); err == nil && strings.HasSuffix(parsedURL.Host, githubActionsTokenRequestHostSuffix) {
+		return actionsEnvGithub, ""
+	}
+	return actionsEnvNone, ""
+}
+
+// gitlabCiIssuer returns the GitLab instance URL for the current CI/CD
+// pipeline, from the CI_SERVER_URL predefined variable, e.g.
+// "https://gitlab.com" or a self-hosted instance's URL.
+func gitlabCiIssuer() string {
+	if issuer := os.Getenv(envCIServerURL); issuer != "" {
+		return issuer
+	}
+	return "https://gitlab.com"
 }
 
 // payloadFromCompactPkt extracts the payload from a compact PK Token which
