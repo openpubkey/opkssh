@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -198,14 +199,14 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		l.checkSSHConfigured()
 	}
 
-	if isActionsEnvironment() {
-		// Both GitHub Actions and Forgejo Actions inject the same environment
-		// variables; the shape of the token request URL tells them apart.
-		if forgejoIssuer, err := providers.ForgejoIssuerFromTokenRequestURL(os.Getenv(envActionsTokenRequestURL)); err == nil {
-			l.Config.Providers = append(l.Config.Providers, config.ForgejoProviderConfig(forgejoIssuer))
-		} else {
-			l.Config.Providers = append(l.Config.Providers, config.GitHubProviderConfig())
-		}
+	if kind, forgejoIssuer := detectActionsEnvironment(); kind == actionsEnvForgejo {
+		l.Config.Providers = append(l.Config.Providers, config.ForgejoProviderConfig(forgejoIssuer))
+	} else if kind == actionsEnvGithub {
+		l.Config.Providers = append(l.Config.Providers, config.GitHubProviderConfig())
+	}
+
+	if os.Getenv(envGitlabCI) == "true" {
+		l.Config.Providers = append(l.Config.Providers, config.GitlabCiProviderConfig(gitlabCiIssuer()))
 	}
 
 	var provider providers.OpenIdProvider
@@ -415,9 +416,9 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 		if !ok {
 			// The CI/CD aliases are only registered when the corresponding
 			// Actions environment is detected, so explain why they are missing
-			_, notForgejoEnv := providers.ForgejoIssuerFromTokenRequestURL(os.Getenv(envActionsTokenRequestURL))
-			isForgejoEnv := isActionsEnvironment() && notForgejoEnv == nil
-			isGithubEnv := isActionsEnvironment() && notForgejoEnv != nil
+			kind, _ := detectActionsEnvironment()
+			isForgejoEnv := kind == actionsEnvForgejo
+			isGithubEnv := kind == actionsEnvGithub
 			switch strings.ToLower(defaultProviderAlias) {
 			case "github":
 				if isForgejoEnv {
@@ -430,6 +431,10 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 					return nil, nil, fmt.Errorf("this looks like a GitHub Actions environment, use `opkssh login github` instead")
 				} else if !isForgejoEnv {
 					return nil, nil, fmt.Errorf("the %s provider only works inside a Forgejo Actions workflow with `enable-openid-connect: true` (%s and %s are not set)", defaultProviderAlias, envActionsTokenRequestURL, envActionsTokenRequestToken)
+				}
+			case "gitlab-ci":
+				if os.Getenv(envGitlabCI) != "true" {
+					return nil, nil, fmt.Errorf("the %s provider only works inside a GitLab CI/CD pipeline (%s is not set to \"true\")", defaultProviderAlias, envGitlabCI)
 				}
 			}
 			return nil, nil, fmt.Errorf("error getting provider config for alias %s", defaultProviderAlias)
@@ -450,7 +455,7 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 		for _, providerConfig := range providerConfigs {
 			// CI/CD providers (GitHub/Forgejo Actions) are not browser-based
 			// and cannot be offered by the chooser
-			if config.IsCICDProvider(providerConfig.Issuer) {
+			if config.IsCICDProvider(providerConfig) {
 				continue
 			}
 			if l.RemoteRedirectURI != "" {
@@ -920,11 +925,17 @@ func PrettyIdToken(pkt pktoken.PKToken) (string, error) {
 	return string(idtJson[:]), nil
 }
 
-// GitHub Actions and Forgejo Actions runners both inject these variables to
-// let a workflow request an OIDC ID Token.
+// GitHub Actions and Forgejo Actions runners both inject
+// envActionsTokenRequestURL/Token to let a workflow request an OIDC ID
+// Token. envGitlabCI and envCIServerURL are GitLab CI/CD's equivalent
+// markers, and githubActionsTokenRequestHostSuffix is the host of GitHub's
+// ACTIONS_ID_TOKEN_REQUEST_URL, e.g. pipelines.actions.githubusercontent.com.
 const (
-	envActionsTokenRequestURL   = "ACTIONS_ID_TOKEN_REQUEST_URL"
-	envActionsTokenRequestToken = "ACTIONS_ID_TOKEN_REQUEST_TOKEN"
+	envActionsTokenRequestURL           = "ACTIONS_ID_TOKEN_REQUEST_URL"
+	envActionsTokenRequestToken         = "ACTIONS_ID_TOKEN_REQUEST_TOKEN"
+	envGitlabCI                         = "GITLAB_CI"
+	envCIServerURL                      = "CI_SERVER_URL"
+	githubActionsTokenRequestHostSuffix = "actions.githubusercontent.com"
 )
 
 // isActionsEnvironment detects a CI/CD workload identity environment
@@ -932,6 +943,42 @@ const (
 func isActionsEnvironment() bool {
 	return os.Getenv(envActionsTokenRequestURL) != "" &&
 		os.Getenv(envActionsTokenRequestToken) != ""
+}
+
+type actionsEnvKind int
+
+const (
+	actionsEnvNone actionsEnvKind = iota
+	actionsEnvGithub
+	actionsEnvForgejo
+)
+
+// detectActionsEnvironment identifies which Actions-compatible CI/CD
+// environment is active. GitHub and Forgejo Actions inject the same env
+// vars, so each is identified positively rather than by ruling out the
+// other, which would misreport a third runner as GitHub.
+func detectActionsEnvironment() (kind actionsEnvKind, forgejoIssuer string) {
+	if !isActionsEnvironment() {
+		return actionsEnvNone, ""
+	}
+	tokenRequestURL := os.Getenv(envActionsTokenRequestURL)
+	if issuer, err := providers.ForgejoIssuerFromTokenRequestURL(tokenRequestURL); err == nil {
+		return actionsEnvForgejo, issuer
+	}
+	if parsedURL, err := url.Parse(tokenRequestURL); err == nil && strings.HasSuffix(parsedURL.Host, githubActionsTokenRequestHostSuffix) {
+		return actionsEnvGithub, ""
+	}
+	return actionsEnvNone, ""
+}
+
+// gitlabCiIssuer returns the GitLab instance URL for the current CI/CD
+// pipeline, from the CI_SERVER_URL predefined variable, e.g.
+// "https://gitlab.com" or a self-hosted instance's URL.
+func gitlabCiIssuer() string {
+	if issuer := os.Getenv(envCIServerURL); issuer != "" {
+		return issuer
+	}
+	return "https://gitlab.com"
 }
 
 // payloadFromCompactPkt extracts the payload from a compact PK Token which

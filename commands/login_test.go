@@ -624,6 +624,11 @@ func TestDetermineProviderCICDAliasErrors(t *testing.T) {
 			tokenRequestURL: forgejoTokenURL,
 			errorString:     "use `opkssh login forgejo` instead",
 		},
+		{
+			name:        "gitlab-ci alias outside a GitLab CI/CD pipeline",
+			alias:       "gitlab-ci",
+			errorString: "only works inside a GitLab CI/CD pipeline",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -635,10 +640,39 @@ func TestDetermineProviderCICDAliasErrors(t *testing.T) {
 			t.Setenv("OPKSSH_PROVIDERS", "")
 			t.Setenv("ACTIONS_ID_TOKEN_REQUEST_URL", tt.tokenRequestURL)
 			t.Setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", requestToken)
+			t.Setenv("GITLAB_CI", "")
 
 			login := LoginCmd{Config: defaultConfig, ProviderAliasArg: tt.alias}
 			_, _, err := login.determineProvider()
 			require.ErrorContains(t, err, tt.errorString)
 		})
 	}
+}
+
+func TestDetermineProviderGitlabCIEnvironment(t *testing.T) {
+	defaultConfig, err := config.NewClientConfig(config.DefaultClientConfig)
+	require.NoError(t, err)
+	t.Setenv("OPKSSH_DEFAULT", "")
+	t.Setenv("OPKSSH_PROVIDERS", "")
+	t.Setenv("GITLAB_CI", "true")
+	t.Setenv("ACTIONS_ID_TOKEN_REQUEST_URL", "")
+	t.Setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "")
+
+	// Mirrors the auto-registration Run() does before determineProvider() is
+	// called; not calling Run() itself since it has unrelated side effects
+	// (SSH config checks, logging setup).
+	defaultConfig.Providers = append(defaultConfig.Providers, config.GitlabCiProviderConfig("https://gitlab.com"))
+
+	login := LoginCmd{Config: defaultConfig, ProviderAliasArg: "gitlab-ci"}
+	provider, _, err := login.determineProvider()
+	require.NoError(t, err)
+	require.Equal(t, "https://gitlab.com", provider.Issuer())
+}
+
+func TestGitlabCiIssuer(t *testing.T) {
+	t.Setenv("CI_SERVER_URL", "")
+	require.Equal(t, "https://gitlab.com", gitlabCiIssuer())
+
+	t.Setenv("CI_SERVER_URL", "https://gitlab.example.com")
+	require.Equal(t, "https://gitlab.example.com", gitlabCiIssuer())
 }

@@ -211,11 +211,60 @@ func TestForgejoProviderConfig(t *testing.T) {
 }
 
 func TestIsCICDProvider(t *testing.T) {
-	require.True(t, IsCICDProvider("https://token.actions.githubusercontent.com"))
-	require.True(t, IsCICDProvider("https://codeberg.org/api/actions"))
-	require.True(t, IsCICDProvider("https://git.example.com/forgejo/api/actions"))
-	require.False(t, IsCICDProvider("https://accounts.google.com"))
-	require.False(t, IsCICDProvider("https://gitlab.com"))
+	require.True(t, IsCICDProvider(GitHubProviderConfig()))
+	require.True(t, IsCICDProvider(ForgejoProviderConfig("https://codeberg.org/api/actions")))
+	require.True(t, IsCICDProvider(ForgejoProviderConfig("https://git.example.com/forgejo/api/actions")))
+	require.True(t, IsCICDProvider(GitlabCiProviderConfig("https://gitlab.com")))
+	require.True(t, IsCICDProvider(GitlabCiProviderConfig("https://gitlab.example.com")))
+	require.False(t, IsCICDProvider(ProviderConfig{Issuer: "https://accounts.google.com"}))
+	// The browser-based GitLab OP shares its issuer with GitLab CI/CD, so it
+	// must be told apart by alias, not issuer.
+	require.False(t, IsCICDProvider(ProviderConfig{AliasList: []string{"gitlab"}, Issuer: "https://gitlab.com"}))
+}
+
+func TestGitlabCiProviderConfig(t *testing.T) {
+	providerConfig := GitlabCiProviderConfig("https://gitlab.example.com")
+	require.Equal(t, []string{"gitlab-ci"}, providerConfig.AliasList)
+	require.Equal(t, "https://gitlab.example.com", providerConfig.Issuer)
+	require.Equal(t, "unused", providerConfig.ClientID)
+}
+
+func TestGitlabCiToProvider(t *testing.T) {
+	t.Setenv("GITLAB_CI", "true")
+
+	providerConfig := GitlabCiProviderConfig("https://gitlab.com")
+	provider, err := providerConfig.ToProvider(false)
+	require.NoError(t, err)
+	require.Equal(t, "https://gitlab.com", provider.Issuer())
+}
+
+func TestGitlabCiToProviderSelfHosted(t *testing.T) {
+	t.Setenv("GITLAB_CI", "true")
+
+	providerConfig := GitlabCiProviderConfig("https://gitlab.example.com")
+	provider, err := providerConfig.ToProvider(false)
+	require.NoError(t, err)
+	require.Equal(t, "https://gitlab.example.com", provider.Issuer())
+}
+
+func TestGitlabCiToProviderOutsideGitlabCI(t *testing.T) {
+	t.Setenv("GITLAB_CI", "")
+
+	providerConfig := GitlabCiProviderConfig("https://gitlab.com")
+	_, err := providerConfig.ToProvider(false)
+	require.ErrorContains(t, err, "error creating gitlab ci op")
+}
+
+func TestGitlabBrowserToProviderUnaffectedByGitlabCI(t *testing.T) {
+	t.Setenv("GITLAB_CI", "")
+
+	providerConfig := DefaultProviderConfig()
+	providerConfig.AliasList = []string{"gitlab"}
+	providerConfig.Issuer = "https://gitlab.com"
+	providerConfig.ClientID = "some-real-client-id"
+	provider, err := providerConfig.ToProvider(false)
+	require.NoError(t, err)
+	require.Equal(t, "https://gitlab.com", provider.Issuer())
 }
 
 func TestForgejoToProvider(t *testing.T) {
