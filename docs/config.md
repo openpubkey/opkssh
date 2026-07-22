@@ -58,6 +58,23 @@ providers:
       - http://localhost:10001/login-callback
       - http://localhost:11110/login-callback
 
+```
+
+On headless nodes, when using device flow, `webchooser` is not available. With multiple provides available specify with `opkssh login [provider]`
+
+```yaml
+---
+
+default_provider: gitlab
+
+providers:
+  - alias: gitlab
+    issuer: https://gitlab.com
+    client_id: 8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923
+    scopes: openid email
+    access_type: offline
+    prompt: consent
+    device_flow: true
 
 ```
 
