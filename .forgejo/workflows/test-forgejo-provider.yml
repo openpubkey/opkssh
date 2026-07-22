@@ -18,7 +18,7 @@ enable-openid-connect: true
 jobs:
   e2e:
     # Adjust the label to one your instance's runners offer.
-    runs-on: ubuntu-latest
+    runs-on: codeberg-small-lazy
     container:
       image: golang:1.26-bookworm
     timeout-minutes: 10
