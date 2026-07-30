@@ -426,6 +426,36 @@ func TestPolicyDeniedMissingOidcGroupsClaim(t *testing.T) {
 	require.Error(t, err, "user should not as the token is missing the groups claim")
 }
 
+func TestPolicyDeniedMalformedOidcRow(t *testing.T) {
+	t.Parallel()
+
+	op := NewMockOpenIdProviderGroups(t, "groups", []string{"a", "b", "c"})
+
+	opkClient, err := client.New(op)
+	require.NoError(t, err)
+	pkt, err := opkClient.Auth(context.Background())
+	require.NoError(t, err)
+
+	// EscapedSplit drops empty fields, so these rows used to produce a
+	// single section and panic on oidcGroupSections[1].
+	for _, identityAttribute := range []string{"oidc:", "oidc::", "oidc:::"} {
+		policyEnforcer := &policy.Enforcer{
+			PolicyLoader: &MockPolicyLoader{Policy: &policy.Policy{
+				Users: []policy.User{
+					{
+						IdentityAttribute: identityAttribute,
+						Principals:        []string{"test"},
+						Issuer:            "https://accounts.example.com",
+					},
+				},
+			}},
+		}
+
+		err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa", policy.DenyList{}, nil)
+		require.Error(t, err, "malformed row %q should deny, not panic", identityAttribute)
+	}
+}
+
 func TestEnforcerTableTest(t *testing.T) {
 	t.Parallel()
 
