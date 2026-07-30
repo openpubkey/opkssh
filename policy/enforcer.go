@@ -139,6 +139,13 @@ func validateClaim(claims *checkedClaims, user *User) bool {
 	// Should we match on an oidc claim?
 	if strings.HasPrefix(user.IdentityAttribute, OIDC_CLAIMS) {
 		oidcGroupSections := EscapedSplit(user.IdentityAttribute, ':')
+		// A well formed row is oidc:<claim>:<value>. EscapedSplit drops empty
+		// fields, so "oidc:" and "oidc::" come back as a single section and
+		// indexing into them panics. Treat a short row as no match.
+		if len(oidcGroupSections) < 3 {
+			log.Printf("warning: malformed oidc identity attribute %q in policy, expected oidc:<claim>:<value>", user.IdentityAttribute)
+			return false
+		}
 		oidcGroupsName := strings.Trim(oidcGroupSections[1], "\"")
 
 		return slices.Contains(
