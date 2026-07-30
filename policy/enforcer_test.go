@@ -445,14 +445,19 @@ func NewMockOpenIdProviderEmailVerified(t *testing.T, emailVerified any) provide
 // A policy row matching on email should still be allowed when the ID Token
 // does not assert email_verified, but the admin should see a warning.
 func TestEmailVerifiedWarning(t *testing.T) {
+	// Some OPs send email_verified as a string rather than a bool, so both
+	// shapes have to be handled. See oauth2-proxy/oauth2-proxy#629.
 	tests := []struct {
 		name          string
 		emailVerified any
 		wantWarning   string
 	}{
 		{name: "claim absent", emailVerified: nil, wantWarning: "no email_verified claim"},
-		{name: "claim false", emailVerified: false, wantWarning: "email_verified to false"},
-		{name: "claim true", emailVerified: true, wantWarning: ""},
+		{name: "bool false", emailVerified: false, wantWarning: `email_verified to "false"`},
+		{name: "bool true", emailVerified: true, wantWarning: ""},
+		{name: "string false", emailVerified: "false", wantWarning: `email_verified to "false"`},
+		{name: "string true", emailVerified: "true", wantWarning: ""},
+		{name: "string True", emailVerified: "True", wantWarning: ""},
 	}
 
 	for _, tt := range tests {
@@ -475,7 +480,7 @@ func TestEmailVerifiedWarning(t *testing.T) {
 			require.NoError(t, err, "email match should still be allowed")
 
 			if tt.wantWarning == "" {
-				require.NotContains(t, logs.String(), "email_verified")
+				require.NotContains(t, logs.String(), "consider matching on sub")
 			} else {
 				require.Contains(t, logs.String(), tt.wantWarning)
 			}
@@ -509,7 +514,7 @@ func TestEmailVerifiedNoWarningOnSubMatch(t *testing.T) {
 
 	err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa", policy.DenyList{}, nil)
 	require.NoError(t, err)
-	require.False(t, strings.Contains(logs.String(), "email_verified"))
+	require.False(t, strings.Contains(logs.String(), "consider matching on sub"))
 }
 
 func TestPolicyDeniedMalformedOidcRow(t *testing.T) {

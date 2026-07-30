@@ -34,6 +34,10 @@ import (
 const (
 	OIDC_CLAIMS         = "oidc:"
 	OIDC_WILDCARD_EMAIL = "oidc-match-end:email:"
+
+	// EMAIL_VERIFIED_CLAIM is read out of ExtraClaims, where a bool and a
+	// string value both end up normalized to a string.
+	EMAIL_VERIFIED_CLAIM = "email_verified"
 )
 
 // DenyList represents the DenyLists in the server config
@@ -50,12 +54,9 @@ type Enforcer struct {
 
 // type for Identity Token checkedClaims
 type checkedClaims struct {
-	Email string `json:"email"`
-	// EmailVerified is a pointer so we can tell "claim absent" from
-	// "claim present and false". Not all OPs send it.
-	EmailVerified *bool               `json:"email_verified"`
-	Sub           string              `json:"sub"`
-	ExtraClaims   map[string][]string `json:"-"`
+	Email       string              `json:"email"`
+	Sub         string              `json:"sub"`
+	ExtraClaims map[string][]string `json:"-"`
 }
 
 func (s *checkedClaims) UnmarshalJSON(data []byte) error {
@@ -188,12 +189,18 @@ func validateClaim(claims *checkedClaims, user *User) bool {
 // warnIfEmailUnverified logs when a policy row matched on the email claim but
 // the ID Token does not assert that the email was verified. Admins who want
 // this enforced rather than logged should match on sub or use a policy plugin.
+//
+// The value is read from ExtraClaims rather than a typed struct field because
+// some OPs send email_verified as the string "true" rather than a bool, and
+// unmarshalling that into a bool would fail the whole token. ExtraClaims
+// normalizes both shapes to a string.
 func warnIfEmailUnverified(claims *checkedClaims, identityAttribute string) {
+	values, ok := claims.ExtraClaims[EMAIL_VERIFIED_CLAIM]
 	switch {
-	case claims.EmailVerified == nil:
+	case !ok || len(values) == 0:
 		log.Printf("warning: policy %q matched on email %q but the ID Token has no email_verified claim, consider matching on sub instead", identityAttribute, claims.Email)
-	case !*claims.EmailVerified:
-		log.Printf("warning: policy %q matched on email %q but the ID Token sets email_verified to false, consider matching on sub instead", identityAttribute, claims.Email)
+	case !strings.EqualFold(values[0], "true"):
+		log.Printf("warning: policy %q matched on email %q but the ID Token sets email_verified to %q, consider matching on sub instead", identityAttribute, claims.Email, values[0])
 	}
 }
 
