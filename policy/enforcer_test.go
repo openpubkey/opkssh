@@ -17,8 +17,12 @@
 package policy_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"log"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/openpubkey/openpubkey/client"
@@ -424,6 +428,93 @@ func TestPolicyDeniedMissingOidcGroupsClaim(t *testing.T) {
 
 	err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa", policy.DenyList{}, nil)
 	require.Error(t, err, "user should not as the token is missing the groups claim")
+}
+
+func NewMockOpenIdProviderEmailVerified(t *testing.T, emailVerified any) providers.OpenIdProvider {
+	providerOpts := providers.DefaultMockProviderOpts()
+	op, _, idTokenTemplate, err := providers.NewMockProvider(providerOpts)
+	require.NoError(t, err)
+	extraClaims := map[string]any{"email": "arthur.aardvark@example.com"}
+	if emailVerified != nil {
+		extraClaims["email_verified"] = emailVerified
+	}
+	idTokenTemplate.ExtraClaims = extraClaims
+	return op
+}
+
+// A policy row matching on email should still be allowed when the ID Token
+// does not assert email_verified, but the admin should see a warning.
+func TestEmailVerifiedWarning(t *testing.T) {
+	// Some OPs send email_verified as a string rather than a bool, so both
+	// shapes have to be handled. See oauth2-proxy/oauth2-proxy#629.
+	tests := []struct {
+		name          string
+		emailVerified any
+		wantWarning   string
+	}{
+		{name: "claim absent", emailVerified: nil, wantWarning: "no email_verified claim"},
+		{name: "bool false", emailVerified: false, wantWarning: `email_verified to "false"`},
+		{name: "bool true", emailVerified: true, wantWarning: ""},
+		{name: "string false", emailVerified: "false", wantWarning: `email_verified to "false"`},
+		{name: "string true", emailVerified: "true", wantWarning: ""},
+		{name: "string True", emailVerified: "True", wantWarning: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op := NewMockOpenIdProviderEmailVerified(t, tt.emailVerified)
+			opkClient, err := client.New(op)
+			require.NoError(t, err)
+			pkt, err := opkClient.Auth(context.Background())
+			require.NoError(t, err)
+
+			policyEnforcer := &policy.Enforcer{
+				PolicyLoader: &MockPolicyLoader{Policy: policyTest},
+			}
+
+			var logs bytes.Buffer
+			log.SetOutput(&logs)
+			defer log.SetOutput(os.Stderr)
+
+			err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa", policy.DenyList{}, nil)
+			require.NoError(t, err, "email match should still be allowed")
+
+			if tt.wantWarning == "" {
+				require.NotContains(t, logs.String(), "consider matching on sub")
+			} else {
+				require.Contains(t, logs.String(), tt.wantWarning)
+			}
+		})
+	}
+}
+
+// Matching on sub should not produce an email_verified warning.
+func TestEmailVerifiedNoWarningOnSubMatch(t *testing.T) {
+	op := NewMockOpenIdSubProvider(t, "repo:organization/repository:ref:refs/heads/main")
+	opkClient, err := client.New(op)
+	require.NoError(t, err)
+	pkt, err := opkClient.Auth(context.Background())
+	require.NoError(t, err)
+
+	policyEnforcer := &policy.Enforcer{
+		PolicyLoader: &MockPolicyLoader{Policy: &policy.Policy{
+			Users: []policy.User{
+				{
+					IdentityAttribute: "repo:organization/repository:ref:refs/heads/main",
+					Principals:        []string{"test"},
+					Issuer:            "https://accounts.example.com",
+				},
+			},
+		}},
+	}
+
+	var logs bytes.Buffer
+	log.SetOutput(&logs)
+	defer log.SetOutput(os.Stderr)
+
+	err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa", policy.DenyList{}, nil)
+	require.NoError(t, err)
+	require.False(t, strings.Contains(logs.String(), "consider matching on sub"))
 }
 
 func TestPolicyDeniedMalformedOidcRow(t *testing.T) {
