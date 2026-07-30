@@ -34,6 +34,10 @@ import (
 const (
 	OIDC_CLAIMS         = "oidc:"
 	OIDC_WILDCARD_EMAIL = "oidc-match-end:email:"
+
+	// EMAIL_VERIFIED_CLAIM is read out of ExtraClaims, where a bool and a
+	// string value both end up normalized to a string.
+	EMAIL_VERIFIED_CLAIM = "email_verified"
 )
 
 // DenyList represents the DenyLists in the server config
@@ -170,7 +174,34 @@ func validateClaim(claims *checkedClaims, user *User) bool {
 
 	// email should be a case-insensitive check
 	// sub should be a case-sensitive check
-	return wildCardEmailMatch || strings.EqualFold(claims.Email, user.IdentityAttribute) || string(claims.Sub) == user.IdentityAttribute
+	emailMatch := wildCardEmailMatch || strings.EqualFold(claims.Email, user.IdentityAttribute)
+	if emailMatch {
+		// We still allow the match. An OP that is authoritative for a domain
+		// may leave email_verified out, or set it to false, and still be the
+		// right source of truth for that email, so this is the admin's call.
+		// Surface it so the choice is visible.
+		warnIfEmailUnverified(claims, user.IdentityAttribute)
+	}
+
+	return emailMatch || string(claims.Sub) == user.IdentityAttribute
+}
+
+// warnIfEmailUnverified logs when a policy row matched on the email claim but
+// the ID Token does not assert that the email was verified. Admins who want
+// this enforced rather than logged should match on sub or use a policy plugin.
+//
+// The value is read from ExtraClaims rather than a typed struct field because
+// some OPs send email_verified as the string "true" rather than a bool, and
+// unmarshalling that into a bool would fail the whole token. ExtraClaims
+// normalizes both shapes to a string.
+func warnIfEmailUnverified(claims *checkedClaims, identityAttribute string) {
+	values, ok := claims.ExtraClaims[EMAIL_VERIFIED_CLAIM]
+	switch {
+	case !ok || len(values) == 0:
+		log.Printf("warning: policy %q matched on email %q but the ID Token has no email_verified claim, consider matching on sub instead", identityAttribute, claims.Email)
+	case !strings.EqualFold(values[0], "true"):
+		log.Printf("warning: policy %q matched on email %q but the ID Token sets email_verified to %q, consider matching on sub instead", identityAttribute, claims.Email, values[0])
+	}
 }
 
 // CheckPolicy loads opkssh policy and checks to see if there is a policy
