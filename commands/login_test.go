@@ -583,3 +583,182 @@ func TestPrettyPrintIdToken(t *testing.T) {
 	require.NotNil(t, pktStr)
 	require.Contains(t, pktStr, iss)
 }
+
+// setupOpkSSHDir creates a configured ~/.ssh/opkssh directory (with an empty
+// config file) inside the supplied in-memory filesystem and returns its path.
+func setupOpkSSHDir(t *testing.T, fs afero.Fs) string {
+	t.Helper()
+	afs := &afero.Afero{Fs: fs}
+	homePath, err := os.UserHomeDir()
+	require.NoError(t, err)
+	opkSshDir := filepath.Join(homePath, ".ssh", "opkssh")
+	require.NoError(t, afs.MkdirAll(opkSshDir, 0o700))
+	require.NoError(t, afs.WriteFile(filepath.Join(opkSshDir, "config"), []byte(""), 0o600))
+	return opkSshDir
+}
+
+// TestLoginWriteDestinationPrecedence is a regression test for
+// https://github.com/openpubkey/opkssh/issues/524 which verifies that the
+// --private-key-file (-i) argument always has the highest precedence when
+// deciding where to write the generated SSH key and certificate.
+func TestLoginWriteDestinationPrecedence(t *testing.T) {
+	homePath, err := os.UserHomeDir()
+	require.NoError(t, err)
+
+	t.Run("--private-key-file wins over configured opkssh dir (#524)", func(t *testing.T) {
+		_, _, mockOp := Mocks(t, ECDSA)
+		mockFs := afero.NewMemMapFs()
+		opkSshDir := setupOpkSSHDir(t, mockFs)
+
+		customKeyPath := filepath.Join(homePath, "custom", "mykey")
+		l := &LoginCmd{
+			Fs:            mockFs,
+			SSHConfigured: true, // opkssh identity dir is configured
+			KeyTypeArg:    ECDSA,
+			KeyPathArg:    customKeyPath,
+		}
+
+		require.NoError(t, l.Login(context.Background(), mockOp, false, l.KeyPathArg))
+
+		// Key/cert must be written to the -i path.
+		_, err := mockFs.Stat(customKeyPath)
+		require.NoError(t, err, "expected private key at custom -i path")
+		_, err = mockFs.Stat(customKeyPath + "-cert.pub")
+		require.NoError(t, err, "expected cert at custom -i path")
+
+		// Nothing should be written into the opkssh dir (only its config file).
+		afs := &afero.Afero{Fs: mockFs}
+		entries, err := afs.ReadDir(opkSshDir)
+		require.NoError(t, err)
+		for _, e := range entries {
+			require.Equal(t, "config", e.Name(),
+				"unexpected key file written to opkssh dir: %s", e.Name())
+		}
+	})
+
+	t.Run("--private-key-file wins over default ~/.ssh location", func(t *testing.T) {
+		_, _, mockOp := Mocks(t, ECDSA)
+		mockFs := afero.NewMemMapFs()
+
+		customKeyPath := filepath.Join(homePath, "custom", "mykey")
+		l := &LoginCmd{
+			Fs:         mockFs,
+			KeyTypeArg: ECDSA,
+			KeyPathArg: customKeyPath,
+		}
+
+		require.NoError(t, l.Login(context.Background(), mockOp, false, l.KeyPathArg))
+
+		_, err := mockFs.Stat(customKeyPath)
+		require.NoError(t, err, "expected private key at custom -i path")
+
+		// The default location must NOT be used.
+		_, err = mockFs.Stat(filepath.Join(homePath, ".ssh", "id_ecdsa"))
+		require.Error(t, err, "default ~/.ssh key should not have been written")
+	})
+
+	t.Run("opkssh dir used when configured and no --private-key-file", func(t *testing.T) {
+		_, _, mockOp := Mocks(t, ECDSA)
+		mockFs := afero.NewMemMapFs()
+		opkSshDir := setupOpkSSHDir(t, mockFs)
+
+		l := &LoginCmd{
+			Fs:            mockFs,
+			SSHConfigured: true,
+			KeyTypeArg:    ECDSA,
+		}
+
+		require.NoError(t, l.Login(context.Background(), mockOp, false, ""))
+
+		// A key file (in addition to config) must appear in the opkssh dir.
+		afs := &afero.Afero{Fs: mockFs}
+		entries, err := afs.ReadDir(opkSshDir)
+		require.NoError(t, err)
+		var keyFiles int
+		for _, e := range entries {
+			if e.Name() != "config" {
+				keyFiles++
+			}
+		}
+		require.Greater(t, keyFiles, 0, "expected key files written to opkssh dir")
+
+		// The default ~/.ssh location must NOT be used.
+		_, err = mockFs.Stat(filepath.Join(homePath, ".ssh", "id_ecdsa"))
+		require.Error(t, err, "default ~/.ssh key should not have been written")
+	})
+
+	t.Run("default ~/.ssh used when nothing configured and no --private-key-file", func(t *testing.T) {
+		_, _, mockOp := Mocks(t, ECDSA)
+		mockFs := afero.NewMemMapFs()
+
+		l := &LoginCmd{
+			Fs:         mockFs,
+			KeyTypeArg: ECDSA,
+		}
+
+		require.NoError(t, l.Login(context.Background(), mockOp, false, ""))
+
+		_, err := mockFs.Stat(filepath.Join(homePath, ".ssh", "id_ecdsa"))
+		require.NoError(t, err, "expected key at default ~/.ssh location")
+	})
+}
+
+// TestWriteKeysToDestination exercises the shared destination helper directly.
+// Both the single-login and the auto-refresh code paths rely on this helper, so
+// asserting its precedence here guards both paths against regressions.
+func TestWriteKeysToDestination(t *testing.T) {
+	homePath, err := os.UserHomeDir()
+	require.NoError(t, err)
+
+	pkt, _, _ := Mocks(t, ECDSA)
+	seckeyPem := []byte("-----BEGIN OPENSSH PRIVATE KEY-----\nfake\n-----END OPENSSH PRIVATE KEY-----\n")
+	certBytes := []byte("ssh-ecdsa-cert-v01@openssh.com AAAAfake")
+
+	t.Run("-i path has highest precedence", func(t *testing.T) {
+		mockFs := afero.NewMemMapFs()
+		opkSshDir := setupOpkSSHDir(t, mockFs)
+		customKeyPath := filepath.Join(homePath, "custom", "mykey")
+
+		l := &LoginCmd{Fs: mockFs, SSHConfigured: true, KeyTypeArg: ECDSA, pkt: pkt}
+		require.NoError(t, l.writeKeysToDestination(customKeyPath, seckeyPem, certBytes))
+
+		_, err := mockFs.Stat(customKeyPath)
+		require.NoError(t, err)
+
+		afs := &afero.Afero{Fs: mockFs}
+		entries, err := afs.ReadDir(opkSshDir)
+		require.NoError(t, err)
+		for _, e := range entries {
+			require.Equal(t, "config", e.Name())
+		}
+	})
+
+	t.Run("opkssh dir used when configured and no -i", func(t *testing.T) {
+		mockFs := afero.NewMemMapFs()
+		opkSshDir := setupOpkSSHDir(t, mockFs)
+
+		l := &LoginCmd{Fs: mockFs, SSHConfigured: true, KeyTypeArg: ECDSA, pkt: pkt}
+		require.NoError(t, l.writeKeysToDestination("", seckeyPem, certBytes))
+
+		afs := &afero.Afero{Fs: mockFs}
+		entries, err := afs.ReadDir(opkSshDir)
+		require.NoError(t, err)
+		var keyFiles int
+		for _, e := range entries {
+			if e.Name() != "config" {
+				keyFiles++
+			}
+		}
+		require.Greater(t, keyFiles, 0)
+	})
+
+	t.Run("default ~/.ssh used when not configured and no -i", func(t *testing.T) {
+		mockFs := afero.NewMemMapFs()
+
+		l := &LoginCmd{Fs: mockFs, KeyTypeArg: ECDSA, pkt: pkt}
+		require.NoError(t, l.writeKeysToDestination("", seckeyPem, certBytes))
+
+		_, err := mockFs.Stat(filepath.Join(homePath, ".ssh", "id_ecdsa"))
+		require.NoError(t, err)
+	})
+}
