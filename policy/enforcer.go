@@ -50,9 +50,12 @@ type Enforcer struct {
 
 // type for Identity Token checkedClaims
 type checkedClaims struct {
-	Email       string              `json:"email"`
-	Sub         string              `json:"sub"`
-	ExtraClaims map[string][]string `json:"-"`
+	Email string `json:"email"`
+	// EmailVerified is a pointer so we can tell "claim absent" from
+	// "claim present and false". Not all OPs send it.
+	EmailVerified *bool               `json:"email_verified"`
+	Sub           string              `json:"sub"`
+	ExtraClaims   map[string][]string `json:"-"`
 }
 
 func (s *checkedClaims) UnmarshalJSON(data []byte) error {
@@ -163,7 +166,28 @@ func validateClaim(claims *checkedClaims, user *User) bool {
 
 	// email should be a case-insensitive check
 	// sub should be a case-sensitive check
-	return wildCardEmailMatch || strings.EqualFold(claims.Email, user.IdentityAttribute) || string(claims.Sub) == user.IdentityAttribute
+	emailMatch := wildCardEmailMatch || strings.EqualFold(claims.Email, user.IdentityAttribute)
+	if emailMatch {
+		// We still allow the match. An OP that is authoritative for a domain
+		// may leave email_verified out, or set it to false, and still be the
+		// right source of truth for that email, so this is the admin's call.
+		// Surface it so the choice is visible.
+		warnIfEmailUnverified(claims, user.IdentityAttribute)
+	}
+
+	return emailMatch || string(claims.Sub) == user.IdentityAttribute
+}
+
+// warnIfEmailUnverified logs when a policy row matched on the email claim but
+// the ID Token does not assert that the email was verified. Admins who want
+// this enforced rather than logged should match on sub or use a policy plugin.
+func warnIfEmailUnverified(claims *checkedClaims, identityAttribute string) {
+	switch {
+	case claims.EmailVerified == nil:
+		log.Printf("warning: policy %q matched on email %q but the ID Token has no email_verified claim, consider matching on sub instead", identityAttribute, claims.Email)
+	case !*claims.EmailVerified:
+		log.Printf("warning: policy %q matched on email %q but the ID Token sets email_verified to false, consider matching on sub instead", identityAttribute, claims.Email)
+	}
 }
 
 // CheckPolicy loads opkssh policy and checks to see if there is a policy
