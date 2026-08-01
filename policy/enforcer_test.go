@@ -647,6 +647,22 @@ func TestEnforcerTableTest(t *testing.T) {
 			policyLoader:  &MockPolicyLoader{Error: fmt.Errorf("error loading policy")},
 			expectedError: "error loading policy",
 		},
+		{
+			name: "policy email wildcard rejects policies that allow any value",
+			op:   NewMockOpenIdProvider(t),
+			policyLoader: &MockPolicyLoader{
+				Policy: &policy.Policy{
+					[]policy.User{
+						{
+							IdentityAttribute: "oidc-match-end:email:",
+							Issuer:            "https://accounts.example.com",
+							Principals:        []string{"test"},
+						},
+					},
+				},
+			},
+			expectedError: `no policy to allow arthur.aardvark@example.com with (issuer=https://accounts.example.com) to assume test`,
+		},
 	}
 
 	for _, tt := range tests {
