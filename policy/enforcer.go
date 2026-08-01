@@ -34,6 +34,7 @@ import (
 const (
 	OIDC_CLAIMS         = "oidc:"
 	OIDC_WILDCARD_EMAIL = "oidc-match-end:email:"
+	REPO_CLAIM          = "repo:"
 
 	// EMAIL_VERIFIED_CLAIM is read out of ExtraClaims, where a bool and a
 	// string value both end up normalized to a string.
@@ -136,6 +137,13 @@ func validateClaim(claims *checkedClaims, user *User) bool {
 	if strings.HasPrefix(claims.Email, OIDC_WILDCARD_EMAIL) {
 		return false
 	}
+	if strings.EqualFold(user.IdentityAttribute, OIDC_WILDCARD_EMAIL) ||
+		strings.EqualFold(user.IdentityAttribute, OIDC_CLAIMS) ||
+		strings.EqualFold(user.IdentityAttribute, REPO_CLAIM) {
+		// If the policy is set to match any value, this is unsafe and we should fail
+		log.Printf("error: rejecting unsafe match - policy (%q) matches any value:", user.IdentityAttribute)
+		return false
+	}
 
 	// Should we match on an oidc claim?
 	if strings.HasPrefix(user.IdentityAttribute, OIDC_CLAIMS) {
@@ -164,7 +172,7 @@ func validateClaim(claims *checkedClaims, user *User) bool {
 	}
 
 	// Should we match on a glob pattern for the sub claim?
-	if strings.HasPrefix(user.IdentityAttribute, "repo:") {
+	if strings.HasPrefix(user.IdentityAttribute, REPO_CLAIM) {
 		if matched, err := path.Match(user.IdentityAttribute, string(claims.Sub)); err != nil {
 			log.Printf("warning: invalid glob pattern %q in policy: %v", user.IdentityAttribute, err)
 		} else if matched {
