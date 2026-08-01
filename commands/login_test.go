@@ -25,8 +25,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"golang.org/x/crypto/ed25519"
 
@@ -584,181 +587,517 @@ func TestPrettyPrintIdToken(t *testing.T) {
 	require.Contains(t, pktStr, iss)
 }
 
+// These tests are a regression suite for
+// https://github.com/openpubkey/opkssh/issues/524: the --private-key-file (-i)
+// argument must always have the highest precedence when opkssh decides where to
+// write the generated SSH key and certificate. The precedence decision lives in
+// the single helper writeKeysToDestination; the tests below exercise that helper
+// directly and through both callers (Login and LoginWithRefresh).
+
+// writeDest identifies where a key/cert pair is expected to land.
+type writeDest int
+
+const (
+	destIKeyPath      writeDest = iota // the --private-key-file (-i) path
+	destOpkSSHDir                      // the ~/.ssh/opkssh identity directory
+	destDefaultSSHDir                  // the default ~/.ssh location
+)
+
+// fakeKeyPem and fakeCertBytes are opaque by design: the write helpers persist
+// these bytes without parsing them, so the tests do not need valid key
+// material. If a helper ever starts validating what it writes, prefer feeding
+// it real bytes from createSSHCert rather than these placeholders.
+var (
+	fakeKeyPem    = []byte("-----BEGIN OPENSSH PRIVATE KEY-----\nfake\n-----END OPENSSH PRIVATE KEY-----\n")
+	fakeCertBytes = []byte("ssh-ecdsa-cert-v01@openssh.com AAAAfake")
+)
+
 // setupOpkSSHDir creates a configured ~/.ssh/opkssh directory (with an empty
-// config file) inside the supplied in-memory filesystem and returns its path.
+// config file) inside fs and returns its path.
 func setupOpkSSHDir(t *testing.T, fs afero.Fs) string {
 	t.Helper()
 	afs := &afero.Afero{Fs: fs}
-	homePath, err := os.UserHomeDir()
+	home, err := os.UserHomeDir()
 	require.NoError(t, err)
-	opkSshDir := filepath.Join(homePath, ".ssh", "opkssh")
-	require.NoError(t, afs.MkdirAll(opkSshDir, 0o700))
-	require.NoError(t, afs.WriteFile(filepath.Join(opkSshDir, "config"), []byte(""), 0o600))
-	return opkSshDir
+	dir := filepath.Join(home, ".ssh", "opkssh")
+	require.NoError(t, afs.MkdirAll(dir, 0o700))
+	require.NoError(t, afs.WriteFile(filepath.Join(dir, "config"), []byte(""), 0o600))
+	return dir
 }
 
-// TestLoginWriteDestinationPrecedence is a regression test for
-// https://github.com/openpubkey/opkssh/issues/524 which verifies that the
-// --private-key-file (-i) argument always has the highest precedence when
-// deciding where to write the generated SSH key and certificate.
-func TestLoginWriteDestinationPrecedence(t *testing.T) {
-	homePath, err := os.UserHomeDir()
+// customKeyPath returns a deterministic -i path inside the (mock) home dir.
+func customKeyPath(t *testing.T) string {
+	t.Helper()
+	home, err := os.UserHomeDir()
 	require.NoError(t, err)
+	return filepath.Join(home, "custom", "mykey")
+}
 
-	t.Run("--private-key-file wins over configured opkssh dir (#524)", func(t *testing.T) {
-		_, _, mockOp := Mocks(t, ECDSA)
-		mockFs := afero.NewMemMapFs()
-		opkSshDir := setupOpkSSHDir(t, mockFs)
+// assertKeyPairAt asserts that both the private key and cert exist at path.
+func assertKeyPairAt(t *testing.T, fs afero.Fs, path string) {
+	t.Helper()
+	_, err := fs.Stat(path)
+	require.NoError(t, err, "expected private key at %s", path)
+	_, err = fs.Stat(path + "-cert.pub")
+	require.NoError(t, err, "expected cert at %s", path)
+}
 
-		customKeyPath := filepath.Join(homePath, "custom", "mykey")
-		l := &LoginCmd{
-			Fs:            mockFs,
-			SSHConfigured: true, // opkssh identity dir is configured
-			KeyTypeArg:    ECDSA,
-			KeyPathArg:    customKeyPath,
+// assertOpkSSHDirUntouched asserts that the opkssh dir contains only its config
+// file, i.e. no key material was written there.
+func assertOpkSSHDirUntouched(t *testing.T, fs afero.Fs, dir string) {
+	t.Helper()
+	entries, err := (&afero.Afero{Fs: fs}).ReadDir(dir)
+	require.NoError(t, err)
+	for _, e := range entries {
+		require.Equal(t, "config", e.Name(), "unexpected file written to opkssh dir: %s", e.Name())
+	}
+}
+
+// assertKeyInOpkSSHDir asserts that at least one file besides config was written
+// to the opkssh dir.
+func assertKeyInOpkSSHDir(t *testing.T, fs afero.Fs, dir string) {
+	t.Helper()
+	entries, err := (&afero.Afero{Fs: fs}).ReadDir(dir)
+	require.NoError(t, err)
+	var keyFiles int
+	for _, e := range entries {
+		if e.Name() != "config" {
+			keyFiles++
 		}
-
-		require.NoError(t, l.Login(context.Background(), mockOp, false, l.KeyPathArg))
-
-		// Key/cert must be written to the -i path.
-		_, err := mockFs.Stat(customKeyPath)
-		require.NoError(t, err, "expected private key at custom -i path")
-		_, err = mockFs.Stat(customKeyPath + "-cert.pub")
-		require.NoError(t, err, "expected cert at custom -i path")
-
-		// Nothing should be written into the opkssh dir (only its config file).
-		afs := &afero.Afero{Fs: mockFs}
-		entries, err := afs.ReadDir(opkSshDir)
-		require.NoError(t, err)
-		for _, e := range entries {
-			require.Equal(t, "config", e.Name(),
-				"unexpected key file written to opkssh dir: %s", e.Name())
-		}
-	})
-
-	t.Run("--private-key-file wins over default ~/.ssh location", func(t *testing.T) {
-		_, _, mockOp := Mocks(t, ECDSA)
-		mockFs := afero.NewMemMapFs()
-
-		customKeyPath := filepath.Join(homePath, "custom", "mykey")
-		l := &LoginCmd{
-			Fs:         mockFs,
-			KeyTypeArg: ECDSA,
-			KeyPathArg: customKeyPath,
-		}
-
-		require.NoError(t, l.Login(context.Background(), mockOp, false, l.KeyPathArg))
-
-		_, err := mockFs.Stat(customKeyPath)
-		require.NoError(t, err, "expected private key at custom -i path")
-
-		// The default location must NOT be used.
-		_, err = mockFs.Stat(filepath.Join(homePath, ".ssh", "id_ecdsa"))
-		require.Error(t, err, "default ~/.ssh key should not have been written")
-	})
-
-	t.Run("opkssh dir used when configured and no --private-key-file", func(t *testing.T) {
-		_, _, mockOp := Mocks(t, ECDSA)
-		mockFs := afero.NewMemMapFs()
-		opkSshDir := setupOpkSSHDir(t, mockFs)
-
-		l := &LoginCmd{
-			Fs:            mockFs,
-			SSHConfigured: true,
-			KeyTypeArg:    ECDSA,
-		}
-
-		require.NoError(t, l.Login(context.Background(), mockOp, false, ""))
-
-		// A key file (in addition to config) must appear in the opkssh dir.
-		afs := &afero.Afero{Fs: mockFs}
-		entries, err := afs.ReadDir(opkSshDir)
-		require.NoError(t, err)
-		var keyFiles int
-		for _, e := range entries {
-			if e.Name() != "config" {
-				keyFiles++
-			}
-		}
-		require.Greater(t, keyFiles, 0, "expected key files written to opkssh dir")
-
-		// The default ~/.ssh location must NOT be used.
-		_, err = mockFs.Stat(filepath.Join(homePath, ".ssh", "id_ecdsa"))
-		require.Error(t, err, "default ~/.ssh key should not have been written")
-	})
-
-	t.Run("default ~/.ssh used when nothing configured and no --private-key-file", func(t *testing.T) {
-		_, _, mockOp := Mocks(t, ECDSA)
-		mockFs := afero.NewMemMapFs()
-
-		l := &LoginCmd{
-			Fs:         mockFs,
-			KeyTypeArg: ECDSA,
-		}
-
-		require.NoError(t, l.Login(context.Background(), mockOp, false, ""))
-
-		_, err := mockFs.Stat(filepath.Join(homePath, ".ssh", "id_ecdsa"))
-		require.NoError(t, err, "expected key at default ~/.ssh location")
-	})
+	}
+	require.Greater(t, keyFiles, 0, "expected key files written to opkssh dir")
 }
 
 // TestWriteKeysToDestination exercises the shared destination helper directly.
 // Both the single-login and the auto-refresh code paths rely on this helper, so
-// asserting its precedence here guards both paths against regressions.
+// asserting its precedence and error wrapping here guards both paths. The table
+// covers every branch of the helper, including each error wrapper.
 func TestWriteKeysToDestination(t *testing.T) {
-	homePath, err := os.UserHomeDir()
+	pkt, _, _ := Mocks(t, ECDSA)
+
+	tests := []struct {
+		name            string
+		useIKeyPath     bool // pass a non-empty -i path
+		sshConfigured   bool // l.SSHConfigured
+		configureOpkDir bool // create a real ~/.ssh/opkssh/config
+		readOnly        bool // wrap the fs read-only to force write failures
+		wantErrContains string
+		wantDest        writeDest
+	}{
+		{
+			name:            "-i wins over configured opkssh dir (#524)",
+			useIKeyPath:     true,
+			sshConfigured:   true,
+			configureOpkDir: true,
+			wantDest:        destIKeyPath,
+		},
+		{
+			name:        "-i wins over default location",
+			useIKeyPath: true,
+			wantDest:    destIKeyPath,
+		},
+		{
+			name:            "opkssh dir used when configured and no -i",
+			sshConfigured:   true,
+			configureOpkDir: true,
+			wantDest:        destOpkSSHDir,
+		},
+		{
+			name:     "default ~/.ssh used when not configured and no -i",
+			wantDest: destDefaultSSHDir,
+		},
+		{
+			name:            "-i write failure is wrapped",
+			useIKeyPath:     true,
+			readOnly:        true,
+			wantErrContains: "failed to write SSH keys to filesystem",
+		},
+		{
+			name:            "opkssh dir write failure is wrapped",
+			sshConfigured:   true,
+			readOnly:        false, // SSHConfigured but no config file -> read fails
+			wantErrContains: "failed to write SSH keys to OPK SSH dir",
+		},
+		{
+			name:            "default location write failure is wrapped",
+			readOnly:        true,
+			wantErrContains: "failed to write SSH keys to filesystem",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var fs = afero.NewMemMapFs()
+			var opkDir string
+			if tt.configureOpkDir {
+				opkDir = setupOpkSSHDir(t, fs)
+			}
+			if tt.readOnly {
+				fs = afero.NewReadOnlyFs(fs)
+			}
+
+			seckeyPath := ""
+			if tt.useIKeyPath {
+				seckeyPath = customKeyPath(t)
+			}
+
+			l := &LoginCmd{
+				Fs:            fs,
+				SSHConfigured: tt.sshConfigured,
+				KeyTypeArg:    ECDSA,
+				pkt:           pkt,
+			}
+
+			err := l.writeKeysToDestination(seckeyPath, fakeKeyPem, fakeCertBytes)
+
+			if tt.wantErrContains != "" {
+				require.ErrorContains(t, err, tt.wantErrContains)
+				return
+			}
+			require.NoError(t, err)
+
+			switch tt.wantDest {
+			case destIKeyPath:
+				assertKeyPairAt(t, fs, seckeyPath)
+				if opkDir != "" {
+					assertOpkSSHDirUntouched(t, fs, opkDir)
+				}
+			case destOpkSSHDir:
+				assertKeyInOpkSSHDir(t, fs, opkDir)
+				home, err := os.UserHomeDir()
+				require.NoError(t, err)
+				_, err = fs.Stat(filepath.Join(home, ".ssh", "id_ecdsa"))
+				require.Error(t, err, "default location must not be used")
+			case destDefaultSSHDir:
+				home, err := os.UserHomeDir()
+				require.NoError(t, err)
+				assertKeyPairAt(t, fs, filepath.Join(home, ".ssh", "id_ecdsa"))
+			}
+		})
+	}
+}
+
+// TestLoginWritesKeysToDestination drives Login end-to-end and asserts the same
+// precedence, covering the login() call site of writeKeysToDestination
+// (including its error return). The success side of this call site is also
+// covered by TestLoginCmd; the error case here covers the `return nil, err`.
+func TestLoginWritesKeysToDestination(t *testing.T) {
+	home, err := os.UserHomeDir()
 	require.NoError(t, err)
 
-	pkt, _, _ := Mocks(t, ECDSA)
-	seckeyPem := []byte("-----BEGIN OPENSSH PRIVATE KEY-----\nfake\n-----END OPENSSH PRIVATE KEY-----\n")
-	certBytes := []byte("ssh-ecdsa-cert-v01@openssh.com AAAAfake")
+	tests := []struct {
+		name            string
+		useIKeyPath     bool
+		sshConfigured   bool
+		configureOpkDir bool
+		readOnly        bool
+		wantErrContains string
+		wantDest        writeDest
+	}{
+		{
+			name:            "-i wins over configured opkssh dir (#524)",
+			useIKeyPath:     true,
+			sshConfigured:   true,
+			configureOpkDir: true,
+			wantDest:        destIKeyPath,
+		},
+		{
+			name:          "opkssh dir used when configured and no -i",
+			sshConfigured: true, configureOpkDir: true,
+			wantDest: destOpkSSHDir,
+		},
+		{
+			name:     "default ~/.ssh used when not configured and no -i",
+			wantDest: destDefaultSSHDir,
+		},
+		{
+			name:            "write failure propagates from login()",
+			readOnly:        true,
+			wantErrContains: "failed to write SSH keys to filesystem",
+		},
+	}
 
-	t.Run("-i path has highest precedence", func(t *testing.T) {
-		mockFs := afero.NewMemMapFs()
-		opkSshDir := setupOpkSSHDir(t, mockFs)
-		customKeyPath := filepath.Join(homePath, "custom", "mykey")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, mockOp := Mocks(t, ECDSA)
 
-		l := &LoginCmd{Fs: mockFs, SSHConfigured: true, KeyTypeArg: ECDSA, pkt: pkt}
-		require.NoError(t, l.writeKeysToDestination(customKeyPath, seckeyPem, certBytes))
-
-		_, err := mockFs.Stat(customKeyPath)
-		require.NoError(t, err)
-
-		afs := &afero.Afero{Fs: mockFs}
-		entries, err := afs.ReadDir(opkSshDir)
-		require.NoError(t, err)
-		for _, e := range entries {
-			require.Equal(t, "config", e.Name())
-		}
-	})
-
-	t.Run("opkssh dir used when configured and no -i", func(t *testing.T) {
-		mockFs := afero.NewMemMapFs()
-		opkSshDir := setupOpkSSHDir(t, mockFs)
-
-		l := &LoginCmd{Fs: mockFs, SSHConfigured: true, KeyTypeArg: ECDSA, pkt: pkt}
-		require.NoError(t, l.writeKeysToDestination("", seckeyPem, certBytes))
-
-		afs := &afero.Afero{Fs: mockFs}
-		entries, err := afs.ReadDir(opkSshDir)
-		require.NoError(t, err)
-		var keyFiles int
-		for _, e := range entries {
-			if e.Name() != "config" {
-				keyFiles++
+			var fs = afero.NewMemMapFs()
+			var opkDir string
+			if tt.configureOpkDir {
+				opkDir = setupOpkSSHDir(t, fs)
 			}
-		}
-		require.Greater(t, keyFiles, 0)
-	})
+			if tt.readOnly {
+				fs = afero.NewReadOnlyFs(fs)
+			}
 
-	t.Run("default ~/.ssh used when not configured and no -i", func(t *testing.T) {
-		mockFs := afero.NewMemMapFs()
+			seckeyPath := ""
+			if tt.useIKeyPath {
+				seckeyPath = customKeyPath(t)
+			}
 
-		l := &LoginCmd{Fs: mockFs, KeyTypeArg: ECDSA, pkt: pkt}
-		require.NoError(t, l.writeKeysToDestination("", seckeyPem, certBytes))
+			l := &LoginCmd{
+				Fs:            fs,
+				SSHConfigured: tt.sshConfigured,
+				KeyTypeArg:    ECDSA,
+				KeyPathArg:    seckeyPath,
+				OutWriter:     &bytes.Buffer{},
+			}
 
-		_, err := mockFs.Stat(filepath.Join(homePath, ".ssh", "id_ecdsa"))
-		require.NoError(t, err)
-	})
+			err := l.Login(context.Background(), mockOp, false, seckeyPath)
+
+			if tt.wantErrContains != "" {
+				require.ErrorContains(t, err, tt.wantErrContains)
+				return
+			}
+			require.NoError(t, err)
+
+			switch tt.wantDest {
+			case destIKeyPath:
+				assertKeyPairAt(t, fs, seckeyPath)
+				assertOpkSSHDirUntouched(t, fs, opkDir)
+			case destOpkSSHDir:
+				assertKeyInOpkSSHDir(t, fs, opkDir)
+				_, err = fs.Stat(filepath.Join(home, ".ssh", "id_ecdsa"))
+				require.Error(t, err, "default location must not be used")
+			case destDefaultSSHDir:
+				assertKeyPairAt(t, fs, filepath.Join(home, ".ssh", "id_ecdsa"))
+			}
+		})
+	}
+}
+
+// writeCountingFs counts write-opens (O_CREATE|O_WRONLY) to a single target
+// path so a test can tell when a file has been (re)written, e.g. once by the
+// initial login and again by a refresh iteration.
+type writeCountingFs struct {
+	afero.Fs
+	target string
+	mu     sync.Mutex
+	writes int
+}
+
+func (c *writeCountingFs) OpenFile(name string, flag int, perm os.FileMode) (afero.File, error) {
+	if name == c.target && flag&os.O_CREATE != 0 && flag&os.O_WRONLY != 0 {
+		c.mu.Lock()
+		c.writes++
+		c.mu.Unlock()
+	}
+	return c.Fs.OpenFile(name, flag, perm)
+}
+
+func (c *writeCountingFs) count() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.writes
+}
+
+// TestLoginWithRefreshWritesKeysToDestination covers the LoginWithRefresh call
+// site of writeKeysToDestination. LoginWithRefresh writes once during the
+// initial login and again on every refresh, so we wait until the -i key has
+// been written at least twice: the second write proves the refresh path routed
+// through the shared helper. The token is given a short expiry so the first
+// refresh fires immediately, and a bounded context guarantees the loop exits.
+func TestLoginWithRefreshWritesKeysToDestination(t *testing.T) {
+	// Short expiry: LoginWithRefresh waits until ~1 minute before expiry, so a
+	// near-term exp makes the first refresh fire right away.
+	shortExp := map[string]any{
+		"email": "arthur.aardvark@example.com",
+		"exp":   time.Now().Add(15 * time.Second).Unix(),
+	}
+	_, _, mockOp := Mocks(t, ECDSA, shortExp)
+
+	refreshable, ok := mockOp.(providers.RefreshableOpenIdProvider)
+	require.True(t, ok, "mock provider must support refresh")
+
+	iPath := customKeyPath(t)
+	fs := &writeCountingFs{Fs: afero.NewMemMapFs(), target: iPath}
+
+	l := &LoginCmd{
+		Fs:         fs,
+		KeyTypeArg: ECDSA,
+		KeyPathArg: iPath,
+		OutWriter:  &bytes.Buffer{},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- l.LoginWithRefresh(ctx, refreshable, false, iPath)
+	}()
+
+	// The initial login writes the key once; the first refresh writes it again.
+	require.Eventually(t, func() bool { return fs.count() >= 2 }, 5*time.Second, 5*time.Millisecond,
+		"expected the refresh loop to re-write the key via writeKeysToDestination")
+
+	// The key/cert must be at the -i path (never the default or opkssh dir).
+	assertKeyPairAt(t, fs, iPath)
+
+	cancel()
+	select {
+	case err := <-errCh:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(2 * time.Second):
+		t.Fatal("LoginWithRefresh did not return after context cancellation")
+	}
+}
+
+// includeDirective must match the directive written by configureSSH.
+const includeDirective = "Include ~/.ssh/opkssh/config"
+
+// faultyFs wraps an afero.Fs and injects failures into Open (used by ReadFile)
+// and OpenFile (used by create/WriteFile) for chosen paths, so tests can drive
+// configureSSH's individual error branches without a real read-only filesystem.
+type faultyFs struct {
+	afero.Fs
+	failOpen     func(name string) bool
+	failOpenFile func(name string, flag int) bool
+}
+
+func (f *faultyFs) Open(name string) (afero.File, error) {
+	if f.failOpen != nil && f.failOpen(name) {
+		return nil, fmt.Errorf("injected Open failure: %s", name)
+	}
+	return f.Fs.Open(name)
+}
+
+func (f *faultyFs) OpenFile(name string, flag int, perm os.FileMode) (afero.File, error) {
+	if f.failOpenFile != nil && f.failOpenFile(name, flag) {
+		return nil, fmt.Errorf("injected OpenFile failure: %s", name)
+	}
+	return f.Fs.OpenFile(name, flag, perm)
+}
+
+// sshConfigPaths returns the three paths configureSSH operates on, derived from
+// the current user's home directory.
+func sshConfigPaths(t *testing.T) (sshConfig, opkConfig string) {
+	t.Helper()
+	home, err := os.UserHomeDir()
+	require.NoError(t, err)
+	return filepath.Join(home, ".ssh/config"), filepath.Join(home, ".ssh/opkssh/config")
+}
+
+func TestConfigureSSH(t *testing.T) {
+	sshConfig, opkConfig := sshConfigPaths(t)
+
+	tests := []struct {
+		name            string
+		setupFs         func(t *testing.T) afero.Fs
+		wantErrContains string
+		wantContains    string // substring the resulting ~/.ssh/config must contain
+		wantExactConfig string // if set, the full resulting ~/.ssh/config content
+	}{
+		{
+			name:         "fresh setup writes directive",
+			setupFs:      func(t *testing.T) afero.Fs { return afero.NewMemMapFs() },
+			wantContains: includeDirective,
+		},
+		{
+			name: "existing config gets directive prepended",
+			setupFs: func(t *testing.T) afero.Fs {
+				fs := afero.NewMemMapFs()
+				require.NoError(t, (&afero.Afero{Fs: fs}).WriteFile(sshConfig, []byte("Host example\n"), 0o600))
+				return fs
+			},
+			wantExactConfig: includeDirective + "\n\nHost example\n",
+		},
+		{
+			name: "already configured is idempotent",
+			setupFs: func(t *testing.T) afero.Fs {
+				fs := afero.NewMemMapFs()
+				afs := &afero.Afero{Fs: fs}
+				// opkssh config already present -> hits the "already configured" branch
+				require.NoError(t, afs.WriteFile(opkConfig, []byte(""), 0o600))
+				// ssh config already contains the directive -> the write is skipped
+				require.NoError(t, afs.WriteFile(sshConfig, []byte(includeDirective+"\n\nHost example\n"), 0o600))
+				return fs
+			},
+			wantExactConfig: includeDirective + "\n\nHost example\n", // unchanged, not duplicated
+		},
+		{
+			name:            "mkdir failure",
+			setupFs:         func(t *testing.T) afero.Fs { return afero.NewReadOnlyFs(afero.NewMemMapFs()) },
+			wantErrContains: "failed to create opkssh SSH directory",
+		},
+		{
+			name: "opkssh config create failure",
+			setupFs: func(t *testing.T) afero.Fs {
+				return &faultyFs{
+					Fs:           afero.NewMemMapFs(),
+					failOpenFile: func(name string, _ int) bool { return name == opkConfig },
+				}
+			},
+			wantErrContains: "failed to create opkssh SSH directory",
+		},
+		{
+			name: "read ssh config failure",
+			setupFs: func(t *testing.T) afero.Fs {
+				return &faultyFs{
+					Fs:       afero.NewMemMapFs(),
+					failOpen: func(name string) bool { return name == sshConfig },
+				}
+			},
+			wantErrContains: "failed to read SSH config file",
+		},
+		{
+			name: "write ssh config failure",
+			setupFs: func(t *testing.T) afero.Fs {
+				return &faultyFs{
+					Fs: afero.NewMemMapFs(),
+					failOpenFile: func(name string, flag int) bool {
+						return name == sshConfig && flag&os.O_WRONLY != 0
+					},
+				}
+			},
+			wantErrContains: "failed to write SSH config file",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs := tt.setupFs(t)
+			l := &LoginCmd{Fs: fs}
+
+			err := l.configureSSH()
+
+			if tt.wantErrContains != "" {
+				require.ErrorContains(t, err, tt.wantErrContains)
+				require.False(t, l.SSHConfigured, "SSHConfigured must stay false on error")
+				return
+			}
+
+			require.NoError(t, err)
+			require.True(t, l.SSHConfigured, "SSHConfigured must be set on success")
+
+			afs := &afero.Afero{Fs: fs}
+			exists, err := afs.Exists(opkConfig)
+			require.NoError(t, err)
+			require.True(t, exists, "opkssh config file should have been created")
+
+			got, err := afs.ReadFile(sshConfig)
+			require.NoError(t, err)
+			if tt.wantExactConfig != "" {
+				require.Equal(t, tt.wantExactConfig, string(got))
+			}
+			if tt.wantContains != "" {
+				require.Contains(t, string(got), tt.wantContains)
+			}
+		})
+	}
+}
+
+// TestConfigureSSHHomeDirError covers the os.UserHomeDir() failure branch by
+// clearing HOME. This resolution path only applies on non-Windows platforms.
+func TestConfigureSSHHomeDirError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("home directory is not resolved via HOME on Windows")
+	}
+	t.Setenv("HOME", "")
+
+	l := &LoginCmd{Fs: afero.NewMemMapFs()}
+	err := l.configureSSH()
+
+	require.ErrorContains(t, err, "failed to get user config dir")
+	require.False(t, l.SSHConfigured)
 }
