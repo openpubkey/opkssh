@@ -85,11 +85,22 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 		"extraArg2",
 	}
 
+	// defaultPrincipals is used when a test does not specify principals
+	defaultPrincipals := []string{"guest", "dev"}
+	// defaultExpectedLine is the authorized_keys line prefix expected for defaultPrincipals
+	defaultExpectedLine := "cert-authority,principals=\"guest,dev\" ecdsa-sha2-nistp256"
+
 	tests := []struct {
 		name        string
 		accessToken string
 		errorString string
 		policyFunc  func(userDesired string, pkt *pktoken.PKToken, userInfo string, certB64 string, typArg string, denyList policy.DenyList, extraArgs []string) error
+		// principals to set in the signed SSH cert. If nil, defaultPrincipals is used.
+		// Use an empty non-nil slice to test a cert with no principals.
+		principals []string
+		// expectedLine is the substring expected in the authorized_keys output.
+		// If empty, defaultExpectedLine is used.
+		expectedLine string
 	}{
 		{
 			name:       "Happy Path",
@@ -116,6 +127,42 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 				return fmt.Errorf("extraArgs doesn't match (expected %v, got %v)", mockExtraArgs, extraArgs)
 			},
 		},
+		{
+			name:         "Happy Path (opkssh-wildcard principal)",
+			policyFunc:   AllowAllPolicyEnforcer,
+			principals:   []string{"opkssh-wildcard"},
+			expectedLine: "cert-authority,principals=\"opkssh-wildcard\" ecdsa-sha2-nistp256",
+		},
+		{
+			name:         "Happy Path (no principals in cert produces bare cert-authority line)",
+			policyFunc:   AllowAllPolicyEnforcer,
+			principals:   []string{},
+			expectedLine: "cert-authority ecdsa-sha2-nistp256",
+		},
+		{
+			name:        "Rejects cert with quote-injection principal",
+			policyFunc:  AllowAllPolicyEnforcer,
+			principals:  []string{`evil",command="/bin/sh`},
+			errorString: "invalid principal",
+		},
+		{
+			name:        "Rejects cert with newline-injection principal",
+			policyFunc:  AllowAllPolicyEnforcer,
+			principals:  []string{"evil\nssh-ed25519 AAAAattackerkey attacker@evil"},
+			errorString: "invalid principal",
+		},
+		{
+			name:        "Rejects cert with comma-splitting principal",
+			policyFunc:  AllowAllPolicyEnforcer,
+			principals:  []string{"guest,root"},
+			errorString: "invalid principal",
+		},
+		{
+			name:        "Rejects cert with one bad principal among valid ones",
+			policyFunc:  AllowAllPolicyEnforcer,
+			principals:  []string{"guest", "dev", `x"`},
+			errorString: "invalid principal",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -132,7 +179,10 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 				accessToken = nil
 			}
 
-			principals := []string{"guest", "dev"}
+			principals := tt.principals
+			if principals == nil {
+				principals = defaultPrincipals
+			}
 			cert, err := sshcert.New(pkt, accessToken, principals)
 			require.NoError(t, err)
 
@@ -171,8 +221,15 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 
-				expectedPubkeyList := "cert-authority,principals=\"guest,dev\" ecdsa-sha2-nistp256"
+				expectedPubkeyList := tt.expectedLine
+				if expectedPubkeyList == "" {
+					expectedPubkeyList = defaultExpectedLine
+				}
 				require.Contains(t, pubkeyList, expectedPubkeyList)
+
+				// The output must never contain characters that could alter how
+				// sshd parses the authorized_keys line beyond the base64 pubkey.
+				require.NotContains(t, pubkeyList, "\n")
 			}
 		})
 
