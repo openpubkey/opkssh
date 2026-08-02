@@ -1102,7 +1102,6 @@ func TestConfigureSSHHomeDirError(t *testing.T) {
 	require.False(t, l.SSHConfigured)
 }
 
-
 func TestDetermineProviderCICDAliasErrors(t *testing.T) {
 	defaultConfig, err := config.NewClientConfig(config.DefaultClientConfig)
 	require.NoError(t, err)
