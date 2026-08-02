@@ -37,7 +37,7 @@ import (
 // Conservative allowlist: covers POSIX usernames and the sentinel.
 // Excludes " \ , whitespace and control chars, so neither the quoted
 // option syntax nor the comma-join can be broken by construction.
-var validPrincipal = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._+@-]{0,127}$`)
+var validPrincipal = regexp.MustCompile(`^[a-zA-Z0-9_][a-zA-Z0-9._+@-]{0,127}\$?$`)
 
 // PolicyEnforcerFunc returns nil if the supplied PK token is permitted to login as
 // username. Otherwise, an error is returned indicating the reason for rejection
