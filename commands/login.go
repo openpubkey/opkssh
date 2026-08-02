@@ -536,20 +536,8 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 		w := l.out()
 		fmt.Fprintln(w, string(certBytes))    // Base64 encoded SSH cert
 		fmt.Fprintln(w, string(seckeySshPem)) // SSH private key in OpenSSH native format
-	} else if seckeyPath != "" {
-		// If we have set seckeyPath then write it there
-		if err := l.writeKeys(seckeyPath, seckeyPath+"-cert.pub", seckeySshPem, certBytes); err != nil {
-			return nil, fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
-		}
-	} else if l.SSHConfigured {
-		if err := l.writeKeysToOpkSSHDir(seckeySshPem, certBytes); err != nil {
-			return nil, fmt.Errorf("failed to write SSH keys to OPK SSH dir: %w", err)
-		}
-	} else {
-		// If keyPath isn't set then write it to the default location
-		if err := l.writeKeysToSSHDir(seckeySshPem, certBytes); err != nil {
-			return nil, fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
-		}
+	} else if err := l.writeKeysToDestination(seckeyPath, seckeySshPem, certBytes); err != nil {
+		return nil, err
 	}
 
 	if printIdToken {
@@ -638,16 +626,8 @@ func (l *LoginCmd) LoginWithRefresh(ctx context.Context, provider providers.Refr
 			}
 
 			// Write ssh secret key and public key to filesystem
-			if seckeyPath != "" {
-				// If we have set seckeyPath then write it there
-				if err := l.writeKeys(seckeyPath, seckeyPath+"-cert.pub", seckeySshPem, certBytes); err != nil {
-					return fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
-				}
-			} else {
-				// If keyPath isn't set then write it to the default location
-				if err := l.writeKeysToSSHDir(seckeySshPem, certBytes); err != nil {
-					return fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
-				}
+			if err := l.writeKeysToDestination(seckeyPath, seckeySshPem, certBytes); err != nil {
+				return err
 			}
 
 			comPkt, err := refreshedPkt.Compact()
@@ -719,6 +699,38 @@ func createSSHCertWithAccessToken(pkt *pktoken.PKToken, accessToken []byte, sign
 	seckeySshBytes := pem.EncodeToMemory(seckeySsh)
 
 	return certBytes, seckeySshBytes, nil
+}
+
+// writeKeysToDestination writes the SSH private key and certificate to the
+// correct location on the filesystem, enforcing the following precedence:
+//
+//  1. seckeyPath (the --private-key-file/-i argument) if set
+//  2. the opkssh identity directory (~/.ssh/opkssh) if it has been configured
+//  3. the default ~/.ssh location
+//
+// The --private-key-file argument always has the highest precedence so that an
+// explicitly requested path is never overridden by the opkssh identity
+// directory or the default location. See https://github.com/openpubkey/opkssh/issues/524
+func (l *LoginCmd) writeKeysToDestination(seckeyPath string, seckeySshPem []byte, certBytes []byte) error {
+	switch {
+	case seckeyPath != "":
+		// If we have set seckeyPath then write it there
+		if err := l.writeKeys(seckeyPath, seckeyPath+"-cert.pub", seckeySshPem, certBytes); err != nil {
+			return fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
+		}
+		return nil
+	case l.SSHConfigured:
+		if err := l.writeKeysToOpkSSHDir(seckeySshPem, certBytes); err != nil {
+			return fmt.Errorf("failed to write SSH keys to OPK SSH dir: %w", err)
+		}
+		return nil
+	default:
+		// If keyPath isn't set then write it to the default location
+		if err := l.writeKeysToSSHDir(seckeySshPem, certBytes); err != nil {
+			return fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
+		}
+		return nil
+	}
 }
 
 func (l *LoginCmd) writeKeysToOpkSSHDir(secKeyPem []byte, certBytes []byte) error {
