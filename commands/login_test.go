@@ -978,9 +978,6 @@ func sshConfigPaths(t *testing.T) (sshConfig, opkConfig string) {
 	return filepath.Join(home, ".ssh/config"), filepath.Join(home, ".ssh/opkssh/config")
 }
 
-
-
-
 func TestConfigureSSH(t *testing.T) {
 	sshConfig, opkConfig := sshConfigPaths(t)
 
