@@ -9,7 +9,7 @@ require (
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/lestrrat-go/jwx/v3 v3.0.12
 	github.com/melbahja/goph v1.4.0
-	github.com/openpubkey/openpubkey v0.26.1-0.20260721023309-d5f4b5497cda
+	github.com/openpubkey/openpubkey v0.27.0
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.43.0
