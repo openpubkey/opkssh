@@ -54,11 +54,11 @@ jobs:
         run: |
           ISSUER="${GITHUB_SERVER_URL%/}/api/actions"
           echo "$ISSUER forgejo oidc" >> /etc/opk/providers
-        # Forgejo v16+ uses immutable owner/repository IDs in the sub claim
-        # (repo:<owner>-<ownerID>/<repo>-<repoID>:ref:<ref>), which is preferred
-        # because it avoids issues with renamed or reused repository names.
-        # Existing repositories from Forgejo v15 LTS installations may still use
-        # the legacy format (repo:<owner>/<repo>:ref:<ref>), so authorize both.
+          # Forgejo v16+ uses immutable owner/repository IDs in the sub claim
+          # (repo:<owner>-<ownerID>/<repo>-<repoID>:ref:<ref>), which is preferred
+          # because it avoids issues with renamed or reused repository names.
+          # Existing repositories from Forgejo v15 LTS installations may still use
+          # the legacy format (repo:<owner>/<repo>:ref:<ref>), so authorize both.
           REPO_INFO=$(curl -sSf -H "Authorization: token ${TOKEN}" "${GITHUB_SERVER_URL%/}/api/v1/repos/${GITHUB_REPOSITORY}")
           OWNER_ID=$(echo "$REPO_INFO" | jq -r '.owner.id')
           REPO_ID=$(echo "$REPO_INFO" | jq -r '.id')
