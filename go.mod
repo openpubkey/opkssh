@@ -4,6 +4,8 @@ go 1.25.0
 
 toolchain go1.26.5
 
+replace github.com/openpubkey/openpubkey => github.com/ianroberts/openpubkey v0.0.0-20260716230114-77f8e20688f6
+
 require (
 	github.com/docker/go-connections v0.6.0
 	github.com/jeremija/gosubmit v0.2.8
@@ -16,9 +18,9 @@ require (
 	github.com/testcontainers/testcontainers-go v0.43.0
 	github.com/thediveo/enumflag/v2 v2.0.7
 	github.com/zitadel/oidc/v3 v3.41.0
-	golang.org/x/crypto v0.53.0
-	golang.org/x/mod v0.36.0
-	golang.org/x/term v0.44.0
+	golang.org/x/crypto v0.54.0
+	golang.org/x/mod v0.37.0
+	golang.org/x/term v0.45.0
 )
 
 require (
@@ -90,7 +92,7 @@ require (
 	go.opentelemetry.io/otel v1.41.0 // indirect
 	go.opentelemetry.io/otel/metric v1.41.0 // indirect
 	go.opentelemetry.io/otel/trace v1.41.0 // indirect
-	golang.org/x/net v0.55.0 // indirect
+	golang.org/x/net v0.56.0 // indirect
 )
 
 require (
@@ -107,7 +109,7 @@ require (
 	github.com/spf13/afero v1.14.0
 	golang.org/x/exp v0.0.0-20250717185816-542afb5b7346 // indirect
 	golang.org/x/oauth2 v0.30.0 // indirect
-	golang.org/x/sys v0.46.0
-	golang.org/x/text v0.38.0 // indirect
+	golang.org/x/sys v0.47.0
+	golang.org/x/text v0.40.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )

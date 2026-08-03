@@ -308,7 +308,7 @@ env_vars:
 					},
 				},
 			}
-			err := ver.ReadFromServerConfig()
+			_, err := ver.ReadFromServerConfig()
 
 			if tt.errorString != "" {
 				require.ErrorContains(t, err, tt.errorString)

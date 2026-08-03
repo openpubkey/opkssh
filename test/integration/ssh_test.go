@@ -120,8 +120,8 @@ func (p *pulseRefreshProvider) VerifyRefreshedIDToken(ctx context.Context, origI
 	return p.RefreshableOP.VerifyRefreshedIDToken(ctx, origIdt, reIdt)
 }
 
-func (p *pulseRefreshProvider) PublicKeyByToken(ctx context.Context, token []byte) (*discover.PublicKeyRecord, error) {
-	return p.RefreshableOP.PublicKeyByToken(ctx, token)
+func (p *pulseRefreshProvider) PublicKeyByToken(ctx context.Context, token []byte, mayUseCache bool) (*discover.PublicKeyRecord, bool, error) {
+	return p.RefreshableOP.PublicKeyByToken(ctx, token, mayUseCache)
 }
 
 func (p *pulseRefreshProvider) VerifyIDToken(ctx context.Context, idt []byte, cic *clientinstance.Claims) error {
@@ -137,8 +137,8 @@ func (p *pulseRefreshProvider) Issuer() string {
 	return p.RefreshableOP.Issuer()
 }
 
-func (p *pulseRefreshProvider) PublicKeyByKeyId(ctx context.Context, keyId string) (*discover.PublicKeyRecord, error) {
-	return p.RefreshableOP.PublicKeyByKeyId(ctx, keyId)
+func (p *pulseRefreshProvider) PublicKeyByKeyId(ctx context.Context, keyId string, mayUseCache bool) (*discover.PublicKeyRecord, bool, error) {
+	return p.RefreshableOP.PublicKeyByKeyId(ctx, keyId, mayUseCache)
 }
 
 // Refresh calls the underlying provider.RefreshableOP() function only after a
