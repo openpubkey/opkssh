@@ -1,6 +1,6 @@
 # SSH via Forgejo Actions (Codeberg)
 
-opkssh supports SSHing into servers from [Forgejo Actions](https://forgejo.org/docs/latest/user/actions/) workflows, for example on [Codeberg](https://codeberg.org), using Forgejo's OpenID Connect (OIDC) tokens. This lets your CI/CD pipelines authenticate over SSH without managing static SSH keys or secrets. Note that we detect if the issuer is a forgejo issuer by checking if the issuer URI ending in `/api/actions`. If you have a issuer than ends in `/api/action` it may be confused for forgejo.
+opkssh supports SSHing into servers from [Forgejo Actions](https://forgejo.org/docs/latest/user/actions/) workflows, for example on [Codeberg](https://codeberg.org), using Forgejo's OpenID Connect (OIDC) tokens. This lets your CI/CD pipelines authenticate over SSH without managing static SSH keys or secrets. Note that opkssh detects Forgejo issuers by checking whether the issuer URI ends in /api/actions. If you have an unrelated OIDC provider whose issuer ends in /api/actions, it may be mistaken for a Forgejo instance.
 
 Forgejo Actions OIDC tokens require Forgejo v15.0 or later. Codeberg supports them out of the box.
 
