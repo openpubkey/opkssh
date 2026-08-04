@@ -167,7 +167,7 @@ func GitlabCiProviderConfig(issuer string) ProviderConfig {
 // browser-based one. GitLab CI/CD is checked by alias, not issuer, since it
 // shares its issuer with the browser-based GitLab OP.
 func IsCICDProvider(p ProviderConfig) bool {
-	if strings.HasPrefix(p.Issuer, "https://token.actions.githubusercontent.com") || providers.IsForgejoIssuer(p.Issuer) {
+	if p.Issuer == "https://token.actions.githubusercontent.com" || providers.IsForgejoIssuer(p.Issuer) {
 		return true
 	}
 	return slices.Contains(p.AliasList, gitlabCiAlias)
@@ -302,7 +302,7 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 		opts.RemoteRedirectURI = p.RemoteRedirectURI
 		opts.OpenBrowser = openBrowser
 		provider = providers.NewHelloOpWithOptions(opts)
-	} else if strings.HasPrefix(p.Issuer, "https://token.actions.githubusercontent.com") {
+	} else if p.Issuer == "https://token.actions.githubusercontent.com" {
 		githubOp, err := providers.NewGithubOpFromEnvironment()
 		if err != nil {
 			return nil, fmt.Errorf("error creating github op: %w", err)
