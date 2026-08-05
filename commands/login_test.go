@@ -378,7 +378,7 @@ func TestDetermineProvider(t *testing.T) {
 			wantIssuer:    "",
 			wantError:     false,
 			errorString:   "",
-			wantChooser:   `[{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"","GQSign":false,"DeviceFlow":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"CallbackHTML":"You may now close this window","ExtraURLParamOpts":{}}]`,
+			wantChooser:   `[{"OutputWriter":null,"ErrorWriter":null,"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"","GQSign":false,"DeviceFlow":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"CallbackHTML":"You may now close this window","ExtraURLParamOpts":{}}]`,
 		},
 		{
 			name:          "Good path with env vars many providers and no default",
@@ -387,7 +387,7 @@ func TestDetermineProvider(t *testing.T) {
 			providerAlias: "",
 			wantIssuer:    "",
 			wantError:     false,
-			wantChooser:   `[{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"","GQSign":false,"DeviceFlow":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"CallbackHTML":"You may now close this window","ExtraURLParamOpts":{}},{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"","GQSign":false,"DeviceFlow":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"CallbackHTML":"You may now close this window","ExtraURLParamOpts":{}},{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"","GQSign":false,"DeviceFlow":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"CallbackHTML":"You may now close this window","ExtraURLParamOpts":{}}]`,
+			wantChooser:   `[{"OutputWriter":null,"ErrorWriter":null,"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"","GQSign":false,"DeviceFlow":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"CallbackHTML":"You may now close this window","ExtraURLParamOpts":{}},{"OutputWriter":null,"ErrorWriter":null,"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"","GQSign":false,"DeviceFlow":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"CallbackHTML":"You may now close this window","ExtraURLParamOpts":{}},{"OutputWriter":null,"ErrorWriter":null,"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"","GQSign":false,"DeviceFlow":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"CallbackHTML":"You may now close this window","ExtraURLParamOpts":{}}]`,
 		},
 		{
 			name:          "Good path with env vars many providers and providerAlias",
@@ -411,7 +411,7 @@ func TestDetermineProvider(t *testing.T) {
 			providerArg:       "",
 			providerAlias:     "",
 			remoteRedirectURI: "https://example.com/login_callback",
-			wantChooser:       `[{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"https://example.com/login_callback","GQSign":false,"DeviceFlow":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"CallbackHTML":"You may now close this window","ExtraURLParamOpts":{}},{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"https://example.com/login_callback","GQSign":false,"DeviceFlow":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"CallbackHTML":"You may now close this window","ExtraURLParamOpts":{}},{"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"https://example.com/login_callback","GQSign":false,"DeviceFlow":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"CallbackHTML":"You may now close this window","ExtraURLParamOpts":{}}]`,
+			wantChooser:       `[{"OutputWriter":null,"ErrorWriter":null,"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"https://example.com/login_callback","GQSign":false,"DeviceFlow":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"CallbackHTML":"You may now close this window","ExtraURLParamOpts":{}},{"OutputWriter":null,"ErrorWriter":null,"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"https://example.com/login_callback","GQSign":false,"DeviceFlow":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"CallbackHTML":"You may now close this window","ExtraURLParamOpts":{}},{"OutputWriter":null,"ErrorWriter":null,"ClientSecret":"","Scopes":["openid profile email"],"PromptType":"consent","AccessType":"offline","RedirectURIs":["http://localhost:3000/login-callback","http://localhost:10001/login-callback","http://localhost:11110/login-callback"],"RemoteRedirectURI":"https://example.com/login_callback","GQSign":false,"DeviceFlow":false,"OpenBrowser":false,"HttpClient":null,"IssuedAtOffset":60000000000,"CallbackHTML":"You may now close this window","ExtraURLParamOpts":{}}]`,
 			wantError:         false,
 		},
 		{
@@ -1100,4 +1100,173 @@ func TestConfigureSSHHomeDirError(t *testing.T) {
 
 	require.ErrorContains(t, err, "failed to get user config dir")
 	require.False(t, l.SSHConfigured)
+}
+
+func TestDetermineProviderCICDAliasErrors(t *testing.T) {
+	defaultConfig, err := config.NewClientConfig(config.DefaultClientConfig)
+	require.NoError(t, err)
+
+	forgejoTokenURL := "https://codeberg.org/api/actions/_apis/pipelines/workflows/42/idtoken?placeholder=true"
+	githubTokenURL := "https://pipelines.actions.githubusercontent.com/abc/_apis/pipelines/1/runs/2/idtoken?api-version=2.0"
+
+	tests := []struct {
+		name            string
+		alias           string
+		tokenRequestURL string
+		errorString     string
+	}{
+		{
+			name:        "forgejo alias outside an Actions environment",
+			alias:       "forgejo",
+			errorString: "only works inside a Forgejo Actions workflow",
+		},
+		{
+			name:        "codeberg alias outside an Actions environment",
+			alias:       "codeberg",
+			errorString: "only works inside a Forgejo Actions workflow",
+		},
+		{
+			name:        "github alias outside an Actions environment",
+			alias:       "github",
+			errorString: "only works inside a GitHub Actions workflow",
+		},
+		{
+			name:            "forgejo alias in a GitHub Actions environment",
+			alias:           "forgejo",
+			tokenRequestURL: githubTokenURL,
+			errorString:     "use `opkssh login github` instead",
+		},
+		{
+			name:            "github alias in a Forgejo Actions environment",
+			alias:           "github",
+			tokenRequestURL: forgejoTokenURL,
+			errorString:     "use `opkssh login forgejo` instead",
+		},
+		{
+			name:        "gitlab-ci alias outside a GitLab CI/CD pipeline",
+			alias:       "gitlab-ci",
+			errorString: "only works inside a GitLab CI/CD pipeline",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			requestToken := ""
+			if tt.tokenRequestURL != "" {
+				requestToken = "runner-token"
+			}
+			t.Setenv("OPKSSH_DEFAULT", "")
+			t.Setenv("OPKSSH_PROVIDERS", "")
+			t.Setenv("ACTIONS_ID_TOKEN_REQUEST_URL", tt.tokenRequestURL)
+			t.Setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", requestToken)
+			t.Setenv("GITLAB_CI", "")
+
+			login := LoginCmd{Config: defaultConfig, ProviderAliasArg: tt.alias}
+			_, _, err := login.determineProvider()
+			require.ErrorContains(t, err, tt.errorString)
+		})
+	}
+}
+
+func TestDetermineProviderGitlabCIEnvironment(t *testing.T) {
+	defaultConfig, err := config.NewClientConfig(config.DefaultClientConfig)
+	require.NoError(t, err)
+	t.Setenv("OPKSSH_DEFAULT", "")
+	t.Setenv("OPKSSH_PROVIDERS", "")
+	t.Setenv("GITLAB_CI", "true")
+	t.Setenv("ACTIONS_ID_TOKEN_REQUEST_URL", "")
+	t.Setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "")
+
+	// Mirrors the auto-registration Run() does before determineProvider() is
+	// called; not calling Run() itself since it has unrelated side effects
+	// (SSH config checks, logging setup).
+	defaultConfig.Providers = append(defaultConfig.Providers, config.GitlabCiProviderConfig("https://gitlab.com"))
+
+	login := LoginCmd{Config: defaultConfig, ProviderAliasArg: "gitlab-ci"}
+	provider, _, err := login.determineProvider()
+	require.NoError(t, err)
+	require.Equal(t, "https://gitlab.com", provider.Issuer())
+}
+
+func TestGitlabCiIssuer(t *testing.T) {
+	t.Setenv("CI_SERVER_URL", "")
+	require.Equal(t, "https://gitlab.com", gitlabCiIssuer())
+
+	t.Setenv("CI_SERVER_URL", "https://gitlab.example.com")
+	require.Equal(t, "https://gitlab.example.com", gitlabCiIssuer())
+}
+
+// OPKSSH_PROVIDERS replaces the provider list wholesale, which drops the
+// CI/CD provider Run() auto-registers. The error has to say so, otherwise it
+// reads as "you are not in a CI/CD environment" while sitting in one.
+func TestDetermineProviderCICDAliasDroppedByProvidersEnvVar(t *testing.T) {
+	defaultConfig, err := config.NewClientConfig(config.DefaultClientConfig)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name            string
+		alias           string
+		tokenRequestURL string
+		gitlabCI        string
+	}{
+		{
+			name:            "forgejo",
+			alias:           "forgejo",
+			tokenRequestURL: "https://codeberg.org/api/actions/_apis/pipelines/workflows/42/idtoken?placeholder=true",
+		},
+		{
+			name:            "github",
+			alias:           "github",
+			tokenRequestURL: "https://pipelines.actions.githubusercontent.com/abc/_apis/pipelines/1/runs/2/idtoken?api-version=2.0",
+		},
+		{
+			name:     "gitlab-ci",
+			alias:    "gitlab-ci",
+			gitlabCI: "true",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			requestToken := ""
+			if tt.tokenRequestURL != "" {
+				requestToken = "runner-token"
+			}
+			t.Setenv("OPKSSH_DEFAULT", "")
+			t.Setenv("ACTIONS_ID_TOKEN_REQUEST_URL", tt.tokenRequestURL)
+			t.Setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", requestToken)
+			t.Setenv("GITLAB_CI", tt.gitlabCI)
+			// An unrelated provider set through the env var, as a workflow
+			// pointing opkssh at its own OP would do.
+			t.Setenv("OPKSSH_PROVIDERS", "https://op.example.com,client-id,client-secret,openid email")
+
+			// The provider Run() would have auto-registered is present in the
+			// config and still unreachable, because the env var wins.
+			cfg := *defaultConfig
+			cfg.Providers = append(cfg.Providers, config.GitlabCiProviderConfig("https://gitlab.com"))
+
+			login := LoginCmd{Config: &cfg, ProviderAliasArg: tt.alias}
+			_, _, err := login.determineProvider()
+			require.ErrorContains(t, err, "OPKSSH_PROVIDERS")
+		})
+	}
+}
+
+// The web chooser cannot offer CI/CD providers, so a list containing nothing
+// else must fail instead of serving an empty chooser page forever.
+func TestDetermineProviderWebChooserWithOnlyCICDProviders(t *testing.T) {
+	t.Setenv("OPKSSH_DEFAULT", "")
+	t.Setenv("OPKSSH_PROVIDERS", "")
+	t.Setenv("ACTIONS_ID_TOKEN_REQUEST_URL", "")
+	t.Setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "")
+	t.Setenv("GITLAB_CI", "")
+
+	cfg := &config.ClientConfig{
+		Providers: []config.ProviderConfig{
+			config.GitHubProviderConfig(),
+			config.ForgejoProviderConfig("https://codeberg.org/api/actions"),
+		},
+	}
+	login := LoginCmd{Config: cfg}
+	_, chooser, err := login.determineProvider()
+	require.ErrorContains(t, err, "no browser-based providers configured")
+	require.Nil(t, chooser)
 }
