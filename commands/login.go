@@ -423,23 +423,33 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 			kind, _ := detectActionsEnvironment()
 			isForgejoEnv := kind == actionsEnvForgejo
 			isGithubEnv := kind == actionsEnvGithub
+			isCICDAlias := false
 			switch strings.ToLower(defaultProviderAlias) {
 			case "github":
+				isCICDAlias = true
 				if isForgejoEnv {
 					return nil, nil, fmt.Errorf("this looks like a Forgejo Actions environment, use `opkssh login forgejo` instead")
 				} else if !isGithubEnv {
 					return nil, nil, fmt.Errorf("the %s provider only works inside a GitHub Actions workflow with the `id-token: write` permission (%s and %s are not set)", defaultProviderAlias, envActionsTokenRequestURL, envActionsTokenRequestToken)
 				}
 			case "forgejo", "codeberg":
+				isCICDAlias = true
 				if isGithubEnv {
 					return nil, nil, fmt.Errorf("this looks like a GitHub Actions environment, use `opkssh login github` instead")
 				} else if !isForgejoEnv {
 					return nil, nil, fmt.Errorf("the %s provider only works inside a Forgejo Actions workflow with `enable-openid-connect: true` (%s and %s are not set)", defaultProviderAlias, envActionsTokenRequestURL, envActionsTokenRequestToken)
 				}
 			case "gitlab-ci":
+				isCICDAlias = true
 				if os.Getenv(config.GITLAB_CI_ENVVAR) != "true" {
 					return nil, nil, fmt.Errorf("the %s provider only works inside a GitLab CI/CD pipeline (%s is not set to \"true\")", defaultProviderAlias, config.GITLAB_CI_ENVVAR)
 				}
+			}
+			// Reaching here with a CI/CD alias means we are inside its
+			// environment, so the provider was auto-registered and then
+			// dropped when the env var replaced the whole provider list.
+			if isCICDAlias && providerConfigsEnv != nil {
+				return nil, nil, fmt.Errorf("the %s provider is registered automatically in this CI/CD environment, but %s is set and replaces the provider list; unset %s or add %s to it", defaultProviderAlias, config.OPKSSH_PROVIDERS_ENVVAR, config.OPKSSH_PROVIDERS_ENVVAR, defaultProviderAlias)
 			}
 			return nil, nil, fmt.Errorf("error getting provider config for alias %s", defaultProviderAlias)
 		}
@@ -475,6 +485,12 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 				return nil, nil, fmt.Errorf("provider for issuer %s does not support browser-based login", providerConfig.Issuer)
 			}
 			providerList = append(providerList, browserOp)
+		}
+
+		// The chooser would otherwise serve a page with no providers on it
+		// and wait forever for a selection that cannot be made.
+		if len(providerList) == 0 {
+			return nil, nil, fmt.Errorf("no browser-based providers configured to choose from; CI/CD providers cannot be used with the web chooser, specify one by alias instead, e.g. `opkssh login forgejo`")
 		}
 
 		chooser := choosers.NewWebChooser(

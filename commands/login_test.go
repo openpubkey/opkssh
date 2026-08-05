@@ -1194,3 +1194,79 @@ func TestGitlabCiIssuer(t *testing.T) {
 	t.Setenv("CI_SERVER_URL", "https://gitlab.example.com")
 	require.Equal(t, "https://gitlab.example.com", gitlabCiIssuer())
 }
+
+// OPKSSH_PROVIDERS replaces the provider list wholesale, which drops the
+// CI/CD provider Run() auto-registers. The error has to say so, otherwise it
+// reads as "you are not in a CI/CD environment" while sitting in one.
+func TestDetermineProviderCICDAliasDroppedByProvidersEnvVar(t *testing.T) {
+	defaultConfig, err := config.NewClientConfig(config.DefaultClientConfig)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name            string
+		alias           string
+		tokenRequestURL string
+		gitlabCI        string
+	}{
+		{
+			name:            "forgejo",
+			alias:           "forgejo",
+			tokenRequestURL: "https://codeberg.org/api/actions/_apis/pipelines/workflows/42/idtoken?placeholder=true",
+		},
+		{
+			name:            "github",
+			alias:           "github",
+			tokenRequestURL: "https://pipelines.actions.githubusercontent.com/abc/_apis/pipelines/1/runs/2/idtoken?api-version=2.0",
+		},
+		{
+			name:     "gitlab-ci",
+			alias:    "gitlab-ci",
+			gitlabCI: "true",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			requestToken := ""
+			if tt.tokenRequestURL != "" {
+				requestToken = "runner-token"
+			}
+			t.Setenv("OPKSSH_DEFAULT", "")
+			t.Setenv("ACTIONS_ID_TOKEN_REQUEST_URL", tt.tokenRequestURL)
+			t.Setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", requestToken)
+			t.Setenv("GITLAB_CI", tt.gitlabCI)
+			// An unrelated provider set through the env var, as a workflow
+			// pointing opkssh at its own OP would do.
+			t.Setenv("OPKSSH_PROVIDERS", "https://op.example.com,client-id,client-secret,openid email")
+
+			// The provider Run() would have auto-registered is present in the
+			// config and still unreachable, because the env var wins.
+			cfg := *defaultConfig
+			cfg.Providers = append(cfg.Providers, config.GitlabCiProviderConfig("https://gitlab.com"))
+
+			login := LoginCmd{Config: &cfg, ProviderAliasArg: tt.alias}
+			_, _, err := login.determineProvider()
+			require.ErrorContains(t, err, "OPKSSH_PROVIDERS")
+		})
+	}
+}
+
+// The web chooser cannot offer CI/CD providers, so a list containing nothing
+// else must fail instead of serving an empty chooser page forever.
+func TestDetermineProviderWebChooserWithOnlyCICDProviders(t *testing.T) {
+	t.Setenv("OPKSSH_DEFAULT", "")
+	t.Setenv("OPKSSH_PROVIDERS", "")
+	t.Setenv("ACTIONS_ID_TOKEN_REQUEST_URL", "")
+	t.Setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "")
+	t.Setenv("GITLAB_CI", "")
+
+	cfg := &config.ClientConfig{
+		Providers: []config.ProviderConfig{
+			config.GitHubProviderConfig(),
+			config.ForgejoProviderConfig("https://codeberg.org/api/actions"),
+		},
+	}
+	login := LoginCmd{Config: cfg}
+	_, chooser, err := login.determineProvider()
+	require.ErrorContains(t, err, "no browser-based providers configured")
+	require.Nil(t, chooser)
+}

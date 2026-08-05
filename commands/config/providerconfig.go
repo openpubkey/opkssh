@@ -284,7 +284,7 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 			return nil, fmt.Errorf("error creating gitlab ci op: not running inside a GitLab CI/CD pipeline (%s environment variable is not \"true\")", GITLAB_CI_ENVVAR)
 		}
 		provider = providers.NewGitlabCiOp(p.Issuer, GITLAB_CI_TOKEN_ENVVAR)
-	} else if strings.HasPrefix(p.Issuer, GITLAB_ISSUER) {
+	} else if strings.TrimSuffix(p.Issuer, "/") == GITLAB_ISSUER {
 		opts := providers.GetDefaultGitlabOpOptions()
 		opts.Issuer = p.Issuer
 		opts.ClientID = p.ClientID

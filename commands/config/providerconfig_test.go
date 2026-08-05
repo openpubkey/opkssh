@@ -20,6 +20,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/openpubkey/openpubkey/providers"
 	"github.com/stretchr/testify/require"
 )
 
@@ -268,6 +269,41 @@ func TestGitlabBrowserToProviderUnaffectedByGitlabCI(t *testing.T) {
 	provider, err := providerConfig.ToProvider(false)
 	require.NoError(t, err)
 	require.Equal(t, "https://gitlab.com", provider.Issuer())
+}
+
+// The GitLab issuer is matched exactly, so a lookalike issuer is built as a
+// generic provider using its own configuration rather than GitLab's.
+func TestGitlabIssuerMatchedExactly(t *testing.T) {
+	t.Setenv("GITLAB_CI", "")
+
+	tests := []struct {
+		name       string
+		issuer     string
+		wantGitlab bool
+	}{
+		{name: "gitlab.com", issuer: "https://gitlab.com", wantGitlab: true},
+		{name: "gitlab.com with a trailing slash", issuer: "https://gitlab.com/", wantGitlab: true},
+		{name: "issuer with gitlab.com as a prefix", issuer: "https://gitlab.com.example.com", wantGitlab: false},
+		{name: "self hosted gitlab", issuer: "https://gitlab.example.com", wantGitlab: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			providerConfig := DefaultProviderConfig()
+			providerConfig.AliasList = []string{"gitlab"}
+			providerConfig.Issuer = tt.issuer
+			providerConfig.ClientID = "some-real-client-id"
+			provider, err := providerConfig.ToProvider(false)
+			require.NoError(t, err)
+
+			// GitlabOp is an alias of StandardOpRefreshable, which is a
+			// different type to the StandardOp the generic branch builds.
+			if tt.wantGitlab {
+				require.IsType(t, &providers.GitlabOp{}, provider)
+			} else {
+				require.IsType(t, &providers.StandardOp{}, provider)
+			}
+		})
+	}
 }
 
 func TestForgejoToProvider(t *testing.T) {

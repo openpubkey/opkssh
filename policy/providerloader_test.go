@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/openpubkey/verifier"
 	"github.com/stretchr/testify/require"
 )
@@ -205,4 +206,81 @@ func TestProviderPolicy_CreateVerifier_Forgejo(t *testing.T) {
 	ver, err := policy.CreateVerifier()
 	require.NoError(t, err)
 	require.NotNil(t, ver)
+}
+
+// The OP a row is verified against is chosen by issuer alone. A row that
+// silently falls through to the wrong branch is verified with the wrong
+// commitment type, so assert the concrete OP and not just that one was built.
+//
+// Note that GoogleOp, AzureOp and GitlabOp are all aliases of
+// StandardOpRefreshable, so those cases cannot tell those branches apart from
+// each other or from the generic fallback. What they do pin down is that such
+// an issuer is not verified as GitHub or Forgejo, which are distinct types and
+// commit differently.
+func TestProviderVerifierFromRow(t *testing.T) {
+	tests := []struct {
+		name       string
+		issuer     string
+		wantOp     verifier.ProviderVerifier
+		wantIssuer string
+	}{
+		{
+			name:   "google",
+			issuer: "https://accounts.google.com",
+			wantOp: &providers.GoogleOp{},
+		},
+		{
+			name:   "azure",
+			issuer: "https://login.microsoftonline.com/tenant/v2.0",
+			wantOp: &providers.AzureOp{},
+		},
+		{
+			name:   "gitlab",
+			issuer: "https://gitlab.com",
+			wantOp: &providers.GitlabOp{},
+		},
+		{
+			name:   "github actions",
+			issuer: "https://token.actions.githubusercontent.com",
+			wantOp: &providers.GithubOp{},
+		},
+		{
+			name:   "forgejo actions on codeberg",
+			issuer: "https://codeberg.org/api/actions",
+			wantOp: &providers.ForgejoOp{},
+		},
+		{
+			name:   "forgejo actions self hosted under a path",
+			issuer: "https://git.example.com/forgejo/api/actions",
+			wantOp: &providers.ForgejoOp{},
+		},
+		{
+			name:       "forgejo actions issuer with a trailing slash",
+			issuer:     "https://codeberg.org/api/actions/",
+			wantOp:     &providers.ForgejoOp{},
+			wantIssuer: "https://codeberg.org/api/actions",
+		},
+		{
+			// Not a Forgejo instance, so it must not get Forgejo's
+			// aud-as-commitment verification.
+			name:   "unrelated issuer",
+			issuer: "https://op.example.com",
+			wantOp: &providers.GoogleOp{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pv := providerVerifierFromRow(ProvidersRow{
+				Issuer:           tt.issuer,
+				ClientID:         "client-id",
+				ExpirationPolicy: "oidc",
+			})
+			require.IsType(t, tt.wantOp, pv)
+			wantIssuer := tt.wantIssuer
+			if wantIssuer == "" {
+				wantIssuer = tt.issuer
+			}
+			require.Equal(t, wantIssuer, pv.Issuer())
+		})
+	}
 }

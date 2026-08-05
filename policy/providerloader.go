@@ -69,42 +69,47 @@ func (p *ProviderPolicy) GetRows() []ProvidersRow {
 	return p.rows
 }
 
+// providerVerifierFromRow selects the OP verifier to use for a row in the
+// providers file. The OP type is determined by the configured issuer alone,
+// never by anything in the token being verified.
+func providerVerifierFromRow(row ProvidersRow) verifier.ProviderVerifier {
+	// TODO: We should handle this issuer matching in a more generic way
+	// oidc.local and localhost: are a test issuers
+	if row.Issuer == "https://accounts.google.com" ||
+		strings.HasPrefix(row.Issuer, "http://oidc.local") ||
+		strings.HasPrefix(row.Issuer, "http://localhost:") {
+
+		opts := providers.GetDefaultGoogleOpOptions()
+		opts.Issuer = row.Issuer
+		opts.ClientID = row.ClientID
+		return providers.NewGoogleOpWithOptions(opts)
+	} else if strings.HasPrefix(row.Issuer, "https://login.microsoftonline.com") {
+		opts := providers.GetDefaultAzureOpOptions()
+		opts.Issuer = row.Issuer
+		opts.ClientID = row.ClientID
+		return providers.NewAzureOpWithOptions(opts)
+	} else if row.Issuer == "https://gitlab.com" {
+		opts := providers.GetDefaultGitlabOpOptions()
+		opts.Issuer = row.Issuer
+		opts.ClientID = row.ClientID
+		return providers.NewGitlabOpWithOptions(opts)
+	} else if row.Issuer == "https://token.actions.githubusercontent.com" {
+		return providers.NewGithubOp(row.Issuer, "")
+	} else if providers.IsForgejoIssuer(row.Issuer) {
+		return providers.NewForgejoOp(row.Issuer, "", "")
+	}
+	opts := providers.GetDefaultGoogleOpOptions()
+	opts.Issuer = row.Issuer
+	opts.ClientID = row.ClientID
+	return providers.NewGoogleOpWithOptions(opts)
+}
+
 func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
 	pvs := []verifier.ProviderVerifier{}
 	var expirationPolicy verifier.ExpirationPolicy
 	var err error
 	for _, row := range p.rows {
-		var provider verifier.ProviderVerifier
-		// TODO: We should handle this issuer matching in a more generic way
-		// oidc.local and localhost: are a test issuers
-		if row.Issuer == "https://accounts.google.com" ||
-			strings.HasPrefix(row.Issuer, "http://oidc.local") ||
-			strings.HasPrefix(row.Issuer, "http://localhost:") {
-
-			opts := providers.GetDefaultGoogleOpOptions()
-			opts.Issuer = row.Issuer
-			opts.ClientID = row.ClientID
-			provider = providers.NewGoogleOpWithOptions(opts)
-		} else if strings.HasPrefix(row.Issuer, "https://login.microsoftonline.com") {
-			opts := providers.GetDefaultAzureOpOptions()
-			opts.Issuer = row.Issuer
-			opts.ClientID = row.ClientID
-			provider = providers.NewAzureOpWithOptions(opts)
-		} else if row.Issuer == "https://gitlab.com" {
-			opts := providers.GetDefaultGitlabOpOptions()
-			opts.Issuer = row.Issuer
-			opts.ClientID = row.ClientID
-			provider = providers.NewGitlabOpWithOptions(opts)
-		} else if row.Issuer == "https://token.actions.githubusercontent.com" {
-			provider = providers.NewGithubOp(row.Issuer, "")
-		} else if providers.IsForgejoIssuer(row.Issuer) {
-			provider = providers.NewForgejoOp(row.Issuer, "", "")
-		} else {
-			opts := providers.GetDefaultGoogleOpOptions()
-			opts.Issuer = row.Issuer
-			opts.ClientID = row.ClientID
-			provider = providers.NewGoogleOpWithOptions(opts)
-		}
+		provider := providerVerifierFromRow(row)
 
 		expirationPolicy, err = row.GetExpirationPolicy()
 		if err != nil {
