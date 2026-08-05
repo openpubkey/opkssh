@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -198,8 +199,14 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		l.checkSSHConfigured()
 	}
 
-	if isGitHubEnvironment() {
+	if kind, forgejoIssuer := detectActionsEnvironment(); kind == actionsEnvForgejo {
+		l.Config.Providers = append(l.Config.Providers, config.ForgejoProviderConfig(forgejoIssuer))
+	} else if kind == actionsEnvGithub {
 		l.Config.Providers = append(l.Config.Providers, config.GitHubProviderConfig())
+	}
+
+	if os.Getenv(config.GITLAB_CI_ENVVAR) == "true" {
+		l.Config.Providers = append(l.Config.Providers, config.GitlabCiProviderConfig(gitlabCiIssuer()))
 	}
 
 	var provider providers.OpenIdProvider
@@ -211,12 +218,16 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 			return err
 		}
 		if chooser != nil {
+			chooser.UseStdOutErr() // Set chooser to write to stdout and stderr
 			provider, err = chooser.ChooseOp(ctx)
 			if err != nil {
 				return fmt.Errorf("error choosing provider: %w", err)
 			}
 		} else if op != nil {
 			provider = op
+			if configurableOp, ok := provider.(interface{ UseStdOutErr() }); ok {
+				configurableOp.UseStdOutErr() // Set op to write to stdout and stderr (if supported)
+			}
 		} else {
 			return fmt.Errorf("no provider found") // Either the provider or the chooser must be set. If this occurs we have a bug in the code.
 		}
@@ -407,6 +418,39 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 		}
 		providerConfig, ok := providerMap[defaultProviderAlias]
 		if !ok {
+			// The CI/CD aliases are only registered when the corresponding
+			// Actions environment is detected, so explain why they are missing
+			kind, _ := detectActionsEnvironment()
+			isForgejoEnv := kind == actionsEnvForgejo
+			isGithubEnv := kind == actionsEnvGithub
+			isCICDAlias := false
+			switch strings.ToLower(defaultProviderAlias) {
+			case "github":
+				isCICDAlias = true
+				if isForgejoEnv {
+					return nil, nil, fmt.Errorf("this looks like a Forgejo Actions environment, use `opkssh login forgejo` instead")
+				} else if !isGithubEnv {
+					return nil, nil, fmt.Errorf("the %s provider only works inside a GitHub Actions workflow with the `id-token: write` permission (%s and %s are not set)", defaultProviderAlias, envActionsTokenRequestURL, envActionsTokenRequestToken)
+				}
+			case "forgejo", "codeberg":
+				isCICDAlias = true
+				if isGithubEnv {
+					return nil, nil, fmt.Errorf("this looks like a GitHub Actions environment, use `opkssh login github` instead")
+				} else if !isForgejoEnv {
+					return nil, nil, fmt.Errorf("the %s provider only works inside a Forgejo Actions workflow with `enable-openid-connect: true` (%s and %s are not set)", defaultProviderAlias, envActionsTokenRequestURL, envActionsTokenRequestToken)
+				}
+			case "gitlab-ci":
+				isCICDAlias = true
+				if os.Getenv(config.GITLAB_CI_ENVVAR) != "true" {
+					return nil, nil, fmt.Errorf("the %s provider only works inside a GitLab CI/CD pipeline (%s is not set to \"true\")", defaultProviderAlias, config.GITLAB_CI_ENVVAR)
+				}
+			}
+			// Reaching here with a CI/CD alias means we are inside its
+			// environment, so the provider was auto-registered and then
+			// dropped when the env var replaced the whole provider list.
+			if isCICDAlias && providerConfigsEnv != nil {
+				return nil, nil, fmt.Errorf("the %s provider is registered automatically in this CI/CD environment, but %s is set and replaces the provider list; unset %s or add %s to it", defaultProviderAlias, config.OPKSSH_PROVIDERS_ENVVAR, config.OPKSSH_PROVIDERS_ENVVAR, defaultProviderAlias)
+			}
 			return nil, nil, fmt.Errorf("error getting provider config for alias %s", defaultProviderAlias)
 		}
 		if l.RemoteRedirectURI != "" {
@@ -423,6 +467,11 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 		// If the default provider is WEBCHOOSER, we need to create a chooser and return it
 		var providerList []providers.BrowserOpenIdProvider
 		for _, providerConfig := range providerConfigs {
+			// CI/CD providers (GitHub/Forgejo Actions) are not browser-based
+			// and cannot be offered by the chooser
+			if config.IsCICDProvider(providerConfig) {
+				continue
+			}
 			if l.RemoteRedirectURI != "" {
 				// Override the remote redirect URI
 				providerConfig.RemoteRedirectURI = l.RemoteRedirectURI
@@ -431,7 +480,17 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 			if err != nil {
 				return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
 			}
-			providerList = append(providerList, op.(providers.BrowserOpenIdProvider))
+			browserOp, ok := op.(providers.BrowserOpenIdProvider)
+			if !ok {
+				return nil, nil, fmt.Errorf("provider for issuer %s does not support browser-based login", providerConfig.Issuer)
+			}
+			providerList = append(providerList, browserOp)
+		}
+
+		// The chooser would otherwise serve a page with no providers on it
+		// and wait forever for a selection that cannot be made.
+		if len(providerList) == 0 {
+			return nil, nil, fmt.Errorf("no browser-based providers configured to choose from; CI/CD providers cannot be used with the web chooser, specify one by alias instead, e.g. `opkssh login forgejo`")
 		}
 
 		chooser := choosers.NewWebChooser(
@@ -497,20 +556,8 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 		w := l.out()
 		fmt.Fprintln(w, string(certBytes))    // Base64 encoded SSH cert
 		fmt.Fprintln(w, string(seckeySshPem)) // SSH private key in OpenSSH native format
-	} else if seckeyPath != "" {
-		// If we have set seckeyPath then write it there
-		if err := l.writeKeys(seckeyPath, seckeyPath+"-cert.pub", seckeySshPem, certBytes); err != nil {
-			return nil, fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
-		}
-	} else if l.SSHConfigured {
-		if err := l.writeKeysToOpkSSHDir(seckeySshPem, certBytes); err != nil {
-			return nil, fmt.Errorf("failed to write SSH keys to OPK SSH dir: %w", err)
-		}
-	} else {
-		// If keyPath isn't set then write it to the default location
-		if err := l.writeKeysToSSHDir(seckeySshPem, certBytes); err != nil {
-			return nil, fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
-		}
+	} else if err := l.writeKeysToDestination(seckeyPath, seckeySshPem, certBytes); err != nil {
+		return nil, err
 	}
 
 	if printIdToken {
@@ -599,16 +646,8 @@ func (l *LoginCmd) LoginWithRefresh(ctx context.Context, provider providers.Refr
 			}
 
 			// Write ssh secret key and public key to filesystem
-			if seckeyPath != "" {
-				// If we have set seckeyPath then write it there
-				if err := l.writeKeys(seckeyPath, seckeyPath+"-cert.pub", seckeySshPem, certBytes); err != nil {
-					return fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
-				}
-			} else {
-				// If keyPath isn't set then write it to the default location
-				if err := l.writeKeysToSSHDir(seckeySshPem, certBytes); err != nil {
-					return fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
-				}
+			if err := l.writeKeysToDestination(seckeyPath, seckeySshPem, certBytes); err != nil {
+				return err
 			}
 
 			comPkt, err := refreshedPkt.Compact()
@@ -680,6 +719,38 @@ func createSSHCertWithAccessToken(pkt *pktoken.PKToken, accessToken []byte, sign
 	seckeySshBytes := pem.EncodeToMemory(seckeySsh)
 
 	return certBytes, seckeySshBytes, nil
+}
+
+// writeKeysToDestination writes the SSH private key and certificate to the
+// correct location on the filesystem, enforcing the following precedence:
+//
+//  1. seckeyPath (the --private-key-file/-i argument) if set
+//  2. the opkssh identity directory (~/.ssh/opkssh) if it has been configured
+//  3. the default ~/.ssh location
+//
+// The --private-key-file argument always has the highest precedence so that an
+// explicitly requested path is never overridden by the opkssh identity
+// directory or the default location. See https://github.com/openpubkey/opkssh/issues/524
+func (l *LoginCmd) writeKeysToDestination(seckeyPath string, seckeySshPem []byte, certBytes []byte) error {
+	switch {
+	case seckeyPath != "":
+		// If we have set seckeyPath then write it there
+		if err := l.writeKeys(seckeyPath, seckeyPath+"-cert.pub", seckeySshPem, certBytes); err != nil {
+			return fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
+		}
+		return nil
+	case l.SSHConfigured:
+		if err := l.writeKeysToOpkSSHDir(seckeySshPem, certBytes); err != nil {
+			return fmt.Errorf("failed to write SSH keys to OPK SSH dir: %w", err)
+		}
+		return nil
+	default:
+		// If keyPath isn't set then write it to the default location
+		if err := l.writeKeysToSSHDir(seckeySshPem, certBytes); err != nil {
+			return fmt.Errorf("failed to write SSH keys to filesystem: %w", err)
+		}
+		return nil
+	}
 }
 
 func (l *LoginCmd) writeKeysToOpkSSHDir(secKeyPem []byte, certBytes []byte) error {
@@ -886,9 +957,59 @@ func PrettyIdToken(pkt pktoken.PKToken) (string, error) {
 	return string(idtJson[:]), nil
 }
 
-func isGitHubEnvironment() bool {
-	return os.Getenv("ACTIONS_ID_TOKEN_REQUEST_URL") != "" &&
-		os.Getenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN") != ""
+// GitHub Actions and Forgejo Actions runners both inject
+// envActionsTokenRequestURL/Token to let a workflow request an OIDC ID
+// Token. config.GITLAB_CI_ENVVAR and config.CI_SERVER_URL_ENVVAR are GitLab
+// CI/CD's equivalent markers, and githubActionsTokenRequestHostSuffix is the
+// host of GitHub's ACTIONS_ID_TOKEN_REQUEST_URL, e.g.
+// pipelines.actions.githubusercontent.com.
+const (
+	envActionsTokenRequestURL           = "ACTIONS_ID_TOKEN_REQUEST_URL"
+	envActionsTokenRequestToken         = "ACTIONS_ID_TOKEN_REQUEST_TOKEN"
+	githubActionsTokenRequestHostSuffix = "actions.githubusercontent.com"
+)
+
+// isActionsEnvironment detects a CI/CD workload identity environment
+// (GitHub Actions or Forgejo Actions); both inject the same variables.
+func isActionsEnvironment() bool {
+	return os.Getenv(envActionsTokenRequestURL) != "" &&
+		os.Getenv(envActionsTokenRequestToken) != ""
+}
+
+type actionsEnvKind int
+
+const (
+	actionsEnvNone actionsEnvKind = iota
+	actionsEnvGithub
+	actionsEnvForgejo
+)
+
+// detectActionsEnvironment identifies which Actions-compatible CI/CD
+// environment is active. GitHub and Forgejo Actions inject the same env
+// vars, so each is identified positively rather than by ruling out the
+// other, which would misreport a third runner as GitHub.
+func detectActionsEnvironment() (kind actionsEnvKind, forgejoIssuer string) {
+	if !isActionsEnvironment() {
+		return actionsEnvNone, ""
+	}
+	tokenRequestURL := os.Getenv(envActionsTokenRequestURL)
+	if issuer, err := providers.ForgejoIssuerFromTokenRequestURL(tokenRequestURL); err == nil {
+		return actionsEnvForgejo, issuer
+	}
+	if parsedURL, err := url.Parse(tokenRequestURL); err == nil && strings.HasSuffix(parsedURL.Host, githubActionsTokenRequestHostSuffix) {
+		return actionsEnvGithub, ""
+	}
+	return actionsEnvNone, ""
+}
+
+// gitlabCiIssuer returns the GitLab instance URL for the current CI/CD
+// pipeline, from the CI_SERVER_URL predefined variable, e.g.
+// "https://gitlab.com" or a self-hosted instance's URL.
+func gitlabCiIssuer() string {
+	if issuer := os.Getenv(config.CI_SERVER_URL_ENVVAR); issuer != "" {
+		return issuer
+	}
+	return "https://gitlab.com"
 }
 
 // payloadFromCompactPkt extracts the payload from a compact PK Token which

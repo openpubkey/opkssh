@@ -368,7 +368,7 @@ func TestEndToEndSSH(t *testing.T) {
 	require.NoError(t, err, "expected to find OPK ssh key written to disk")
 
 	pubkeyBytes := base64.StdEncoding.EncodeToString(pubKey.Marshal())
-	certSmug, err := sshcert.NewFromAuthorizedKey("cert-type", string(pubkeyBytes))
+	certSmug, err := sshcert.NewFromAuthorizedKey(pubKey.Type(), string(pubkeyBytes))
 	require.NoError(t, err)
 	accToken := certSmug.GetAccessToken()
 	require.Empty(t, accToken, "expected access token to be empty since we did not request adding access token to SSH cert")
@@ -470,7 +470,7 @@ func TestEndToEndSSHUserInfo(t *testing.T) {
 	pubKey, secKeyFilePath, err := GetOPKSshKey("")
 	require.NoError(t, err, "expected to find OPK ssh key written to disk")
 	pubkeyBytes := base64.StdEncoding.EncodeToString(pubKey.Marshal())
-	certSmug, err := sshcert.NewFromAuthorizedKey("cert-type", string(pubkeyBytes))
+	certSmug, err := sshcert.NewFromAuthorizedKey(pubKey.Type(), string(pubkeyBytes))
 	require.NoError(t, err)
 	accToken := certSmug.GetAccessToken()
 	require.NotEmpty(t, accToken, "expected access token to not be since we requested access token on SSH cert")
