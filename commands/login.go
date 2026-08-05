@@ -218,12 +218,16 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 			return err
 		}
 		if chooser != nil {
+			chooser.UseStdOutErr() // Set chooser to write to stdout and stderr
 			provider, err = chooser.ChooseOp(ctx)
 			if err != nil {
 				return fmt.Errorf("error choosing provider: %w", err)
 			}
 		} else if op != nil {
 			provider = op
+			if configurableOp, ok := provider.(interface{ UseStdOutErr() }); ok {
+				configurableOp.UseStdOutErr() // Set op to write to stdout and stderr (if supported)
+			}
 		} else {
 			return fmt.Errorf("no provider found") // Either the provider or the chooser must be set. If this occurs we have a bug in the code.
 		}
