@@ -205,7 +205,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 		l.Config.Providers = append(l.Config.Providers, config.GitHubProviderConfig())
 	}
 
-	if os.Getenv(envGitlabCI) == "true" {
+	if os.Getenv(config.GITLAB_CI_ENVVAR) == "true" {
 		l.Config.Providers = append(l.Config.Providers, config.GitlabCiProviderConfig(gitlabCiIssuer()))
 	}
 
@@ -437,8 +437,8 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 					return nil, nil, fmt.Errorf("the %s provider only works inside a Forgejo Actions workflow with `enable-openid-connect: true` (%s and %s are not set)", defaultProviderAlias, envActionsTokenRequestURL, envActionsTokenRequestToken)
 				}
 			case "gitlab-ci":
-				if os.Getenv(envGitlabCI) != "true" {
-					return nil, nil, fmt.Errorf("the %s provider only works inside a GitLab CI/CD pipeline (%s is not set to \"true\")", defaultProviderAlias, envGitlabCI)
+				if os.Getenv(config.GITLAB_CI_ENVVAR) != "true" {
+					return nil, nil, fmt.Errorf("the %s provider only works inside a GitLab CI/CD pipeline (%s is not set to \"true\")", defaultProviderAlias, config.GITLAB_CI_ENVVAR)
 				}
 			}
 			return nil, nil, fmt.Errorf("error getting provider config for alias %s", defaultProviderAlias)
@@ -943,14 +943,13 @@ func PrettyIdToken(pkt pktoken.PKToken) (string, error) {
 
 // GitHub Actions and Forgejo Actions runners both inject
 // envActionsTokenRequestURL/Token to let a workflow request an OIDC ID
-// Token. envGitlabCI and envCIServerURL are GitLab CI/CD's equivalent
-// markers, and githubActionsTokenRequestHostSuffix is the host of GitHub's
-// ACTIONS_ID_TOKEN_REQUEST_URL, e.g. pipelines.actions.githubusercontent.com.
+// Token. config.GITLAB_CI_ENVVAR and config.CI_SERVER_URL_ENVVAR are GitLab
+// CI/CD's equivalent markers, and githubActionsTokenRequestHostSuffix is the
+// host of GitHub's ACTIONS_ID_TOKEN_REQUEST_URL, e.g.
+// pipelines.actions.githubusercontent.com.
 const (
 	envActionsTokenRequestURL           = "ACTIONS_ID_TOKEN_REQUEST_URL"
 	envActionsTokenRequestToken         = "ACTIONS_ID_TOKEN_REQUEST_TOKEN"
-	envGitlabCI                         = "GITLAB_CI"
-	envCIServerURL                      = "CI_SERVER_URL"
 	githubActionsTokenRequestHostSuffix = "actions.githubusercontent.com"
 )
 
@@ -991,7 +990,7 @@ func detectActionsEnvironment() (kind actionsEnvKind, forgejoIssuer string) {
 // pipeline, from the CI_SERVER_URL predefined variable, e.g.
 // "https://gitlab.com" or a self-hosted instance's URL.
 func gitlabCiIssuer() string {
-	if issuer := os.Getenv(envCIServerURL); issuer != "" {
+	if issuer := os.Getenv(config.CI_SERVER_URL_ENVVAR); issuer != "" {
 		return issuer
 	}
 	return "https://gitlab.com"

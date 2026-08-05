@@ -220,6 +220,9 @@ func TestIsCICDProvider(t *testing.T) {
 	// The browser-based GitLab OP shares its issuer with GitLab CI/CD, so it
 	// must be told apart by alias, not issuer.
 	require.False(t, IsCICDProvider(ProviderConfig{AliasList: []string{"gitlab"}, Issuer: "https://gitlab.com"}))
+	// An unrelated OP whose issuer happens to end in /api/actions. It has a
+	// real client ID, so it is browser-based, matching what ToProvider builds.
+	require.False(t, IsCICDProvider(ProviderConfig{Issuer: "https://op.example.com/api/actions", ClientID: "real-client-id"}))
 }
 
 func TestGitlabCiProviderConfig(t *testing.T) {
