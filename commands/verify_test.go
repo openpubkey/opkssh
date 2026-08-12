@@ -263,14 +263,6 @@ env_vars:
 			errorString: "",
 		},
 		{
-			name:        "Missing config",
-			configFile:  map[string]string{"wrong-filename.yml": configContent},
-			permission:  0640,
-			owner:       "root",
-			group:       "opksshuser",
-			errorString: "file does not exist",
-		},
-		{
 			name:        "Corrupted file",
 			configFile:  map[string]string{"server_config.yml": `;;;corrupted`},
 			permission:  0640,
@@ -320,6 +312,89 @@ env_vars:
 		})
 	}
 
+}
+
+func TestReadFromServerConfigDenyList(t *testing.T) {
+	t.Parallel()
+
+	denyListConfig := `---
+deny_users:
+  - root
+deny_emails:
+  - attacker@example.com
+`
+
+	tests := []struct {
+		name        string
+		configFile  map[string]string
+		permission  fs.FileMode
+		owner       string
+		group       string
+		errorString string
+		wantDeny    policy.DenyList
+	}{
+		{
+			name:        "Missing config proceeds with empty deny list",
+			configFile:  map[string]string{"wrong-filename.yml": denyListConfig},
+			permission:  0640,
+			owner:       "root",
+			group:       "opksshuser",
+			errorString: "",
+			wantDeny:    policy.DenyList{},
+		},
+		{
+			name:        "Unparseable config fails closed",
+			configFile:  map[string]string{"server_config.yml": `;;;corrupted`},
+			permission:  0640,
+			owner:       "root",
+			group:       "opksshuser",
+			errorString: "failed to parse config file",
+			wantDeny:    policy.DenyList{},
+		},
+		{
+			name:        "Valid config loads deny list",
+			configFile:  map[string]string{"server_config.yml": denyListConfig},
+			permission:  0640,
+			owner:       "root",
+			group:       "opksshuser",
+			errorString: "",
+			wantDeny: policy.DenyList{
+				Users:  []string{"root"},
+				Emails: []string{"attacker@example.com"},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mockFs := afero.NewMemMapFs()
+			tempDir, _ := afero.TempDir(mockFs, "opk", "config")
+			for name, content := range tt.configFile {
+				err := afero.WriteFile(mockFs, filepath.Join(tempDir, name), []byte(content), tt.permission)
+				require.NoError(t, err)
+			}
+
+			ver := VerifyCmd{
+				Fs:            mockFs,
+				ConfigPathArg: filepath.Join(tempDir, "server_config.yml"),
+				filePermChecker: files.PermsChecker{
+					Fs: mockFs,
+					CmdRunner: func(name string, arg ...string) ([]byte, error) {
+						return []byte(tt.owner + " " + tt.group), nil
+					},
+				},
+			}
+			err := ver.ReadFromServerConfig()
+
+			if tt.errorString != "" {
+				require.ErrorContains(t, err, tt.errorString)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tt.wantDeny, ver.denyList)
+		})
+	}
 }
 
 func TestErrorOnUnsafePrincipal(t *testing.T) {

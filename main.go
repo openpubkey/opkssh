@@ -359,7 +359,8 @@ Arguments:
 
 			v := commands.NewVerifyCmd(*pktVerifier, commands.OpkPolicyEnforcerFunc(userArg), serverConfigPathArg)
 			if err := v.ReadFromServerConfig(); err != nil {
-				log.Println("Failed to set environment variables in config:", err)
+				log.Println("Failed to load server config:", err)
+				return err
 			}
 
 			if authKey, err := v.AuthorizedKeysCommand(ctx, userArg, typArg, certB64Arg, extraArgs); err != nil {

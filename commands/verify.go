@@ -18,6 +18,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -154,7 +155,11 @@ func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, t
 }
 
 // ReadFromServerConfig sets the environment variables specified in the server config file
-// and assigns configured deny lists to VerifyCmd's denyList
+// and assigns configured deny lists to VerifyCmd's denyList.
+// A missing config file is not an error: the deny list stays empty and no
+// environment variables are set. A config file that exists but cannot be read,
+// has incorrect permissions, or fails to parse is returned as an error so that
+// configured deny lists are never silently dropped.
 func (v *VerifyCmd) ReadFromServerConfig() error {
 	var configBytes []byte
 
@@ -162,6 +167,9 @@ func (v *VerifyCmd) ReadFromServerConfig() error {
 	afs := &afero.Afero{Fs: v.Fs}
 	configBytes, err := afs.ReadFile(v.ConfigPathArg)
 	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
 		return fmt.Errorf("failed to read config file: %w", err)
 	}
 

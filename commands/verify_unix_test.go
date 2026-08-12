@@ -26,6 +26,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/openpubkey/opkssh/policy"
 	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
@@ -99,4 +100,38 @@ env_vars:
 			require.ErrorContains(t, err, tt.errorString)
 		})
 	}
+}
+
+// TestReadFromServerConfigDenyList_UnixPermissions verifies that a config file
+// which exists but has incorrect permissions is rejected, so a configured deny
+// list is never silently dropped.
+func TestReadFromServerConfigDenyList_UnixPermissions(t *testing.T) {
+	t.Parallel()
+
+	denyListConfig := `---
+deny_users:
+  - root
+deny_emails:
+  - attacker@example.com
+`
+
+	mockFs := afero.NewMemMapFs()
+	tempDir, _ := afero.TempDir(mockFs, "opk", "config")
+	err := afero.WriteFile(mockFs, filepath.Join(tempDir, "server_config.yml"), []byte(denyListConfig), 0o644)
+	require.NoError(t, err)
+
+	ver := VerifyCmd{
+		Fs:            mockFs,
+		ConfigPathArg: filepath.Join(tempDir, "server_config.yml"),
+		filePermChecker: files.PermsChecker{
+			Fs: mockFs,
+			CmdRunner: func(name string, arg ...string) ([]byte, error) {
+				return []byte("root opksshuser"), nil
+			},
+		},
+	}
+	err = ver.ReadFromServerConfig()
+
+	require.ErrorContains(t, err, "expected one of the following permissions [640], got (644)")
+	require.Equal(t, policy.DenyList{}, ver.denyList)
 }
