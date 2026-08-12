@@ -72,6 +72,32 @@ func FromTable(input []byte, path string) (*Policy, []files.ConfigProblem) {
 			files.ConfigProblems().RecordProblem(configProblem)
 			continue
 		}
+		// An empty identity attribute matches any token that carries no email
+		// claim, so skip the row rather than guess at the admin's intent
+		if row[1] == "" {
+			configProblem := files.ConfigProblem{
+				Filepath:      path,
+				OffendingLine: strings.Join(row, " "),
+				ErrorMessage:  "identity attribute is empty",
+				Source:        "user policy file",
+			}
+			problems = append(problems, configProblem)
+			files.ConfigProblems().RecordProblem(configProblem)
+			continue
+		}
+		// The email suffix match must be bound to a domain by a leading @,
+		// otherwise "example.com" also matches attacker@evil-example.com
+		if suffix, isWildcard := strings.CutPrefix(row[1], OIDC_WILDCARD_EMAIL); isWildcard && !strings.HasPrefix(suffix, "@") {
+			configProblem := files.ConfigProblem{
+				Filepath:      path,
+				OffendingLine: strings.Join(row, " "),
+				ErrorMessage:  fmt.Sprintf("oidc-match-end:email: match value %q must begin with @ (expected oidc-match-end:email:@<domain>)", suffix),
+				Source:        "user policy file",
+			}
+			problems = append(problems, configProblem)
+			files.ConfigProblems().RecordProblem(configProblem)
+			continue
+		}
 		user := User{
 			Principals:        []string{row[0]},
 			IdentityAttribute: row[1],

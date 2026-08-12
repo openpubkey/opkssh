@@ -133,6 +133,12 @@ func EscapedSplit(s string, sep rune) []string {
 // Validates that the server defined identity attribute matches the
 // respective claim from the identity token
 func validateClaim(claims *checkedClaims, user *User) bool {
+	// An empty identity attribute must never match; otherwise a policy row
+	// with an empty value matches any token that carries no email claim
+	if user.IdentityAttribute == "" {
+		log.Printf("warning: skipping policy row with empty identity attribute")
+		return false
+	}
 	// Should we match on the email claim?
 	if strings.HasPrefix(claims.Email, OIDC_WILDCARD_EMAIL) {
 		return false
@@ -165,8 +171,12 @@ func validateClaim(claims *checkedClaims, user *User) bool {
 
 	// Should we match on the email wildcard claim?
 	wildCardEmailMatch := false
-	if strings.HasPrefix(user.IdentityAttribute, OIDC_WILDCARD_EMAIL) {
-		if strings.HasSuffix(strings.ToLower(claims.Email), strings.ToLower(user.IdentityAttribute[len(OIDC_WILDCARD_EMAIL):len(user.IdentityAttribute)])) {
+	if suffix, isWildcard := strings.CutPrefix(user.IdentityAttribute, OIDC_WILDCARD_EMAIL); isWildcard {
+		// The match value must begin with @ to bind the suffix to an email
+		// domain; "example.com" would also match attacker@evil-example.com
+		if !strings.HasPrefix(suffix, "@") {
+			log.Printf("error: rejecting unsafe match - policy (%q) must match on an @-bound email suffix (e.g. oidc-match-end:email:@example.com)", user.IdentityAttribute)
+		} else if strings.HasSuffix(strings.ToLower(claims.Email), strings.ToLower(suffix)) {
 			wildCardEmailMatch = true
 		}
 	}
