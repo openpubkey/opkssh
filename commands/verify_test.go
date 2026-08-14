@@ -183,7 +183,7 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 			if principals == nil {
 				principals = defaultPrincipals
 			}
-			cert, err := sshcert.New(pkt, accessToken, principals)
+			cert, err := sshcert.New(pkt, accessToken, principals, ssh.CertTimeInfinity)
 			require.NoError(t, err)
 
 			sshSigner, err := ssh.NewSignerFromSigner(signer)

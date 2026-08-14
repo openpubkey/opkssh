@@ -33,7 +33,13 @@ type SshCertSmuggler struct {
 	SshCert *ssh.Certificate
 }
 
-func New(pkt *pktoken.PKToken, accessToken []byte, principals []string) (*SshCertSmuggler, error) {
+// New builds an (unsigned) OpenSSH certificate embedding the PK token.
+// validBefore sets the certificate's ValidBefore: callers pass the ID token's
+// exp for a one-shot login (so the cert cannot outlive the token whose
+// authorization it carries) or ssh.CertTimeInfinity for `--auto-refresh`, where
+// the cert must survive across token refreshes. ValidAfter is left at 0 to avoid
+// clock-skew rejections.
+func New(pkt *pktoken.PKToken, accessToken []byte, principals []string, validBefore uint64) (*SshCertSmuggler, error) {
 
 	// TODO: assumes email exists in ID Token,
 	// this will break for OPs like Azure that do not have email as a claim
@@ -72,7 +78,7 @@ func New(pkt *pktoken.PKToken, accessToken []byte, principals []string) (*SshCer
 			CertType:        ssh.UserCert,
 			KeyId:           claims.Email,
 			ValidPrincipals: principals,
-			ValidBefore:     ssh.CertTimeInfinity,
+			ValidBefore:     validBefore,
 			Permissions: ssh.Permissions{
 				Extensions: extensions,
 			},

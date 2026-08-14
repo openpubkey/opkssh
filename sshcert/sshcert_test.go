@@ -155,7 +155,7 @@ func TestSshCertCreation(t *testing.T) {
 			require.NoError(t, err)
 
 			principals := []string{"guest", "dev"}
-			certSmug, err := New(pkt, tt.accessToken, principals)
+			certSmug, err := New(pkt, tt.accessToken, principals, ssh.CertTimeInfinity)
 			require.NoError(t, err)
 
 			pktSet, err := certSmug.GetPKToken()
