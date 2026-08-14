@@ -607,6 +607,10 @@ func (l *LoginCmd) LoginWithRefresh(ctx context.Context, provider providers.Refr
 	if loginResult, err := l.login(ctx, provider, printIdToken, seckeyPath); err != nil {
 		return err
 	} else {
+		// Fail fast rather than dying on the first refresh.
+		if !loginResult.client.HasRefreshToken() {
+			return fmt.Errorf("provider (%s) did not issue a refresh token", provider.Issuer())
+		}
 		var claims struct {
 			Expiration int64 `json:"exp"`
 		}
