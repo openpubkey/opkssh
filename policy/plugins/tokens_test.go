@@ -18,6 +18,7 @@ package plugins
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -26,6 +27,14 @@ import (
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/stretchr/testify/require"
 )
+
+// roundTripJSONArray asserts env JSON parses back to exactly want.
+func roundTripJSONArray(t *testing.T, got string, want []string) {
+	t.Helper()
+	var parsed []string
+	require.NoError(t, json.Unmarshal([]byte(got), &parsed))
+	require.Equal(t, want, parsed)
+}
 
 func CreateMockPKToken(t *testing.T, claims map[string]any) *pktoken.PKToken {
 	providerOpts := providers.DefaultMockProviderOpts()
@@ -159,6 +168,73 @@ func TestNewTokens(t *testing.T) {
 			},
 		},
 		{
+			// Some OPs send email_verified as a string rather than a bool.
+			// See https://github.com/oauth2-proxy/oauth2-proxy/issues/629.
+			name: "Email verified sent as a string",
+			pkt: CreateMockPKToken(t, map[string]any{
+				"email":          "alice@gmail.com",
+				"email_verified": "true",
+				"iat":            1999999990,
+			}),
+			userInfoJson: `{"email":"alice@gmail.com","email_verified":"true","sub":"me"}`,
+			principal:    "root",
+			sshCert:      b64("SSH certificate"),
+			keyType:      "ssh-rsa",
+			expectTokens: map[string]string{
+				"OPKSSH_PLUGIN_AUD":            "test_client_id",
+				"OPKSSH_PLUGIN_EMAIL":          "alice@gmail.com",
+				"OPKSSH_PLUGIN_EMAIL_VERIFIED": "true",
+				"OPKSSH_PLUGIN_EXP":            "-",
+				"OPKSSH_PLUGIN_EXTRA_ARGS":     "",
+				"OPKSSH_PLUGIN_GROUPS":         "",
+				"OPKSSH_PLUGIN_IAT":            "1999999990",
+				"OPKSSH_PLUGIN_IDT":            "-",
+				"OPKSSH_PLUGIN_ISS":            "https://accounts.example.com",
+				"OPKSSH_PLUGIN_JTI":            "",
+				"OPKSSH_PLUGIN_K":              b64("SSH certificate"),
+				"OPKSSH_PLUGIN_NBF":            "",
+				"OPKSSH_PLUGIN_PAYLOAD":        "-",
+				"OPKSSH_PLUGIN_PKT":            "-",
+				"OPKSSH_PLUGIN_SUB":            "me",
+				"OPKSSH_PLUGIN_T":              "ssh-rsa",
+				"OPKSSH_PLUGIN_U":              "root",
+				"OPKSSH_PLUGIN_UPK":            "-",
+				"OPKSSH_PLUGIN_USERINFO":       `{"email":"alice@gmail.com","email_verified":"true","sub":"me"}`,
+			},
+		},
+		{
+			name: "Email verified sent as the string false",
+			pkt: CreateMockPKToken(t, map[string]any{
+				"email":          "alice@gmail.com",
+				"email_verified": "false",
+				"iat":            1999999990,
+			}),
+			principal: "root",
+			sshCert:   b64("SSH certificate"),
+			keyType:   "ssh-rsa",
+			expectTokens: map[string]string{
+				"OPKSSH_PLUGIN_AUD":            "test_client_id",
+				"OPKSSH_PLUGIN_EMAIL":          "alice@gmail.com",
+				"OPKSSH_PLUGIN_EMAIL_VERIFIED": "false",
+				"OPKSSH_PLUGIN_EXP":            "-",
+				"OPKSSH_PLUGIN_EXTRA_ARGS":     "",
+				"OPKSSH_PLUGIN_GROUPS":         "",
+				"OPKSSH_PLUGIN_IAT":            "1999999990",
+				"OPKSSH_PLUGIN_IDT":            "-",
+				"OPKSSH_PLUGIN_ISS":            "https://accounts.example.com",
+				"OPKSSH_PLUGIN_JTI":            "",
+				"OPKSSH_PLUGIN_K":              b64("SSH certificate"),
+				"OPKSSH_PLUGIN_NBF":            "",
+				"OPKSSH_PLUGIN_PAYLOAD":        "-",
+				"OPKSSH_PLUGIN_PKT":            "-",
+				"OPKSSH_PLUGIN_SUB":            "me",
+				"OPKSSH_PLUGIN_T":              "ssh-rsa",
+				"OPKSSH_PLUGIN_U":              "root",
+				"OPKSSH_PLUGIN_UPK":            "-",
+				"OPKSSH_PLUGIN_USERINFO":       "",
+			},
+		},
+		{
 			name: "Wrong type for email_verified claim in ID token",
 			pkt: CreateMockPKToken(t, map[string]any{
 				"email_verified": 1234,
@@ -200,4 +276,31 @@ func TestNewTokens(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPluginEnvJSONEscapesSpecialChars(t *testing.T) {
+	groups := []string{`x","ssh-admins`, `a\b`}
+	pkt := CreateMockPKToken(t, map[string]any{
+		"groups": groups,
+		"iat":    1999999990,
+	})
+	tokens, err := PopulatePluginEnvVars(pkt, "", "root", b64("SSH certificate"), "ssh-rsa", nil)
+	require.NoError(t, err)
+	roundTripJSONArray(t, tokens["OPKSSH_PLUGIN_GROUPS"], groups)
+}
+
+func TestAudienceUnmarshalJSONEscapesSpecialChars(t *testing.T) {
+	raw := []byte(`["client\",\"injected","other"]`)
+	// Simulate IdP multi-aud claim values that contain quote/backslash metacharacters.
+	input, err := json.Marshal([]string{`client","injected`, `a\b`, "other"})
+	require.NoError(t, err)
+
+	var aud Audience
+	require.NoError(t, aud.UnmarshalJSON(input))
+	roundTripJSONArray(t, string(aud), []string{`client","injected`, `a\b`, "other"})
+
+	// Control: already-escaped JSON array still unmarshals cleanly.
+	var aud2 Audience
+	require.NoError(t, aud2.UnmarshalJSON(raw))
+	roundTripJSONArray(t, string(aud2), []string{`client","injected`, "other"})
 }

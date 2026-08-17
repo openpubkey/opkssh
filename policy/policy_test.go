@@ -267,3 +267,45 @@ func TestAddAllowedPrincipal(t *testing.T) {
 		})
 	}
 }
+
+func TestFromTable(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name            string
+		input           string
+		expectedUsers   int
+		expectedProblem string
+	}{
+		{
+			name:          "valid row",
+			input:         "root alice@example.com https://accounts.example.com",
+			expectedUsers: 1,
+		},
+		{
+			name:            "empty identity attribute row is skipped",
+			input:           `root "" https://accounts.example.com`,
+			expectedUsers:   0,
+			expectedProblem: "identity attribute is empty",
+		},
+		{
+			name: "invalid rows do not block valid rows",
+			input: `root "" https://accounts.example.com
+root alice@example.com https://accounts.example.com`,
+			expectedUsers:   1,
+			expectedProblem: "identity attribute is empty",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parsed, problems := policy.FromTable([]byte(tt.input), "test-path")
+			assert.Len(t, parsed.Users, tt.expectedUsers)
+			if tt.expectedProblem == "" {
+				assert.Empty(t, problems)
+			} else {
+				assert.NotEmpty(t, problems)
+				assert.Contains(t, problems[0].ErrorMessage, tt.expectedProblem)
+			}
+		})
+	}
+}

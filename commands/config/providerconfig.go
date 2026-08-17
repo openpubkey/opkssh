@@ -30,6 +30,25 @@ const (
 	WEBCHOOSER_ALIAS        = "WEBCHOOSER"
 	OPKSSH_DEFAULT_ENVVAR   = "OPKSSH_DEFAULT"
 	OPKSSH_PROVIDERS_ENVVAR = "OPKSSH_PROVIDERS"
+
+	// CICD_UNUSED_CLIENT_ID marks a config built by GitHubProviderConfig,
+	// ForgejoProviderConfig, or GitlabCiProviderConfig; real OPs need a real client ID.
+	CICD_UNUSED_CLIENT_ID = "unused"
+
+	// GITLAB_CI_ALIAS tells GitlabCiProviderConfig apart from the browser
+	// GitLab OP, since both share the same issuer.
+	GITLAB_CI_ALIAS = "gitlab-ci"
+
+	GITLAB_ISSUER    = "https://gitlab.com"
+	GITLAB_CI_ENVVAR = "GITLAB_CI"
+
+	// CI_SERVER_URL_ENVVAR is the GitLab CI/CD predefined variable holding
+	// the instance URL, which is the issuer for a pipeline's ID token.
+	CI_SERVER_URL_ENVVAR = "CI_SERVER_URL"
+
+	// GITLAB_CI_TOKEN_ENVVAR is the env var GitLab CI/CD's `id_tokens:` config
+	// must request the ID token under (see GitlabCiProviderConfig).
+	GITLAB_CI_TOKEN_ENVVAR = "OPENPUBKEY_JWT"
 )
 
 type ProviderConfig struct {
@@ -118,21 +137,50 @@ func GitHubProviderConfig() ProviderConfig {
 		AliasList: []string{"github"},
 		Issuer:    "https://token.actions.githubusercontent.com",
 		// This is required, but is not used for this provider.
-		ClientID: "unused",
+		ClientID: CICD_UNUSED_CLIENT_ID,
 	}
 }
 
-func GitLabCiProviderConfig() ProviderConfig {
-	issuer := os.Getenv("OPKSSH_GITLAB_CI_ISSUER")
-	if issuer == "" {
-		issuer = "https://gitlab.com"
-	}
+// ForgejoProviderConfig returns the provider config for logging in from a
+// Forgejo Actions workflow (e.g. Codeberg). The issuer is instance-specific
+// (<instance URL>/api/actions) and is typically derived from the token
+// request URL the Forgejo runner injects into the environment.
+func ForgejoProviderConfig(issuer string) ProviderConfig {
 	return ProviderConfig{
-		AliasList: []string{"gitlab-ci"},
+		AliasList: []string{"forgejo", "codeberg"},
 		Issuer:    issuer,
 		// This is required, but is not used for this provider.
-		ClientID: "unused",
+		ClientID: CICD_UNUSED_CLIENT_ID,
 	}
+}
+
+// GitlabCiProviderConfig returns the provider config for a GitLab CI/CD
+// pipeline. issuer is the GitLab instance URL (gitlab.com or self-hosted,
+// from CI_SERVER_URL). Requires an `id_tokens: OPENPUBKEY_JWT: ...` entry in
+// .gitlab-ci.yml.
+func GitlabCiProviderConfig(issuer string) ProviderConfig {
+	return ProviderConfig{
+		AliasList: []string{GITLAB_CI_ALIAS},
+		Issuer:    issuer,
+		// This is required, but is not used for this provider.
+		ClientID: CICD_UNUSED_CLIENT_ID,
+	}
+}
+
+// IsCICDProvider reports whether p is a CI/CD provider rather than a
+// browser-based one. GitLab CI/CD is checked by alias, not issuer, since it
+// shares its issuer with the browser-based GitLab OP.
+func IsCICDProvider(p ProviderConfig) bool {
+	if p.Issuer == "https://token.actions.githubusercontent.com" {
+		return true
+	}
+	// The client ID is checked here as well as in ToProvider, so that an
+	// unrelated OP whose issuer ends in /api/actions stays browser-based
+	// rather than being classified CI/CD and then built as a browser OP.
+	if providers.IsForgejoIssuer(p.Issuer) && p.ClientID == CICD_UNUSED_CLIENT_ID {
+		return true
+	}
+	return slices.Contains(p.AliasList, GITLAB_CI_ALIAS)
 }
 
 // NewProviderConfigFromString is a function to create the provider config from a string of the format
@@ -237,7 +285,12 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 		opts.RemoteRedirectURI = p.RemoteRedirectURI
 		opts.OpenBrowser = openBrowser
 		provider = providers.NewAzureOpWithOptions(opts)
-	} else if strings.HasPrefix(p.Issuer, "https://gitlab.com") {
+	} else if p.ClientID == CICD_UNUSED_CLIENT_ID && slices.Contains(p.AliasList, GITLAB_CI_ALIAS) {
+		if os.Getenv(GITLAB_CI_ENVVAR) != "true" {
+			return nil, fmt.Errorf("error creating gitlab ci op: not running inside a GitLab CI/CD pipeline (%s environment variable is not \"true\")", GITLAB_CI_ENVVAR)
+		}
+		provider = providers.NewGitlabCiOp(p.Issuer, GITLAB_CI_TOKEN_ENVVAR)
+	} else if strings.TrimSuffix(p.Issuer, "/") == GITLAB_ISSUER {
 		opts := providers.GetDefaultGitlabOpOptions()
 		opts.Issuer = p.Issuer
 		opts.ClientID = p.ClientID
@@ -265,12 +318,23 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 		opts.RemoteRedirectURI = p.RemoteRedirectURI
 		opts.OpenBrowser = openBrowser
 		provider = providers.NewHelloOpWithOptions(opts)
-	} else if strings.HasPrefix(p.Issuer, "https://token.actions.githubusercontent.com") {
+	} else if p.Issuer == "https://token.actions.githubusercontent.com" {
 		githubOp, err := providers.NewGithubOpFromEnvironment()
 		if err != nil {
 			return nil, fmt.Errorf("error creating github op: %w", err)
 		}
 		provider = githubOp
+	} else if providers.IsForgejoIssuer(p.Issuer) && p.ClientID == CICD_UNUSED_CLIENT_ID {
+		// ClientID check avoids misrouting an unrelated OP whose issuer
+		// happens to end in "/api/actions".
+		forgejoOp, err := providers.NewForgejoOpFromEnvironment()
+		if err != nil {
+			return nil, fmt.Errorf("error creating forgejo op: %w", err)
+		}
+		if forgejoOp.Issuer() != strings.TrimSuffix(p.Issuer, "/") {
+			return nil, fmt.Errorf("forgejo issuer mismatch: configured issuer is %s but the Forgejo Actions environment issues tokens for %s", p.Issuer, forgejoOp.Issuer())
+		}
+		provider = forgejoOp
 	} else {
 		// Generic provider
 		opts := providers.GetDefaultStandardOpOptions(p.Issuer, p.ClientID)

@@ -133,6 +133,8 @@ We support email "wildcard" validation using the `oidc-match-end:email:` prefix.
 - This matching is **case-insensitive**.
 - Use with care, as allowing a domain grants access to all users at that domain.
 
+Matching on email trusts the OpenID Provider to be authoritative for that email address. opkssh does not require `email_verified` to be true, because an OP that is authoritative for a domain may leave the claim out or set it to false and still be the right source of truth. When a policy row matches on email and the ID Token does not assert `email_verified`, opkssh logs a warning. If you do not trust an OP as an authoritative source for email, match on `sub` instead, or enforce your own rule with a [policy plugin](policyplugins.md).
+
 ### System authorized identity file `/etc/opk/auth_id` (Linux) or `%ProgramData%\opk\auth_id` (Windows)
 
 This is a server wide policy file.

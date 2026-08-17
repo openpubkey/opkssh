@@ -224,3 +224,133 @@ func TestProviderConfigFromString(t *testing.T) {
 		})
 	}
 }
+
+func TestForgejoProviderConfig(t *testing.T) {
+	providerConfig := ForgejoProviderConfig("https://codeberg.org/api/actions")
+	require.Equal(t, []string{"forgejo", "codeberg"}, providerConfig.AliasList)
+	require.Equal(t, "https://codeberg.org/api/actions", providerConfig.Issuer)
+	require.Equal(t, "unused", providerConfig.ClientID)
+}
+
+func TestIsCICDProvider(t *testing.T) {
+	require.True(t, IsCICDProvider(GitHubProviderConfig()))
+	require.True(t, IsCICDProvider(ForgejoProviderConfig("https://codeberg.org/api/actions")))
+	require.True(t, IsCICDProvider(ForgejoProviderConfig("https://git.example.com/forgejo/api/actions")))
+	require.True(t, IsCICDProvider(GitlabCiProviderConfig("https://gitlab.com")))
+	require.True(t, IsCICDProvider(GitlabCiProviderConfig("https://gitlab.example.com")))
+	require.False(t, IsCICDProvider(ProviderConfig{Issuer: "https://accounts.google.com"}))
+	// The browser-based GitLab OP shares its issuer with GitLab CI/CD, so it
+	// must be told apart by alias, not issuer.
+	require.False(t, IsCICDProvider(ProviderConfig{AliasList: []string{"gitlab"}, Issuer: "https://gitlab.com"}))
+	// An unrelated OP whose issuer happens to end in /api/actions. It has a
+	// real client ID, so it is browser-based, matching what ToProvider builds.
+	require.False(t, IsCICDProvider(ProviderConfig{Issuer: "https://op.example.com/api/actions", ClientID: "real-client-id"}))
+}
+
+func TestGitlabCiProviderConfig(t *testing.T) {
+	providerConfig := GitlabCiProviderConfig("https://gitlab.example.com")
+	require.Equal(t, []string{"gitlab-ci"}, providerConfig.AliasList)
+	require.Equal(t, "https://gitlab.example.com", providerConfig.Issuer)
+	require.Equal(t, "unused", providerConfig.ClientID)
+}
+
+func TestGitlabCiToProvider(t *testing.T) {
+	t.Setenv("GITLAB_CI", "true")
+
+	providerConfig := GitlabCiProviderConfig("https://gitlab.com")
+	provider, err := providerConfig.ToProvider(false)
+	require.NoError(t, err)
+	require.Equal(t, "https://gitlab.com", provider.Issuer())
+}
+
+func TestGitlabCiToProviderSelfHosted(t *testing.T) {
+	t.Setenv("GITLAB_CI", "true")
+
+	providerConfig := GitlabCiProviderConfig("https://gitlab.example.com")
+	provider, err := providerConfig.ToProvider(false)
+	require.NoError(t, err)
+	require.Equal(t, "https://gitlab.example.com", provider.Issuer())
+}
+
+func TestGitlabCiToProviderOutsideGitlabCI(t *testing.T) {
+	t.Setenv("GITLAB_CI", "")
+
+	providerConfig := GitlabCiProviderConfig("https://gitlab.com")
+	_, err := providerConfig.ToProvider(false)
+	require.ErrorContains(t, err, "error creating gitlab ci op")
+}
+
+func TestGitlabBrowserToProviderUnaffectedByGitlabCI(t *testing.T) {
+	t.Setenv("GITLAB_CI", "")
+
+	providerConfig := DefaultProviderConfig()
+	providerConfig.AliasList = []string{"gitlab"}
+	providerConfig.Issuer = "https://gitlab.com"
+	providerConfig.ClientID = "some-real-client-id"
+	provider, err := providerConfig.ToProvider(false)
+	require.NoError(t, err)
+	require.Equal(t, "https://gitlab.com", provider.Issuer())
+}
+
+// The GitLab issuer is matched exactly, so a lookalike issuer is built as a
+// generic provider using its own configuration rather than GitLab's.
+func TestGitlabIssuerMatchedExactly(t *testing.T) {
+	t.Setenv("GITLAB_CI", "")
+
+	tests := []struct {
+		name       string
+		issuer     string
+		wantGitlab bool
+	}{
+		{name: "gitlab.com", issuer: "https://gitlab.com", wantGitlab: true},
+		{name: "gitlab.com with a trailing slash", issuer: "https://gitlab.com/", wantGitlab: true},
+		{name: "issuer with gitlab.com as a prefix", issuer: "https://gitlab.com.example.com", wantGitlab: false},
+		{name: "self hosted gitlab", issuer: "https://gitlab.example.com", wantGitlab: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			providerConfig := DefaultProviderConfig()
+			providerConfig.AliasList = []string{"gitlab"}
+			providerConfig.Issuer = tt.issuer
+			providerConfig.ClientID = "some-real-client-id"
+			provider, err := providerConfig.ToProvider(false)
+			require.NoError(t, err)
+
+			// GitlabOp is an alias of StandardOpRefreshable, which is a
+			// different type to the StandardOp the generic branch builds.
+			if tt.wantGitlab {
+				require.IsType(t, &providers.GitlabOp{}, provider)
+			} else {
+				require.IsType(t, &providers.StandardOp{}, provider)
+			}
+		})
+	}
+}
+
+func TestForgejoToProvider(t *testing.T) {
+	t.Setenv("ACTIONS_ID_TOKEN_REQUEST_URL", "https://codeberg.org/api/actions/_apis/pipelines/workflows/42/idtoken?placeholder=true")
+	t.Setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "runner-token")
+
+	providerConfig := ForgejoProviderConfig("https://codeberg.org/api/actions")
+	provider, err := providerConfig.ToProvider(false)
+	require.NoError(t, err)
+	require.Equal(t, "https://codeberg.org/api/actions", provider.Issuer())
+}
+
+func TestForgejoToProviderIssuerMismatch(t *testing.T) {
+	t.Setenv("ACTIONS_ID_TOKEN_REQUEST_URL", "https://codeberg.org/api/actions/_apis/pipelines/workflows/42/idtoken?placeholder=true")
+	t.Setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "runner-token")
+
+	providerConfig := ForgejoProviderConfig("https://git.example.com/api/actions")
+	_, err := providerConfig.ToProvider(false)
+	require.ErrorContains(t, err, "issuer mismatch")
+}
+
+func TestForgejoToProviderOutsideActionsEnvironment(t *testing.T) {
+	t.Setenv("ACTIONS_ID_TOKEN_REQUEST_URL", "")
+	t.Setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "")
+
+	providerConfig := ForgejoProviderConfig("https://codeberg.org/api/actions")
+	_, err := providerConfig.ToProvider(false)
+	require.ErrorContains(t, err, "error creating forgejo op")
+}
