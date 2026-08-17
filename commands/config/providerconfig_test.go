@@ -57,8 +57,8 @@ func TestProvidersConfigFromStrings(t *testing.T) {
 	require.Nil(t, providerConfigs)
 }
 
-func TestGitLabCiProviderConfigToProvider(t *testing.T) {
-	providerConfig := GitLabCiProviderConfig()
+func TestGitlabCiProviderConfigToProvider(t *testing.T) {
+	providerConfig := GitlabCiProviderConfig("https://gitlab.com")
 	provider, err := providerConfig.ToProvider(false)
 
 	require.NoError(t, err)
@@ -66,11 +66,10 @@ func TestGitLabCiProviderConfigToProvider(t *testing.T) {
 	require.Equal(t, "https://gitlab.com", provider.Issuer())
 }
 
-func TestGitLabCiProviderConfigWithCustomIssuerToProvider(t *testing.T) {
+func TestGitlabCiProviderConfigWithCustomIssuerToProvider(t *testing.T) {
 	customIssuer := "https://gitlab.example.com"
-	t.Setenv("OPKSSH_GITLAB_CI_ISSUER", customIssuer)
 
-	providerConfig := GitLabCiProviderConfig()
+	providerConfig := GitlabCiProviderConfig(customIssuer)
 	provider, err := providerConfig.ToProvider(false)
 
 	require.NoError(t, err)
@@ -272,12 +271,13 @@ func TestGitlabCiToProviderSelfHosted(t *testing.T) {
 	require.Equal(t, "https://gitlab.example.com", provider.Issuer())
 }
 
-func TestGitlabCiToProviderOutsideGitlabCI(t *testing.T) {
+func TestGitlabCiToProviderDoesNotRequireGitlabCIEnvironment(t *testing.T) {
 	t.Setenv("GITLAB_CI", "")
 
 	providerConfig := GitlabCiProviderConfig("https://gitlab.com")
-	_, err := providerConfig.ToProvider(false)
-	require.ErrorContains(t, err, "error creating gitlab ci op")
+	provider, err := providerConfig.ToProvider(false)
+	require.NoError(t, err)
+	require.Equal(t, "https://gitlab.com", provider.Issuer())
 }
 
 func TestGitlabBrowserToProviderUnaffectedByGitlabCI(t *testing.T) {

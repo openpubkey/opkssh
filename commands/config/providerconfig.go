@@ -254,7 +254,7 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 		if p.Issuer == "https://gitlab.com" {
 			provider = providers.NewGitlabCiOpFromEnvironmentDefault()
 		} else {
-			provider = providers.NewGitlabCiOp(p.Issuer, "OPENPUBKEY_JWT")
+			provider = providers.NewGitlabCiOp(p.Issuer, GITLAB_CI_TOKEN_ENVVAR)
 		}
 	} else if strings.HasPrefix(p.Issuer, "https://accounts.google.com") {
 		opts := providers.GetDefaultGoogleOpOptions()
