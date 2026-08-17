@@ -211,48 +211,6 @@ func (m multiProviderVerifier) VerifyIDToken(ctx context.Context, idt []byte, ci
 	return fmt.Errorf("all provider verifiers failed for issuer %s: %s", m.issuer, strings.Join(verificationErrors, "; "))
 }
 
-func providerVerifierFromRow(row ProvidersRow) verifier.ProviderVerifier {
-	// TODO: We should handle this issuer matching in a more generic way
-	// oidc.local and localhost: are a test issuers
-	if row.Issuer == "https://accounts.google.com" ||
-		strings.HasPrefix(row.Issuer, "http://oidc.local") ||
-		strings.HasPrefix(row.Issuer, "http://localhost:") {
-
-		opts := providers.GetDefaultGoogleOpOptions()
-		opts.Issuer = row.Issuer
-		opts.ClientID = row.ClientID
-		return providers.NewGoogleOpWithOptions(opts)
-	} else if strings.HasPrefix(row.Issuer, "https://login.microsoftonline.com") {
-		opts := providers.GetDefaultAzureOpOptions()
-		opts.Issuer = row.Issuer
-		opts.ClientID = row.ClientID
-		return providers.NewAzureOpWithOptions(opts)
-	} else if row.isGitLabCi() {
-		var provider verifier.ProviderVerifier
-		if row.Issuer == "https://gitlab.com" {
-			provider = providers.NewGitlabCiOpFromEnvironmentDefault()
-		} else {
-			provider = providers.NewGitlabCiOp(row.Issuer, "OPENPUBKEY_JWT")
-		}
-		return gitLabCiProviderVerifier{
-			provider: provider,
-			audience: row.ClientID,
-		}
-	} else if row.Issuer == "https://gitlab.com" {
-		opts := providers.GetDefaultGitlabOpOptions()
-		opts.Issuer = row.Issuer
-		opts.ClientID = row.ClientID
-		return providers.NewGitlabOpWithOptions(opts)
-	} else if row.Issuer == "https://token.actions.githubusercontent.com" {
-		return providers.NewGithubOp(row.Issuer, "")
-	} else {
-		opts := providers.GetDefaultGoogleOpOptions()
-		opts.Issuer = row.Issuer
-		opts.ClientID = row.ClientID
-		return providers.NewGoogleOpWithOptions(opts)
-	}
-}
-
 func (p ProvidersRow) isGitLabCi() bool {
 	return strings.HasPrefix(p.ClientID, "OPENPUBKEY-PKTOKEN:")
 }
