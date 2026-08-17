@@ -1012,10 +1012,6 @@ func gitlabCiIssuer() string {
 	return "https://gitlab.com"
 }
 
-func isGitLabCiEnvironment() bool {
-	return os.Getenv("GITLAB_CI") == "true" && os.Getenv("OPENPUBKEY_JWT") != ""
-}
-
 // payloadFromCompactPkt extracts the payload from a compact PK Token which
 // is always the second part of the '.' separated string.
 func payloadFromCompactPkt(compactPkt []byte) []byte {
