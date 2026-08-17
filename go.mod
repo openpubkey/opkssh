@@ -9,7 +9,7 @@ require (
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/lestrrat-go/jwx/v3 v3.0.12
 	github.com/melbahja/goph v1.4.0
-	github.com/openpubkey/openpubkey v0.27.0
+	github.com/openpubkey/openpubkey v0.28.0
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.43.0
@@ -111,5 +111,3 @@ require (
 	golang.org/x/text v0.40.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )
-
-replace github.com/openpubkey/openpubkey => github.com/EthanHeilman/openpubkey v0.0.0-20260814213428-fce68f48c30c
