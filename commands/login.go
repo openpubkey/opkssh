@@ -34,6 +34,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -102,6 +103,7 @@ type LoginCmd struct {
 	Verbosity             int // Default verbosity is 0, 1 is verbose, 2 is debug
 	RemoteRedirectURI     string
 	PrincipalsArg         []string // The principals that will be included in the generated SSH cert. If not specified, it functions as a wildcard and will work for any principals.
+	AgentLifetimeArg      string   // Lifetime duration when adding cert to ssh-agent (e.g. 12h, 45m, 24h)
 
 	overrideProvider *providers.OpenIdProvider // Used in tests to override the provider to inject a mock provider
 	// State
@@ -121,7 +123,7 @@ type LoginCmd struct {
 func NewLogin(autoRefreshArg bool, configPathArg string, createConfigArg bool, configureArg bool, logDirArg string,
 	sendAccessTokenArg bool, disableBrowserOpenArg bool, printIdTokenArg bool,
 	providerArg string, printKeyArg bool, keyPathArg string, providerAliasArg string, keyTypeArg KeyType,
-	remoteRedirectUri string, inspectCertArg bool, principalsArg []string,
+	remoteRedirectUri string, inspectCertArg bool, principalsArg []string, agentLifetimeArg string,
 ) *LoginCmd {
 	return &LoginCmd{
 		Fs:                    afero.NewOsFs(),
@@ -141,6 +143,7 @@ func NewLogin(autoRefreshArg bool, configPathArg string, createConfigArg bool, c
 		KeyTypeArg:            keyTypeArg,
 		RemoteRedirectURI:     remoteRedirectUri,
 		PrincipalsArg:         principalsArg,
+		AgentLifetimeArg:      agentLifetimeArg,
 	}
 }
 
@@ -740,7 +743,7 @@ func (l *LoginCmd) addCertToAgent(certBytes []byte, signer crypto.Signer, pkt *p
 		return
 	}
 
-	lifetimeSecs, err := certLifetimeSecs(pkt.Payload)
+	lifetimeSecs, err := resolveAgentLifetimeSecs(l, pkt.Payload)
 	if err != nil {
 		fmt.Fprintf(l.out(), "warning: not adding certificate to ssh-agent: %v\n", err)
 		return
@@ -758,25 +761,61 @@ func (l *LoginCmd) addCertToAgent(certBytes []byte, signer crypto.Signer, pkt *p
 	fmt.Fprintln(l.out(), "Certificate added to ssh-agent")
 }
 
-// certLifetimeSecs returns how long, in seconds, an agent should retain the
-// certificate: the time until the ID Token's exp, less a one-minute safety
-// margin. A zero return means "no lifetime constraint" (used only when the
-// token carries no exp). It errors if the token is already expired.
-func certLifetimeSecs(idTokenPayload []byte) (uint32, error) {
-	var claims struct {
-		Expiration int64 `json:"exp"`
+func parseDurationOrSeconds(s string) (time.Duration, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, errors.New("empty duration string")
 	}
-	if err := json.Unmarshal(idTokenPayload, &claims); err != nil {
-		return 0, fmt.Errorf("malformed ID Token payload: %w", err)
+	d, err := time.ParseDuration(s)
+	if err == nil {
+		return d, nil
 	}
-	if claims.Expiration <= 0 {
-		return 0, nil
+	if sec, err := strconv.ParseInt(s, 10, 64); err == nil {
+		return time.Duration(sec) * time.Second, nil
 	}
-	remaining := time.Until(time.Unix(claims.Expiration, 0)) - time.Minute
-	if remaining <= 0 {
-		return 0, fmt.Errorf("ID Token already expired")
+	return 0, fmt.Errorf("invalid duration format: %q (expected format like 8h, 45m, or seconds like 28800)", s)
+}
+
+// resolveAgentLifetimeSecs calculates how long, in seconds, an agent should retain the
+// certificate. It checks CLI flag (`--lifetime`), client config (`agent_lifetime`),
+// ID Token `exp` remaining time, and defaults to 24h (86,400s).
+// Supports both duration strings (e.g. "8h", "45m") and raw seconds (e.g. "28800", 28800).
+func resolveAgentLifetimeSecs(l *LoginCmd, idTokenPayload []byte) (uint32, error) {
+	if l != nil && l.AgentLifetimeArg != "" {
+		d, err := parseDurationOrSeconds(l.AgentLifetimeArg)
+		if err != nil {
+			return 0, fmt.Errorf("invalid --lifetime duration (%s): %w", l.AgentLifetimeArg, err)
+		}
+		if d <= 0 {
+			return 0, fmt.Errorf("--lifetime duration must be positive")
+		}
+		return uint32(d.Seconds()), nil
 	}
-	return uint32(remaining.Seconds()), nil
+
+	if l != nil && l.Config != nil && l.Config.AgentLifetime != "" {
+		d, err := parseDurationOrSeconds(l.Config.AgentLifetime)
+		if err != nil {
+			return 0, fmt.Errorf("invalid agent_lifetime in config (%s): %w", l.Config.AgentLifetime, err)
+		}
+		if d <= 0 {
+			return 0, fmt.Errorf("agent_lifetime in config must be positive")
+		}
+		return uint32(d.Seconds()), nil
+	}
+
+	if len(idTokenPayload) > 0 {
+		var claims struct {
+			Expiration int64 `json:"exp"`
+		}
+		if err := json.Unmarshal(idTokenPayload, &claims); err == nil && claims.Expiration > 0 {
+			remaining := time.Until(time.Unix(claims.Expiration, 0)) - time.Minute
+			if remaining > 0 {
+				return uint32(remaining.Seconds()), nil
+			}
+		}
+	}
+
+	return 86400, nil
 }
 
 func createSSHCertWithAccessToken(pkt *pktoken.PKToken, accessToken []byte, signer crypto.Signer, principals []string, validBefore uint64) ([]byte, []byte, error) {
