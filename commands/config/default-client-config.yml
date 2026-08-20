@@ -1,6 +1,11 @@
 ---
 default_provider: webchooser
 
+# How long ssh-agent retains the certificate added by opkssh login, as a
+# duration (12h, 45m) or in seconds (28800). Defaults to 24h, matching the
+# server's default certificate expiration policy.
+# agent_lifetime: 24h
+
 providers:
   - alias: google
     issuer: https://accounts.google.com

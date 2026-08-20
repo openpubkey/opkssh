@@ -33,6 +33,7 @@ var DefaultClientConfig []byte
 type ClientConfig struct {
 	DefaultProvider string           `yaml:"default_provider"`
 	Providers       []ProviderConfig `yaml:"providers"`
+	AgentLifetime   string           `yaml:"agent_lifetime,omitempty"`
 }
 
 func NewClientConfig(c []byte) (*ClientConfig, error) {

@@ -76,3 +76,30 @@ providers:
 	require.NotNil(t, clientConfig)
 	require.Equal(t, clientConfig.Providers[0].SendAccessToken, true)
 }
+
+func TestParseConfigWithAgentLifetime(t *testing.T) {
+	c := `---
+agent_lifetime: 12h
+providers:
+  - alias: google
+    issuer: https://accounts.google.com
+    client_id: test-client-id`
+
+	clientConfig, err := NewClientConfig([]byte(c))
+	require.NoError(t, err)
+	require.NotNil(t, clientConfig)
+	require.Equal(t, "12h", clientConfig.AgentLifetime)
+
+	// Test with numeric seconds
+	c2 := `---
+agent_lifetime: 28800
+providers:
+  - alias: google
+    issuer: https://accounts.google.com
+    client_id: test-client-id`
+
+	clientConfig2, err := NewClientConfig([]byte(c2))
+	require.NoError(t, err)
+	require.NotNil(t, clientConfig2)
+	require.Equal(t, "28800", clientConfig2.AgentLifetime)
+}
