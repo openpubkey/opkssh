@@ -739,6 +739,14 @@ func (l *LoginCmd) addCertToAgent(certBytes []byte, signer crypto.Signer) {
 	}
 	defer conn.Close()
 
+	// Deadline on the whole exchange: a dead socket (e.g. a forwarded agent
+	// whose upstream connection is gone) accepts the dial but never responds,
+	// which would otherwise hang the login after authentication succeeded.
+	if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		fmt.Fprintf(l.out(), "warning: could not set ssh-agent I/O deadline: %v\n", err)
+		return
+	}
+
 	if err := agent.NewClient(conn).Add(agent.AddedKey{
 		PrivateKey:   signer,
 		Certificate:  cert,
@@ -772,8 +780,11 @@ func (l *LoginCmd) resolveAgentLifetimeSecs() (uint32, error) {
 	if err != nil {
 		return 0, fmt.Errorf("invalid %s value %q: %w", source, value, err)
 	}
-	if d <= 0 {
-		return 0, fmt.Errorf("invalid %s value %q: must be positive", source, value)
+	// Below one second the conversion would truncate to LifetimeSecs 0, which
+	// the agent protocol treats as "no lifetime" — an immortal key, the exact
+	// state the lifetime exists to prevent.
+	if d < time.Second {
+		return 0, fmt.Errorf("invalid %s value %q: must be at least 1 second", source, value)
 	}
 	if d > math.MaxUint32*time.Second {
 		return 0, fmt.Errorf("invalid %s value %q: too large", source, value)
@@ -792,6 +803,12 @@ func parseDurationOrSeconds(s string) (time.Duration, error) {
 		return d, nil
 	}
 	if sec, err := strconv.ParseInt(s, 10, 64); err == nil {
+		// Bound before multiplying: time.Duration(sec) * time.Second overflows
+		// int64 for large values and can wrap around into a small positive
+		// duration.
+		if sec < 0 || sec > math.MaxUint32 {
+			return 0, fmt.Errorf("seconds value %d out of range", sec)
+		}
 		return time.Duration(sec) * time.Second, nil
 	}
 	return 0, errors.New("expected a duration like 8h or 45m, or a number of seconds like 28800")

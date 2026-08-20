@@ -566,12 +566,36 @@ func TestResolveAgentLifetimeSecs(t *testing.T) {
 		{
 			name:   "zero flag value is an error",
 			cmd:    LoginCmd{AgentLifetimeArg: "0"},
-			errMsg: "must be positive",
+			errMsg: "must be at least 1 second",
 		},
 		{
 			name:   "negative flag value is an error",
 			cmd:    LoginCmd{AgentLifetimeArg: "-5m"},
-			errMsg: "must be positive",
+			errMsg: "must be at least 1 second",
+		},
+		{
+			// Sub-second values would truncate to LifetimeSecs 0, which the
+			// agent protocol treats as no lifetime at all.
+			name:   "sub-second flag value is an error",
+			cmd:    LoginCmd{AgentLifetimeArg: "500ms"},
+			errMsg: "must be at least 1 second",
+		},
+		{
+			// Large enough to wrap int64 nanoseconds into a small positive
+			// duration if multiplied unbounded.
+			name:   "overflowing raw seconds value is an error",
+			cmd:    LoginCmd{AgentLifetimeArg: "18446744074"},
+			errMsg: "out of range",
+		},
+		{
+			name:   "duration exceeding uint32 seconds is an error",
+			cmd:    LoginCmd{AgentLifetimeArg: "1193047h"},
+			errMsg: "too large",
+		},
+		{
+			name:   "whitespace-only flag value is an error",
+			cmd:    LoginCmd{AgentLifetimeArg: "   "},
+			errMsg: "empty duration",
 		},
 		{
 			name:   "invalid config value is an error",
