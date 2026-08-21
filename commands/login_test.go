@@ -1963,3 +1963,32 @@ func TestOpkSSHDirForeignTaggedPathErrors(t *testing.T) {
 	_, err := cmd.writeKeysToOpkSSHDir(pem, certBytes, identity)
 	require.ErrorContains(t, err, "holds a different identity")
 }
+
+func TestIdentityFileLineQuoting(t *testing.T) {
+	require.Equal(t, "IdentityFile /home/user/.ssh/opkssh/key", identityFileLine("/home/user/.ssh/opkssh/key"))
+	require.Equal(t, `IdentityFile "/home/John Smith/.ssh/opkssh/key"`, identityFileLine("/home/John Smith/.ssh/opkssh/key"))
+
+	// Round-trip the writer/remover contract under a blank-bearing home
+	// directory (common on Windows, legal everywhere).
+	t.Setenv("HOME", "/home/John Smith")
+	cmd, afs, dirPath, identity, pem, certBytes := opkDirFixture(t)
+
+	written, err := cmd.writeKeysToOpkSSHDir(pem, certBytes, identity)
+	require.NoError(t, err)
+	require.Contains(t, written, " ", "test premise: the key path must contain a blank")
+	configPath := filepath.Join(dirPath, "config")
+	quotedLine := identityFileLine(written)
+	require.Contains(t, strings.Split(string(mustReadFile(t, afs, configPath)), "\n"), quotedLine,
+		"a blank-bearing path must be written quoted")
+
+	// A re-login must dedup against the quoted form, not duplicate it.
+	written2, err := cmd.writeKeysToOpkSSHDir(pem, certBytes, identity)
+	require.NoError(t, err)
+	require.Equal(t, written, written2)
+	require.Equal(t, 1, strings.Count(string(mustReadFile(t, afs, configPath)), quotedLine))
+
+	// Logout's remover must strip exactly this entry.
+	lo := &LogoutCmd{Fs: cmd.Fs}
+	require.NoError(t, lo.removeFromOpkSSHConfig(configPath, written))
+	require.NotContains(t, string(mustReadFile(t, afs, configPath)), quotedLine)
+}

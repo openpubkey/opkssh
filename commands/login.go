@@ -1199,8 +1199,14 @@ func classifySlot(fs afero.Fs, privKeyPath, pubKeyPath string, identity keyIdent
 
 // identityFileLine renders a config-fragment entry for a private key path.
 // The format is a contract between login (which writes entries) and logout
-// (which removes them); both sides must go through this function.
+// (which removes them); both sides must go through this function. A path
+// containing blanks is double-quoted per ssh_config token rules — OpenSSH
+// mis-parses an unquoted path with a space. Paths without blanks stay
+// unquoted so entries written by earlier versions keep matching exactly.
 func identityFileLine(privKeyPath string) string {
+	if strings.ContainsAny(privKeyPath, " \t") {
+		return `IdentityFile "` + privKeyPath + `"`
+	}
 	return "IdentityFile " + privKeyPath
 }
 
