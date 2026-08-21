@@ -60,7 +60,11 @@ func (c *ClientConfig) GetByIssuer(issuer string) (*ProviderConfig, bool) {
 	return nil, false
 }
 
-// ClientConfigCandidatePaths returns the client config locations in
+// ConfigPathFlagHelp documents the --config-path default resolution chain;
+// shared by every command that carries the flag so the copies cannot drift.
+const ConfigPathFlagHelp = "Path to the client config file. Default: the first existing of $XDG_CONFIG_HOME/opk/config.yml (~/.config/opk/config.yml on linux/macOS, %AppData%\\opk\\config.yml on windows) and the legacy ~/.opk/config.yml."
+
+// clientConfigCandidatePaths returns the client config locations in
 // resolution order:
 //
 //  1. <configDir>/opk/config.yml, where <configDir> is $XDG_CONFIG_HOME when
@@ -69,7 +73,7 @@ func (c *ClientConfig) GetByIssuer(issuer string) (*ProviderConfig, bool) {
 //     systems, %AppData% on Windows). Replacement semantics per the spec: a
 //     set variable replaces the platform default, it does not stack with it.
 //  2. The legacy ~/.opk/config.yml.
-func ClientConfigCandidatePaths() ([]string, error) {
+func clientConfigCandidatePaths() ([]string, error) {
 	var configDir string
 	var platformDirErr error
 	if xdgDir := os.Getenv("XDG_CONFIG_HOME"); xdgDir != "" && filepath.IsAbs(xdgDir) {
@@ -98,34 +102,37 @@ func ClientConfigCandidatePaths() ([]string, error) {
 	return candidates, nil
 }
 
-// ResolveClientConfigPath resolves the client config path. An explicitly
-// provided path is used as-is. Otherwise the first existing candidate wins —
-// so a legacy ~/.opk/config.yml keeps working untouched — and when no config
-// exists anywhere the path falls to the first candidate, the XDG-preferred
+// ResolveClientConfigPath resolves the client config path and reports
+// whether a config file exists there. An explicitly provided path is used
+// as-is. Otherwise the first existing candidate wins — so a legacy
+// ~/.opk/config.yml keeps working untouched — and when no config exists
+// anywhere the path falls to the first candidate, the XDG-preferred
 // location, which is where a new config is then created.
-func ResolveClientConfigPath(fs afero.Fs, configPath *string) error {
-	if *configPath != "" {
-		return nil
-	}
-	candidates, err := ClientConfigCandidatePaths()
-	if err != nil {
-		return err
-	}
+func ResolveClientConfigPath(fs afero.Fs, configPath *string) (bool, error) {
 	afs := &afero.Afero{Fs: fs}
+	if *configPath != "" {
+		found, err := afs.Exists(*configPath)
+		return err == nil && found, nil
+	}
+	candidates, err := clientConfigCandidatePaths()
+	if err != nil {
+		return false, err
+	}
 	for _, candidate := range candidates {
 		if exists, err := afs.Exists(candidate); err == nil && exists {
 			*configPath = candidate
-			return nil
+			return true, nil
 		}
 	}
 	*configPath = candidates[0]
-	return nil
+	return false, nil
 }
 
 // GetClientConfigFromFile retrieves the client config from the configuration file at configPath.
-// If configPath is not specified then the default configuration path is uses ~/.opk/config.yml
+// If configPath is not specified it is resolved via ResolveClientConfigPath
+// (see clientConfigCandidatePaths for the resolution order).
 func GetClientConfigFromFile(configPath string, Fs afero.Fs) (*ClientConfig, error) {
-	if err := ResolveClientConfigPath(Fs, &configPath); err != nil {
+	if _, err := ResolveClientConfigPath(Fs, &configPath); err != nil {
 		return nil, err
 	}
 

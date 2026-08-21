@@ -212,7 +212,7 @@ Arguments:
 
 	// Define flags for login.
 	loginCmd.Flags().BoolVar(&autoRefreshArg, "auto-refresh", false, "Automatically refresh PK token after login")
-	loginCmd.Flags().StringVar(&configPathArg, "config-path", "", "Path to the client config file. Default: the first existing of $XDG_CONFIG_HOME/opk/config.yml (~/.config/opk/config.yml on linux/macOS, %AppData%\\opk\\config.yml on windows) and the legacy ~/.opk/config.yml")
+	loginCmd.Flags().StringVar(&configPathArg, "config-path", "", config.ConfigPathFlagHelp)
 	loginCmd.Flags().BoolVar(&createConfigArg, "create-config", false, "Creates a client config file if it does not exist")
 	loginCmd.Flags().BoolVar(&configureArg, "configure", false, "Apply changes to ssh config and create ~/.ssh/opkssh directory")
 	loginCmd.Flags().StringVar(&logDirArg, "log-dir", "", "Directory to write output logs")
@@ -485,7 +485,7 @@ Exit code: 0 if all entries are valid, 1 if any warnings or errors are found.`,
 		},
 	}
 
-	providerListCmd.Flags().StringVar(&configPathArg, "config-path", "", "Path to the client config file. Default: the first existing of $XDG_CONFIG_HOME/opk/config.yml (~/.config/opk/config.yml on linux/macOS, %AppData%\\opk\\config.yml on windows) and the legacy ~/.opk/config.yml.")
+	providerListCmd.Flags().StringVar(&configPathArg, "config-path", "", config.ConfigPathFlagHelp)
 
 	providerCmd.AddCommand(providerListCmd)
 

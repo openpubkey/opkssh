@@ -289,11 +289,10 @@ func (l *LogoutCmd) removeFromOpkSSHConfig(configPath string, seckeyPath string)
 		return nil // Config file doesn't exist, nothing to clean up
 	}
 
-	identityLine := "IdentityFile " + seckeyPath
-
-	// Split handling both \r\n (Windows) and \n (Unix) line endings
-	normalized := strings.ReplaceAll(string(content), "\r\n", "\n")
-	lines := strings.Split(normalized, "\n")
+	// identityFileLine and fragmentLines are the shared fragment-format
+	// contract with login's writer — both sides must stay on these helpers.
+	identityLine := identityFileLine(seckeyPath)
+	lines := fragmentLines(content)
 	var newLines []string
 	for _, line := range lines {
 		if strings.TrimSpace(line) != identityLine {

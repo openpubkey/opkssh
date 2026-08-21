@@ -29,7 +29,7 @@ opkssh login [alias] [flags]
 
 ```
       --auto-refresh                 Automatically refresh PK token after login
-      --config-path string           Path to the client config file. Default: the first existing of $XDG_CONFIG_HOME/opk/config.yml (~/.config/opk/config.yml on linux/macOS, %AppData%\opk\config.yml on windows) and the legacy ~/.opk/config.yml
+      --config-path string           Path to the client config file. Default: the first existing of $XDG_CONFIG_HOME/opk/config.yml (~/.config/opk/config.yml on linux/macOS, %AppData%\opk\config.yml on windows) and the legacy ~/.opk/config.yml.
       --configure                    Apply changes to ssh config and create ~/.ssh/opkssh directory
       --create-config                Creates a client config file if it does not exist
       --disable-browser-open         Set this flag to disable opening the browser. Useful for choosing the browser you want to use

@@ -105,64 +105,74 @@ func TestResolveClientConfigPath(t *testing.T) {
 	legacyPath := home + "/.opk/config.yml"
 
 	tests := []struct {
-		name     string
-		xdgEnv   string
-		files    []string
-		explicit string
-		expected string
+		name      string
+		xdgEnv    string
+		files     []string
+		explicit  string
+		expected  string
+		wantFound bool
 	}{
 		{
-			name:     "explicit path is used as-is",
-			explicit: "/tmp/custom.yml",
-			files:    []string{legacyPath},
-			expected: "/tmp/custom.yml",
+			name:      "explicit path is used as-is",
+			explicit:  "/tmp/custom.yml",
+			files:     []string{legacyPath},
+			expected:  "/tmp/custom.yml",
+			wantFound: false,
 		},
 		{
-			name:     "XDG set and file exists there",
-			xdgEnv:   "/xdg-config",
-			files:    []string{xdgPath, legacyPath},
-			expected: xdgPath,
+			name:      "XDG set and file exists there",
+			xdgEnv:    "/xdg-config",
+			files:     []string{xdgPath, legacyPath},
+			expected:  xdgPath,
+			wantFound: true,
 		},
 		{
-			name:     "XDG replaces the platform dir, it does not stack",
-			xdgEnv:   "/xdg-config",
-			files:    []string{platformPath},
-			expected: xdgPath, // ~/.config is never consulted; no legacy -> chain head
+			name:      "XDG replaces the platform dir, it does not stack",
+			xdgEnv:    "/xdg-config",
+			files:     []string{platformPath},
+			expected:  xdgPath, // ~/.config is never consulted; no legacy -> chain head
+			wantFound: false,
 		},
 		{
-			name:     "relative XDG value is ignored per the spec",
-			xdgEnv:   "relative/dir",
-			files:    []string{platformPath},
-			expected: platformPath,
+			name:      "relative XDG value is ignored per the spec",
+			xdgEnv:    "relative/dir",
+			files:     []string{platformPath},
+			expected:  platformPath,
+			wantFound: true,
 		},
 		{
-			name:     "platform dir file wins over legacy",
-			files:    []string{platformPath, legacyPath},
-			expected: platformPath,
+			name:      "platform dir file wins over legacy",
+			files:     []string{platformPath, legacyPath},
+			expected:  platformPath,
+			wantFound: true,
 		},
 		{
-			name:     "legacy config keeps working when it is the only one",
-			files:    []string{legacyPath},
-			expected: legacyPath,
+			name:      "legacy config keeps working when it is the only one",
+			files:     []string{legacyPath},
+			expected:  legacyPath,
+			wantFound: true,
 		},
 		{
 			// The common upgrade scenario: XDG in the environment, but the
 			// user's only config is the legacy one.
-			name:     "XDG set but only legacy exists: legacy wins",
-			xdgEnv:   "/xdg-config",
-			files:    []string{legacyPath},
-			expected: legacyPath,
+			name:      "XDG set but only legacy exists: legacy wins",
+			xdgEnv:    "/xdg-config",
+			files:     []string{legacyPath},
+			expected:  legacyPath,
+			wantFound: true,
 		},
 		{
-			name:     "no config anywhere resolves to the chain head for creation",
-			files:    nil,
-			expected: platformPath,
+			name:      "no config anywhere resolves to the chain head for creation",
+			files:     nil,
+			expected:  platformPath,
+			wantFound: false,
 		},
 		{
-			name:     "no config anywhere with XDG set resolves to the XDG head",
-			xdgEnv:   "/xdg-config",
-			files:    nil,
-			expected: xdgPath,
+			name:      "no config anywhere with XDG set resolves to the XDG head",
+			xdgEnv:    "/xdg-config",
+			files:     nil,
+			expected:  xdgPath,
+			wantFound: false,
 		},
 	}
 
@@ -184,8 +194,10 @@ func TestResolveClientConfigPath(t *testing.T) {
 			}
 
 			configPath := tt.explicit
-			require.NoError(t, ResolveClientConfigPath(fs, &configPath))
+			found, err := ResolveClientConfigPath(fs, &configPath)
+			require.NoError(t, err)
 			require.Equal(t, tt.expected, configPath)
+			require.Equal(t, tt.wantFound, found)
 		})
 	}
 }
