@@ -39,10 +39,8 @@ func TestMain(m *testing.M) {
 		defer cancel()
 		TestCtx = ctx
 
-		// Keep every login flow in the suite away from any real ssh-agent on
-		// the host: login adds the minted certificate to the agent reachable
-		// via SSH_AUTH_SOCK, and these tests must never inject test keys into
-		// a developer's agent.
+		// login adds the minted certificate to the agent at SSH_AUTH_SOCK;
+		// never inject test keys into a developer's real agent.
 		os.Unsetenv("SSH_AUTH_SOCK")
 
 		return m.Run()

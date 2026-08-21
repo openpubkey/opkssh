@@ -693,18 +693,15 @@ func (l *LoginCmd) out() io.Writer {
 	return os.Stdout
 }
 
-// defaultAgentLifetime matches the opkssh server's default certificate
-// expiration policy of 24 hours from the ID token's issuance (see
-// docs/config.md), so by default the agent drops the key around the time the
-// server stops accepting it.
+// defaultAgentLifetime matches the server's default expiration policy (24h
+// from the ID token's iat, see docs/config.md): the agent drops the key about
+// when the server stops accepting it.
 const defaultAgentLifetime = 24 * time.Hour
 
-// addCertToAgent loads the freshly minted certificate and its private key into
-// the ssh-agent reachable via SSH_AUTH_SOCK. The key is always added with a
-// lifetime: ssh-agent has no replace operation, so without one every login
-// would accumulate another key in the agent forever. Best-effort: any problem
-// is reported and swallowed so login still succeeds (the keys were already
-// written to disk before this is called).
+// addCertToAgent loads the certificate and its private key into the ssh-agent
+// reachable via SSH_AUTH_SOCK, always with a lifetime — ssh-agent has no
+// replace operation, so lifetime-less keys would accumulate forever.
+// Best-effort: problems are warnings, never login failures.
 func (l *LoginCmd) addCertToAgent(certBytes []byte, signer crypto.Signer) {
 	sock := os.Getenv("SSH_AUTH_SOCK")
 	if sock == "" {
@@ -735,9 +732,8 @@ func (l *LoginCmd) addCertToAgent(certBytes []byte, signer crypto.Signer) {
 	}
 	defer conn.Close()
 
-	// Deadline on the whole exchange: a dead socket (e.g. a forwarded agent
-	// whose upstream connection is gone) accepts the dial but never responds,
-	// which would otherwise hang the login after authentication succeeded.
+	// A dead socket (e.g. an orphaned forwarding socket) accepts the dial but
+	// never responds; without a deadline that hangs login after auth succeeded.
 	if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
 		fmt.Fprintf(l.out(), "warning: could not set ssh-agent I/O deadline: %v\n", err)
 		return
@@ -755,12 +751,10 @@ func (l *LoginCmd) addCertToAgent(certBytes []byte, signer crypto.Signer) {
 	fmt.Fprintf(l.out(), "Certificate added to ssh-agent (lifetime %s)\n", time.Duration(lifetimeSecs)*time.Second)
 }
 
-// resolveAgentLifetimeSecs returns how long, in seconds, ssh-agent should
-// retain the certificate: the --lifetime flag if set, otherwise agent_lifetime
-// from the client config, otherwise defaultAgentLifetime. The client cannot
-// know the server's real expiration policy (the server computes it from the ID
-// token's iat claim), so this is a client-side bound that keeps keys from
-// accumulating in the agent, not a statement of the certificate's validity.
+// resolveAgentLifetimeSecs picks the agent retention: --lifetime flag, else
+// agent_lifetime from the client config, else defaultAgentLifetime. It is a
+// client-side accumulation bound, not a validity statement — the client
+// cannot know the server's expiration policy (computed server-side from iat).
 func (l *LoginCmd) resolveAgentLifetimeSecs() (uint32, error) {
 	var source, value string
 	switch {
@@ -776,9 +770,8 @@ func (l *LoginCmd) resolveAgentLifetimeSecs() (uint32, error) {
 	if err != nil {
 		return 0, fmt.Errorf("invalid %s value %q: %w", source, value, err)
 	}
-	// Below one second the conversion would truncate to LifetimeSecs 0, which
-	// the agent protocol treats as "no lifetime" — an immortal key, the exact
-	// state the lifetime exists to prevent.
+	// Sub-second durations truncate to LifetimeSecs 0 = "no lifetime" in the
+	// agent protocol — an immortal key, the exact state this exists to prevent.
 	if d < time.Second {
 		return 0, fmt.Errorf("invalid %s value %q: must be at least 1 second", source, value)
 	}
@@ -799,9 +792,8 @@ func parseDurationOrSeconds(s string) (time.Duration, error) {
 		return d, nil
 	}
 	if sec, err := strconv.ParseInt(s, 10, 64); err == nil {
-		// Bound before multiplying: time.Duration(sec) * time.Second overflows
-		// int64 for large values and can wrap around into a small positive
-		// duration.
+		// Bound first: the multiplication overflows int64 for large values
+		// and can wrap into a small positive duration.
 		if sec < 0 || sec > math.MaxUint32 {
 			return 0, fmt.Errorf("seconds value %d out of range", sec)
 		}

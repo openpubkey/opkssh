@@ -79,9 +79,8 @@ func Mocks(t *testing.T, keyType KeyType, extraClaims ...map[string]any) (*pktok
 	}
 	require.NoError(t, err)
 
-	// Keep every mock login flow away from any real ssh-agent the test
-	// runner has; a test that needs an agent points SSH_AUTH_SOCK at its own
-	// after calling Mocks.
+	// Isolate every mock login from the test runner's real ssh-agent; a test
+	// needing an agent points SSH_AUTH_SOCK at its own after calling Mocks.
 	t.Setenv("SSH_AUTH_SOCK", "")
 
 	providerOpts := providers.DefaultMockProviderOpts()
@@ -576,15 +575,12 @@ func TestResolveAgentLifetimeSecs(t *testing.T) {
 			errMsg: "must be at least 1 second",
 		},
 		{
-			// Sub-second values would truncate to LifetimeSecs 0, which the
-			// agent protocol treats as no lifetime at all.
 			name:   "sub-second flag value is an error",
 			cmd:    LoginCmd{AgentLifetimeArg: "500ms"},
 			errMsg: "must be at least 1 second",
 		},
 		{
-			// Large enough to wrap int64 nanoseconds into a small positive
-			// duration if multiplied unbounded.
+			// Wraps int64 nanoseconds if multiplied unbounded.
 			name:   "overflowing raw seconds value is an error",
 			cmd:    LoginCmd{AgentLifetimeArg: "18446744074"},
 			errMsg: "out of range",
