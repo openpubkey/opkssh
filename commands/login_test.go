@@ -79,8 +79,9 @@ func Mocks(t *testing.T, keyType KeyType, extraClaims ...map[string]any) (*pktok
 	}
 	require.NoError(t, err)
 
-	// Isolate every mock login from the test runner's real ssh-agent; a test
-	// needing an agent points SSH_AUTH_SOCK at its own after calling Mocks.
+	// Isolate every mock login from the test runner's real ssh-agent. A test
+	// that needs an agent points SSH_AUTH_SOCK at its own test agent after
+	// calling Mocks.
 	t.Setenv("SSH_AUTH_SOCK", "")
 
 	providerOpts := providers.DefaultMockProviderOpts()
@@ -580,7 +581,8 @@ func TestResolveAgentLifetimeSecs(t *testing.T) {
 			errMsg: "must be at least 1 second",
 		},
 		{
-			// Wraps int64 nanoseconds if multiplied unbounded.
+			// This value wraps int64 nanoseconds if multiplied without a
+			// bound check.
 			name:   "overflowing raw seconds value is an error",
 			cmd:    LoginCmd{AgentLifetimeArg: "18446744074"},
 			errMsg: "out of range",
