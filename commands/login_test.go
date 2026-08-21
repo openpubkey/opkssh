@@ -1968,6 +1968,13 @@ func TestIdentityFileLineQuoting(t *testing.T) {
 	require.Equal(t, "IdentityFile /home/user/.ssh/opkssh/key", identityFileLine("/home/user/.ssh/opkssh/key"))
 	require.Equal(t, `IdentityFile "/home/John Smith/.ssh/opkssh/key"`, identityFileLine("/home/John Smith/.ssh/opkssh/key"))
 
+	if runtime.GOOS == "windows" {
+		// The round-trip below pins a blank-bearing home via HOME, which does
+		// not drive os.UserHomeDir on Windows. The rendering assertions above
+		// already ran.
+		t.Skip("home directory is not resolved via HOME on Windows")
+	}
+
 	// Round-trip the writer/remover contract under a blank-bearing home
 	// directory (common on Windows, legal everywhere).
 	t.Setenv("HOME", "/home/John Smith")
