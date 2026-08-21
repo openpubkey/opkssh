@@ -573,10 +573,7 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 		return nil, err
 	}
 
-	// Also load the certificate and its private key into a running ssh-agent
-	// (if one is reachable via SSH_AUTH_SOCK). Best-effort and non-fatal: the
-	// keys were already written to disk above, so a missing or broken agent
-	// must not fail the login.
+	// Best-effort: addCertToAgent warns and returns rather than failing the login.
 	if !l.PrintKeyArg {
 		l.addCertToAgent(certBytes, signer)
 	}
@@ -696,11 +693,10 @@ func (l *LoginCmd) out() io.Writer {
 	return os.Stdout
 }
 
-// defaultAgentLifetime is how long ssh-agent retains the certificate when
-// neither --lifetime nor agent_lifetime in the client config is set. It matches
-// the opkssh server's default certificate expiration policy of 24 hours from
-// the ID token's issuance (see docs/config.md), so by default the agent drops
-// the key around the time the server stops accepting it.
+// defaultAgentLifetime matches the opkssh server's default certificate
+// expiration policy of 24 hours from the ID token's issuance (see
+// docs/config.md), so by default the agent drops the key around the time the
+// server stops accepting it.
 const defaultAgentLifetime = 24 * time.Hour
 
 // addCertToAgent loads the freshly minted certificate and its private key into

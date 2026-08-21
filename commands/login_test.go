@@ -79,6 +79,11 @@ func Mocks(t *testing.T, keyType KeyType, extraClaims ...map[string]any) (*pktok
 	}
 	require.NoError(t, err)
 
+	// Keep every mock login flow away from any real ssh-agent the test
+	// runner has; a test that needs an agent points SSH_AUTH_SOCK at its own
+	// after calling Mocks.
+	t.Setenv("SSH_AUTH_SOCK", "")
+
 	providerOpts := providers.DefaultMockProviderOpts()
 	op, _, idtTemplate, err := providers.NewMockProvider(providerOpts)
 	require.NoError(t, err)
@@ -102,9 +107,6 @@ func Mocks(t *testing.T, keyType KeyType, extraClaims ...map[string]any) (*pktok
 }
 
 func TestLoginCmd(t *testing.T) {
-	// Keep the login flow away from any real ssh-agent the test runner has.
-	t.Setenv("SSH_AUTH_SOCK", "")
-
 	logDir := "./logs"
 	logPath := filepath.Join(logDir, "opkssh.log")
 
@@ -632,31 +634,37 @@ func (r *recordingAgent) Add(key agent.AddedKey) error {
 	return r.Agent.Add(key)
 }
 
-func TestAddCertToAgent(t *testing.T) {
+// startTestAgent serves an in-process ssh-agent over a unix socket for the
+// duration of the test and points SSH_AUTH_SOCK at it.
+func startTestAgent(t *testing.T, a agent.Agent) string {
+	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("test agent listens on a unix domain socket")
 	}
-
-	pkt, signer, _ := Mocks(t, ECDSA)
-	certBytes, _, err := createSSHCert(pkt, signer, []string{"test"})
-	require.NoError(t, err)
-
 	sockPath := filepath.Join(t.TempDir(), "agent.sock")
 	listener, err := net.Listen("unix", sockPath)
 	require.NoError(t, err)
-	defer listener.Close()
-
-	mockAgent := &recordingAgent{Agent: agent.NewKeyring()}
+	t.Cleanup(func() { _ = listener.Close() })
 	go func() {
 		conn, err := listener.Accept()
 		if err != nil {
 			return
 		}
-		_ = agent.ServeAgent(mockAgent, conn)
+		_ = agent.ServeAgent(a, conn)
 	}()
+	t.Setenv("SSH_AUTH_SOCK", sockPath)
+	return sockPath
+}
+
+func TestAddCertToAgent(t *testing.T) {
+	pkt, signer, _ := Mocks(t, ECDSA)
+	certBytes, _, err := createSSHCert(pkt, signer, []string{"test"})
+	require.NoError(t, err)
+
+	mockAgent := &recordingAgent{Agent: agent.NewKeyring()}
+	startTestAgent(t, mockAgent)
 
 	out := &bytes.Buffer{}
-	t.Setenv("SSH_AUTH_SOCK", sockPath)
 	l := &LoginCmd{AgentLifetimeArg: "2h", OutWriter: out}
 	l.addCertToAgent(certBytes, signer)
 	require.Contains(t, out.String(), "Certificate added to ssh-agent")
@@ -933,9 +941,6 @@ func TestWriteKeysToDestination(t *testing.T) {
 // (including its error return). The success side of this call site is also
 // covered by TestLoginCmd; the error case here covers the `return nil, err`.
 func TestLoginWritesKeysToDestination(t *testing.T) {
-	// Keep the login flow away from any real ssh-agent the test runner has.
-	t.Setenv("SSH_AUTH_SOCK", "")
-
 	home, err := os.UserHomeDir()
 	require.NoError(t, err)
 
@@ -1052,9 +1057,6 @@ func (c *writeCountingFs) count() int {
 // through the shared helper. The token is given a short expiry so the first
 // refresh fires immediately, and a bounded context guarantees the loop exits.
 func TestLoginWithRefreshWritesKeysToDestination(t *testing.T) {
-	// Keep the login flow away from any real ssh-agent the test runner has.
-	t.Setenv("SSH_AUTH_SOCK", "")
-
 	// Short expiry: LoginWithRefresh waits until ~1 minute before expiry, so a
 	// near-term exp makes the first refresh fire right away.
 	shortExp := map[string]any{

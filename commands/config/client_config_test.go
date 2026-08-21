@@ -78,28 +78,19 @@ providers:
 }
 
 func TestParseConfigWithAgentLifetime(t *testing.T) {
-	c := `---
-agent_lifetime: 12h
+	// Both value shapes must parse into the string field: a duration string
+	// and a bare integer number of seconds.
+	for _, lifetime := range []string{"12h", "28800"} {
+		c := `---
+agent_lifetime: ` + lifetime + `
 providers:
   - alias: google
     issuer: https://accounts.google.com
     client_id: test-client-id`
 
-	clientConfig, err := NewClientConfig([]byte(c))
-	require.NoError(t, err)
-	require.NotNil(t, clientConfig)
-	require.Equal(t, "12h", clientConfig.AgentLifetime)
-
-	// Test with numeric seconds
-	c2 := `---
-agent_lifetime: 28800
-providers:
-  - alias: google
-    issuer: https://accounts.google.com
-    client_id: test-client-id`
-
-	clientConfig2, err := NewClientConfig([]byte(c2))
-	require.NoError(t, err)
-	require.NotNil(t, clientConfig2)
-	require.Equal(t, "28800", clientConfig2.AgentLifetime)
+		clientConfig, err := NewClientConfig([]byte(c))
+		require.NoError(t, err)
+		require.NotNil(t, clientConfig)
+		require.Equal(t, lifetime, clientConfig.AgentLifetime)
+	}
 }
