@@ -699,7 +699,7 @@ func (l *LoginCmd) out() io.Writer {
 const defaultAgentLifetime = 24 * time.Hour
 
 // addCertToAgent loads the certificate and its private key into the ssh-agent
-// reachable via SSH_AUTH_SOCK, always with a lifetime — ssh-agent has no
+// reachable via SSH_AUTH_SOCK, always with a lifetime: ssh-agent has no
 // replace operation, so lifetime-less keys would accumulate forever.
 // Best-effort: problems are warnings, never login failures.
 func (l *LoginCmd) addCertToAgent(certBytes []byte, signer crypto.Signer) {
@@ -753,7 +753,7 @@ func (l *LoginCmd) addCertToAgent(certBytes []byte, signer crypto.Signer) {
 
 // resolveAgentLifetimeSecs picks the agent retention: --lifetime flag, else
 // agent_lifetime from the client config, else defaultAgentLifetime. It is a
-// client-side accumulation bound, not a validity statement — the client
+// client-side accumulation bound, not a validity statement; the client
 // cannot know the server's expiration policy (computed server-side from iat).
 func (l *LoginCmd) resolveAgentLifetimeSecs() (uint32, error) {
 	var source, value string
@@ -771,7 +771,7 @@ func (l *LoginCmd) resolveAgentLifetimeSecs() (uint32, error) {
 		return 0, fmt.Errorf("invalid %s value %q: %w", source, value, err)
 	}
 	// Sub-second durations truncate to LifetimeSecs 0 = "no lifetime" in the
-	// agent protocol — an immortal key, the exact state this exists to prevent.
+	// agent protocol; an immortal key, the exact state this exists to prevent.
 	if d < time.Second {
 		return 0, fmt.Errorf("invalid %s value %q: must be at least 1 second", source, value)
 	}
