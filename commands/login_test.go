@@ -1044,9 +1044,12 @@ func TestWriteKeysToDestination(t *testing.T) {
 			wantErrContains: "failed to write SSH keys to filesystem",
 		},
 		{
+			// A missing opkssh dir or config fragment is no longer an error
+			// (both are created on demand), so the write failure is induced
+			// with a read-only filesystem instead.
 			name:            "opkssh dir write failure is wrapped",
 			sshConfigured:   true,
-			readOnly:        false, // SSHConfigured but no config file -> read fails
+			readOnly:        true,
 			wantErrContains: "failed to write SSH keys to OPK SSH dir",
 		},
 		{
@@ -1669,4 +1672,328 @@ func TestDetermineProviderWebChooserWithOnlyCICDProviders(t *testing.T) {
 	_, chooser, err := login.determineProvider()
 	require.ErrorContains(t, err, "no browser-based providers configured")
 	require.Nil(t, chooser)
+}
+
+func TestIdentityTag(t *testing.T) {
+	a := keyIdentity{issuer: "https://op.example.com", audience: "client-1", subject: "alice@example.com"}
+	b := keyIdentity{issuer: "https://op.example.com", audience: "client-1", subject: "bob@example.com"}
+	c := keyIdentity{issuer: "https://op.example.com", audience: "client-2", subject: "alice@example.com"}
+
+	require.Len(t, identityTag(a), 8)
+	require.Equal(t, identityTag(a), identityTag(a), "tag must be deterministic")
+	require.NotEqual(t, identityTag(a), identityTag(b), "different subjects must yield different tags")
+	require.NotEqual(t, identityTag(a), identityTag(c), "different audiences must yield different tags")
+	require.NotContains(t, identityTag(a), "alice", "raw subject must not appear in the tag")
+}
+
+// foreignPubkeyLine returns an authorized-key line for a key opkssh did not
+// generate: parseable, not a certificate, comment not "openpubkey".
+func foreignPubkeyLine(t *testing.T) []byte {
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	sshPub, err := ssh.NewPublicKey(pub)
+	require.NoError(t, err)
+	return ssh.MarshalAuthorizedKey(sshPub)
+}
+
+func TestWriteKeysIdentitySlots(t *testing.T) {
+	homePath, err := os.UserHomeDir()
+	require.NoError(t, err)
+	defaultKeyPath := filepath.Join(homePath, ".ssh", "id_ecdsa")
+	skKeyPath := filepath.Join(homePath, ".ssh", "id_ecdsa_sk")
+	opkDirPath := filepath.Join(homePath, ".ssh", "opkssh")
+
+	pktA, signerA, _ := Mocks(t, ECDSA)
+	pktB, signerB, _ := Mocks(t, ECDSA, map[string]any{
+		"email": "second.identity@example.com",
+		"sub":   "second-identity-sub",
+	})
+	identityA, okA := pktIdentity(pktA)
+	identityB, okB := pktIdentity(pktB)
+	require.True(t, okA)
+	require.True(t, okB)
+	require.NotEqual(t, identityA, identityB, "mock identities must differ for this test to mean anything")
+
+	certA, pemA, err := createSSHCert(pktA, signerA, []string{"test"})
+	require.NoError(t, err)
+	certA2, pemA2, err := createSSHCert(pktA, signerA, []string{"test"})
+	require.NoError(t, err)
+	certB, pemB, err := createSSHCert(pktB, signerB, []string{"test"})
+	require.NoError(t, err)
+	certB2, pemB2, err := createSSHCert(pktB, signerB, []string{"test"})
+	require.NoError(t, err)
+
+	fs := afero.NewMemMapFs()
+	afs := &afero.Afero{Fs: fs}
+	newCmd := func(pkt *pktoken.PKToken) *LoginCmd {
+		return &LoginCmd{Fs: fs, KeyTypeArg: ECDSA, pkt: pkt, OutWriter: &bytes.Buffer{}}
+	}
+	mustRead := func(path string) []byte {
+		b, err := afs.ReadFile(path)
+		require.NoError(t, err)
+		return b
+	}
+
+	// Occupy the id_ecdsa_sk slot with a foreign key so the second identity
+	// exercises the fallback rather than cascading into the _sk slot.
+	require.NoError(t, afs.WriteFile(skKeyPath, []byte("foreign"), 0o600))
+	require.NoError(t, afs.WriteFile(skKeyPath+"-cert.pub", foreignPubkeyLine(t), 0o644))
+
+	// First login writes the default slot, exactly as before this change.
+	cmdA := newCmd(pktA)
+	require.NoError(t, cmdA.writeKeysToDestination("", pemA, certA))
+	require.Empty(t, cmdA.fallbackKeyPath)
+	require.Equal(t, pemA, mustRead(defaultKeyPath))
+
+	// Same identity again: overwritten in place, still no fallback, and the
+	// opkssh dir is never created for a single identity.
+	cmdA2 := newCmd(pktA)
+	require.NoError(t, cmdA2.writeKeysToDestination("", pemA2, certA2))
+	require.Empty(t, cmdA2.fallbackKeyPath)
+	require.Equal(t, pemA2, mustRead(defaultKeyPath))
+	dirExists, err := afs.DirExists(opkDirPath)
+	require.NoError(t, err)
+	require.False(t, dirExists, "opkssh dir must not appear while a single identity is in play")
+
+	// Different identity: the occupied slots are preserved and the keys land
+	// in the opkssh identity directory, with a fragment entry.
+	cmdB := newCmd(pktB)
+	require.NoError(t, cmdB.writeKeysToDestination("", pemB, certB))
+	require.NotEmpty(t, cmdB.fallbackKeyPath)
+	require.Equal(t, pemA2, mustRead(defaultKeyPath), "first identity's key must be untouched")
+	require.Equal(t, []byte("foreign"), mustRead(skKeyPath), "foreign key must be untouched")
+	require.True(t, strings.HasPrefix(cmdB.fallbackKeyPath, opkDirPath+string(filepath.Separator)))
+	require.Equal(t, pemB, mustRead(cmdB.fallbackKeyPath))
+	writtenIdentity, parsed := certFileIdentity(mustRead(cmdB.fallbackKeyPath + "-cert.pub"))
+	require.True(t, parsed)
+	require.Equal(t, identityB, writtenIdentity)
+	fragmentLines := strings.Split(string(mustRead(filepath.Join(opkDirPath, "config"))), "\n")
+	require.Contains(t, fragmentLines, "IdentityFile "+cmdB.fallbackKeyPath)
+
+	// Second identity re-login: same fallback file overwritten in place, no
+	// duplicate fragment line.
+	cmdB2 := newCmd(pktB)
+	require.NoError(t, cmdB2.writeKeysToDestination("", pemB2, certB2))
+	require.Equal(t, cmdB.fallbackKeyPath, cmdB2.fallbackKeyPath)
+	require.Equal(t, pemB2, mustRead(cmdB.fallbackKeyPath))
+	fragmentLines = strings.Split(string(mustRead(filepath.Join(opkDirPath, "config"))), "\n")
+	lineCount := 0
+	for _, line := range fragmentLines {
+		if line == "IdentityFile "+cmdB.fallbackKeyPath {
+			lineCount++
+		}
+	}
+	require.Equal(t, 1, lineCount, "fragment must not accumulate duplicate IdentityFile lines")
+}
+
+func TestWriteKeysLegacyCommentFallback(t *testing.T) {
+	// A cert written by an older opkssh whose embedded PK token no longer
+	// parses must still be overwritten in place when its comment is exactly
+	// "openpubkey" — requirement: never demote a single-identity re-login to
+	// a relocated key on a parse failure.
+	pkt, signer, _ := Mocks(t, ECDSA)
+	certBytes, pem, err := createSSHCert(pkt, signer, []string{"test"})
+	require.NoError(t, err)
+
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	sshPub, err := ssh.NewPublicKey(pub)
+	require.NoError(t, err)
+	sshSigner, err := ssh.NewSignerFromSigner(priv)
+	require.NoError(t, err)
+	legacyCert := &ssh.Certificate{
+		Key:         sshPub,
+		CertType:    ssh.UserCert,
+		ValidBefore: ssh.CertTimeInfinity,
+	}
+	require.NoError(t, legacyCert.SignCert(rand.Reader, sshSigner))
+	legacyLine := bytes.TrimSuffix(ssh.MarshalAuthorizedKey(legacyCert), []byte("\n"))
+	legacyLine = append(legacyLine, []byte(" openpubkey")...)
+	identity, parsed := certFileIdentity(legacyLine)
+	require.False(t, parsed, "test premise: the legacy cert must not carry a parseable PK token")
+	require.Zero(t, identity)
+
+	homePath, err := os.UserHomeDir()
+	require.NoError(t, err)
+	defaultKeyPath := filepath.Join(homePath, ".ssh", "id_ecdsa")
+
+	fs := afero.NewMemMapFs()
+	afs := &afero.Afero{Fs: fs}
+	require.NoError(t, afs.WriteFile(defaultKeyPath, []byte("legacy-key"), 0o600))
+	require.NoError(t, afs.WriteFile(defaultKeyPath+"-cert.pub", legacyLine, 0o644))
+
+	cmd := &LoginCmd{Fs: fs, KeyTypeArg: ECDSA, pkt: pkt, OutWriter: &bytes.Buffer{}}
+	require.NoError(t, cmd.writeKeysToDestination("", pem, certBytes))
+	require.Empty(t, cmd.fallbackKeyPath)
+	written, err := afs.ReadFile(defaultKeyPath)
+	require.NoError(t, err)
+	require.Equal(t, pem, written, "legacy-comment slot must be overwritten in place")
+}
+
+// seedForeignDefaultSlots fills every default ECDSA key slot with a foreign
+// (non-opkssh) key so a login is forced onto the fallback path.
+func seedForeignDefaultSlots(t *testing.T, fs afero.Fs) {
+	homePath, err := os.UserHomeDir()
+	require.NoError(t, err)
+	afs := &afero.Afero{Fs: fs}
+	for _, name := range DefaultSSHKeyFileNames[ECDSA] {
+		p := filepath.Join(homePath, ".ssh", name)
+		require.NoError(t, afs.WriteFile(p, []byte("foreign"), 0o600))
+		require.NoError(t, afs.WriteFile(p+"-cert.pub", foreignPubkeyLine(t), 0o644))
+	}
+}
+
+func TestFallbackWarningDecision(t *testing.T) {
+	const warningMarker = "will not try"
+
+	t.Run("warns on fallback when no agent holds the key", func(t *testing.T) {
+		t.Setenv("SSH_AUTH_SOCK", "")
+		_, _, mockOp := Mocks(t, ECDSA)
+		fs := afero.NewMemMapFs()
+		seedForeignDefaultSlots(t, fs)
+		out := &bytes.Buffer{}
+		l := &LoginCmd{Fs: fs, KeyTypeArg: ECDSA, OutWriter: out}
+		require.NoError(t, l.Login(context.Background(), mockOp, false, ""))
+		require.Contains(t, out.String(), warningMarker)
+		homePath, err := os.UserHomeDir()
+		require.NoError(t, err)
+		require.Contains(t, out.String(), filepath.Join(homePath, ".ssh", "opkssh"),
+			"the warning must name the fallback location it is about")
+	})
+
+	t.Run("silent on fallback when the agent add succeeds", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("test agent listens on a unix domain socket")
+		}
+		// Mocks pins SSH_AUTH_SOCK empty, so the test agent must be started
+		// after it to win.
+		_, _, mockOp := Mocks(t, ECDSA)
+		sockPath := filepath.Join(t.TempDir(), "agent.sock")
+		listener, err := net.Listen("unix", sockPath)
+		require.NoError(t, err)
+		defer listener.Close()
+		go func() {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			_ = agent.ServeAgent(agent.NewKeyring(), conn)
+		}()
+		t.Setenv("SSH_AUTH_SOCK", sockPath)
+
+		fs := afero.NewMemMapFs()
+		seedForeignDefaultSlots(t, fs)
+		out := &bytes.Buffer{}
+		// The sibling cases leave AddKeyToAgent at its default, which keeps a
+		// login off the agent entirely; this one needs the agent to take the
+		// key for the warning to be suppressed.
+		l := &LoginCmd{Fs: fs, KeyTypeArg: ECDSA, AddKeyToAgent: true, OutWriter: out}
+		require.NoError(t, l.Login(context.Background(), mockOp, false, ""))
+		require.Contains(t, out.String(), "Certificate added to ssh-agent")
+		require.NotContains(t, out.String(), warningMarker)
+	})
+
+	t.Run("silent on default-slot writes", func(t *testing.T) {
+		t.Setenv("SSH_AUTH_SOCK", "")
+		_, _, mockOp := Mocks(t, ECDSA)
+		out := &bytes.Buffer{}
+		l := &LoginCmd{Fs: afero.NewMemMapFs(), KeyTypeArg: ECDSA, OutWriter: out}
+		require.NoError(t, l.Login(context.Background(), mockOp, false, ""))
+		require.NotContains(t, out.String(), warningMarker)
+	})
+}
+
+func TestOpkSSHDirPartialStateDisambiguates(t *testing.T) {
+	// A private key without its certificate cannot prove any identity, so
+	// the slot must be treated as foreign and left untouched.
+	pkt, signer, _ := Mocks(t, ECDSA)
+	certBytes, pem, err := createSSHCert(pkt, signer, []string{"test"})
+	require.NoError(t, err)
+	identity, ok := pktIdentity(pkt)
+	require.True(t, ok)
+
+	homePath, err := os.UserHomeDir()
+	require.NoError(t, err)
+	opkDirPath := filepath.Join(homePath, ".ssh", "opkssh")
+
+	fs := afero.NewMemMapFs()
+	afs := &afero.Afero{Fs: fs}
+	cmd := &LoginCmd{Fs: fs, KeyTypeArg: ECDSA, pkt: pkt, OutWriter: &bytes.Buffer{}}
+
+	basePath := filepath.Join(opkDirPath, cmd.makeSSHKeyFileName(pkt))
+	require.NoError(t, afs.WriteFile(basePath, []byte("orphan"), 0o600))
+
+	written, err := cmd.writeKeysToOpkSSHDir(pem, certBytes)
+	require.NoError(t, err)
+	require.Equal(t, basePath+"-"+identityTag(identity), written)
+	orphan, err := afs.ReadFile(basePath)
+	require.NoError(t, err)
+	require.Equal(t, []byte("orphan"), orphan, "orphaned private key must be untouched")
+}
+
+func TestFragmentWholeLineDedup(t *testing.T) {
+	// The discriminating case for whole-line matching: the fragment already
+	// holds the TAGGED path's line, whose text contains the base path as a
+	// prefix. A base-path write must still add its own line — a substring
+	// check would wrongly skip it.
+	pkt, signer, _ := Mocks(t, ECDSA)
+	certBytes, pem, err := createSSHCert(pkt, signer, []string{"test"})
+	require.NoError(t, err)
+	identity, ok := pktIdentity(pkt)
+	require.True(t, ok)
+
+	homePath, err := os.UserHomeDir()
+	require.NoError(t, err)
+	opkDirPath := filepath.Join(homePath, ".ssh", "opkssh")
+
+	fs := afero.NewMemMapFs()
+	afs := &afero.Afero{Fs: fs}
+	cmd := &LoginCmd{Fs: fs, KeyTypeArg: ECDSA, pkt: pkt, OutWriter: &bytes.Buffer{}}
+
+	basePath := filepath.Join(opkDirPath, cmd.makeSSHKeyFileName(pkt))
+	taggedLine := "IdentityFile " + basePath + "-" + identityTag(identity)
+	require.NoError(t, afs.WriteFile(filepath.Join(opkDirPath, "config"), []byte(taggedLine+"\n"), 0o600))
+
+	written, err := cmd.writeKeysToOpkSSHDir(pem, certBytes)
+	require.NoError(t, err)
+	require.Equal(t, basePath, written, "free base slot must be used")
+
+	fragmentLines := strings.Split(string(mustReadFile(t, afs, filepath.Join(opkDirPath, "config"))), "\n")
+	require.Contains(t, fragmentLines, "IdentityFile "+basePath, "base line must be added despite being a substring of the tagged line")
+	require.Contains(t, fragmentLines, taggedLine, "pre-existing tagged line must be preserved")
+}
+
+func mustReadFile(t *testing.T, afs *afero.Afero, path string) []byte {
+	b, err := afs.ReadFile(path)
+	require.NoError(t, err)
+	return b
+}
+
+func TestOpkSSHDirForeignTaggedPathErrors(t *testing.T) {
+	// The clobber-protection must hold at the tagged path too: a foreign
+	// occupant there is an error, never a silent overwrite.
+	pkt, signer, _ := Mocks(t, ECDSA)
+	certBytes, pem, err := createSSHCert(pkt, signer, []string{"test"})
+	require.NoError(t, err)
+	identity, ok := pktIdentity(pkt)
+	require.True(t, ok)
+
+	homePath, err := os.UserHomeDir()
+	require.NoError(t, err)
+	opkDirPath := filepath.Join(homePath, ".ssh", "opkssh")
+
+	fs := afero.NewMemMapFs()
+	afs := &afero.Afero{Fs: fs}
+	cmd := &LoginCmd{Fs: fs, KeyTypeArg: ECDSA, pkt: pkt, OutWriter: &bytes.Buffer{}}
+
+	baseName := cmd.makeSSHKeyFileName(pkt)
+	basePath := filepath.Join(opkDirPath, baseName)
+	taggedPath := filepath.Join(opkDirPath, baseName+"-"+identityTag(identity))
+	for _, p := range []string{basePath, taggedPath} {
+		require.NoError(t, afs.WriteFile(p, []byte("foreign"), 0o600))
+		require.NoError(t, afs.WriteFile(p+"-cert.pub", foreignPubkeyLine(t), 0o644))
+	}
+
+	_, err = cmd.writeKeysToOpkSSHDir(pem, certBytes)
+	require.ErrorContains(t, err, "holds a different identity")
 }

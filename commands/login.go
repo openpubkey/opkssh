@@ -21,7 +21,9 @@ import (
 	"context"
 	"crypto"
 	"crypto/ecdsa"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -115,6 +117,10 @@ type LoginCmd struct {
 	// certificate blob, which the agent stores as a separate identity, so the
 	// previous one has to be removed explicitly.
 	agentCert *ssh.Certificate
+	// fallbackKeyPath is set when the default key slots were all taken by
+	// other identities and the keys were written to the opkssh identity
+	// directory instead; used to warn when that key is not reachable.
+	fallbackKeyPath string
 
 	// Outputs
 	pkt    *pktoken.PKToken
@@ -175,7 +181,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 
 	// If the Config has been set in the struct don't replace it. This is useful for testing
 	if l.Config == nil {
-		if err := config.ResolveClientConfigPath(&l.ConfigPathArg); err != nil {
+		if err := config.ResolveClientConfigPath(l.Fs, &l.ConfigPathArg); err != nil {
 			return err
 		}
 		if _, err := l.Fs.Stat(l.ConfigPathArg); err == nil {
@@ -187,6 +193,13 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 				return err
 			} else {
 				l.Config = client_config
+				// Multiple config locations are possible (see
+				// config.ClientConfigCandidatePaths); naming the winner
+				// defuses silent shadowing, e.g. a hand-created legacy file
+				// losing to an existing XDG-location config.
+				if l.Verbosity >= 1 {
+					log.Printf("using client config at %s", l.ConfigPathArg)
+				}
 			}
 		} else {
 			if l.CreateConfigArg {
@@ -197,6 +210,9 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 			l.Config, err = config.NewClientConfig(config.DefaultClientConfig)
 			if err != nil {
 				return fmt.Errorf("failed to parse default config file: %w", err)
+			}
+			if l.Verbosity >= 1 {
+				log.Printf("no client config file found; using built-in defaults (a new config would be created at %s)", l.ConfigPathArg)
 			}
 		}
 	}
@@ -579,7 +595,13 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 		return nil, err
 	}
 
-	l.maybeAddCertToAgent(certBytes, signer)
+	addedToAgent := l.maybeAddCertToAgent(certBytes, signer)
+	// The remediation warning is decided after the agent attempt: keys written
+	// to the fallback location are not tried by ssh on their own, so the user
+	// must hear about it exactly when no agent ended up holding the key either.
+	if !l.PrintKeyArg && l.fallbackKeyPath != "" && !addedToAgent {
+		fmt.Fprintf(l.out(), "warning: ssh will not try %s automatically and no ssh-agent holds it; add an IdentityFile entry for it, use -i, or run `opkssh login --configure`\n", l.fallbackKeyPath)
+	}
 
 	if printIdToken {
 		idTokenStr, err := PrettyIdToken(*pkt)
@@ -713,47 +735,49 @@ const defaultAgentLifetime = 24 * time.Hour
 
 // maybeAddCertToAgent applies the AddKeyToAgent gate, so that both paths that
 // mint a certificate (the initial login and every refresh) make one decision
-// about reaching the agent.
-func (l *LoginCmd) maybeAddCertToAgent(certBytes []byte, signer crypto.Signer) {
+// about reaching the agent. It reports whether the key landed in an agent, so
+// a caller can tell an unreachable key from one the agent is holding.
+func (l *LoginCmd) maybeAddCertToAgent(certBytes []byte, signer crypto.Signer) bool {
 	if l.AddKeyToAgent && !l.PrintKeyArg {
-		l.addCertToAgent(certBytes, signer)
+		return l.addCertToAgent(certBytes, signer)
 	}
+	return false
 }
 
 // addCertToAgent loads the certificate and its private key into the ssh-agent
-// reachable via SSH_AUTH_SOCK, always with a lifetime. A certificate this
-// command added earlier is removed first. The lifetime covers what the removal
-// cannot: a later opkssh process has no record of this one's certificate, so
-// without a lifetime every login would leave another certificate in the agent
-// forever. Best-effort: every failure is a printed warning, never a login
-// failure.
-func (l *LoginCmd) addCertToAgent(certBytes []byte, signer crypto.Signer) {
+// reachable via SSH_AUTH_SOCK, reporting whether the key landed in an agent.
+// It always sets a lifetime. A certificate this command added earlier is
+// removed first. The lifetime covers what the removal cannot: a later opkssh
+// process has no record of this one's certificate, so without a lifetime every
+// login would leave another certificate in the agent forever. Best-effort:
+// every failure is a printed warning, never a login failure.
+func (l *LoginCmd) addCertToAgent(certBytes []byte, signer crypto.Signer) bool {
 	sock := os.Getenv("SSH_AUTH_SOCK")
 	if sock == "" {
-		return
+		return false
 	}
 
 	lifetimeSecs, err := l.resolveAgentLifetimeSecs()
 	if err != nil {
 		fmt.Fprintf(l.out(), "warning: not adding certificate to ssh-agent: %v\n", err)
-		return
+		return false
 	}
 
 	pubkey, _, _, _, err := ssh.ParseAuthorizedKey(certBytes)
 	if err != nil {
 		fmt.Fprintf(l.out(), "warning: could not parse generated certificate for ssh-agent: %v\n", err)
-		return
+		return false
 	}
 	cert, ok := pubkey.(*ssh.Certificate)
 	if !ok {
 		fmt.Fprintln(l.out(), "warning: generated key is not a certificate; not adding to ssh-agent")
-		return
+		return false
 	}
 
 	conn, err := net.Dial("unix", sock)
 	if err != nil {
 		fmt.Fprintf(l.out(), "warning: could not connect to ssh-agent (%s): %v\n", sock, err)
-		return
+		return false
 	}
 	defer conn.Close()
 
@@ -762,7 +786,7 @@ func (l *LoginCmd) addCertToAgent(certBytes []byte, signer crypto.Signer) {
 	// the login after authentication has already succeeded.
 	if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
 		fmt.Fprintf(l.out(), "warning: could not set ssh-agent I/O deadline: %v\n", err)
-		return
+		return false
 	}
 
 	agentClient := agent.NewClient(conn)
@@ -779,10 +803,11 @@ func (l *LoginCmd) addCertToAgent(certBytes []byte, signer crypto.Signer) {
 		LifetimeSecs: lifetimeSecs,
 	}); err != nil {
 		fmt.Fprintf(l.out(), "warning: failed to add certificate to ssh-agent: %v\n", err)
-		return
+		return false
 	}
 	l.agentCert = cert
 	fmt.Fprintf(l.out(), "Certificate added to ssh-agent (lifetime %s)\n", time.Duration(lifetimeSecs)*time.Second)
+	return true
 }
 
 // resolveAgentLifetimeSecs picks how long ssh-agent retains the key: the
@@ -905,7 +930,7 @@ func (l *LoginCmd) writeKeysToDestination(seckeyPath string, seckeySshPem []byte
 		}
 		return nil
 	case l.SSHConfigured:
-		if err := l.writeKeysToOpkSSHDir(seckeySshPem, certBytes); err != nil {
+		if _, err := l.writeKeysToOpkSSHDir(seckeySshPem, certBytes); err != nil {
 			return fmt.Errorf("failed to write SSH keys to OPK SSH dir: %w", err)
 		}
 		return nil
@@ -918,7 +943,7 @@ func (l *LoginCmd) writeKeysToDestination(seckeyPath string, seckeySshPem []byte
 	}
 }
 
-func (l *LoginCmd) writeKeysToOpkSSHDir(secKeyPem []byte, certBytes []byte) error {
+func (l *LoginCmd) writeKeysToOpkSSHDir(secKeyPem []byte, certBytes []byte) (string, error) {
 
 	const (
 		opkSshPath     = ".ssh/opkssh"
@@ -927,51 +952,108 @@ func (l *LoginCmd) writeKeysToOpkSSHDir(secKeyPem []byte, certBytes []byte) erro
 
 	userhomeDir, err := os.UserHomeDir()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	opkSshUserPath := filepath.Join(userhomeDir, opkSshPath)
 	opkSshConfigPath := filepath.Join(opkSshUserPath, configFileName)
 
+	// The directory and its config fragment are created on demand: this
+	// writer also serves logins whose default key slots are all taken, which
+	// may happen before --configure has ever run. Writing the IdentityFile
+	// line is inert until ~/.ssh/config gains the Include directive, but it
+	// makes a later --configure pick every key up instantly.
+	if err := l.Fs.MkdirAll(opkSshUserPath, 0o700); err != nil {
+		return "", err
+	}
+
+	afs := &afero.Afero{Fs: l.Fs}
+	identity, identityOK := pktIdentity(l.pkt)
+
 	sshKeyName := l.makeSSHKeyFileName(l.pkt)
-
 	privKeyPath := filepath.Join(opkSshUserPath, sshKeyName)
-	pubKeyPath := filepath.Join(privKeyPath + "-cert.pub")
+	pubKeyPath := privKeyPath + "-cert.pub"
 
-	// get key comment
-	issuer, err := l.pkt.Issuer()
-	if err != nil {
-		issuer = "unknown"
+	// A different account at the same provider maps to the same
+	// <issuer>-<client_id> file name; it must not be clobbered. The slot is
+	// reusable only when the existing certificate provably belongs to the
+	// same identity; otherwise (different identity, unparseable, or a
+	// private key without its certificate) disambiguate with an identity
+	// tag — and apply the same rule at the tagged path, erroring rather
+	// than silently replacing a foreign occupant.
+	if !l.slotReusable(privKeyPath, pubKeyPath, identity, identityOK) {
+		// Tagging a nothing would produce a stable but non-identifying file
+		// name; failing loudly is clearer (unreachable in practice — the PK
+		// token just completed a login).
+		if !identityOK {
+			return "", errors.New("cannot disambiguate the key file name: no identity could be extracted from the PK token")
+		}
+		sshKeyName = sshKeyName + "-" + identityTag(identity)
+		privKeyPath = filepath.Join(opkSshUserPath, sshKeyName)
+		pubKeyPath = privKeyPath + "-cert.pub"
+		if !l.slotReusable(privKeyPath, pubKeyPath, identity, identityOK) {
+			return "", fmt.Errorf("key file %s exists and holds a different identity; remove it or use -i to pick another path", privKeyPath)
+		}
 	}
 
-	audience, err := l.pkt.Audience()
-	if err != nil {
-		audience = "unknown"
-	}
+	comment := " openpubkey: " + commentField(identity.issuer) + " " + commentField(identity.audience)
 
-	comment := " openpubkey: " + issuer + " " + audience
+	// Write the key files before the config fragment references them, so a
+	// key-write failure cannot leave a dangling IdentityFile entry.
+	if err := l.writeKeysComment(privKeyPath, pubKeyPath, secKeyPem, certBytes, comment); err != nil {
+		return "", err
+	}
 
 	// add key to config
-	afs := &afero.Afero{Fs: l.Fs}
 	configContent, err := afs.ReadFile(opkSshConfigPath)
 	if err != nil {
-		return fmt.Errorf("failed to read opk ssh config file (%s): %w", opkSshConfigPath, err)
+		if !os.IsNotExist(err) {
+			return "", fmt.Errorf("failed to read opk ssh config file (%s): %w", opkSshConfigPath, err)
+		}
+		configContent = nil
 	}
 
-	if !strings.Contains(string(configContent), privKeyPath) {
+	// Whole-line match: a tagged path contains its untagged prefix, so a
+	// substring check would wrongly skip needed entries.
+	identityLine := "IdentityFile " + privKeyPath
+	hasLine := false
+	for _, line := range strings.Split(string(configContent), "\n") {
+		if strings.TrimSpace(line) == identityLine {
+			hasLine = true
+			break
+		}
+	}
+	if !hasLine {
 		configContent = slices.Concat(
-			[]byte("IdentityFile "+privKeyPath+"\n"),
+			[]byte(identityLine+"\n"),
 			configContent,
 		)
 	}
 
 	err = afs.WriteFile(opkSshConfigPath, configContent, 0600)
 	if err != nil {
-		return fmt.Errorf("failed to write opk ssh config file (%s): %w", opkSshConfigPath, err)
+		return "", fmt.Errorf("failed to write opk ssh config file (%s): %w", opkSshConfigPath, err)
 	}
+	return privKeyPath, nil
+}
 
-	// write ssh key files
-	return l.writeKeysComment(privKeyPath, pubKeyPath, secKeyPem, certBytes, comment)
+// slotReusable reports whether a key file slot may be written for the given
+// identity: the slot is free, or its certificate provably belongs to the
+// same identity. Identity comparison fails closed — an unparseable existing
+// certificate or an unknown own identity never authorizes an overwrite.
+func (l *LoginCmd) slotReusable(privKeyPath, pubKeyPath string, identity keyIdentity, identityOK bool) bool {
+	if !l.fileExists(privKeyPath) && !l.fileExists(pubKeyPath) {
+		return true
+	}
+	if !l.fileExists(pubKeyPath) {
+		return false
+	}
+	existing, err := (&afero.Afero{Fs: l.Fs}).ReadFile(pubKeyPath)
+	if err != nil {
+		return false
+	}
+	existingIdentity, parsed := certFileIdentity(existing)
+	return parsed && identityOK && existingIdentity == identity
 }
 
 func (l *LoginCmd) writeKeysToSSHDir(seckeySshPem []byte, certBytes []byte) error {
@@ -988,16 +1070,18 @@ func (l *LoginCmd) writeKeysToSSHDir(seckeySshPem []byte, certBytes []byte) erro
 	}
 
 	// For ssh to automatically find the key created by openpubkey when
-	// connecting, we use one of the default ssh key paths. However, the file
-	// might contain an existing key. We will overwrite the key if it was
-	// generated by openpubkey  which we check by looking at the associated
-	// comment. If the comment is equal to "openpubkey", we overwrite the file
-	// with a new key.
+	// connecting, we prefer one of the default ssh key paths. A slot is
+	// reusable when it is free or when it already holds a certificate for
+	// the SAME identity (a re-login or refresh); a key belonging to a
+	// different identity — another opkssh account or a foreign key — is
+	// never overwritten.
 	keyFileNames, ok := DefaultSSHKeyFileNames[l.KeyTypeArg]
 	if !ok {
 		return fmt.Errorf("key type (%s) has no default output file name; use -i <filePath>", l.KeyTypeArg.String())
 	}
 
+	identity, identityOK := pktIdentity(l.pkt)
+	afs := &afero.Afero{Fs: l.Fs}
 	for _, keyFilename := range keyFileNames {
 		seckeyPath := filepath.Join(sshPath, keyFilename)
 		pubkeyPath := seckeyPath + "-cert.pub"
@@ -1008,26 +1092,117 @@ func (l *LoginCmd) writeKeysToSSHDir(seckeySshPem []byte, certBytes []byte) erro
 		} else if !l.fileExists(pubkeyPath) {
 			continue
 		} else {
-			// If the ssh key file does exist, check if it was generated by openpubkey, if it was then it is safe to overwrite
-			afs := &afero.Afero{Fs: l.Fs}
 			sshPubkey, err := afs.ReadFile(pubkeyPath)
 			if err != nil {
 				log.Println("Failed to read:", pubkeyPath)
 				continue
 			}
-			_, comment, _, _, err := ssh.ParseAuthorizedKey(sshPubkey)
+			pubkey, comment, _, _, err := ssh.ParseAuthorizedKey(sshPubkey)
 			if err != nil {
 				log.Println("Failed to parse:", pubkeyPath)
 				continue
 			}
-
-			// If the key comment is "openpubkey" then we generated it
+			if existingIdentity, parsed := certKeyIdentity(pubkey); parsed {
+				if identityOK && existingIdentity == identity {
+					return l.writeKeys(seckeyPath, pubkeyPath, seckeySshPem, certBytes)
+				}
+				// A parseable certificate for a different identity is
+				// protected; try the next slot.
+				continue
+			}
+			// Legacy fallback: an opkssh certificate whose embedded PK token
+			// no longer parses must still be reusable exactly as before this
+			// change, which keyed reuse on the comment alone. This repo does
+			// not control the PK token wire format's history, and demoting a
+			// re-login to a relocated key on a parse failure would silently
+			// shadow the fresh key with the stale file.
 			if comment == "openpubkey" {
 				return l.writeKeys(seckeyPath, pubkeyPath, seckeySshPem, certBytes)
 			}
 		}
 	}
-	return fmt.Errorf("no default ssh key file free for openpubkey")
+
+	// Every default slot belongs to someone else: write a per-identity file
+	// into the opkssh identity directory instead of clobbering. ssh does not
+	// try non-default file names on its own — the key is reachable through
+	// ssh-agent (login loads it there when one is available), an
+	// IdentityFile entry, -i, or the --configure mechanism.
+	writtenPath, err := l.writeKeysToOpkSSHDir(seckeySshPem, certBytes)
+	if err != nil {
+		return err
+	}
+	l.fallbackKeyPath = writtenPath
+	return nil
+}
+
+// keyIdentity is the identity triple a written key file is bound to.
+type keyIdentity struct {
+	issuer   string
+	audience string
+	subject  string
+}
+
+// pktIdentity extracts the identity triple from a PK token. It fails closed:
+// ok is false when the token is nil or any component cannot be extracted,
+// and a failed identity must never compare equal to anything — equality is
+// what authorizes overwriting a key file.
+func pktIdentity(pkt *pktoken.PKToken) (keyIdentity, bool) {
+	if pkt == nil {
+		return keyIdentity{}, false
+	}
+	issuer, errIss := pkt.Issuer()
+	audience, errAud := pkt.Audience()
+	subject, errSub := pkt.Subject()
+	if errIss != nil || errAud != nil || errSub != nil {
+		return keyIdentity{}, false
+	}
+	return keyIdentity{issuer: issuer, audience: audience, subject: subject}, true
+}
+
+// certFileIdentity extracts the identity from the bytes of a certificate
+// file written by opkssh. ok is false when the file does not hold an opkssh
+// certificate with an extractable identity (foreign key, plain public key,
+// unreadable or unparseable PK token).
+func certFileIdentity(certBytes []byte) (keyIdentity, bool) {
+	pubkey, _, _, _, err := ssh.ParseAuthorizedKey(certBytes)
+	if err != nil {
+		return keyIdentity{}, false
+	}
+	return certKeyIdentity(pubkey)
+}
+
+// certKeyIdentity extracts the identity from an already-parsed public key.
+func certKeyIdentity(pubkey ssh.PublicKey) (keyIdentity, bool) {
+	cert, isCert := pubkey.(*ssh.Certificate)
+	if !isCert {
+		return keyIdentity{}, false
+	}
+	smuggler := &sshcert.SshCertSmuggler{SshCert: cert}
+	pkt, err := smuggler.GetPKToken()
+	if err != nil {
+		return keyIdentity{}, false
+	}
+	return pktIdentity(pkt)
+}
+
+// commentField preserves the historical key-comment format, which printed
+// "unknown" for a claim that could not be extracted rather than an empty
+// field.
+func commentField(s string) string {
+	if s == "" {
+		return "unknown"
+	}
+	return s
+}
+
+// identityTag returns a short, stable tag for an identity, used to
+// disambiguate key file names for different accounts at the same provider.
+// The full triple is hashed — not the subject alone — so that two client IDs
+// sharing a truncated prefix in the file name cannot alias, and because some
+// OPs use email addresses as subjects, which do not belong in file names.
+func identityTag(identity keyIdentity) string {
+	digest := sha256.Sum256([]byte(identity.issuer + "|" + identity.audience + "|" + identity.subject))
+	return hex.EncodeToString(digest[:4])
 }
 
 func (l *LoginCmd) writeKeys(seckeyPath string, pubkeyPath string, seckeySshPem []byte, certBytes []byte) error {
@@ -1087,7 +1262,9 @@ func (l *LoginCmd) makeSSHKeyFileName(pkt *pktoken.PKToken) string {
 }
 
 func (l *LoginCmd) fileExists(fPath string) bool {
-	_, err := l.Fs.Open(fPath)
+	// Stat, not Open: the previous Open-based check leaked a file descriptor
+	// per call.
+	_, err := l.Fs.Stat(fPath)
 	return !errors.Is(err, os.ErrNotExist)
 }
 
@@ -1101,7 +1278,7 @@ func IdentityString(pkt pktoken.PKToken) (string, error) {
 	claims := idt.GetClaims()
 	if claims.Email == "" {
 		return fmt.Sprintf(`WARNING: Email claim is missing from ID token. Policies based on email will not work.
-Check if your client config (~/.opk/config.yml) has the correct scopes configured for this OpenID Provider.
+Check if your client config has the correct scopes configured for this OpenID Provider (run with -v to see which config file is in use).
 Sub, issuer, audience:
 %s %s %s`, claims.Subject, claims.Issuer, claims.Audience), nil
 	} else {

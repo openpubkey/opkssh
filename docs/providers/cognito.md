@@ -122,9 +122,9 @@ https://cognito-idp.<aws-region>.amazonaws.com/<user-pool-id> <CLIENT-ID> 12h
 
 To test run `opkssh login --provider="https://cognito-idp.us-east-1.amazonaws.com/us-east-1_xxxxxxxxx,<CLIENT-ID>"` with the User Pool ID and Client ID you registered. If this works then the App has been setup correctly.
 
-On the client check to see if you have already created a config at `~/.opk/config.yml`. If no config if found, create a config by running `opkssh login --create-config`.
+On the client check to see if you have already created a client config file (see [config locations](../config.md#client-config)). If no config if found, create a config by running `opkssh login --create-config`.
 
-Then edit `~/.opk/config.yml` and add an entry for Cognito to use the User Pool and Client ID from the App Registration.
+Then edit your client config file and add an entry for Cognito to use the User Pool and Client ID from the App Registration.
 
 ```yaml
 - alias: cognito

@@ -6,7 +6,7 @@ Authenticate with an OpenID Provider to generate an SSH key for opkssh
 
 Login creates opkssh SSH keys
 
-Login generates a key pair, then opens a browser to authenticate the user with the OpenID Provider. Upon successful authentication, opkssh creates an SSH public key (~/.ssh/id_ecdsa) containing the user's PK token. By default, this SSH key expires after 24 hours, after which the user must run "opkssh login" again to generate a new key.
+Login generates a key pair, then opens a browser to authenticate the user with the OpenID Provider. Upon successful authentication, opkssh creates an SSH public key (~/.ssh/id_ecdsa) containing the user's PK token. By default, this SSH key expires after 24 hours, after which the user must run "opkssh login" again to generate a new key. When the default key files already hold a different identity, keys for additional identities are written to the opkssh identity directory (~/.ssh/opkssh) instead of overwriting them.
 
 Users can then SSH into servers configured to use opkssh as the AuthorizedKeysCommand. The server verifies the PK token and grants access if the token is valid and the user is authorized per the auth_id policy.
 Arguments:
@@ -29,7 +29,7 @@ opkssh login [alias] [flags]
 
 ```
       --auto-refresh                 Automatically refresh PK token after login
-      --config-path string           Path to the client config file. Default: ~/.opk/config.yml on linux and %APPDATA%\.opk\config.yml on windows
+      --config-path string           Path to the client config file. Default: the first existing of $XDG_CONFIG_HOME/opk/config.yml (~/.config/opk/config.yml on linux/macOS, %AppData%\opk\config.yml on windows) and the legacy ~/.opk/config.yml
       --configure                    Apply changes to ssh config and create ~/.ssh/opkssh directory
       --create-config                Creates a client config file if it does not exist
       --disable-browser-open         Set this flag to disable opening the browser. Useful for choosing the browser you want to use

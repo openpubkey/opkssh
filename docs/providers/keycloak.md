@@ -58,9 +58,9 @@ https://your-keycloak-instance.tld/realms/your-realm {CLIENT_ID} 24h
 To test, run `opkssh login --provider="https://your-keycloak-instance.tld/realms/your-realm,CLIENT_ID"` with the `CLIENT_ID` you registered (`opkssh` in this guide).
 If this works, the server has been set up correctly.
 
-On the client, check whether you have already created a config at `~/.opk/config.yml`. If no config is found, create one by running `opkssh login --create-config`.
+On the client, check whether you have already created a client config file (see [config locations](../config.md#client-config)). If no config is found, create one by running `opkssh login --create-config`.
 
-Then edit `~/.opk/config.yml` and change (or add) the `keycloak` provider entry to use the `issuer` (realm URL) and `CLIENT_ID` values from the client you registered in Keycloak.
+Then edit your client config file and change (or add) the `keycloak` provider entry to use the `issuer` (realm URL) and `CLIENT_ID` values from the client you registered in Keycloak.
 
 ```yaml
   - alias: keycloak
