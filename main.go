@@ -198,6 +198,9 @@ Arguments:
 			login := commands.NewLogin(autoRefreshArg, configPathArg, createConfigArg, configureArg, logDirArg,
 				sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, printKeyArg, keyPathArg,
 				providerAliasArg, keyTypeArg, remoteRedirectURIArg, inspectCertArg, principalsArg, agentLifetimeArg)
+			// LoginCmd leaves the user's ssh-agent alone unless a caller asks
+			// for it, and the CLI is the caller that should ask.
+			login.AddKeyToAgent = true
 			if err := login.Run(ctx); err != nil {
 				log.Println("Error executing login command:", err)
 				return err

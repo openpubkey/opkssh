@@ -105,6 +105,7 @@ type LoginCmd struct {
 	RemoteRedirectURI     string
 	PrincipalsArg         []string // The principals that will be included in the generated SSH cert. If not specified, it functions as a wildcard and will work for any principals.
 	AgentLifetimeArg      string   // How long ssh-agent should retain the certificate (--lifetime flag; overrides agent_lifetime in the client config)
+	AddKeyToAgent         bool     // Load the generated certificate into the ssh-agent at SSH_AUTH_SOCK. The zero value leaves this off so that a LoginCmd built directly, as tests build it, never reaches a real agent; main.go turns it on for the CLI.
 
 	overrideProvider *providers.OpenIdProvider // Used in tests to override the provider to inject a mock provider
 	// State
@@ -573,8 +574,10 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 		return nil, err
 	}
 
-	// Best-effort: addCertToAgent warns and returns rather than failing the login.
-	if !l.PrintKeyArg {
+	// AddKeyToAgent gates the agent entirely, so a caller that never opts in
+	// cannot touch an agent. addCertToAgent is best-effort past that gate: it
+	// warns and returns rather than failing the login.
+	if l.AddKeyToAgent && !l.PrintKeyArg {
 		l.addCertToAgent(certBytes, signer)
 	}
 

@@ -79,9 +79,10 @@ func Mocks(t *testing.T, keyType KeyType, extraClaims ...map[string]any) (*pktok
 	}
 	require.NoError(t, err)
 
-	// Isolate every mock login from the test runner's real ssh-agent. A test
-	// that needs an agent points SSH_AUTH_SOCK at its own test agent after
-	// calling Mocks.
+	// LoginCmd.AddKeyToAgent keeps a login off any agent by default; clearing
+	// SSH_AUTH_SOCK additionally covers a test that calls addCertToAgent
+	// directly. A test that needs an agent points SSH_AUTH_SOCK at its own
+	// test agent after calling Mocks.
 	t.Setenv("SSH_AUTH_SOCK", "")
 
 	providerOpts := providers.DefaultMockProviderOpts()
@@ -674,6 +675,56 @@ func TestAddCertToAgent(t *testing.T) {
 	require.NotNil(t, added.Certificate)
 	require.Equal(t, uint32(2*3600), added.LifetimeSecs)
 	require.Equal(t, "opkssh", added.Comment)
+}
+
+// TestLoginAddsToAgentOnlyWhenEnabled exercises the gate LoginCmd puts in
+// front of the agent. With AddKeyToAgent unset, a full login leaves a
+// reachable agent untouched; that default is what keeps a LoginCmd built
+// directly, as tests build it, off a developer's real agent.
+func TestLoginAddsToAgentOnlyWhenEnabled(t *testing.T) {
+	tests := []struct {
+		name          string
+		addKeyToAgent bool
+		wantAdded     int
+	}{
+		{name: "default leaves a reachable agent untouched", wantAdded: 0},
+		{name: "enabled adds the certificate", addKeyToAgent: true, wantAdded: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, mockOp := Mocks(t, ECDSA)
+
+			mockAgent := &recordingAgent{Agent: agent.NewKeyring()}
+			startTestAgent(t, mockAgent)
+
+			l := &LoginCmd{
+				Fs:            afero.NewMemMapFs(),
+				KeyTypeArg:    ECDSA,
+				AddKeyToAgent: tt.addKeyToAgent,
+				OutWriter:     &bytes.Buffer{},
+			}
+			require.NoError(t, l.Login(context.Background(), mockOp, false, ""))
+
+			mockAgent.mu.Lock()
+			defer mockAgent.mu.Unlock()
+			require.Len(t, mockAgent.added, tt.wantAdded)
+		})
+	}
+}
+
+// TestDefaultClientConfigAgentLifetime pins the agent_lifetime shipped in the
+// default client config to defaultAgentLifetime. CreateDefaultClientConfig
+// copies that file verbatim into a user's config, so a change to the constant
+// that skipped the file would leave every new user on the old value.
+func TestDefaultClientConfigAgentLifetime(t *testing.T) {
+	c, err := config.NewClientConfig(config.DefaultClientConfig)
+	require.NoError(t, err)
+	require.NotEmpty(t, c.AgentLifetime, "default client config must set agent_lifetime")
+
+	l := LoginCmd{Config: c}
+	secs, err := l.resolveAgentLifetimeSecs()
+	require.NoError(t, err)
+	require.Equal(t, uint32(defaultAgentLifetime/time.Second), secs)
 }
 
 func TestCreateSSHCert(t *testing.T) {
