@@ -622,8 +622,9 @@ func TestResolveAgentLifetimeSecs(t *testing.T) {
 // back through List.
 type recordingAgent struct {
 	agent.Agent
-	mu    sync.Mutex
-	added []agent.AddedKey
+	mu      sync.Mutex
+	added   []agent.AddedKey
+	removed []ssh.PublicKey
 }
 
 func (r *recordingAgent) Add(key agent.AddedKey) error {
@@ -631,6 +632,19 @@ func (r *recordingAgent) Add(key agent.AddedKey) error {
 	r.added = append(r.added, key)
 	r.mu.Unlock()
 	return r.Agent.Add(key)
+}
+
+func (r *recordingAgent) Remove(key ssh.PublicKey) error {
+	r.mu.Lock()
+	r.removed = append(r.removed, key)
+	r.mu.Unlock()
+	return r.Agent.Remove(key)
+}
+
+func (r *recordingAgent) addCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.added)
 }
 
 // startTestAgent serves an in-process ssh-agent over a unix socket for the
@@ -644,37 +658,48 @@ func startTestAgent(t *testing.T, a agent.Agent) string {
 	listener, err := net.Listen("unix", sockPath)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = listener.Close() })
+	// addCertToAgent dials once per certificate it loads, so a login that
+	// refreshes opens more than one connection over the test's lifetime.
 	go func() {
-		conn, err := listener.Accept()
-		if err != nil {
-			return
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			go func() { _ = agent.ServeAgent(a, conn) }()
 		}
-		_ = agent.ServeAgent(a, conn)
 	}()
 	t.Setenv("SSH_AUTH_SOCK", sockPath)
 	return sockPath
 }
 
 func TestAddCertToAgent(t *testing.T) {
-	pkt, signer, _ := Mocks(t, ECDSA)
-	certBytes, _, err := createSSHCert(pkt, signer, []string{"test"})
-	require.NoError(t, err)
+	// Both key types opkssh can mint have to survive the agent protocol's own
+	// marshalling of the private key, which accepts only certain concrete
+	// types.
+	for _, keyType := range []KeyType{ECDSA, ED25519} {
+		t.Run(keyType.String(), func(t *testing.T) {
+			pkt, signer, _ := Mocks(t, keyType)
+			certBytes, _, err := createSSHCert(pkt, signer, []string{"test"})
+			require.NoError(t, err)
 
-	mockAgent := &recordingAgent{Agent: agent.NewKeyring()}
-	startTestAgent(t, mockAgent)
+			mockAgent := &recordingAgent{Agent: agent.NewKeyring()}
+			startTestAgent(t, mockAgent)
 
-	out := &bytes.Buffer{}
-	l := &LoginCmd{AgentLifetimeArg: "2h", OutWriter: out}
-	l.addCertToAgent(certBytes, signer)
-	require.Contains(t, out.String(), "Certificate added to ssh-agent")
+			out := &bytes.Buffer{}
+			l := &LoginCmd{AgentLifetimeArg: "2h", OutWriter: out}
+			l.addCertToAgent(certBytes, signer)
+			require.Contains(t, out.String(), "Certificate added to ssh-agent")
 
-	mockAgent.mu.Lock()
-	defer mockAgent.mu.Unlock()
-	require.Len(t, mockAgent.added, 1)
-	added := mockAgent.added[0]
-	require.NotNil(t, added.Certificate)
-	require.Equal(t, uint32(2*3600), added.LifetimeSecs)
-	require.Equal(t, "opkssh", added.Comment)
+			mockAgent.mu.Lock()
+			defer mockAgent.mu.Unlock()
+			require.Len(t, mockAgent.added, 1)
+			added := mockAgent.added[0]
+			require.NotNil(t, added.Certificate)
+			require.Equal(t, uint32(2*3600), added.LifetimeSecs)
+			require.Equal(t, "opkssh", added.Comment)
+		})
+	}
 }
 
 // TestLoginAddsToAgentOnlyWhenEnabled exercises the gate LoginCmd puts in
@@ -1149,6 +1174,75 @@ func TestLoginWithRefreshWritesKeysToDestination(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("LoginWithRefresh did not return after context cancellation")
 	}
+}
+
+// TestLoginWithRefreshUpdatesAgent covers the refresh path's use of the agent.
+// Each refresh mints a new certificate over the same private key, and the agent
+// stores a certificate as its own identity, so the refreshed certificate has to
+// both reach the agent and displace the one it supersedes. The keyring holding
+// exactly one key at the end is what rules out accumulation, which would
+// otherwise grow until a server refuses the connection for too many attempts.
+func TestLoginWithRefreshUpdatesAgent(t *testing.T) {
+	shortExp := map[string]any{
+		"email": "arthur.aardvark@example.com",
+		"exp":   time.Now().Add(15 * time.Second).Unix(),
+	}
+	_, _, mockOp := Mocks(t, ECDSA, shortExp)
+
+	refreshable, ok := mockOp.(providers.RefreshableOpenIdProvider)
+	require.True(t, ok, "mock provider must support refresh")
+
+	mockAgent := &recordingAgent{Agent: agent.NewKeyring()}
+	startTestAgent(t, mockAgent)
+
+	iPath := customKeyPath(t)
+	l := &LoginCmd{
+		Fs:            afero.NewMemMapFs(),
+		KeyTypeArg:    ECDSA,
+		KeyPathArg:    iPath,
+		AddKeyToAgent: true,
+		OutWriter:     &bytes.Buffer{},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- l.LoginWithRefresh(ctx, refreshable, false, iPath)
+	}()
+
+	// The initial login adds once; the first refresh adds its replacement.
+	require.Eventually(t, func() bool { return mockAgent.addCount() >= 2 }, 5*time.Second, 5*time.Millisecond,
+		"expected the refresh loop to load the refreshed certificate into the agent")
+
+	// Stop the loop before inspecting: refreshes keep firing, so the agent is
+	// only a settled object once LoginWithRefresh has returned.
+	cancel()
+	select {
+	case err := <-errCh:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(2 * time.Second):
+		t.Fatal("LoginWithRefresh did not return after context cancellation")
+	}
+
+	mockAgent.mu.Lock()
+	defer mockAgent.mu.Unlock()
+
+	// Every certificate but the newest was removed, and each removal names the
+	// certificate added just before it.
+	require.Len(t, mockAgent.removed, len(mockAgent.added)-1)
+	for i, removed := range mockAgent.removed {
+		require.Equal(t, mockAgent.added[i].Certificate.Marshal(), removed.Marshal(),
+			"removal %d must name the certificate added before it", i)
+	}
+
+	keys, err := mockAgent.List()
+	require.NoError(t, err)
+	require.Len(t, keys, 1, "the agent must hold only the current certificate")
+	newest := mockAgent.added[len(mockAgent.added)-1].Certificate
+	require.Equal(t, newest.Marshal(), keys[0].Marshal(),
+		"the surviving certificate must be the most recently minted one")
 }
 
 // includeDirective must match the directive written by configureSSH.

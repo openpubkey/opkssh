@@ -110,6 +110,11 @@ type LoginCmd struct {
 	overrideProvider *providers.OpenIdProvider // Used in tests to override the provider to inject a mock provider
 	// State
 	Config *config.ClientConfig
+	// agentCert is the certificate this command last loaded into the agent.
+	// A refresh mints a replacement under the same private key but a different
+	// certificate blob, which the agent stores as a separate identity, so the
+	// previous one has to be removed explicitly.
+	agentCert *ssh.Certificate
 
 	// Outputs
 	pkt    *pktoken.PKToken
@@ -574,12 +579,7 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 		return nil, err
 	}
 
-	// AddKeyToAgent gates the agent entirely, so a caller that never opts in
-	// cannot touch an agent. addCertToAgent is best-effort past that gate: it
-	// warns and returns rather than failing the login.
-	if l.AddKeyToAgent && !l.PrintKeyArg {
-		l.addCertToAgent(certBytes, signer)
-	}
+	l.maybeAddCertToAgent(certBytes, signer)
 
 	if printIdToken {
 		idTokenStr, err := PrettyIdToken(*pkt)
@@ -671,6 +671,11 @@ func (l *LoginCmd) LoginWithRefresh(ctx context.Context, provider providers.Refr
 				return err
 			}
 
+			// Keep the agent holding the same certificate as the filesystem;
+			// otherwise the agent keeps serving the certificate minted at the
+			// initial login and stops participating once its lifetime elapses.
+			l.maybeAddCertToAgent(certBytes, loginResult.signer)
+
 			comPkt, err := refreshedPkt.Compact()
 			if err != nil {
 				return err
@@ -701,11 +706,22 @@ func (l *LoginCmd) out() io.Writer {
 // so the agent drops the key around the time servers stop accepting it.
 const defaultAgentLifetime = 24 * time.Hour
 
+// maybeAddCertToAgent applies the AddKeyToAgent gate, so that both paths that
+// mint a certificate (the initial login and every refresh) make one decision
+// about reaching the agent.
+func (l *LoginCmd) maybeAddCertToAgent(certBytes []byte, signer crypto.Signer) {
+	if l.AddKeyToAgent && !l.PrintKeyArg {
+		l.addCertToAgent(certBytes, signer)
+	}
+}
+
 // addCertToAgent loads the certificate and its private key into the ssh-agent
-// reachable via SSH_AUTH_SOCK, always with a lifetime: ssh-agent has no
-// replace operation, so a key without a lifetime would sit in the agent
-// forever and every login would add another. Best-effort: every failure is a
-// printed warning, never a login failure.
+// reachable via SSH_AUTH_SOCK, always with a lifetime. A certificate this
+// command added earlier is removed first. The lifetime covers what the removal
+// cannot: a later opkssh process has no record of this one's certificate, so
+// without a lifetime every login would leave another certificate in the agent
+// forever. Best-effort: every failure is a printed warning, never a login
+// failure.
 func (l *LoginCmd) addCertToAgent(certBytes []byte, signer crypto.Signer) {
 	sock := os.Getenv("SSH_AUTH_SOCK")
 	if sock == "" {
@@ -744,7 +760,14 @@ func (l *LoginCmd) addCertToAgent(certBytes []byte, signer crypto.Signer) {
 		return
 	}
 
-	if err := agent.NewClient(conn).Add(agent.AddedKey{
+	agentClient := agent.NewClient(conn)
+	// Removing the superseded certificate is advisory: if the agent has
+	// already dropped it, or never held it, the login proceeds regardless.
+	if l.agentCert != nil {
+		_ = agentClient.Remove(l.agentCert)
+	}
+
+	if err := agentClient.Add(agent.AddedKey{
 		PrivateKey:   signer,
 		Certificate:  cert,
 		Comment:      "opkssh",
@@ -753,6 +776,7 @@ func (l *LoginCmd) addCertToAgent(certBytes []byte, signer crypto.Signer) {
 		fmt.Fprintf(l.out(), "warning: failed to add certificate to ssh-agent: %v\n", err)
 		return
 	}
+	l.agentCert = cert
 	fmt.Fprintf(l.out(), "Certificate added to ssh-agent (lifetime %s)\n", time.Duration(lifetimeSecs)*time.Second)
 }
 
