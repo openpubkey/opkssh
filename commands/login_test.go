@@ -737,14 +737,14 @@ func TestLoginAddsToAgentOnlyWhenEnabled(t *testing.T) {
 	}
 }
 
-// TestDefaultClientConfigAgentLifetime pins the agent_lifetime shipped in the
-// default client config to defaultAgentLifetime. CreateDefaultClientConfig
-// copies that file verbatim into a user's config, so a change to the constant
-// that skipped the file would leave every new user on the old value.
+// TestDefaultClientConfigAgentLifetime holds the default client config to
+// defaultAgentLifetime. The template leaves agent_lifetime commented out, and
+// CreateDefaultClientConfig copies that file verbatim into a user's config, so
+// a new user follows the constant instead of a value frozen into the file.
 func TestDefaultClientConfigAgentLifetime(t *testing.T) {
 	c, err := config.NewClientConfig(config.DefaultClientConfig)
 	require.NoError(t, err)
-	require.NotEmpty(t, c.AgentLifetime, "default client config must set agent_lifetime")
+	require.Empty(t, c.AgentLifetime, "default client config must leave agent_lifetime unset")
 
 	l := LoginCmd{Config: c}
 	secs, err := l.resolveAgentLifetimeSecs()
