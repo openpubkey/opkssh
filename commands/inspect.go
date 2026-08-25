@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openpubkey/openpubkey/oidc"
 	"github.com/openpubkey/openpubkey/pktoken"
 	"golang.org/x/crypto/ssh"
 )
@@ -168,6 +169,19 @@ func (i *InspectCmd) inspectPKToken(pktStr string) {
 		hdrs := pkt.Cos.ProtectedHeaders()
 		if hdrs != nil {
 			i.printJSONObject(hdrs)
+		}
+	}
+	if pkt.FreshIDToken != nil {
+		i.printf("Refreshed ID Token exists\n")
+		parsedReIdt, err := oidc.NewJwt(pkt.FreshIDToken)
+		if err != nil {
+			i.printf("Error parsing refreshed ID token: %v\n", err)
+		} else {
+			if prettyReIdt, err := parsedReIdt.PrettyJson(); err != nil {
+				i.printf("Error pretty-printing refreshed ID token: %v\n", err)
+			} else {
+				i.printf("%s\n", prettyReIdt)
+			}
 		}
 	}
 

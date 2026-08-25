@@ -266,9 +266,9 @@ This file functions as an access control list that enables admins to determine t
   - `48h` - user's ssh public key expires after 48 hours,
   - `1week` - user's ssh public key expires after 1 week,
   - `oidc` - user's ssh public key expires when the ID Token expires
-  - `oidc-refreshed` - user's ssh public key expires when their refreshed ID Token expires.
+  - `oidc_refreshed` - user's ssh public key expires when their refreshed ID Token expires.
 
-By default we use `24h` as it requires that the user authenticate to their OP once a day. Most OPs expire ID Tokens every one to two hours, so if `oidc` the user will have to sign multiple times a day. `oidc-refreshed` is supported but complex and not currently recommended unless you know what you are doing.
+By default we use `24h` as it requires that the user authenticate to their OP once a day. Most OPs expire ID Tokens every one to two hours, so if `oidc` the user will have to sign multiple times a day. `oidc_refreshed` is supported but complex and not currently recommended unless you know what you are doing.
 
 The default values for `/etc/opk/providers` are:
 

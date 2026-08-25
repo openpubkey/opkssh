@@ -292,11 +292,12 @@ func TestGitlabIssuerMatchedExactly(t *testing.T) {
 			providerConfig.AliasList = []string{"gitlab"}
 			providerConfig.Issuer = tt.issuer
 			providerConfig.ClientID = "some-real-client-id"
+			providerConfig.ClientSecret = "some-client-secret"
 			provider, err := providerConfig.ToProvider(false)
 			require.NoError(t, err)
 
-			// GitlabOp is an alias of StandardOpRefreshable, which is a
-			// different type to the StandardOp the generic branch builds.
+			// GitlabOp, AzureOp, GoogleOp and HelloOp are all aliases of
+			// StandardOp.
 			if tt.wantGitlab {
 				require.IsType(t, &providers.GitlabOp{}, provider)
 			} else {
@@ -332,4 +333,26 @@ func TestForgejoToProviderOutsideActionsEnvironment(t *testing.T) {
 	providerConfig := ForgejoProviderConfig("https://codeberg.org/api/actions")
 	_, err := providerConfig.ToProvider(false)
 	require.ErrorContains(t, err, "error creating forgejo op")
+}
+
+func TestGenericProviderIsRefreshable(t *testing.T) {
+	for _, issuer := range []string{
+		"https://example.okta.com",
+		"https://example.us.auth0.com",
+		"https://keycloak.example.com/realms/main",
+		"https://gitlab.example.com", // self-hosted, not gitlab.com
+		"https://issuer.hello.coop",
+	} {
+		t.Run(issuer, func(t *testing.T) {
+			providerConfig := DefaultProviderConfig()
+			providerConfig.Issuer = issuer
+			providerConfig.ClientID = "client-id"
+			providerConfig.Scopes = append(providerConfig.Scopes, "offline_access") // ensure the refresh flow is requested
+
+			provider, err := providerConfig.ToProvider(false)
+			require.NoError(t, err)
+			require.Implements(t, (*providers.RefreshableOpenIdProvider)(nil), provider,
+				"provider must support the OIDC refresh flow")
+		})
+	}
 }
