@@ -5,7 +5,7 @@ default_provider: webchooser
 # duration (12h, 45m) or in seconds (28800). 24h matches the server's default
 # certificate expiration policy. Delete this line to follow opkssh's built-in
 # default instead of pinning a value here.
-agent_lifetime: 24h
+# agent_lifetime: 24h
 
 providers:
   - alias: google
