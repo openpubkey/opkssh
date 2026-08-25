@@ -514,9 +514,54 @@ func TestNewLogin(t *testing.T) {
 	remoteRedirectURIArg := ""
 	var principalsDesired []string = nil
 
+	agentLifetimeArg := "12h"
+
 	loginCmd := NewLogin(autoRefresh, configPathArg, createConfig, configureArg, logDir,
-		sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, keyAsOutputArg, keyPathArg, providerAlias, keyTypeArg, remoteRedirectURIArg, false, principalsDesired)
+		sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, keyAsOutputArg, keyPathArg, providerAlias, keyTypeArg, remoteRedirectURIArg, false, principalsDesired, agentLifetimeArg)
 	require.NotNil(t, loginCmd)
+	require.Equal(t, "12h", loginCmd.AgentLifetimeArg)
+}
+
+func TestResolveAgentLifetimeSecs(t *testing.T) {
+	// 1. CLI flag precedence
+	lFlag := &LoginCmd{AgentLifetimeArg: "12h"}
+	secs, err := resolveAgentLifetimeSecs(lFlag, nil)
+	require.NoError(t, err)
+	require.Equal(t, uint32(12*3600), secs)
+
+	// 2. Client config precedence
+	lConfig := &LoginCmd{Config: &config.ClientConfig{AgentLifetime: "8h"}}
+	secs, err = resolveAgentLifetimeSecs(lConfig, nil)
+	require.NoError(t, err)
+	require.Equal(t, uint32(8*3600), secs)
+
+	// CLI flag overrides config
+	lBoth := &LoginCmd{AgentLifetimeArg: "2h", Config: &config.ClientConfig{AgentLifetime: "8h"}}
+	secs, err = resolveAgentLifetimeSecs(lBoth, nil)
+	require.NoError(t, err)
+	require.Equal(t, uint32(2*3600), secs)
+
+	// Standard duration format (e.g. 48h)
+	lHours := &LoginCmd{AgentLifetimeArg: "48h"}
+	secs, err = resolveAgentLifetimeSecs(lHours, nil)
+	require.NoError(t, err)
+	require.Equal(t, uint32(48*3600), secs)
+
+	// Raw integer seconds format (e.g. 28800)
+	lSeconds := &LoginCmd{AgentLifetimeArg: "28800"}
+	secs, err = resolveAgentLifetimeSecs(lSeconds, nil)
+	require.NoError(t, err)
+	require.Equal(t, uint32(28800), secs)
+
+	// Invalid format error
+	lBad := &LoginCmd{AgentLifetimeArg: "invalid"}
+	_, err = resolveAgentLifetimeSecs(lBad, nil)
+	require.ErrorContains(t, err, "invalid --lifetime duration")
+
+	// Fallback default (24h = 86400s)
+	secs, err = resolveAgentLifetimeSecs(nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, uint32(86400), secs)
 }
 
 func TestCreateSSHCert(t *testing.T) {

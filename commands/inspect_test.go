@@ -97,7 +97,11 @@ func TestInspectSSHCert(t *testing.T) {
 			requireLineMatches(t, lines, 3, `^Key ID:\s+arthur\.aardvark@example\.com$`)
 			requireLineMatches(t, lines, 4, `^Principals:\s+\[guest dev\]$`)
 			requireLineMatches(t, lines, 5, `^Valid After:\s+Not set$`)
-			requireLineMatches(t, lines, 6, `^Valid Before:\s+Forever$`)
+			// opkssh now binds the certificate's ValidBefore to the ID Token's
+			// exp (see sshcert.New), so the cert has a real expiry rather than
+			// "Forever". The mock token's exp is dynamic, so match an RFC3339
+			// timestamp rather than a fixed value.
+			requireLineMatches(t, lines, 6, `^Valid Before:\s+\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$`)
 			requireLineMatches(t, lines, 7, `^Critical Options:\s+map\[\]$`)
 			requireLineEquals(t, lines, 8, "Extensions:")
 
