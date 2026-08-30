@@ -607,6 +607,10 @@ func (l *LoginCmd) LoginWithRefresh(ctx context.Context, provider providers.Refr
 	if loginResult, err := l.login(ctx, provider, printIdToken, seckeyPath); err != nil {
 		return err
 	} else {
+		// Fail fast rather than dying on the first refresh.
+		if !loginResult.client.HasRefreshToken() {
+			return fmt.Errorf("provider (%s) did not issue a refresh token", provider.Issuer())
+		}
 		var claims struct {
 			Expiration int64 `json:"exp"`
 		}
@@ -618,6 +622,7 @@ func (l *LoginCmd) LoginWithRefresh(ctx context.Context, provider providers.Refr
 			// Sleep until a minute before expiration to give us time to refresh
 			// the token and minimize any interruptions
 			untilExpired := time.Until(time.Unix(claims.Expiration, 0)) - time.Minute
+			// untilExpired := time.Until(time.Now().Add(15 * time.Second))
 			log.Printf("Waiting for %v before attempting to refresh id_token...", untilExpired)
 			select {
 			case <-time.After(untilExpired):
@@ -1013,8 +1018,8 @@ func gitlabCiIssuer() string {
 }
 
 // payloadFromCompactPkt extracts the payload from a compact PK Token which
-// is always the second part of the '.' separated string.
+// is always the third part of the '.' separated string.
 func payloadFromCompactPkt(compactPkt []byte) []byte {
 	parts := bytes.Split(compactPkt, []byte("."))
-	return parts[1]
+	return parts[2]
 }
