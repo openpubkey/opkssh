@@ -1,23 +1,36 @@
 # opkssh configuration files
 
 Herein we document the various configuration files used by opkssh.
-The documentation for the `/etc/opk/policy.d/` policy plugin system is found [here](policyplugins.md).
+The documentation for the policy plugin system at `/etc/opk/policy.d/` (Linux) or `%ProgramData%\opk\policy.d\` (Windows) is found [here](policyplugins.md).
 
 All our configuration files are space delimited like ssh authorized key files.
-We have the follow syntax rules:
+We have the following syntax rules:
 
 - `#` for comments
 
-Our goal is to have an distinct meaning for each column. This way if we want to extend the rules we can add additional columns.
+Our goal is to have a distinct meaning for each column. This way if we want to extend the rules we can add additional columns.
 
 You can check the correctness of server side config files by running the audit command: `sudo opkssh audit`.
 
-## Client config `~/.opk/config.yml`
+System-wide configuration lives under `/etc/opk` on Linux and `%ProgramData%\opk` on Windows, which is typically `C:\ProgramData\opk`.
 
-The config file for the client is saved in `~/.opk/config.yml`.
+## Config file location summary
+
+| Configuration | Linux default location | Linux example | Windows default location | Windows example | Notes |
+| --- | --- | --- | --- | --- | --- |
+| Client config | `~/.opk/config.yml` | `/home/alice/.opk/config.yml` | `%USERPROFILE%\.opk\config.yml` | `C:\Users\Alice\.opk\config.yml` | Optional. Create it with `opkssh login --create-config`. |
+| Server config | `/etc/opk/config.yml` | `/etc/opk/config.yml` | `%ProgramData%\opk\config.yml` | `C:\ProgramData\opk\config.yml` | Used by `opkssh verify`. |
+| Allowed OpenID Providers | `/etc/opk/providers` | `/etc/opk/providers` | `%ProgramData%\opk\providers` | `C:\ProgramData\opk\providers` | System-wide allowlist of issuers and client IDs. |
+| System authorized identities | `/etc/opk/auth_id` | `/etc/opk/auth_id` | `%ProgramData%\opk\auth_id` | `C:\ProgramData\opk\auth_id` | System-wide authorization policy. |
+| Home authorized identities | `/home/{USER}/.opk/auth_id` | `/home/alice/.opk/auth_id` | Not supported | Not supported | On Windows, `verify` uses the system policy file only. |
+| Policy plugin configs | `/etc/opk/policy.d/*.yml` | `/etc/opk/policy.d/example-plugin.yml` | `%ProgramData%\opk\policy.d\*.yml` | `C:\ProgramData\opk\policy.d\example-plugin.yml` | Plugin config format is documented in [policyplugins.md](policyplugins.md). |
+
+## Client config `~/.opk/config.yml` (Linux) or `%USERPROFILE%\.opk\config.yml` (Windows)
+
+The config file for the client is saved in the current user's home directory under `.opk/config.yml`, for example `/home/alice/.opk/config.yml` on Linux or `C:\Users\Alice\.opk\config.yml` on Windows. On Windows this usually corresponds to `%USERPROFILE%\.opk\config.yml`.
 It configures which OpenID Providers the user can log in with.
 This file is not required to exist to use opkssh and it is not created by default.
-To create it, simple run `~/opkssh login --create-config`.
+To create it, run `opkssh login --create-config`.
 
 The default client config can be found in [../commands/config/default-client-config.yml](../commands/config/default-client-config.yml).
 
@@ -112,7 +125,7 @@ The client ID must match the aud (audience) claim in the PK Token.
 
 ### Examples
 
-The file lives at `/etc/opk/providers`. The default values are:
+The default values in the providers file are:
 
 ```bash
 # Issuer Client-ID expiration-policy 
