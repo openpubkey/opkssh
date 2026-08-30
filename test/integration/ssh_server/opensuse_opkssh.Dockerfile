@@ -16,7 +16,7 @@ ARG ISSUER_PORT="9998"
 RUN go build -v -o opksshbuild
 
 # Stage 2: Create a minimal opensuse leap:16 image
-FROM opensuse/leap:16.0
+FROM opensuse/leap:42.3
 
 # Install dependencies required for runtime (e.g., SSH server)
 RUN zypper refresh && \
