@@ -288,17 +288,24 @@ func (p *PermissionsCmd) Fix() error {
 		planned = append(planned, "chown "+configFile+" to "+cpOwner)
 	}
 
+	pfOwner := pf.Owner
+	if pf.Group != "" {
+		// add Group
+		pfOwner += ":" + pf.Group
+	}
 	pluginsDir := filepath.Join(policy.GetSystemConfigBasePath(), "policy.d")
 	if _, err := p.FileSystem.Stat(pluginsDir); err != nil {
 		planned = append(planned, "mkdir "+pluginsDir)
 	}
 	// include plugin files if present
 	if fi, err := p.FileSystem.Open(pluginsDir); err == nil {
+		// set Owner and Group of pluginDir
+		planned = append(planned, "chown "+pluginsDir+" to "+pfOwner)
 		entries, _ := fi.Readdir(-1)
 		for _, e := range entries {
 			if !e.IsDir() && strings.HasSuffix(e.Name(), ".yml") {
 				planned = append(planned, fmt.Sprintf("chmod %s to %04o", filepath.Join(pluginsDir, e.Name()), pf.Mode))
-				planned = append(planned, "chown "+filepath.Join(pluginsDir, e.Name())+" to "+pf.Owner)
+				planned = append(planned, "chown "+filepath.Join(pluginsDir, e.Name())+" to "+pfOwner)
 			}
 		}
 		fi.Close()
@@ -416,6 +423,10 @@ func (p *PermissionsCmd) Fix() error {
 		}
 	}
 	if fi, err := p.FileSystem.Open(pluginsDir); err == nil {
+		// set Owner and Group of pluginDir
+		if err := p.FileSystem.Chown(pluginsDir, pf.Owner, pf.Group); err != nil {
+			errorsFound = append(errorsFound, "chown "+pluginsDir+": "+err.Error())
+		}
 		entries, _ := fi.Readdir(-1)
 		for _, e := range entries {
 			if !e.IsDir() && strings.HasSuffix(e.Name(), ".yml") {
