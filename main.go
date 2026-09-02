@@ -159,6 +159,7 @@ Arguments:
 	var keyTypeArg commands.KeyType
 	var remoteRedirectURIArg string
 	var principalsArg []string
+	var agentLifetimeArg string
 
 	loginCmd := &cobra.Command{
 		SilenceUsage: true,
@@ -196,7 +197,10 @@ Arguments:
 
 			login := commands.NewLogin(autoRefreshArg, configPathArg, createConfigArg, configureArg, logDirArg,
 				sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, printKeyArg, keyPathArg,
-				providerAliasArg, keyTypeArg, remoteRedirectURIArg, inspectCertArg, principalsArg)
+				providerAliasArg, keyTypeArg, remoteRedirectURIArg, inspectCertArg, principalsArg, agentLifetimeArg)
+			// LoginCmd leaves the user's ssh-agent alone unless a caller asks
+			// for it, and the CLI is the caller that should ask.
+			login.AddKeyToAgent = true
 			if err := login.Run(ctx); err != nil {
 				log.Println("Error executing login command:", err)
 				return err
@@ -223,6 +227,7 @@ Arguments:
 	loginCmd.Flags().StringVar(&remoteRedirectURIArg, "remote-redirect-uri", "", "Remote redirect URI used for non-localhost redirects. This is an advanced option for embedding opkssh in server-side logic.")
 	loginCmd.Flags().VarP(enumflag.New(&keyTypeArg, "Key Type", map[commands.KeyType][]string{commands.ECDSA: {commands.ECDSA.String()}, commands.ED25519: {commands.ED25519.String()}}, enumflag.EnumCaseInsensitive), "key-type", "t", "Type of key to generate")
 	loginCmd.Flags().StringSliceVar(&principalsArg, "principals", nil, "Comma separated list of principals to include in the generated SSH certificate. If not specified it will work for any principal. Do not use unless you know what you are doing.")
+	loginCmd.Flags().StringVar(&agentLifetimeArg, "lifetime", "", "How long ssh-agent retains the certificate when it is added at login, as a duration (e.g. 12h, 45m) or in seconds (e.g. 28800). Overrides agent_lifetime in the client config. Defaults to 24h.")
 	rootCmd.AddCommand(loginCmd)
 
 	var logoutKeyPathArg string

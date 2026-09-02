@@ -22,7 +22,9 @@ import (
 	"crypto"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -43,6 +45,7 @@ import (
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
 )
 
 const providerAlias1 = "op1"
@@ -76,6 +79,12 @@ func Mocks(t *testing.T, keyType KeyType, extraClaims ...map[string]any) (*pktok
 		_, signer, err = ed25519.GenerateKey(rand.Reader)
 	}
 	require.NoError(t, err)
+
+	// LoginCmd.AddKeyToAgent keeps a login off any agent by default; clearing
+	// SSH_AUTH_SOCK additionally covers a test that calls addCertToAgent
+	// directly. A test that needs an agent points SSH_AUTH_SOCK at its own
+	// test agent after calling Mocks.
+	t.Setenv("SSH_AUTH_SOCK", "")
 
 	providerOpts := providers.DefaultMockProviderOpts()
 	op, _, idtTemplate, err := providers.NewMockProvider(providerOpts)
@@ -513,10 +522,332 @@ func TestNewLogin(t *testing.T) {
 	keyTypeArg := ECDSA
 	remoteRedirectURIArg := ""
 	var principalsDesired []string = nil
+	agentLifetimeArg := "12h"
 
 	loginCmd := NewLogin(autoRefresh, configPathArg, createConfig, configureArg, logDir,
-		sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, keyAsOutputArg, keyPathArg, providerAlias, keyTypeArg, remoteRedirectURIArg, false, principalsDesired)
+		sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, keyAsOutputArg, keyPathArg, providerAlias, keyTypeArg, remoteRedirectURIArg, false, principalsDesired, agentLifetimeArg)
 	require.NotNil(t, loginCmd)
+	require.Equal(t, "12h", loginCmd.AgentLifetimeArg)
+}
+
+func TestResolveAgentLifetimeSecs(t *testing.T) {
+	tests := []struct {
+		name     string
+		cmd      LoginCmd
+		expected uint32
+		errMsg   string
+	}{
+		{
+			name:     "default is 24h when nothing is configured",
+			cmd:      LoginCmd{},
+			expected: 86400,
+		},
+		{
+			name:     "--lifetime flag as duration",
+			cmd:      LoginCmd{AgentLifetimeArg: "12h"},
+			expected: 12 * 3600,
+		},
+		{
+			name:     "--lifetime flag as raw seconds",
+			cmd:      LoginCmd{AgentLifetimeArg: "28800"},
+			expected: 28800,
+		},
+		{
+			name:     "agent_lifetime from client config",
+			cmd:      LoginCmd{Config: &config.ClientConfig{AgentLifetime: "8h"}},
+			expected: 8 * 3600,
+		},
+		{
+			name:     "--lifetime flag overrides client config",
+			cmd:      LoginCmd{AgentLifetimeArg: "2h", Config: &config.ClientConfig{AgentLifetime: "8h"}},
+			expected: 2 * 3600,
+		},
+		{
+			name:   "invalid flag value is an error",
+			cmd:    LoginCmd{AgentLifetimeArg: "tomorrow"},
+			errMsg: "invalid --lifetime value",
+		},
+		{
+			name:   "zero flag value is an error",
+			cmd:    LoginCmd{AgentLifetimeArg: "0"},
+			errMsg: "must be at least 1 second",
+		},
+		{
+			name:   "negative flag value is an error",
+			cmd:    LoginCmd{AgentLifetimeArg: "-5m"},
+			errMsg: "must be at least 1 second",
+		},
+		{
+			name:   "sub-second flag value is an error",
+			cmd:    LoginCmd{AgentLifetimeArg: "500ms"},
+			errMsg: "must be at least 1 second",
+		},
+		{
+			// This value wraps int64 nanoseconds if multiplied without a
+			// bound check.
+			name:   "overflowing raw seconds value is an error",
+			cmd:    LoginCmd{AgentLifetimeArg: "18446744074"},
+			errMsg: "out of range",
+		},
+		{
+			name:   "duration exceeding uint32 seconds is an error",
+			cmd:    LoginCmd{AgentLifetimeArg: "1193047h"},
+			errMsg: "too large",
+		},
+		{
+			name:   "whitespace-only flag value is an error",
+			cmd:    LoginCmd{AgentLifetimeArg: "   "},
+			errMsg: "empty duration",
+		},
+		{
+			name:   "invalid config value is an error",
+			cmd:    LoginCmd{Config: &config.ClientConfig{AgentLifetime: "not-a-duration"}},
+			errMsg: "invalid agent_lifetime in client config",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			secs, err := tt.cmd.resolveAgentLifetimeSecs()
+			if tt.errMsg != "" {
+				require.ErrorContains(t, err, tt.errMsg)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.expected, secs)
+		})
+	}
+}
+
+// recordingAgent wraps an in-memory ssh-agent and records the keys added to
+// it, because agent.Keyring does not expose constraints like LifetimeSecs
+// back through List.
+type recordingAgent struct {
+	agent.Agent
+	mu      sync.Mutex
+	added   []agent.AddedKey
+	removed []ssh.PublicKey
+	// addErr makes the agent refuse every key, so that a test can reach the
+	// branch addCertToAgent takes when the agent rejects the certificate.
+	addErr error
+}
+
+func (r *recordingAgent) Add(key agent.AddedKey) error {
+	if r.addErr != nil {
+		return r.addErr
+	}
+	r.mu.Lock()
+	r.added = append(r.added, key)
+	r.mu.Unlock()
+	return r.Agent.Add(key)
+}
+
+func (r *recordingAgent) Remove(key ssh.PublicKey) error {
+	r.mu.Lock()
+	r.removed = append(r.removed, key)
+	r.mu.Unlock()
+	return r.Agent.Remove(key)
+}
+
+func (r *recordingAgent) addCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.added)
+}
+
+// startTestAgent serves an in-process ssh-agent over a unix socket for the
+// duration of the test and points SSH_AUTH_SOCK at it.
+func startTestAgent(t *testing.T, a agent.Agent) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("test agent listens on a unix domain socket")
+	}
+	sockPath := filepath.Join(t.TempDir(), "agent.sock")
+	listener, err := net.Listen("unix", sockPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = listener.Close() })
+	// addCertToAgent dials once per certificate it loads, so a login that
+	// refreshes opens more than one connection over the test's lifetime.
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			go func() { _ = agent.ServeAgent(a, conn) }()
+		}
+	}()
+	t.Setenv("SSH_AUTH_SOCK", sockPath)
+	return sockPath
+}
+
+func TestAddCertToAgent(t *testing.T) {
+	// Both key types opkssh can mint have to survive the agent protocol's own
+	// marshalling of the private key, which accepts only certain concrete
+	// types.
+	for _, keyType := range []KeyType{ECDSA, ED25519} {
+		t.Run(keyType.String(), func(t *testing.T) {
+			pkt, signer, _ := Mocks(t, keyType)
+			certBytes, _, err := createSSHCert(pkt, signer, []string{"test"})
+			require.NoError(t, err)
+
+			mockAgent := &recordingAgent{Agent: agent.NewKeyring()}
+			startTestAgent(t, mockAgent)
+
+			out := &bytes.Buffer{}
+			l := &LoginCmd{AgentLifetimeArg: "2h", OutWriter: out}
+			l.addCertToAgent(certBytes, signer)
+			require.Contains(t, out.String(), "Certificate added to ssh-agent")
+
+			mockAgent.mu.Lock()
+			defer mockAgent.mu.Unlock()
+			require.Len(t, mockAgent.added, 1)
+			added := mockAgent.added[0]
+			require.NotNil(t, added.Certificate)
+			require.Equal(t, uint32(2*3600), added.LifetimeSecs)
+			require.Equal(t, "opkssh", added.Comment)
+		})
+	}
+}
+
+// TestAddCertToAgentWarnings covers the paths where addCertToAgent gives up.
+// Authentication has already succeeded by the time it runs, so each failure to
+// reach the agent leaves a warning behind rather than failing the login. The
+// one path with no case here is the I/O deadline, which needs a connection
+// whose SetDeadline fails and so cannot be reached through SSH_AUTH_SOCK.
+func TestAddCertToAgentWarnings(t *testing.T) {
+	validCert := func(t *testing.T, pkt *pktoken.PKToken, signer crypto.Signer) []byte {
+		certBytes, _, err := createSSHCert(pkt, signer, []string{"test"})
+		require.NoError(t, err)
+		return certBytes
+	}
+
+	tests := []struct {
+		name        string
+		lifetimeArg string
+		// setup points SSH_AUTH_SOCK at whatever the case needs and returns
+		// the bytes handed to addCertToAgent.
+		setup func(t *testing.T, pkt *pktoken.PKToken, signer crypto.Signer) []byte
+		// wantWarning is empty for the case that returns without printing.
+		wantWarning string
+	}{
+		{
+			name: "no agent in the environment",
+			setup: func(t *testing.T, pkt *pktoken.PKToken, signer crypto.Signer) []byte {
+				t.Setenv("SSH_AUTH_SOCK", "")
+				return validCert(t, pkt, signer)
+			},
+		},
+		{
+			name:        "lifetime that does not parse",
+			lifetimeArg: "not-a-duration",
+			setup: func(t *testing.T, pkt *pktoken.PKToken, signer crypto.Signer) []byte {
+				startTestAgent(t, agent.NewKeyring())
+				return validCert(t, pkt, signer)
+			},
+			wantWarning: "warning: not adding certificate to ssh-agent",
+		},
+		{
+			name: "certificate that does not parse",
+			setup: func(t *testing.T, pkt *pktoken.PKToken, signer crypto.Signer) []byte {
+				startTestAgent(t, agent.NewKeyring())
+				return []byte("not an authorized key")
+			},
+			wantWarning: "warning: could not parse generated certificate for ssh-agent",
+		},
+		{
+			name: "public key that is not a certificate",
+			setup: func(t *testing.T, pkt *pktoken.PKToken, signer crypto.Signer) []byte {
+				startTestAgent(t, agent.NewKeyring())
+				pub, err := ssh.NewPublicKey(signer.Public())
+				require.NoError(t, err)
+				return ssh.MarshalAuthorizedKey(pub)
+			},
+			wantWarning: "warning: generated key is not a certificate",
+		},
+		{
+			name: "socket nothing is listening on",
+			setup: func(t *testing.T, pkt *pktoken.PKToken, signer crypto.Signer) []byte {
+				t.Setenv("SSH_AUTH_SOCK", filepath.Join(t.TempDir(), "absent.sock"))
+				return validCert(t, pkt, signer)
+			},
+			wantWarning: "warning: could not connect to ssh-agent",
+		},
+		{
+			name: "agent that refuses the certificate",
+			setup: func(t *testing.T, pkt *pktoken.PKToken, signer crypto.Signer) []byte {
+				startTestAgent(t, &recordingAgent{Agent: agent.NewKeyring(), addErr: errors.New("refused")})
+				return validCert(t, pkt, signer)
+			},
+			wantWarning: "warning: failed to add certificate to ssh-agent",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pkt, signer, _ := Mocks(t, ECDSA)
+			certBytes := tt.setup(t, pkt, signer)
+
+			out := &bytes.Buffer{}
+			l := &LoginCmd{AgentLifetimeArg: tt.lifetimeArg, OutWriter: out}
+			l.addCertToAgent(certBytes, signer)
+
+			if tt.wantWarning == "" {
+				require.Empty(t, out.String())
+				return
+			}
+			require.Contains(t, out.String(), tt.wantWarning)
+			require.NotContains(t, out.String(), "Certificate added to ssh-agent")
+		})
+	}
+}
+
+// TestLoginAddsToAgentOnlyWhenEnabled exercises the gate LoginCmd puts in
+// front of the agent. With AddKeyToAgent unset, a full login leaves a
+// reachable agent untouched; that default is what keeps a LoginCmd built
+// directly, as tests build it, off a developer's real agent.
+func TestLoginAddsToAgentOnlyWhenEnabled(t *testing.T) {
+	tests := []struct {
+		name          string
+		addKeyToAgent bool
+		wantAdded     int
+	}{
+		{name: "default leaves a reachable agent untouched", wantAdded: 0},
+		{name: "enabled adds the certificate", addKeyToAgent: true, wantAdded: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, mockOp := Mocks(t, ECDSA)
+
+			mockAgent := &recordingAgent{Agent: agent.NewKeyring()}
+			startTestAgent(t, mockAgent)
+
+			l := &LoginCmd{
+				Fs:            afero.NewMemMapFs(),
+				KeyTypeArg:    ECDSA,
+				AddKeyToAgent: tt.addKeyToAgent,
+				OutWriter:     &bytes.Buffer{},
+			}
+			require.NoError(t, l.Login(context.Background(), mockOp, false, ""))
+
+			mockAgent.mu.Lock()
+			defer mockAgent.mu.Unlock()
+			require.Len(t, mockAgent.added, tt.wantAdded)
+		})
+	}
+}
+
+// TestDefaultClientConfigAgentLifetime holds the default client config to
+// defaultAgentLifetime. The template leaves agent_lifetime commented out, and
+// CreateDefaultClientConfig copies that file verbatim into a user's config, so
+// a new user follows the constant instead of a value frozen into the file.
+func TestDefaultClientConfigAgentLifetime(t *testing.T) {
+	c, err := config.NewClientConfig(config.DefaultClientConfig)
+	require.NoError(t, err)
+	require.Empty(t, c.AgentLifetime, "default client config must leave agent_lifetime unset")
+
+	l := LoginCmd{Config: c}
+	secs, err := l.resolveAgentLifetimeSecs()
+	require.NoError(t, err)
+	require.Equal(t, uint32(defaultAgentLifetime/time.Second), secs)
 }
 
 func TestCreateSSHCert(t *testing.T) {
@@ -941,6 +1272,75 @@ func TestLoginWithRefreshWritesKeysToDestination(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("LoginWithRefresh did not return after context cancellation")
 	}
+}
+
+// TestLoginWithRefreshUpdatesAgent covers the refresh path's use of the agent.
+// Each refresh mints a new certificate over the same private key, and the agent
+// stores a certificate as its own identity, so the refreshed certificate has to
+// both reach the agent and displace the one it supersedes. The keyring holding
+// exactly one key at the end is what rules out accumulation, which would
+// otherwise grow until a server refuses the connection for too many attempts.
+func TestLoginWithRefreshUpdatesAgent(t *testing.T) {
+	shortExp := map[string]any{
+		"email": "arthur.aardvark@example.com",
+		"exp":   time.Now().Add(15 * time.Second).Unix(),
+	}
+	_, _, mockOp := Mocks(t, ECDSA, shortExp)
+
+	refreshable, ok := mockOp.(providers.RefreshableOpenIdProvider)
+	require.True(t, ok, "mock provider must support refresh")
+
+	mockAgent := &recordingAgent{Agent: agent.NewKeyring()}
+	startTestAgent(t, mockAgent)
+
+	iPath := customKeyPath(t)
+	l := &LoginCmd{
+		Fs:            afero.NewMemMapFs(),
+		KeyTypeArg:    ECDSA,
+		KeyPathArg:    iPath,
+		AddKeyToAgent: true,
+		OutWriter:     &bytes.Buffer{},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- l.LoginWithRefresh(ctx, refreshable, false, iPath)
+	}()
+
+	// The initial login adds once; the first refresh adds its replacement.
+	require.Eventually(t, func() bool { return mockAgent.addCount() >= 2 }, 5*time.Second, 5*time.Millisecond,
+		"expected the refresh loop to load the refreshed certificate into the agent")
+
+	// Stop the loop before inspecting: refreshes keep firing, so the agent is
+	// only a settled object once LoginWithRefresh has returned.
+	cancel()
+	select {
+	case err := <-errCh:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(2 * time.Second):
+		t.Fatal("LoginWithRefresh did not return after context cancellation")
+	}
+
+	mockAgent.mu.Lock()
+	defer mockAgent.mu.Unlock()
+
+	// Every certificate but the newest was removed, and each removal names the
+	// certificate added just before it.
+	require.Len(t, mockAgent.removed, len(mockAgent.added)-1)
+	for i, removed := range mockAgent.removed {
+		require.Equal(t, mockAgent.added[i].Certificate.Marshal(), removed.Marshal(),
+			"removal %d must name the certificate added before it", i)
+	}
+
+	keys, err := mockAgent.List()
+	require.NoError(t, err)
+	require.Len(t, keys, 1, "the agent must hold only the current certificate")
+	newest := mockAgent.added[len(mockAgent.added)-1].Certificate
+	require.Equal(t, newest.Marshal(), keys[0].Marshal(),
+		"the surviving certificate must be the most recently minted one")
 }
 
 // includeDirective must match the directive written by configureSSH.
