@@ -60,21 +60,78 @@ func (c *ClientConfig) GetByIssuer(issuer string) (*ProviderConfig, bool) {
 	return nil, false
 }
 
-func ResolveClientConfigPath(configPath *string) error {
-	if *configPath == "" {
-		dir, dirErr := os.UserHomeDir()
-		if dirErr != nil {
-			return fmt.Errorf("failed to get user config dir: %w", dirErr)
-		}
-		*configPath = filepath.Join(dir, ".opk", "config.yml")
+// ConfigPathFlagHelp documents the --config-path default resolution chain;
+// shared by every command that carries the flag so the copies cannot drift.
+const ConfigPathFlagHelp = "Path to the client config file. Default: the first existing of $XDG_CONFIG_HOME/opk/config.yml (~/.config/opk/config.yml on linux/macOS, %AppData%\\opk\\config.yml on windows) and the legacy ~/.opk/config.yml."
+
+// clientConfigCandidatePaths returns the client config locations in
+// resolution order:
+//
+//  1. <configDir>/opk/config.yml, where <configDir> is $XDG_CONFIG_HOME when
+//     set and absolute (the XDG Base Directory spec requires relative values
+//     to be ignored), otherwise the platform default (~/.config on Unix-like
+//     systems, %AppData% on Windows). Replacement semantics per the spec: a
+//     set variable replaces the platform default, it does not stack with it.
+//  2. The legacy ~/.opk/config.yml.
+func clientConfigCandidatePaths() ([]string, error) {
+	var configDir string
+	var platformDirErr error
+	if xdgDir := os.Getenv("XDG_CONFIG_HOME"); xdgDir != "" && filepath.IsAbs(xdgDir) {
+		configDir = xdgDir
+	} else if platformDir, err := userConfigDir(); err == nil {
+		configDir = platformDir
+	} else {
+		platformDirErr = err
 	}
-	return nil
+
+	var candidates []string
+	if configDir != "" {
+		candidates = append(candidates, filepath.Join(configDir, "opk", "config.yml"))
+	}
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		candidates = append(candidates, filepath.Join(homeDir, ".opk", "config.yml"))
+	} else {
+		// Never drop the legacy candidate silently: a user whose only config
+		// is the legacy one would get an unexplained fresh-config resolution.
+		log.Printf("warning: could not determine home directory, ignoring legacy ~/.opk/config.yml: %v", err)
+	}
+	if len(candidates) == 0 {
+		return nil, fmt.Errorf("failed to determine the user config directory: %w", platformDirErr)
+	}
+	return candidates, nil
+}
+
+// ResolveClientConfigPath resolves the client config path and reports
+// whether a config file exists there. An explicitly provided path is used
+// as-is. Otherwise the first existing candidate wins (so a legacy
+// ~/.opk/config.yml keeps working untouched), and when no config exists
+// anywhere the path falls to the first candidate, the XDG-preferred
+// location, which is where a new config is then created.
+func ResolveClientConfigPath(fs afero.Fs, configPath *string) (bool, error) {
+	afs := &afero.Afero{Fs: fs}
+	if *configPath != "" {
+		found, err := afs.Exists(*configPath)
+		return err == nil && found, nil
+	}
+	candidates, err := clientConfigCandidatePaths()
+	if err != nil {
+		return false, err
+	}
+	for _, candidate := range candidates {
+		if exists, err := afs.Exists(candidate); err == nil && exists {
+			*configPath = candidate
+			return true, nil
+		}
+	}
+	*configPath = candidates[0]
+	return false, nil
 }
 
 // GetClientConfigFromFile retrieves the client config from the configuration file at configPath.
-// If configPath is not specified then the default configuration path is uses ~/.opk/config.yml
+// If configPath is not specified it is resolved via ResolveClientConfigPath
+// (see clientConfigCandidatePaths for the resolution order).
 func GetClientConfigFromFile(configPath string, Fs afero.Fs) (*ClientConfig, error) {
-	if err := ResolveClientConfigPath(&configPath); err != nil {
+	if _, err := ResolveClientConfigPath(Fs, &configPath); err != nil {
 		return nil, err
 	}
 
@@ -94,10 +151,11 @@ func GetClientConfigFromFile(configPath string, Fs afero.Fs) (*ClientConfig, err
 
 func CreateDefaultClientConfig(configPath string, Fs afero.Fs) error {
 	afs := &afero.Afero{Fs: Fs}
-	if err := afs.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+	// 0700/0600: the client config can carry provider client_secret values.
+	if err := afs.MkdirAll(filepath.Dir(configPath), 0o700); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
-	if err := afs.WriteFile(configPath, DefaultClientConfig, 0o644); err != nil {
+	if err := afs.WriteFile(configPath, DefaultClientConfig, 0o600); err != nil {
 		return fmt.Errorf("failed to write default config file: %w", err)
 	}
 	log.Printf("created client config file at %s", configPath)
