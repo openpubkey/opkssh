@@ -22,6 +22,7 @@ import (
 	"crypto"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -625,9 +626,15 @@ type recordingAgent struct {
 	mu      sync.Mutex
 	added   []agent.AddedKey
 	removed []ssh.PublicKey
+	// addErr makes the agent refuse every key, so that a test can reach the
+	// branch addCertToAgent takes when the agent rejects the certificate.
+	addErr error
 }
 
 func (r *recordingAgent) Add(key agent.AddedKey) error {
+	if r.addErr != nil {
+		return r.addErr
+	}
 	r.mu.Lock()
 	r.added = append(r.added, key)
 	r.mu.Unlock()
@@ -698,6 +705,97 @@ func TestAddCertToAgent(t *testing.T) {
 			require.NotNil(t, added.Certificate)
 			require.Equal(t, uint32(2*3600), added.LifetimeSecs)
 			require.Equal(t, "opkssh", added.Comment)
+		})
+	}
+}
+
+// TestAddCertToAgentWarnings covers the paths where addCertToAgent gives up.
+// Authentication has already succeeded by the time it runs, so each failure to
+// reach the agent leaves a warning behind rather than failing the login. The
+// one path with no case here is the I/O deadline, which needs a connection
+// whose SetDeadline fails and so cannot be reached through SSH_AUTH_SOCK.
+func TestAddCertToAgentWarnings(t *testing.T) {
+	validCert := func(t *testing.T, pkt *pktoken.PKToken, signer crypto.Signer) []byte {
+		certBytes, _, err := createSSHCert(pkt, signer, []string{"test"})
+		require.NoError(t, err)
+		return certBytes
+	}
+
+	tests := []struct {
+		name        string
+		lifetimeArg string
+		// setup points SSH_AUTH_SOCK at whatever the case needs and returns
+		// the bytes handed to addCertToAgent.
+		setup func(t *testing.T, pkt *pktoken.PKToken, signer crypto.Signer) []byte
+		// wantWarning is empty for the case that returns without printing.
+		wantWarning string
+	}{
+		{
+			name: "no agent in the environment",
+			setup: func(t *testing.T, pkt *pktoken.PKToken, signer crypto.Signer) []byte {
+				t.Setenv("SSH_AUTH_SOCK", "")
+				return validCert(t, pkt, signer)
+			},
+		},
+		{
+			name:        "lifetime that does not parse",
+			lifetimeArg: "not-a-duration",
+			setup: func(t *testing.T, pkt *pktoken.PKToken, signer crypto.Signer) []byte {
+				startTestAgent(t, agent.NewKeyring())
+				return validCert(t, pkt, signer)
+			},
+			wantWarning: "warning: not adding certificate to ssh-agent",
+		},
+		{
+			name: "certificate that does not parse",
+			setup: func(t *testing.T, pkt *pktoken.PKToken, signer crypto.Signer) []byte {
+				startTestAgent(t, agent.NewKeyring())
+				return []byte("not an authorized key")
+			},
+			wantWarning: "warning: could not parse generated certificate for ssh-agent",
+		},
+		{
+			name: "public key that is not a certificate",
+			setup: func(t *testing.T, pkt *pktoken.PKToken, signer crypto.Signer) []byte {
+				startTestAgent(t, agent.NewKeyring())
+				pub, err := ssh.NewPublicKey(signer.Public())
+				require.NoError(t, err)
+				return ssh.MarshalAuthorizedKey(pub)
+			},
+			wantWarning: "warning: generated key is not a certificate",
+		},
+		{
+			name: "socket nothing is listening on",
+			setup: func(t *testing.T, pkt *pktoken.PKToken, signer crypto.Signer) []byte {
+				t.Setenv("SSH_AUTH_SOCK", filepath.Join(t.TempDir(), "absent.sock"))
+				return validCert(t, pkt, signer)
+			},
+			wantWarning: "warning: could not connect to ssh-agent",
+		},
+		{
+			name: "agent that refuses the certificate",
+			setup: func(t *testing.T, pkt *pktoken.PKToken, signer crypto.Signer) []byte {
+				startTestAgent(t, &recordingAgent{Agent: agent.NewKeyring(), addErr: errors.New("refused")})
+				return validCert(t, pkt, signer)
+			},
+			wantWarning: "warning: failed to add certificate to ssh-agent",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pkt, signer, _ := Mocks(t, ECDSA)
+			certBytes := tt.setup(t, pkt, signer)
+
+			out := &bytes.Buffer{}
+			l := &LoginCmd{AgentLifetimeArg: tt.lifetimeArg, OutWriter: out}
+			l.addCertToAgent(certBytes, signer)
+
+			if tt.wantWarning == "" {
+				require.Empty(t, out.String())
+				return
+			}
+			require.Contains(t, out.String(), tt.wantWarning)
+			require.NotContains(t, out.String(), "Certificate added to ssh-agent")
 		})
 	}
 }
