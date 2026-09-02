@@ -107,7 +107,7 @@ opkssh login
 
 This opens a browser window to select which OpenID Provider you want to authenticate against.
 After successfully authenticating opkssh generates an SSH public key in `~/.ssh/id_ecdsa` which contains your PK Token.
-If the default key files already hold a different identity — for instance when you log in with a second account or provider — the new keys are written to the opkssh identity directory (`~/.ssh/opkssh/`) instead of overwriting them.
+If the default key files already hold a different identity, for instance when you log in with a second account or provider, the new keys are written to the opkssh identity directory (`~/.ssh/opkssh/`) instead of overwriting them.
 By default this ssh key expires after 24 hours and you must run `opkssh login` to generate a new ssh key.
 
 Since your PK Token has been saved as an SSH key you can SSH as normal:

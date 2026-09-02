@@ -91,9 +91,8 @@ func clientConfigCandidatePaths() ([]string, error) {
 	if homeDir, err := os.UserHomeDir(); err == nil {
 		candidates = append(candidates, filepath.Join(homeDir, ".opk", "config.yml"))
 	} else {
-		// Never drop the legacy candidate silently: a user with only a
-		// legacy config would otherwise get an unexplained fresh-config
-		// resolution.
+		// Never drop the legacy candidate silently: a user whose only config
+		// is the legacy one would get an unexplained fresh-config resolution.
 		log.Printf("warning: could not determine home directory, ignoring legacy ~/.opk/config.yml: %v", err)
 	}
 	if len(candidates) == 0 {
@@ -104,8 +103,8 @@ func clientConfigCandidatePaths() ([]string, error) {
 
 // ResolveClientConfigPath resolves the client config path and reports
 // whether a config file exists there. An explicitly provided path is used
-// as-is. Otherwise the first existing candidate wins — so a legacy
-// ~/.opk/config.yml keeps working untouched — and when no config exists
+// as-is. Otherwise the first existing candidate wins (so a legacy
+// ~/.opk/config.yml keeps working untouched), and when no config exists
 // anywhere the path falls to the first candidate, the XDG-preferred
 // location, which is where a new config is then created.
 func ResolveClientConfigPath(fs afero.Fs, configPath *string) (bool, error) {

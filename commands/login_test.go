@@ -1044,9 +1044,9 @@ func TestWriteKeysToDestination(t *testing.T) {
 			wantErrContains: "failed to write SSH keys to filesystem",
 		},
 		{
-			// A missing opkssh dir or config fragment is no longer an error
-			// (both are created on demand), so the write failure is induced
-			// with a read-only filesystem instead.
+			// writeKeysToOpkSSHDir creates a missing ~/.ssh/opkssh directory
+			// and config fragment on demand, so the write failure is induced
+			// with a read-only filesystem.
 			name:            "opkssh dir write failure is wrapped",
 			sshConfigured:   true,
 			readOnly:        true,
@@ -1771,7 +1771,8 @@ func TestWriteKeysIdentitySlots(t *testing.T) {
 	require.NoError(t, afs.WriteFile(skKeyPath, []byte("foreign"), 0o600))
 	require.NoError(t, afs.WriteFile(skKeyPath+"-cert.pub", foreignPubkeyLine(t), 0o644))
 
-	// First login writes the default slot, exactly as before this change.
+	// A first login writes the default ~/.ssh/id_ecdsa slot (the unchanged
+	// single-identity behavior).
 	fallback, err := newCmd(pktA).writeKeysToDestination("", pemA, certA)
 	require.NoError(t, err)
 	require.Empty(t, fallback)
@@ -1788,7 +1789,7 @@ func TestWriteKeysIdentitySlots(t *testing.T) {
 	require.False(t, dirExists, "opkssh dir must not appear while a single identity is in play")
 
 	// Different identity: the occupied slots are preserved and the keys land
-	// in the opkssh identity directory, with a fragment entry.
+	// in the opkssh identity directory, with a config-fragment entry.
 	fallbackB, err := newCmd(pktB).writeKeysToDestination("", pemB, certB)
 	require.NoError(t, err)
 	require.NotEmpty(t, fallbackB)
@@ -1802,7 +1803,7 @@ func TestWriteKeysIdentitySlots(t *testing.T) {
 	require.Contains(t, configLines, identityFileLine(fallbackB))
 
 	// Second identity re-login: same fallback file overwritten in place, no
-	// duplicate fragment line.
+	// duplicate config-fragment line.
 	fallbackB2, err := newCmd(pktB).writeKeysToDestination("", pemB2, certB2)
 	require.NoError(t, err)
 	require.Equal(t, fallbackB, fallbackB2)
@@ -1818,10 +1819,8 @@ func TestWriteKeysIdentitySlots(t *testing.T) {
 }
 
 func TestWriteKeysLegacyCommentFallback(t *testing.T) {
-	// A cert written by an older opkssh whose embedded PK token no longer
-	// parses must still be overwritten in place when its comment is exactly
-	// "openpubkey" — a single-identity re-login must never be demoted to a
-	// relocated key by a parse failure.
+	// A legacy cert with an unparseable PK token but comment "openpubkey"
+	// must be overwritten in place: never demote a re-login on parse failure.
 	pkt, signer, _ := Mocks(t, ECDSA)
 	certBytes, pem, err := createSSHCert(pkt, signer, []string{"test"})
 	require.NoError(t, err)
@@ -1929,10 +1928,10 @@ func TestOpkSSHDirPartialStateDisambiguates(t *testing.T) {
 }
 
 func TestFragmentWholeLineDedup(t *testing.T) {
-	// The discriminating case for whole-line matching: the fragment already
-	// holds the TAGGED path's line, whose text contains the base path as a
-	// prefix. A base-path write must still add its own line — a substring
-	// check would wrongly skip it.
+	// The discriminating case for whole-line matching: the config fragment
+	// (~/.ssh/opkssh/config) already holds the TAGGED path's IdentityFile
+	// line, whose text contains the base path as a prefix. A base-path write
+	// must still add its own line; a substring check would wrongly skip it.
 	cmd, afs, dirPath, identity, pem, certBytes := opkDirFixture(t)
 
 	basePath := filepath.Join(dirPath, cmd.makeSSHKeyFileName(cmd.pkt))

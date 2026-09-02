@@ -289,8 +289,8 @@ func (l *LogoutCmd) removeFromOpkSSHConfig(configPath string, seckeyPath string)
 		return nil // Config file doesn't exist, nothing to clean up
 	}
 
-	// identityFileLine and fragmentLines are the shared fragment-format
-	// contract with login's writer — both sides must stay on these helpers.
+	// Render and split entries via login.go's identityFileLine/fragmentLines
+	// so this remover cannot drift from the writer's entry format.
 	identityLine := identityFileLine(seckeyPath)
 	lines := fragmentLines(content)
 	var newLines []string

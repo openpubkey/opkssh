@@ -190,10 +190,9 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 				return err
 			} else {
 				l.Config = client_config
-				// Multiple config locations are possible (see
-				// config.ResolveClientConfigPath); naming the winner
-				// defuses silent shadowing, e.g. a hand-created legacy file
-				// losing to an existing XDG-location config.
+				// Log which config file won the resolution. Without this, a
+				// user who edits the legacy file while an XDG config exists
+				// sees their edits silently ignored.
 				if l.Verbosity >= 1 {
 					log.Printf("using client config at %s", l.ConfigPathArg)
 				}
@@ -584,8 +583,8 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 	}
 
 	// Write ssh secret key and public key to filesystem. fallbackKeyPath is
-	// set when the default key slots were all taken by other identities and
-	// the keys landed in the opkssh identity directory instead.
+	// set when the keys landed in the opkssh identity directory instead of a
+	// default slot.
 	var fallbackKeyPath string
 	if l.PrintKeyArg {
 		w := l.out()
@@ -596,9 +595,8 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 	}
 
 	addedToAgent := l.maybeAddCertToAgent(certBytes, signer)
-	// The remediation warning is decided after the agent attempt: keys written
-	// to the fallback location are not tried by ssh on their own, so the user
-	// must hear about it exactly when no agent ended up holding the key either.
+	// Warn only when the fallback was used AND no agent holds the key:
+	// ssh does not try non-default file names on its own.
 	if !l.PrintKeyArg && fallbackKeyPath != "" && !addedToAgent {
 		fmt.Fprintf(l.out(), "warning: ssh will not try %s automatically and no ssh-agent holds it; add an IdentityFile entry for it, use -i, or run `opkssh login --configure`\n", fallbackKeyPath)
 	}
@@ -959,11 +957,11 @@ func (l *LoginCmd) writeKeysToOpkSSHDir(secKeyPem []byte, certBytes []byte, iden
 	opkSshUserPath := filepath.Join(userhomeDir, opkSshPath)
 	opkSshConfigPath := filepath.Join(opkSshUserPath, configFileName)
 
-	// The directory and its config fragment are created on demand: this
-	// writer also serves logins whose default key slots are all taken, which
-	// may happen before --configure has ever run. Writing the IdentityFile
-	// line is inert until ~/.ssh/config gains the Include directive, but it
-	// makes a later --configure pick every key up instantly.
+	// The directory and its config fragment are created on demand, because
+	// this writer also serves logins whose default key slots are all taken,
+	// which can happen before --configure has ever run. The IdentityFile
+	// line is inert without the Include in ~/.ssh/config, but a later
+	// --configure adopts every key already listed.
 	if err := l.Fs.MkdirAll(opkSshUserPath, 0o700); err != nil {
 		return "", err
 	}
@@ -974,18 +972,13 @@ func (l *LoginCmd) writeKeysToOpkSSHDir(secKeyPem []byte, certBytes []byte, iden
 	privKeyPath := filepath.Join(opkSshUserPath, sshKeyName)
 	pubKeyPath := privKeyPath + "-cert.pub"
 
-	// A different account at the same provider maps to the same
-	// <issuer>-<client_id> file name; it must not be clobbered. Policy for
-	// this tier: a slot is writable only when it is fully free or the
-	// existing certificate provably belongs to the same identity; anything
-	// else (different identity, unparseable, or a private key without its
-	// certificate) disambiguates with an identity tag — and the same rule
-	// applies at the tagged path, erroring rather than silently replacing a
-	// foreign occupant.
+	// A different account at the same provider maps to the same file name and
+	// must not be clobbered; see dirSlotWritable. The same rule applies at
+	// the tagged path: a foreign occupant there is an error, never a silent
+	// overwrite.
 	if !dirSlotWritable(classifySlot(l.Fs, privKeyPath, pubKeyPath, identity)) {
-		// Tagging a nothing would produce a stable but non-identifying file
-		// name; failing loudly is clearer (unreachable in practice — the PK
-		// token just completed a login).
+		// Tagging an invalid identity would hash nothing; fail loudly instead
+		// (unreachable in practice; the token just completed a login).
 		if !identity.valid {
 			return "", errors.New("cannot disambiguate the key file name: no identity could be extracted from the PK token")
 		}
@@ -1005,10 +998,9 @@ func (l *LoginCmd) writeKeysToOpkSSHDir(secKeyPem []byte, certBytes []byte, iden
 		return "", err
 	}
 
-	// add key to config. Whole-line match (a tagged path contains its
-	// untagged prefix, so a substring check would wrongly skip needed
-	// entries); when the line is already present the fragment is left
-	// entirely untouched.
+	// Whole-line match: a tagged path contains its untagged prefix, so a
+	// substring check would wrongly skip entries. An already-present line
+	// means no rewrite.
 	configContent, err := afs.ReadFile(opkSshConfigPath)
 	if err != nil {
 		if !os.IsNotExist(err) {
@@ -1063,18 +1055,15 @@ func (l *LoginCmd) writeKeysToSSHDir(seckeySshPem []byte, certBytes []byte, iden
 		pubkeyPath := seckeyPath + "-cert.pub"
 		info := classifySlot(l.Fs, seckeyPath, pubkeyPath, identity)
 
-		// Policy for the default tier, preserving pre-change behavior
-		// exactly: an absent private key makes the slot writable even over
-		// an orphaned or foreign certificate. With the private key present,
-		// only a provably same-identity certificate may be overwritten —
-		// plus the legacy case of a certificate with no extractable PK
-		// token identity but the comment exactly "openpubkey", which was
-		// the pre-change reuse condition; this repo does not control the PK
-		// token wire format's history, and demoting a re-login to a
-		// relocated key on a parse failure would silently shadow the fresh
-		// key with the stale file. A parseable certificate for a different
-		// identity, an orphaned private key, and an unreadable certificate
-		// are protected.
+		// Policy for the default ~/.ssh key names: an absent private key
+		// makes the slot writable even over an orphaned or foreign
+		// certificate; with the key present,
+		// only a same-identity certificate or a legacy one (unparseable PK
+		// token, comment exactly "openpubkey") may be overwritten. The
+		// legacy case matters because this repo does not control the PK token
+		// wire format, and skipping on a parse failure would silently shadow
+		// a re-login's fresh key with its own stale file. All else is
+		// protected.
 		if !info.privExists || info.cert == certSameIdentity || info.cert == certLegacyComment {
 			return "", l.writeKeys(seckeyPath, pubkeyPath, seckeySshPem, certBytes)
 		}
@@ -1083,11 +1072,9 @@ func (l *LoginCmd) writeKeysToSSHDir(seckeySshPem []byte, certBytes []byte, iden
 		}
 	}
 
-	// Every default slot belongs to someone else: write a per-identity file
-	// into the opkssh identity directory instead of clobbering. ssh does not
-	// try non-default file names on its own — the key is reachable through
-	// ssh-agent (login loads it there when one is available), an
-	// IdentityFile entry, -i, or the --configure mechanism.
+	// Every default slot belongs to someone else: fall through to the opkssh
+	// identity directory (~/.ssh/opkssh). The key stays reachable via
+	// ssh-agent, an IdentityFile entry, -i, or --configure.
 	return l.writeKeysToOpkSSHDir(seckeySshPem, certBytes, identity)
 }
 
@@ -1100,10 +1087,9 @@ type keyIdentity struct {
 	valid    bool
 }
 
-// sameAs reports whether two identities are provably the same. It fails
-// closed by construction: an invalid identity — nil token, failed claim
-// extraction, unparseable certificate — never compares equal to anything,
-// because equality is what authorizes overwriting a key file.
+// sameAs fails closed: an invalid identity (nil token, failed extraction,
+// unparseable certificate) never compares equal; equality is what authorizes
+// overwriting a key file.
 func (k keyIdentity) sameAs(other keyIdentity) bool {
 	return k.valid && other.valid && k == other
 }
@@ -1123,9 +1109,8 @@ func pktIdentity(pkt *pktoken.PKToken) keyIdentity {
 	return keyIdentity{issuer: issuer, audience: audience, subject: subject, valid: true}
 }
 
-// certFileIdentity extracts the identity from the bytes of a certificate
-// file written by opkssh; invalid when the file does not hold an opkssh
-// certificate with an extractable identity.
+// certFileIdentity extracts the identity from a certificate file's bytes;
+// invalid unless it holds an opkssh certificate with an extractable identity.
 func certFileIdentity(certBytes []byte) keyIdentity {
 	pubkey, _, _, _, err := ssh.ParseAuthorizedKey(certBytes)
 	if err != nil {
@@ -1148,8 +1133,8 @@ func certKeyIdentity(pubkey ssh.PublicKey) keyIdentity {
 	return pktIdentity(pkt)
 }
 
-// certState classifies the -cert.pub side of a key-file slot relative to the
-// identity now logging in.
+// certState classifies the -cert.pub side of a key-file slot (a private key
+// path plus its -cert.pub companion) relative to the identity now logging in.
 type certState int
 
 const (
@@ -1167,9 +1152,9 @@ type slotInfo struct {
 	cert       certState
 }
 
-// classifySlot answers "who holds this slot?" for a private-key path and its
-// -cert.pub companion. It is the mechanism shared by every key-writing tier;
-// each tier maps the states to its own write policy.
+// classifySlot answers "who holds this slot?". It is shared by both
+// key-writing destinations, the default ~/.ssh key names and the opkssh
+// identity directory; each maps the states to its own write policy.
 func classifySlot(fs afero.Fs, privKeyPath, pubKeyPath string, identity keyIdentity) slotInfo {
 	info := slotInfo{privExists: fsFileExists(fs, privKeyPath)}
 	if !fsFileExists(fs, pubKeyPath) {
@@ -1197,12 +1182,14 @@ func classifySlot(fs afero.Fs, privKeyPath, pubKeyPath string, identity keyIdent
 	return info
 }
 
-// identityFileLine renders a config-fragment entry for a private key path.
-// The format is a contract between login (which writes entries) and logout
-// (which removes them); both sides must go through this function. A path
-// containing blanks is double-quoted per ssh_config token rules — OpenSSH
-// mis-parses an unquoted path with a space. Paths without blanks stay
-// unquoted so entries written by earlier versions keep matching exactly.
+// identityFileLine renders one IdentityFile entry for the opkssh config
+// fragment: the file ~/.ssh/opkssh/config, which holds one IdentityFile line
+// per written key and which ~/.ssh/config Includes once --configure has run.
+// The entry format is a contract between login (which writes entries) and
+// logout (which removes them); both must use this function. A path containing
+// blanks is double-quoted, because OpenSSH mis-parses an unquoted path with a
+// space; paths without blanks stay unquoted so entries written by earlier
+// versions keep matching.
 func identityFileLine(privKeyPath string) string {
 	if strings.ContainsAny(privKeyPath, " \t") {
 		return `IdentityFile "` + privKeyPath + `"`
@@ -1210,15 +1197,14 @@ func identityFileLine(privKeyPath string) string {
 	return "IdentityFile " + privKeyPath
 }
 
-// fragmentLines splits config-fragment content into lines, tolerating both
-// \n and \r\n endings.
+// fragmentLines splits the config fragment's content into lines, tolerating
+// both \n and \r\n endings.
 func fragmentLines(fragment []byte) []string {
 	return strings.Split(strings.ReplaceAll(string(fragment), "\r\n", "\n"), "\n")
 }
 
-// commentField preserves the historical key-comment format, which printed
-// "unknown" for a claim that could not be extracted rather than an empty
-// field.
+// commentField substitutes "unknown" for a claim that could not be
+// extracted, preserving the historical format of the key-file comment.
 func commentField(s string) string {
 	if s == "" {
 		return "unknown"
@@ -1226,11 +1212,9 @@ func commentField(s string) string {
 	return s
 }
 
-// identityTag returns a short, stable tag for an identity, used to
-// disambiguate key file names for different accounts at the same provider.
-// The full triple is hashed — not the subject alone — so that two client IDs
-// sharing a truncated prefix in the file name cannot alias, and because some
-// OPs use email addresses as subjects, which do not belong in file names.
+// identityTag disambiguates key file names for different accounts at the
+// same provider. The full triple is hashed: truncated client-ID prefixes
+// cannot alias, and subjects (sometimes emails) stay out of file names.
 func identityTag(identity keyIdentity) string {
 	digest := sha256.Sum256([]byte(identity.issuer + "|" + identity.audience + "|" + identity.subject))
 	return hex.EncodeToString(digest[:4])
@@ -1293,8 +1277,7 @@ func (l *LoginCmd) makeSSHKeyFileName(pkt *pktoken.PKToken) string {
 }
 
 func fsFileExists(fs afero.Fs, fPath string) bool {
-	// Stat, not Open: the previous Open-based check leaked a file descriptor
-	// per call.
+	// Stat, not Open: an Open-based check leaks a file descriptor per call.
 	_, err := fs.Stat(fPath)
 	return !errors.Is(err, os.ErrNotExist)
 }

@@ -24,11 +24,9 @@ import (
 	"path/filepath"
 )
 
-// userConfigDir returns the platform's user config directory used when
-// $XDG_CONFIG_HOME is not set. This is deliberately ~/.config on every
-// Unix-like system, macOS included: opkssh is a CLI tool, and CLI convention
-// (and the XDG default) is ~/.config rather than ~/Library/Application
-// Support.
+// userConfigDir is the fallback when $XDG_CONFIG_HOME is unset. It is
+// deliberately ~/.config on every Unix-like system, macOS included, because
+// CLI tools follow the XDG default, not ~/Library/Application Support.
 func userConfigDir() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
