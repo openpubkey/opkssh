@@ -250,7 +250,13 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 	}
 	var provider providers.OpenIdProvider
 
-	if strings.HasPrefix(p.Issuer, "https://accounts.google.com") {
+	if p.hasAlias("gitlab-ci") {
+		if p.Issuer == "https://gitlab.com" {
+			provider = providers.NewGitlabCiOpFromEnvironmentDefault()
+		} else {
+			provider = providers.NewGitlabCiOp(p.Issuer, GITLAB_CI_TOKEN_ENVVAR)
+		}
+	} else if strings.HasPrefix(p.Issuer, "https://accounts.google.com") {
 		opts := providers.GetDefaultGoogleOpOptions()
 		opts.Issuer = p.Issuer
 		opts.ClientID = p.ClientID
@@ -350,6 +356,10 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 
 func (p *ProviderConfig) hasScopes() bool {
 	return len(p.Scopes) > 0 && (len(p.Scopes) > 1 || p.Scopes[0] != "")
+}
+
+func (p *ProviderConfig) hasAlias(alias string) bool {
+	return slices.Contains(p.AliasList, alias)
 }
 
 // GetProvidersConfigFromEnv is a function to retrieve the config from the env variables
