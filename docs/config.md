@@ -25,6 +25,8 @@ The client config can be used to configure the following values:
 
 - **default_provider** By default this is set to the webchooser, which opens a webpage and allows the user to select the OpenID Provider they want by clicking. However if you wish to always connect to one particular OpenID Provider you can set this to the alias of that OpenID Provider and it will skip the web chooser and automatically just open a browser window to that provider.
 
+- **agent_lifetime** How long ssh-agent retains the certificate that `opkssh login` adds to it, either as a duration (`12h`, `45m`) or in seconds (`28800`). The default client config ships this key commented out, so a config that omits it falls back to `24h`, matching the server's default certificate expiration policy. Note the client cannot know the expiration policy of every server it connects to, so this is a client-side bound to keep expired keys from accumulating in the agent rather than a statement of the certificate's validity. The `--lifetime` flag on `opkssh login` overrides this value. Under `--auto-refresh` each refreshed certificate replaces the previous one in the agent and restarts the lifetime, so the agent tracks the certificate on disk for as long as the command runs. On Windows the agent is not currently reachable (the native OpenSSH agent listens on a named pipe rather than a unix socket), so the certificate is not added there.
+
 - **providers** This allows you to configure all the OpenID Providers you wish to use. See example below.
   - **send_access_token** Is a boolean value scoped to a particular provider. It determines if opkssh should put the user's access token into the SSH public key (SSH Certificate). This is useful for allowing the opkssh verifier to read claims not available in the ID Token that can only be read from the OpenID Provider's [userinfo endpoint](https://openid.net/specs/openid-connect-core-1_0.html#UserInfo). The opkssh verifier on the SSH server will use the access token to make a call to the OpenID Provider's userinfo endpoint. Configuration option false by default as SSH will send SSH Public Keys to any host you are attempting to SSH into. Before setting this to true carefully consider the security implications of including the access token in the SSH Public key.
 
@@ -108,7 +110,7 @@ The client ID must match the aud (audience) claim in the PK Token.
 
 - Column 1: Issuer
 - Column 2: Client-ID a.k.a. what to match on the aud claim in the ID Token
-- Column 3: Expiration policy, options are: `12h`, `24h`, `48h`, `1week`, `oidc`, `oidc-refreshed`
+- Column 3: Expiration policy, options are: `12h`, `24h`, `48h`, `1week`, `oidc`, `oidc_refreshed`
 
 ### Examples
 
@@ -132,6 +134,8 @@ We support email "wildcard" validation using the `oidc-match-end:email:` prefix.
 
 - This matching is **case-insensitive**.
 - Use with care, as allowing a domain grants access to all users at that domain.
+
+Matching on email trusts the OpenID Provider to be authoritative for that email address. opkssh does not require `email_verified` to be true, because an OP that is authoritative for a domain may leave the claim out or set it to false and still be the right source of truth. When a policy row matches on email and the ID Token does not assert `email_verified`, opkssh logs a warning. If you do not trust an OP as an authoritative source for email, match on `sub` instead, or enforce your own rule with a [policy plugin](policyplugins.md).
 
 ### System authorized identity file `/etc/opk/auth_id` (Linux) or `%ProgramData%\opk\auth_id` (Windows)
 

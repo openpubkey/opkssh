@@ -266,9 +266,9 @@ This file functions as an access control list that enables admins to determine t
   - `48h` - user's ssh public key expires after 48 hours,
   - `1week` - user's ssh public key expires after 1 week,
   - `oidc` - user's ssh public key expires when the ID Token expires
-  - `oidc-refreshed` - user's ssh public key expires when their refreshed ID Token expires.
+  - `oidc_refreshed` - user's ssh public key expires when their refreshed ID Token expires.
 
-By default we use `24h` as it requires that the user authenticate to their OP once a day. Most OPs expire ID Tokens every one to two hours, so if `oidc` the user will have to sign multiple times a day. `oidc-refreshed` is supported but complex and not currently recommended unless you know what you are doing.
+By default we use `24h` as it requires that the user authenticate to their OP once a day. Most OPs expire ID Tokens every one to two hours, so if `oidc` the user will have to sign multiple times a day. `oidc_refreshed` is supported but complex and not currently recommended unless you know what you are doing.
 
 The default values for `/etc/opk/providers` are:
 
@@ -562,6 +562,7 @@ opkssh add root alice@example.com https://authentik.local/application/o/opkssh/
 | [Authentik](https://goauthentik.io/)           | ✅     | Do not add a certificate in the encryption section of the provider                                      |
 | [AWS Cognito](https://aws.amazon.com/cognito/) | ✅     | [Amazon Cognito Integration Guide](docs/providers/cognito.md)                                           |
 | [Azure](https://www.azure.com/)                | ✅     | [Entra ID (Azure) Integration Guide](docs/providers/azure.md)                                           |
+| [Forgejo Actions / Codeberg](https://forgejo.org/) | ✅ | [Forgejo Actions Guide](docs/forgejo-actions.md), requires Forgejo v15.0+                               |
 | [GitHub Actions](https://github.com/features/actions) | ✅ | [GitHub Actions Guide](docs/github-actions.md)                                                          |
 | [Gitlab Self-hosted](https://gitlab.com/)      | ✅     | [Configuration guide](docs/gitlab-selfhosted.md)                                                        |
 | [Kanidm](https://kanidm.com/)                  | ✅ | [Kanidm Integration Guide](https://kanidm.github.io/kanidm/master/integrations/oauth2/examples.html#opkssh)|
@@ -653,6 +654,7 @@ For integration tests run:
 ### Guides
 - [CONTRIBUTING.md](https://github.com/openpubkey/opkssh/blob/main/CONTRIBUTING.md) Guide to contributing to opkssh (includes developer help).
 - [docs/gitlab-selfhosted.md](docs/gitlab-selfhosted.md) Guide on configuring and using a self hosted GitLab instance with opkssh.
+- [docs/forgejo-actions.md](docs/forgejo-actions.md) Guide to SSHing via Forgejo Actions (e.g. Codeberg).
 - [docs/paramiko.md](docs/paramiko.md) Guide to using the Python SSH paramiko library with opkssh.
 - [docs/putty.md](docs/putty.md) Guide to using PuTTY with opkssh.
 - [docs/aws-ec2.md](docs/aws-ec2.md) Guide to get opkssh working on AWS EC2.
