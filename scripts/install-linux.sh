@@ -500,6 +500,29 @@ install_opkssh_binary() {
     fi
 }
 
+# install_selinux_module
+#   Compiles, packages, and loads an SELinux module from a TE file. Errors
+#   from the individual tools are suppressed so callers can silently try
+#   another TE variant on failure.
+#
+# Arguments:
+#   $1 - Path to the .te file
+#   $2 - Path to write the compiled module to
+#   $3 - Path to write the packaged module to
+#
+# Returns:
+#   0 if the module was compiled, packaged, and loaded successfully, 1 otherwise
+install_selinux_module() {
+    local te_file mod_out pp_out
+    te_file="$1"
+    mod_out="$2"
+    pp_out="$3"
+
+    checkmodule -M -m -o "$mod_out" "$te_file" >/dev/null 2>&1 &&
+        semodule_package -o "$pp_out" -m "$mod_out" >/dev/null 2>&1 &&
+        semodule -i "$pp_out" >/dev/null 2>&1
+}
+
 # check_selinux
 #   Checks if SELinux is enabled and if so, ensures the context is set correctly
 #
@@ -509,8 +532,9 @@ install_opkssh_binary() {
 # Returns:
 #   0 if SELinux is disabled or if context is correctly
 check_selinux() {
-    local te_tmp mod_tmp pp_tmp version
+    local te_tmp te_session_tmp mod_tmp pp_tmp version use_session_variant
     te_tmp="/tmp/opkssh.te"
+    te_session_tmp="/tmp/opkssh.session.te"
     mod_tmp="/tmp/opkssh.mod" # SELinux requires that modules have the same file name as the module name
     pp_tmp="/tmp/opkssh.pp"
 
@@ -520,6 +544,7 @@ check_selinux() {
             echo "  Restoring context for $INSTALL_DIR/$BINARY_NAME..."
             restorecon "$INSTALL_DIR/$BINARY_NAME"
 
+            use_session_variant=false
             if [[ -n "$LOCAL_TE_FILE" ]]; then
                 echo "  Using local TE-file"
                 cp "$LOCAL_TE_FILE" "$te_tmp"
@@ -531,16 +556,32 @@ check_selinux() {
                 fi
                 echo "  Downloading TE-file"
                 wget -q -O "$te_tmp" "https://raw.githubusercontent.com/${GITHUB_REPO}/refs/tags/${version}/opkssh.te"
+                use_session_variant=true
             fi
 
             echo "  Compiling SELinux module..."
-            checkmodule -M -m -o "$mod_tmp" "$te_tmp"
-
-            echo "  Packaging module..."
-            semodule_package -o "$pp_tmp" -m "$mod_tmp"
-
-            echo "  Installing module..."
-            semodule -i "$pp_tmp"
+            if [[ "$use_session_variant" == true ]]; then
+                # Some policies run AuthorizedKeysCommand in sshd_session_t,
+                # not sshd_t. Try that first; if the loaded policy lacks the
+                # type, the module fails to load and we fall back to sshd_t.
+                sed 's/sshd_t/sshd_session_t/g' "$te_tmp" > "$te_session_tmp"
+                if install_selinux_module "$te_session_tmp" "$mod_tmp" "$pp_tmp"; then
+                    echo "  Installed module for sshd_session_t"
+                elif install_selinux_module "$te_tmp" "$mod_tmp" "$pp_tmp"; then
+                    echo "  Installed module for sshd_t"
+                else
+                    rm -f "$te_tmp" "$te_session_tmp" "$mod_tmp" "$pp_tmp"
+                    echo "Failed to compile/install the opkssh SELinux module" >&2
+                    return 1
+                fi
+                rm -f "$te_session_tmp"
+            else
+                if ! install_selinux_module "$te_tmp" "$mod_tmp" "$pp_tmp"; then
+                    rm -f "$te_tmp" "$mod_tmp" "$pp_tmp"
+                    echo "Failed to compile/install the opkssh SELinux module" >&2
+                    return 1
+                fi
+            fi
 
             rm -f "$te_tmp" "$mod_tmp" "$pp_tmp"
             if [[ "$HOME_POLICY" == true ]]; then
