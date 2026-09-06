@@ -4,6 +4,8 @@ go 1.25.0
 
 toolchain go1.26.6
 
+replace github.com/openpubkey/openpubkey => github.com/ianroberts/openpubkey v0.0.0-20260906141230-d80813047a6d
+
 require (
 	github.com/jeremija/gosubmit v0.2.8
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
