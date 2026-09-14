@@ -91,6 +91,29 @@ It also supports a `deny_users` field. This field is a YAML array of strings, wh
 
 Both `deny_emails` and `deny_users` are evaluated before policy.
 
+### Cacheing of JWKS data
+
+By default, `opkssh verify` will contact the provider's OIDC discovery URL and download a fresh copy of the provider's public keys on every authentication attempt.  This guarantees that the keys will always be up to date, but there are several reasons why it may not be a good idea
+
+- the double round trip to the provider introduces latency in the login process
+- busy sites authenticating many users against the same provider may place significant load on the provider's JWKS endpoint, and may even find themselves blocked or rate limited
+- if the JWKS is unreachable for any reason then `opkssh` authenticated logins will fail.  Small tweaks to network settings on the server may be enough to lock out the administrator
+
+To mitigate this, `opkssh verify` supports a _cache_ mechanism that saves a copy of the retrieved JWKS data for each provider on disk on the server.  Subsequent authentication attempts against the same provider will first attempt to use the cached keys to validate the token, fetching a fresh copy only if either the signature verification fails or the cached keys are too old.  The cache is configured in the `config.yml` server config file:
+
+```yml
+cache:
+  base_dir: /var/cache/opkssh
+  max_age: 1h
+  fallback_max_age: 2h
+```
+
+The `base_dir` is the root directory where the cache is stored, and is the only required setting; no other processes should write to this directory, and it must be readable and writeable by the `opksshuser`.  The `max_age` is the standard maximum age of cache entries that `opkssh verify` will consider; if a user attempts to log in and the most recent cache entry for their provider is older than this threshold, then `opkssh verify` will download a fresh set of keys from the provider.  The `fallback_max_age` is a safety valve whereby if the latest cache entry is older than the standard `max_age` but downloading a fresh set of keys fails, then the verifier may use an older cache entry up to the `fallback_max_age`.  The intent is to allow a recently-expired cache entry to be used when the alternative is failing entirely.
+
+The `max_age` settings are a tradeoff between convenience and security.  A short `max_age` will catch expired or rotated provider keys sooner but increase load on the provider and make it more likely that transient communication problems will cause login failures.  A longer `max_age` means that tokens issued by a compromised signing key may still be accepted by `opkssh` until the `max_age` expires, but logins will have lower latency and be more resilient to an unreliable provider connection.
+
+The default `max_age` if unspecified is 1 hour, and the `fallback_max_age` defaults to twice the standard `max_age`.  If you want to disable the fallback mechanism then you should set `fallback_max_age` and `max_age` to the same value.
+
 ### Server config permissions
 
 The server config file requires the following permissions be set:
@@ -117,7 +140,7 @@ The client ID must match the aud (audience) claim in the PK Token.
 The file lives at `/etc/opk/providers`. The default values are:
 
 ```bash
-# Issuer Client-ID expiration-policy 
+# Issuer Client-ID expiration-policy
 https://accounts.google.com 206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com 24h
 https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0 096ce0a3-5e72-4da8-9c86-12924b294a01 24h
 https://gitlab.com 8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923 24h
@@ -142,13 +165,13 @@ Matching on email trusts the OpenID Provider to be authoritative for that email 
 This is a server wide policy file.
 
 ```bash
-# email/sub principal issuer 
+# email/sub principal issuer
 alice alice@example.com https://accounts.google.com
-guest alice@example.com https://accounts.google.com 
-root alice@example.com https://accounts.google.com 
+guest alice@example.com https://accounts.google.com
+root alice@example.com https://accounts.google.com
 dev bob@microsoft.com https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
 
-# Group identifier 
+# Group identifier
 dev oidc:groups:developer https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
 
 # Email suffix wildcard matching all emails ending in `@example.com`
@@ -172,7 +195,7 @@ sudo opkssh add root oidc:group:admin azure
 
 Note that currently Google does not put their groups in the ID Token, so groups based auth does not work if you OpenID Provider is Google.
 
-We support policy on claims that are also URIs as this is a common pattern for groups in some systems. 
+We support policy on claims that are also URIs as this is a common pattern for groups in some systems.
 To require that root access is only granted to users whose ID Token has a claim `https://acme.com/groups` with the value `ssh-users` run:
 
 ```bash
@@ -198,10 +221,10 @@ This is user/principal specific permissions.
 That is, if it is in `/home/alice/.opk/auth_id` it can only specify who can assume the principal `alice` on the server.
 
 ```bash
-# email/sub principal issuer 
+# email/sub principal issuer
 alice alice@example.com https://accounts.google.com
 
-# Group identifier 
+# Group identifier
 alice oidc:groups:developer https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
 ```
 
@@ -214,6 +237,6 @@ chmod 600 /home/{USER}/.opk/auth_id
 
 ## See Also
 
-Our documentation on the [audit command](audit.md) for troubleshooting server side configurations. 
+Our documentation on the [audit command](audit.md) for troubleshooting server side configurations.
 
 Our documentation on the changes our install script makes to a server: [installing.md](../scripts/installing.md)
