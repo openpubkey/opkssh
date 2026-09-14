@@ -499,6 +499,9 @@ Exit code: 0 if all entries are valid, 1 if any warnings or errors are found.`,
 	permsCmd := commands.NewPermissionsCmd(os.Stdout, os.Stderr)
 	rootCmd.AddCommand(permsCmd.CobraCommand())
 
+	cacheCmd := commands.NewCacheCmd()
+	rootCmd.AddCommand(cacheCmd.CobraCommand())
+
 	// genDocsCmd is a hidden command used as a helper for generating our
 	// command line reference documentation.
 	genDocsCmd := &cobra.Command{
