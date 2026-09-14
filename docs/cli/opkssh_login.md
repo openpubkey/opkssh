@@ -29,7 +29,7 @@ opkssh login [alias] [flags]
 
 ```
       --auto-refresh                 Automatically refresh PK token after login
-      --config-path string           Path to the client config file. Default: ~/.opk/config.yml on linux and %APPDATA%\.opk\config.yml on windows
+      --config-path string           Path to the client config file. Default: ~/.opk/config.yml on linux and %USERPROFILE%\.opk\config.yml on windows
       --configure                    Apply changes to ssh config and create ~/.ssh/opkssh directory
       --create-config                Creates a client config file if it does not exist
       --disable-browser-open         Set this flag to disable opening the browser. Useful for choosing the browser you want to use
