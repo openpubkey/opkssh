@@ -11,7 +11,7 @@ jobs:
   goreleaser-release:
     name: Build and release opkssh (forks only)
     if: github.event.repository.fork == true
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: write
     steps:
