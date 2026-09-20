@@ -92,13 +92,15 @@ func providerVerifierFromRow(row ProvidersRow) verifier.ProviderVerifier {
 		opts.Issuer = row.Issuer
 		opts.ClientID = row.ClientID
 		return providers.NewAzureOpWithOptions(opts)
-	} else if row.isGitLabCi() {
-		var provider verifier.ProviderVerifier
-		if row.Issuer == "https://gitlab.com" {
-			provider = providers.NewGitlabCiOpFromEnvironmentDefault()
-		} else {
-			provider = providers.NewGitlabCiOp(row.Issuer, "OPENPUBKEY_JWT")
-		}
+	} else if row.Issuer == "https://token.actions.githubusercontent.com" {
+		return providers.NewGithubOp(row.Issuer, "")
+	} else if providers.IsForgejoIssuer(row.Issuer) {
+		return providers.NewForgejoOp(row.Issuer, "", "")
+	} else if strings.HasPrefix(row.ClientID, "OPENPUBKEY-PKTOKEN:GITLAB-CI:") {
+		// Do the gitlab checks last so that github or forgejo issuers
+		// checks happen first. This is to avoid a case where someone has
+		// a github issuer but sets the client ID prefix to "OPENPUBKEY-PKTOKEN:GITLAB-CI:"
+		provider := providers.NewGitlabCiOp(row.Issuer, "OPENPUBKEY_JWT")
 		return gitLabCiProviderVerifier{
 			provider: provider,
 			audience: row.ClientID,
@@ -108,11 +110,8 @@ func providerVerifierFromRow(row ProvidersRow) verifier.ProviderVerifier {
 		opts.Issuer = row.Issuer
 		opts.ClientID = row.ClientID
 		return providers.NewGitlabOpWithOptions(opts)
-	} else if row.Issuer == "https://token.actions.githubusercontent.com" {
-		return providers.NewGithubOp(row.Issuer, "")
-	} else if providers.IsForgejoIssuer(row.Issuer) {
-		return providers.NewForgejoOp(row.Issuer, "", "")
 	}
+
 	opts := providers.GetDefaultGoogleOpOptions()
 	opts.Issuer = row.Issuer
 	opts.ClientID = row.ClientID
@@ -220,10 +219,6 @@ func (m multiProviderVerifier) VerifyIDToken(ctx context.Context, idt []byte, ci
 		return nil
 	}
 	return fmt.Errorf("all provider verifiers failed for issuer %s: %s", m.issuer, strings.Join(verificationErrors, "; "))
-}
-
-func (p ProvidersRow) isGitLabCi() bool {
-	return strings.HasPrefix(p.ClientID, "OPENPUBKEY-PKTOKEN:")
 }
 
 type gitLabCiProviderVerifier struct {

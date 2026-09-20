@@ -23,20 +23,20 @@ Add a GitLab CI provider entry to `/etc/opk/providers`. The second field must be
 Using the explicit audience from the GitLab CI token:
 
 ```bash
-echo "https://gitlab.com OPENPUBKEY-PKTOKEN:ssh-deploy-prod 24h" | sudo tee -a /etc/opk/providers
+echo "https://gitlab.com OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod 24h" | sudo tee -a /etc/opk/providers
 ```
 
 For self-managed GitLab, use your GitLab instance URL as the issuer instead:
 
 ```bash
-echo "https://gitlab.example.com OPENPUBKEY-PKTOKEN:ssh-deploy-prod 24h" | sudo tee -a /etc/opk/providers
+echo "https://gitlab.example.com OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod 24h" | sudo tee -a /etc/opk/providers
 ```
 
 If you also want to allow normal interactive GitLab logins, keep the normal GitLab provider entry as well:
 
 ```text
 https://gitlab.com 8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923 24h
-https://gitlab.com OPENPUBKEY-PKTOKEN:ssh-deploy-prod 24h
+https://gitlab.com OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod 24h
 ```
 
 For self-managed GitLab, use the same issuer in `/etc/opk/auth_id` as in `/etc/opk/providers`.
@@ -87,7 +87,7 @@ stages:
 test-ssh:
   id_tokens:
     OPENPUBKEY_JWT:
-      aud: OPENPUBKEY-PKTOKEN:ssh-deploy-prod
+      aud: OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod
   image: ubuntu
   stage: test
   script:
@@ -109,7 +109,7 @@ test-ssh:
     OPKSSH_GITLAB_CI_ISSUER: https://gitlab.example.com
   id_tokens:
     OPENPUBKEY_JWT:
-      aud: OPENPUBKEY-PKTOKEN:ssh-deploy-prod
+      aud: OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod
   image: ubuntu
   stage: test
   script:
@@ -123,7 +123,7 @@ test-ssh:
 ### Key workflow requirements
 
 - **`id_tokens.OPENPUBKEY_JWT`**: This must be configured so GitLab creates an OIDC ID token and exposes it as the `OPENPUBKEY_JWT` environment variable.
-- **Audience must match server policy**: If the job uses `aud: OPENPUBKEY-PKTOKEN:ssh-deploy-prod`, the server should have `https://gitlab.com OPENPUBKEY-PKTOKEN:ssh-deploy-prod 24h` in `/etc/opk/providers`.
+- **Audience must match server policy**: If the job uses `aud: OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod`, the server should have `https://gitlab.com OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod 24h` in `/etc/opk/providers`.
 - **GitLab CI claims are required**: The token must include GitLab CI-specific claims (`ci_config_ref_uri`, `job_id`, `job_project_path`, and `pipeline_id`). These claims distinguish GitLab CI tokens from normal interactive GitLab login tokens that share the same issuer.
 - **`opkssh login gitlab-ci`**: The `gitlab-ci` argument tells opkssh to use the GitLab CI provider. It reads `OPENPUBKEY_JWT` from the environment.
 - **`OPKSSH_GITLAB_CI_ISSUER`**: Optional. Set this to your self-managed GitLab issuer URL, such as `https://gitlab.example.com`. If unset, opkssh uses `https://gitlab.com`.
@@ -174,14 +174,14 @@ sudo opkssh audit
 Verify that the identity in `/etc/opk/auth_id` matches the `Subject` shown by `opkssh inspect`.
 
 **Audience mismatch**
-If the token audience is `OPENPUBKEY-PKTOKEN:ssh-deploy-prod`, add a matching provider line:
+If the token audience is `OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod`, add a matching provider line:
 
 ```text
-https://gitlab.com OPENPUBKEY-PKTOKEN:ssh-deploy-prod 24h
+https://gitlab.com OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod 24h
 ```
 
 **Normal GitLab login works but GitLab CI fails**
-Normal GitLab logins use the browser/OIDC nonce flow. GitLab CI uses GQ-bound tokens (`GQ256`). Ensure the server has a GitLab CI provider line with an explicit `OPENPUBKEY-PKTOKEN:*` audience in `/etc/opk/providers`. The GitLab CI token must also include the required CI claims: `ci_config_ref_uri`, `job_id`, `job_project_path`, and `pipeline_id`.
+Normal GitLab logins use the browser/OIDC nonce flow. GitLab CI uses GQ-bound tokens (`GQ256`). Ensure the server has a GitLab CI provider line with an explicit `OPENPUBKEY-PKTOKEN:GITLAB-CI:*` audience in `/etc/opk/providers`. The GitLab CI token must also include the required CI claims: `ci_config_ref_uri`, `job_id`, `job_project_path`, and `pipeline_id`.
 
 **Verify fails during SSH authentication**
 Check the opkssh server log:

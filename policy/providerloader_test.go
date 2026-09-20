@@ -121,7 +121,7 @@ func TestProviderPolicy_CreateVerifier_DuplicateGitLabIssuer(t *testing.T) {
 	})
 	policy.AddRow(ProvidersRow{
 		Issuer:           "https://gitlab.com",
-		ClientID:         "OPENPUBKEY-PKTOKEN:ssh-deploy-prod",
+		ClientID:         "OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod",
 		ExpirationPolicy: "24h",
 	})
 
@@ -145,7 +145,7 @@ func TestAddProviderVerifier_DuplicateGitLabIssuerCombinesProviders(t *testing.T
 	gitLabCi := verifier.ProviderVerifierExpires{
 		ProviderVerifier: providerVerifierFromRow(ProvidersRow{
 			Issuer:           "https://gitlab.com",
-			ClientID:         "OPENPUBKEY-PKTOKEN:ssh-deploy-prod",
+			ClientID:         "OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod",
 			ExpirationPolicy: "24h",
 		}),
 		Expiration: verifier.ExpirationPolicies.MAX_AGE_24HOURS,
@@ -189,7 +189,7 @@ func TestAddProviderVerifier_MixedProvidersCombinesOnlyDuplicateGitLabIssuer(t *
 	gitLabCi := verifier.ProviderVerifierExpires{
 		ProviderVerifier: providerVerifierFromRow(ProvidersRow{
 			Issuer:           "https://gitlab.com",
-			ClientID:         "OPENPUBKEY-PKTOKEN:ssh-deploy-prod",
+			ClientID:         "OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod",
 			ExpirationPolicy: "24h",
 		}),
 		Expiration: verifier.ExpirationPolicies.MAX_AGE_24HOURS,
@@ -218,7 +218,7 @@ func TestProviderVerifierFromRow_GitLabCiCustomIssuer(t *testing.T) {
 	customIssuer := "https://gitlab.example.com"
 	provider := providerVerifierFromRow(ProvidersRow{
 		Issuer:           customIssuer,
-		ClientID:         "OPENPUBKEY-PKTOKEN:ssh-deploy-prod",
+		ClientID:         "OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod",
 		ExpirationPolicy: "24h",
 	})
 
@@ -231,14 +231,14 @@ func TestProviderVerifierFromRow_GitLabCiCustomIssuer(t *testing.T) {
 func TestProviderVerifierFromRow_GitLabCi(t *testing.T) {
 	provider := providerVerifierFromRow(ProvidersRow{
 		Issuer:           "https://gitlab.com",
-		ClientID:         "OPENPUBKEY-PKTOKEN:ssh-deploy-prod",
+		ClientID:         "OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod",
 		ExpirationPolicy: "24h",
 	})
 
 	gitLabCiProvider, ok := provider.(gitLabCiProviderVerifier)
 	require.True(t, ok)
 	require.IsType(t, &providers.GitlabCiOp{}, gitLabCiProvider.provider)
-	require.Equal(t, "OPENPUBKEY-PKTOKEN:ssh-deploy-prod", gitLabCiProvider.audience)
+	require.Equal(t, "OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod", gitLabCiProvider.audience)
 	require.Equal(t, "https://gitlab.com", provider.Issuer())
 }
 
@@ -266,37 +266,37 @@ func TestProviderPolicy_CreateVerifier_NoProviders(t *testing.T) {
 // Test ProvidersFileLoader.FromTable with valid and invalid rows.
 func TestVerifyGitLabCiTokenClaims(t *testing.T) {
 	idt := testJWT(t, map[string]any{
-		"aud":               "OPENPUBKEY-PKTOKEN:ssh-deploy-prod",
+		"aud":               "OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod",
 		"ci_config_ref_uri": "gitlab.com/mygroup/myproject//.gitlab-ci.yml@refs/heads/main",
 		"job_id":            "123",
 		"job_project_path":  "mygroup/myproject",
 		"pipeline_id":       "456",
 	})
 
-	require.NoError(t, verifyGitLabCiTokenClaims([]byte(idt), "OPENPUBKEY-PKTOKEN:ssh-deploy-prod"))
+	require.NoError(t, verifyGitLabCiTokenClaims([]byte(idt), "OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod"))
 }
 
 func TestVerifyGitLabCiTokenClaimsRequiresExpectedAudience(t *testing.T) {
 	idt := testJWT(t, map[string]any{
-		"aud":               "OPENPUBKEY-PKTOKEN:other",
+		"aud":               "OPENPUBKEY-PKTOKEN:GITLAB-CI:other",
 		"ci_config_ref_uri": "gitlab.com/mygroup/myproject//.gitlab-ci.yml@refs/heads/main",
 		"job_id":            "123",
 		"job_project_path":  "mygroup/myproject",
 		"pipeline_id":       "456",
 	})
 
-	require.ErrorContains(t, verifyGitLabCiTokenClaims([]byte(idt), "OPENPUBKEY-PKTOKEN:ssh-deploy-prod"), "audience does not match")
+	require.ErrorContains(t, verifyGitLabCiTokenClaims([]byte(idt), "OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod"), "audience does not match")
 }
 
 func TestVerifyGitLabCiTokenClaimsRequiresCiClaims(t *testing.T) {
 	idt := testJWT(t, map[string]any{
-		"aud":               "OPENPUBKEY-PKTOKEN:ssh-deploy-prod",
+		"aud":               "OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod",
 		"ci_config_ref_uri": "gitlab.com/mygroup/myproject//.gitlab-ci.yml@refs/heads/main",
 		"job_id":            "123",
 		"job_project_path":  "mygroup/myproject",
 	})
 
-	require.ErrorContains(t, verifyGitLabCiTokenClaims([]byte(idt), "OPENPUBKEY-PKTOKEN:ssh-deploy-prod"), "pipeline_id")
+	require.ErrorContains(t, verifyGitLabCiTokenClaims([]byte(idt), "OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod"), "pipeline_id")
 }
 
 func TestProviderVerifierFromRow_GitLabCiMarkerUsesNormalGitLabProvider(t *testing.T) {
