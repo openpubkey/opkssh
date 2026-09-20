@@ -57,26 +57,6 @@ func TestProvidersConfigFromStrings(t *testing.T) {
 	require.Nil(t, providerConfigs)
 }
 
-func TestGitlabCiProviderConfigToProvider(t *testing.T) {
-	providerConfig := GitlabCiProviderConfig("https://gitlab.com")
-	provider, err := providerConfig.ToProvider(false)
-
-	require.NoError(t, err)
-	require.IsType(t, &providers.GitlabCiOp{}, provider)
-	require.Equal(t, "https://gitlab.com", provider.Issuer())
-}
-
-func TestGitlabCiProviderConfigWithCustomIssuerToProvider(t *testing.T) {
-	customIssuer := "https://gitlab.example.com"
-
-	providerConfig := GitlabCiProviderConfig(customIssuer)
-	provider, err := providerConfig.ToProvider(false)
-
-	require.NoError(t, err)
-	require.IsType(t, &providers.GitlabCiOp{}, provider)
-	require.Equal(t, customIssuer, provider.Issuer())
-}
-
 func TestProvidersConfigFromEnv(t *testing.T) {
 
 	tests := []struct {
@@ -259,6 +239,7 @@ func TestGitlabCiToProvider(t *testing.T) {
 	providerConfig := GitlabCiProviderConfig("https://gitlab.com")
 	provider, err := providerConfig.ToProvider(false)
 	require.NoError(t, err)
+	require.IsType(t, &providers.GitlabCiOp{}, provider)
 	require.Equal(t, "https://gitlab.com", provider.Issuer())
 }
 
@@ -271,13 +252,12 @@ func TestGitlabCiToProviderSelfHosted(t *testing.T) {
 	require.Equal(t, "https://gitlab.example.com", provider.Issuer())
 }
 
-func TestGitlabCiToProviderDoesNotRequireGitlabCIEnvironment(t *testing.T) {
+func TestGitlabCiToProviderOutsideGitlabCI(t *testing.T) {
 	t.Setenv("GITLAB_CI", "")
 
 	providerConfig := GitlabCiProviderConfig("https://gitlab.com")
-	provider, err := providerConfig.ToProvider(false)
-	require.NoError(t, err)
-	require.Equal(t, "https://gitlab.com", provider.Issuer())
+	_, err := providerConfig.ToProvider(false)
+	require.ErrorContains(t, err, "error creating gitlab ci op")
 }
 
 func TestGitlabBrowserToProviderUnaffectedByGitlabCI(t *testing.T) {

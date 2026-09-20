@@ -32,7 +32,9 @@ const (
 	OPKSSH_PROVIDERS_ENVVAR = "OPKSSH_PROVIDERS"
 
 	// CICD_UNUSED_CLIENT_ID marks a config built by GitHubProviderConfig,
-	// ForgejoProviderConfig, or GitlabCiProviderConfig; real OPs need a real client ID.
+	// ForgejoProviderConfig, or GitlabCiProviderConfig; traditional OPs need a
+	// client ID, but these CI/CD providers allow the audience to be specified
+	// at runtime by the CI/CD runner.
 	CICD_UNUSED_CLIENT_ID = "unused"
 
 	// GITLAB_CI_ALIAS tells GitlabCiProviderConfig apart from the browser
@@ -250,13 +252,7 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 	}
 	var provider providers.OpenIdProvider
 
-	if p.hasAlias("gitlab-ci") {
-		if p.Issuer == "https://gitlab.com" {
-			provider = providers.NewGitlabCiOpFromEnvironmentDefault()
-		} else {
-			provider = providers.NewGitlabCiOp(p.Issuer, GITLAB_CI_TOKEN_ENVVAR)
-		}
-	} else if strings.HasPrefix(p.Issuer, "https://accounts.google.com") {
+	if strings.HasPrefix(p.Issuer, "https://accounts.google.com") {
 		opts := providers.GetDefaultGoogleOpOptions()
 		opts.Issuer = p.Issuer
 		opts.ClientID = p.ClientID
@@ -285,7 +281,7 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 		opts.RemoteRedirectURI = p.RemoteRedirectURI
 		opts.OpenBrowser = openBrowser
 		provider = providers.NewAzureOpWithOptions(opts)
-	} else if p.ClientID == CICD_UNUSED_CLIENT_ID && slices.Contains(p.AliasList, GITLAB_CI_ALIAS) {
+	} else if slices.Contains(p.AliasList, GITLAB_CI_ALIAS) {
 		if os.Getenv(GITLAB_CI_ENVVAR) != "true" {
 			return nil, fmt.Errorf("error creating gitlab ci op: not running inside a GitLab CI/CD pipeline (%s environment variable is not \"true\")", GITLAB_CI_ENVVAR)
 		}
@@ -356,10 +352,6 @@ func (p *ProviderConfig) ToProvider(openBrowser bool) (providers.OpenIdProvider,
 
 func (p *ProviderConfig) hasScopes() bool {
 	return len(p.Scopes) > 0 && (len(p.Scopes) > 1 || p.Scopes[0] != "")
-}
-
-func (p *ProviderConfig) hasAlias(alias string) bool {
-	return slices.Contains(p.AliasList, alias)
 }
 
 // GetProvidersConfigFromEnv is a function to retrieve the config from the env variables
