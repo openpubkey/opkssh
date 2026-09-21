@@ -12,12 +12,22 @@ Our goal is to have an distinct meaning for each column. This way if we want to 
 
 You can check the correctness of server side config files by running the audit command: `sudo opkssh audit`.
 
-## Client config `~/.opk/config.yml`
+## Client config
 
-The config file for the client is saved in `~/.opk/config.yml`.
-It configures which OpenID Providers the user can log in with.
+The client config configures which OpenID Providers the user can log in with.
+It is looked up in the following order, and the first file that exists wins:
+
+1. `$XDG_CONFIG_HOME/opk/config.yml` when `XDG_CONFIG_HOME` is set (to an
+   absolute path, per the XDG Base Directory specification), otherwise
+   `~/.config/opk/config.yml` on Linux/macOS or `%AppData%\opk\config.yml` on
+   Windows.
+2. The legacy `~/.opk/config.yml` (all platforms). An existing legacy config
+   keeps working unchanged and is never moved.
+
 This file is not required to exist to use opkssh and it is not created by default.
-To create it, simple run `~/opkssh login --create-config`.
+To create it, simply run `opkssh login --create-config`; a new config is
+written to the first location above unless a legacy config already exists.
+Run `opkssh login -v` to see which config file is in use.
 
 The default client config can be found in [../commands/config/default-client-config.yml](../commands/config/default-client-config.yml).
 
