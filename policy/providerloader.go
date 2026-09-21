@@ -120,7 +120,6 @@ func providerVerifierFromRow(row ProvidersRow) verifier.ProviderVerifier {
 
 func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
 	pvs := []verifier.ProviderVerifier{}
-	providerIndexes := make(map[string]int)
 	var expirationPolicy verifier.ExpirationPolicy
 	var err error
 	for _, row := range p.rows {
@@ -134,7 +133,7 @@ func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
 			ProviderVerifier: provider,
 			Expiration:       expirationPolicy,
 		}
-		pvs = addProviderVerifier(pvs, providerIndexes, pv)
+		pvs = append(pvs, pv)
 	}
 
 	if len(pvs) == 0 {
@@ -148,77 +147,6 @@ func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
 		return nil, err
 	}
 	return pktVerifier, nil
-}
-
-func addProviderVerifier(pvs []verifier.ProviderVerifier, providerIndexes map[string]int, provider verifier.ProviderVerifier) []verifier.ProviderVerifier {
-	issuer := provider.Issuer()
-	if idx, ok := providerIndexes[issuer]; ok {
-		existingProvider := pvs[idx]
-		pvs[idx] = combineProviderVerifiers(existingProvider, provider)
-		return pvs
-	}
-
-	providerIndexes[issuer] = len(pvs)
-	return append(pvs, provider)
-}
-
-func combineProviderVerifiers(existing verifier.ProviderVerifier, next verifier.ProviderVerifier) verifier.ProviderVerifier {
-	existingProvider, expirationPolicy, hasExpirationPolicy := unwrapProviderVerifierExpires(existing)
-	nextProvider, nextExpirationPolicy, nextHasExpirationPolicy := unwrapProviderVerifierExpires(next)
-
-	if nextHasExpirationPolicy {
-		expirationPolicy = nextExpirationPolicy
-		hasExpirationPolicy = true
-	}
-
-	combinedProvider := multiProviderVerifier{
-		issuer:    existingProvider.Issuer(),
-		providers: append(providerVerifierList(existingProvider), nextProvider),
-	}
-
-	if hasExpirationPolicy {
-		return verifier.ProviderVerifierExpires{
-			ProviderVerifier: combinedProvider,
-			Expiration:       expirationPolicy,
-		}
-	}
-	return combinedProvider
-}
-
-func unwrapProviderVerifierExpires(provider verifier.ProviderVerifier) (verifier.ProviderVerifier, verifier.ExpirationPolicy, bool) {
-	providerWithExpiration, ok := provider.(verifier.ProviderVerifierExpires)
-	if !ok {
-		return provider, verifier.ExpirationPolicy{}, false
-	}
-	return providerWithExpiration.ProviderVerifier, providerWithExpiration.ExpirationPolicy(), true
-}
-
-func providerVerifierList(provider verifier.ProviderVerifier) []verifier.ProviderVerifier {
-	if multiProvider, ok := provider.(multiProviderVerifier); ok {
-		return multiProvider.providers
-	}
-	return []verifier.ProviderVerifier{provider}
-}
-
-type multiProviderVerifier struct {
-	issuer    string
-	providers []verifier.ProviderVerifier
-}
-
-func (m multiProviderVerifier) Issuer() string {
-	return m.issuer
-}
-
-func (m multiProviderVerifier) VerifyIDToken(ctx context.Context, idt []byte, cic *clientinstance.Claims) error {
-	var verificationErrors []string
-	for _, provider := range m.providers {
-		if err := provider.VerifyIDToken(ctx, idt, cic); err != nil {
-			verificationErrors = append(verificationErrors, err.Error())
-			continue
-		}
-		return nil
-	}
-	return fmt.Errorf("all provider verifiers failed for issuer %s: %s", m.issuer, strings.Join(verificationErrors, "; "))
 }
 
 type gitLabCiProviderVerifier struct {
