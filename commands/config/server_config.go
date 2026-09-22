@@ -18,23 +18,40 @@ package config
 
 import (
 	"os"
+	"time"
 
+	"github.com/openpubkey/openpubkey/discover"
+	"github.com/openpubkey/opkssh/commands/discoverycache"
+	"github.com/spf13/afero"
 	"gopkg.in/yaml.v3"
 )
 
+type CacheConfig struct {
+	BaseDir        string        `yaml:"base_dir"`
+	StandardMaxAge time.Duration `yaml:"max_age"`
+	FallbackMaxAge time.Duration `yaml:"fallback_max_age"`
+}
+
 // ServerConfig struct to represent the /etc/opk/config.yml file that runs on the server that the user is SSHing into
 type ServerConfig struct {
-	EnvVars    map[string]string `yaml:"env_vars"`
-	DenyUsers  []string          `yaml:"deny_users"`
-	DenyEmails []string          `yaml:"deny_emails"`
+	EnvVars     map[string]string `yaml:"env_vars"`
+	DenyUsers   []string          `yaml:"deny_users"`
+	DenyEmails  []string          `yaml:"deny_emails"`
+	CacheConfig *CacheConfig      `yaml:"cache"`
 }
 
 func NewServerConfig(c []byte) (*ServerConfig, error) {
 	var serverConfig ServerConfig
+	if len(c) == 0 {
+		c = []byte("{}")
+	}
 	if err := yaml.Unmarshal(c, &serverConfig); err != nil {
 		return nil, err
 	}
 
+	if serverConfig.CacheConfig == nil {
+		serverConfig.CacheConfig = &CacheConfig{}
+	}
 	return &serverConfig, nil
 }
 
@@ -45,4 +62,17 @@ func (c *ServerConfig) SetEnvVars() error {
 		}
 	}
 	return nil
+}
+
+func (c *ServerConfig) CreateCache(fs afero.Fs) discover.DiscoveryCache {
+	if c.CacheConfig.BaseDir == "" {
+		return discover.NoOpCache{}
+	}
+	if c.CacheConfig.StandardMaxAge == 0 {
+		c.CacheConfig.StandardMaxAge = 60 * time.Minute
+	}
+	if c.CacheConfig.FallbackMaxAge < c.CacheConfig.StandardMaxAge {
+		c.CacheConfig.FallbackMaxAge = 2 * c.CacheConfig.StandardMaxAge
+	}
+	return discoverycache.NewFilesystemDiscoveryCache(fs, c.CacheConfig.BaseDir)
 }
