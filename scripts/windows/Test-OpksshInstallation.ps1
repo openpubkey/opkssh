@@ -161,11 +161,12 @@ function Test-ConfigurationFiles {
     # Test 4: Providers file content
     $providersPath = Join-Path $configBase "providers"
     if (Test-Path $providersPath) {
-        $providersContent = Get-Content $providersPath -Raw
-        if ($providersContent -match 'accounts.google.com|login.microsoftonline.com') {
-            Write-TestResult -TestName "Providers file has content" -Result Pass
+        # Lines opkssh reads as providers: comments and blank lines removed
+        $providerLines = @(Get-Content $providersPath | ForEach-Object { ($_ -replace '#.*', '').Trim() } | Where-Object { $_ })
+        if ($providerLines.Count -gt 0) {
+            Write-TestResult -TestName "Providers file has content" -Result Pass -Message "$($providerLines.Count) provider(s) enabled"
         } else {
-            Write-TestResult -TestName "Providers file has content" -Result Warning -Message "File exists but may be empty"
+            Write-TestResult -TestName "Providers file has content" -Result Warning -Message "No provider enabled. Add one to $providersPath"
         }
     }
 }

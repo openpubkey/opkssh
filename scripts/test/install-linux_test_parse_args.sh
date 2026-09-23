@@ -13,6 +13,7 @@ setUp() {
     OVERWRITE_ACTIVE_CONFIG=false
     LOCAL_INSTALL_FILE=""
     INSTALL_VERSION="latest"
+    LOCAL_PROVIDERS_FILE=""
 }
 
 # Mock the help function
@@ -43,6 +44,11 @@ test_parse_args_install_from() {
 test_parse_args_install_version() {
     parse_args --install-version=1.2.3
     assertEquals "Expected INSTALL_VERSION to be set" "1.2.3" "$INSTALL_VERSION"
+}
+
+test_parse_args_install_providers_from() {
+    parse_args --install-providers-from=/path/to/providers
+    assertEquals "Expected LOCAL_PROVIDERS_FILE to be set" "/path/to/providers" "$LOCAL_PROVIDERS_FILE"
 }
 
 test_parse_args_help_flag() {

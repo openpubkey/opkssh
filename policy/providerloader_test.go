@@ -127,7 +127,7 @@ func TestProviderPolicy_CreateVerifier_InvalidExpiration(t *testing.T) {
 func TestProviderPolicy_CreateVerifier_NoProviders(t *testing.T) {
 	policy := &ProviderPolicy{}
 	ver, err := policy.CreateVerifier()
-	require.ErrorContains(t, err, "no providers configured")
+	require.ErrorIs(t, err, ErrNoProviders)
 	require.Nil(t, ver)
 }
 

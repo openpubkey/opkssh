@@ -36,6 +36,10 @@ Options:
 
   Install a specific version from GitHub instead of "latest".
 
+  `--install-providers-from=FILEPATH`
+
+  Use a local file as the providers file (/etc/opk/providers) instead of       the commented-out template. Ignored if /etc/opk/providers is not empty.
+
 - `--help`: Display this help message.
 
 ## Environment Variables
@@ -249,11 +253,26 @@ Parses CLI arguments and sets configuration flags.
 
 
 **Outputs:**
--   Sets global variables: HOME_POLICY, RESTART_SSH, OVERWRITE_ACTIVE_CONFIG,LOCAL_INSTALL_FILE, INSTALL_VERSION.
+-   Sets global variables: HOME_POLICY, RESTART_SSH, OVERWRITE_ACTIVE_CONFIG,LOCAL_INSTALL_FILE, INSTALL_VERSION, LOCAL_PROVIDERS_FILE.
 
 
 **Returns:**
 -   0 on success, 1 if help is in arguments
+
+
+## `check_local_providers_file`
+
+check_local_providers_file
+Checks that the file given with --install-providers-from exists, so the
+install fails before changing the system rather than after
+
+
+**Outputs:**
+-   Writes to stderr if the file does not exist
+
+
+**Returns:**
+-   0 if no file was given or the file exists, 1 otherwise
 
 
 ## `install_opkssh_binary`
@@ -271,6 +290,23 @@ Installs opkssh binary either from local file or downloads from repository
 -   0 if installation is succeeded, 1 otherwise
 
 
+## `install_selinux_module`
+
+install_selinux_module
+  Compiles, packages, and loads an SELinux module from a TE file. Errors
+  from the individual tools are suppressed so callers can silently try
+  another TE variant on failure.
+
+**Arguments:**
+-   $1 - Path to the .te file
+-   $2 - Path to write the compiled module to
+-   $3 - Path to write the packaged module to
+
+
+**Returns:**
+-   0 if the module was compiled, packaged, and loaded successfully, 1 otherwise
+
+
 ## `check_selinux`
 
 check_selinux
@@ -283,6 +319,21 @@ check_selinux
 
 **Returns:**
 -   0 if SELinux is disabled or if context is correctly
+
+
+## `providers_template`
+
+providers_template
+Prints the commented-out providers file written on a new install. No
+provider is trusted until the administrator adds their own client ID.
+
+
+**Outputs:**
+-   Writes the template to stdout
+
+
+**Returns:**
+-   0
 
 
 ## `configure_opkssh`

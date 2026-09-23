@@ -168,6 +168,9 @@ wget -qO- "https://raw.githubusercontent.com/openpubkey/opkssh/main/scripts/inst
 
 This downloads the opkssh binary, installs it as `/usr/local/bin/opkssh`, and then configures ssh to use opkssh as an additional authentication mechanism.
 
+The installer does not enable any OpenID Provider: register a client ID for opkssh with your OpenID Provider and add it to [`/etc/opk/providers`](#etcopkproviders).
+To install with your own providers file instead, pass `--install-providers-from=FILEPATH`.
+
 ### Installing on a Windows Server
 
 To configure a Windows server to use opkssh, download and run the installer script in an elevated PowerShell terminal:
@@ -178,6 +181,7 @@ Invoke-WebRequest -Uri "https://github.com/openpubkey/opkssh/releases/latest/dow
 ```
 
 This downloads the opkssh binary, configures `sshd_config` for `AuthorizedKeysCommand`, sets up the correct NTFS ACLs on all configuration files, and restarts sshd.
+As on Linux, no OpenID Provider is enabled until you add one to `%ProgramData%\opk\providers`, or install with `-InstallProvidersFrom <file>`.
 
 To uninstall:
 
@@ -195,7 +199,7 @@ Invoke-WebRequest -Uri "https://github.com/openpubkey/opkssh/releases/latest/dow
 
 On Windows, the configuration files are located at `%ProgramData%\opk\` (typically `C:\ProgramData\opk\`).
 
-To allow a user, `alice@gmail.com`, to ssh to your server as `root`, run:
+Once the Google provider is enabled, to allow a user, `alice@gmail.com`, to ssh to your server as `root`, run:
 
 ```bash
 sudo opkssh add root alice@gmail.com google
@@ -270,12 +274,23 @@ This file functions as an access control list that enables admins to determine t
 
 By default we use `24h` as it requires that the user authenticate to their OP once a day. Most OPs expire ID Tokens every one to two hours, so if `oidc` the user will have to sign multiple times a day. `oidc_refreshed` is supported but complex and not currently recommended unless you know what you are doing.
 
-The default values for `/etc/opk/providers` are:
+The installer writes the template below to `/etc/opk/providers`, which enables no provider.
+To enable a provider, register a client ID for opkssh with it, uncomment its line and replace `<CLIENT-ID>` with that client ID.
+Clients must log in with the same client ID (see [Client Config File](#client-config-file)).
 
 ```bash
-# Issuer Client-ID expiration-policy
-https://accounts.google.com 206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com 24h
-https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0 096ce0a3-5e72-4da8-9c86-12924b294a01 24h
+# OpenID Providers trusted by opkssh, one per line:
+#   <issuer> <client-id> <expiration-policy>
+# expiration-policy is one of: 12h, 24h, 48h, 1week, oidc, oidc_refreshed, never
+#
+# No provider is enabled until you add one. Register a client ID for opkssh
+# with your OpenID Provider, then uncomment its line below and replace
+# <CLIENT-ID> with it. Clients must log in with the same client ID.
+# See https://github.com/openpubkey/opkssh/tree/main/docs/providers
+#
+# https://accounts.google.com <CLIENT-ID> 24h
+# https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0 <CLIENT-ID> 24h
+# https://gitlab.com <CLIENT-ID> 24h
 ```
 
 `/etc/opk/providers` requires the following permissions (by default we create all configuration files with the correct permissions):

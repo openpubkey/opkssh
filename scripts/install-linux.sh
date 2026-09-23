@@ -32,6 +32,10 @@
 #   --install-version=VERSION
 #       Install a specific version from GitHub instead of "latest".
 #
+#   --install-providers-from=FILEPATH
+#       Use a local file as the providers file (/etc/opk/providers) instead of
+#       the commented-out template. Ignored if /etc/opk/providers is not empty.
+#
 #   --help
 #       Display this help message.
 # ==============================================================================
@@ -93,6 +97,11 @@ LOCAL_INSTALL_FILE="${OPKSSH_INSTALL_LOCAL_INSTALL_FILE:-}"
 # Default: (empty)
 # Descriptiopn: path to local Type Enforcement file to install on SELinux enabled systems
 LOCAL_TE_FILE="${OPKSSH_LOCAL_TE_FILE:-}"
+
+# OPKSSH_INSTALL_LOCAL_PROVIDERS_FILE
+# Default: (empty)
+# Description: Path to local providers file, used instead of the commented-out providers template
+LOCAL_PROVIDERS_FILE="${OPKSSH_INSTALL_LOCAL_PROVIDERS_FILE:-}"
 
 # OPKSSH_INSTALL_VERSION
 # Default: latest
@@ -262,6 +271,8 @@ display_help_message() {
     echo "  --install-from=FILEPATH     Install using a local file"
     echo "  --install-te-from=FILEPATH  Install SELinux Type Enforcement using a local file"
     echo "  --install-version=VER       Install a specific version from GitHub"
+    echo "  --install-providers-from=FILEPATH"
+    echo "                              Use a local file as /etc/opk/providers instead of the commented-out template"
     echo "  --selinux-enable-squid      Enables the Squid proxy ports in opkssh SELinux module"
     echo "  --selinux-enable-proxy      Enables the HTTP Cache ports in opkssh SELinux module"
     echo "  --help                      Display this help message"
@@ -422,7 +433,7 @@ check_opkssh_version() {
 #   $@ - Command-line arguments
 #
 # Outputs:
-#   Sets global variables: HOME_POLICY, RESTART_SSH, OVERWRITE_ACTIVE_CONFIG,LOCAL_INSTALL_FILE, INSTALL_VERSION.
+#   Sets global variables: HOME_POLICY, RESTART_SSH, OVERWRITE_ACTIVE_CONFIG,LOCAL_INSTALL_FILE, INSTALL_VERSION, LOCAL_PROVIDERS_FILE.
 #
 # Returns:
 #   0 on success, 1 if help is in arguments
@@ -447,8 +458,26 @@ parse_args() {
             LOCAL_TE_FILE="${arg#*=}"
         elif [[ "$arg" == --install-version=* ]]; then
             INSTALL_VERSION="${arg#*=}"
+        elif [[ "$arg" == --install-providers-from=* ]]; then
+            LOCAL_PROVIDERS_FILE="${arg#*=}"
         fi
     done
+}
+
+# check_local_providers_file
+# Checks that the file given with --install-providers-from exists, so the
+# install fails before changing the system rather than after
+#
+# Outputs:
+#   Writes to stderr if the file does not exist
+#
+# Returns:
+#   0 if no file was given or the file exists, 1 otherwise
+check_local_providers_file() {
+    if [[ -n "$LOCAL_PROVIDERS_FILE" ]] && ! file_exists "$LOCAL_PROVIDERS_FILE"; then
+        echo "Error: Specified providers file does not exist: $LOCAL_PROVIDERS_FILE" >&2
+        return 1
+    fi
 }
 
 # install_opkssh_binary
@@ -603,6 +632,32 @@ check_selinux() {
     fi
 }
 
+# providers_template
+# Prints the commented-out providers file written on a new install. No
+# provider is trusted until the administrator adds their own client ID.
+#
+# Outputs:
+#   Writes the template to stdout
+#
+# Returns:
+#   0
+providers_template() {
+    cat <<'EOF'
+# OpenID Providers trusted by opkssh, one per line:
+#   <issuer> <client-id> <expiration-policy>
+# expiration-policy is one of: 12h, 24h, 48h, 1week, oidc, oidc_refreshed, never
+#
+# No provider is enabled until you add one. Register a client ID for opkssh
+# with your OpenID Provider, then uncomment its line below and replace
+# <CLIENT-ID> with it. Clients must log in with the same client ID.
+# See https://github.com/openpubkey/opkssh/tree/main/docs/providers
+#
+# https://accounts.google.com <CLIENT-ID> 24h
+# https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0 <CLIENT-ID> 24h
+# https://gitlab.com <CLIENT-ID> 24h
+EOF
+}
+
 # configure_opkssh
 # Creates/checks the opskssh configuration
 #
@@ -617,11 +672,6 @@ check_selinux() {
 # shellcheck disable=SC2120
 configure_opkssh() {
     local etc_path="${1:-/etc}"
-    # Define the default OpenID Providers
-    local provider_google="https://accounts.google.com 206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com 24h"
-    local provider_microsoft="https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0 096ce0a3-5e72-4da8-9c86-12924b294a01 24h"
-    local provider_gitlab="https://gitlab.com 8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923 24h"
-    local provider_hello="https://issuer.hello.coop app_xejobTKEsDNSRd5vofKB2iay_2rN 24h"
 
     echo "Configuring opkssh:"
 
@@ -657,13 +707,19 @@ configure_opkssh() {
 
     if [[ -s "$etc_path/opk/providers" ]]; then
         echo "  The providers policy file (/etc/opk/providers) is not empty. Keeping existing values"
+        if [[ -n "$LOCAL_PROVIDERS_FILE" ]]; then
+            echo "  Not using $LOCAL_PROVIDERS_FILE"
+        fi
+    elif [[ -n "$LOCAL_PROVIDERS_FILE" ]]; then
+        echo "  Writing providers from $LOCAL_PROVIDERS_FILE"
+        cat "$LOCAL_PROVIDERS_FILE" >> "$etc_path/opk/providers"
+        # End with a newline so that a line appended later starts on its own line
+        if [[ -n "$(tail -c 1 "$etc_path/opk/providers")" ]]; then
+            echo >> "$etc_path/opk/providers"
+        fi
     else
-        {
-            echo "$provider_google"
-            echo "$provider_microsoft"
-            echo "$provider_gitlab"
-            echo "$provider_hello"
-        } >> "$etc_path/opk/providers"
+        providers_template >> "$etc_path/opk/providers"
+        echo "  No OpenID Provider is enabled yet. Add one to /etc/opk/providers"
     fi
 }
 
@@ -809,7 +865,7 @@ log_opkssh_installation() {
     VERSION_INSTALLED=$("$INSTALL_DIR"/"$BINARY_NAME" --version)
     INSTALLED_ON=$(date)
     # Log the installation details to /var/log/opkssh.log to help with debugging
-    echo "Successfully installed opkssh (INSTALLED_ON: $INSTALLED_ON, VERSION_INSTALLED: $VERSION_INSTALLED, INSTALL_VERSION: $INSTALL_VERSION, LOCAL_INSTALL_FILE: $LOCAL_INSTALL_FILE, HOME_POLICY: $HOME_POLICY, RESTART_SSH: $RESTART_SSH)" >> "$log_file"
+    echo "Successfully installed opkssh (INSTALLED_ON: $INSTALLED_ON, VERSION_INSTALLED: $VERSION_INSTALLED, INSTALL_VERSION: $INSTALL_VERSION, LOCAL_INSTALL_FILE: $LOCAL_INSTALL_FILE, LOCAL_PROVIDERS_FILE: $LOCAL_PROVIDERS_FILE, HOME_POLICY: $HOME_POLICY, RESTART_SSH: $RESTART_SSH)" >> "$log_file"
 
     echo "Installation successful! Run '$BINARY_NAME' to use it."
 }
@@ -824,6 +880,7 @@ log_opkssh_installation() {
 #   0 if opkssh installs successfully, 1 if installation failed
 main() {
     parse_args "$@" || return 0
+    check_local_providers_file || return 1
     check_bash_version "${BASH_VERSINFO[@]}" || return 1
     check_opkssh_version || return 1
     running_as_root "$EUID" || return 1
