@@ -140,7 +140,9 @@ jobs:
     needs: build
     name: 'Integration Tests'
     runs-on: ${{ matrix.runs_on }}
-    timeout-minutes: 8
+    # Longer than the go test -timeout below, so a hung test fails with Go's
+    # goroutine dump instead of the job being cancelled without one
+    timeout-minutes: 20
     strategy:
       matrix:
         runs_on: [ubuntu-24.04, ubuntu-24.04-arm]
