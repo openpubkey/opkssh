@@ -23,6 +23,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/openpubkey/opkssh/commands/config"
 	"github.com/openpubkey/opkssh/policy"
 	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/spf13/afero"
@@ -106,6 +107,14 @@ func SetupAuditCmdMocks(t *testing.T, etcPasswdContent string, providerContent s
 func TestAuditCmd(t *testing.T) {
 	t.Parallel()
 
+	defaultConfig, err := config.NewClientConfig(config.DefaultClientConfig)
+	require.NoError(t, err)
+	googleDefault, ok := defaultConfig.GetByIssuer("https://accounts.google.com")
+	require.True(t, ok)
+	gitlabDefault, ok := defaultConfig.GetByIssuer("https://gitlab.com")
+	require.True(t, ok)
+	providersPath := strings.ReplaceAll(policy.SystemDefaultProvidersPath, string(filepath.Separator), "/")
+
 	tests := []struct {
 		name                   string
 		providerContent        string
@@ -182,6 +191,53 @@ func TestAuditCmd(t *testing.T) {
 			expectedStdErrContains: []string{
 				"no policy entries",
 				"validating " + strings.ReplaceAll(policy.SystemDefaultPolicyPath, string(filepath.Separator), "/"),
+			},
+		},
+		{
+			name: "Provider with a default client ID",
+			providerContent: "https://accounts.google.com " + googleDefault.ClientID + " 24h\n" +
+				"https://auth.example.com example-client-id 24h",
+			SystemPolicyContent:  `root alice@mail.com https://accounts.google.com`,
+			currentUsername:      "testuser",
+			expectedSuccessCount: 1,
+			expectedWarningCount: 1,
+			expectedStdOutContains: []string{
+				"[OK] SUCCESS",
+				"Warnings:              1",
+				"(warnings detected)",
+			},
+			expectedStdErrContains: []string{
+				"warning: " + providersPath + " trusts https://accounts.google.com with opkssh's default client ID " + googleDefault.ClientID,
+				"register your own client ID",
+			},
+		},
+		{
+			name: "Providers with two default client IDs",
+			providerContent: "https://accounts.google.com " + googleDefault.ClientID + " 24h\n" +
+				"https://gitlab.com " + gitlabDefault.ClientID + " 24h",
+			SystemPolicyContent:  `root alice@mail.com https://accounts.google.com`,
+			currentUsername:      "testuser",
+			expectedSuccessCount: 1,
+			expectedWarningCount: 2,
+			expectedStdOutContains: []string{
+				"Warnings:              2",
+			},
+			expectedStdErrContains: []string{
+				"trusts https://accounts.google.com with opkssh's default client ID",
+				"trusts https://gitlab.com with opkssh's default client ID",
+			},
+		},
+		{
+			name:                 "Provider with a default client ID (Json Output)",
+			providerContent:      "https://accounts.google.com " + googleDefault.ClientID + " 24h",
+			SystemPolicyContent:  `root alice@mail.com https://accounts.google.com`,
+			currentUsername:      "testuser",
+			jsonOutput:           true,
+			expectedSuccessCount: 1,
+			expectedWarningCount: 1,
+			expectedStdOutContains: []string{
+				"{\n  \"ok\": false,",
+				"\"warnings\": [",
 			},
 		},
 		{
