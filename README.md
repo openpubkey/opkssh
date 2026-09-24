@@ -445,6 +445,15 @@ Rather than type in the provider each time, you can create a client config file 
 `C:\Users\{USER}\.opk\config.yml` on windows and `~/.opk/config.yml` on linux.
 You can then edit this config file to add your provider.
 
+The client IDs in the default config are shared by everyone using opkssh's defaults: they are for trying opkssh out and can stop working at any time, and `opkssh login` warns when it uses one.
+To use your own client ID instead, run `opkssh client provider add`, which creates the config file if needed. For example, to replace the default Google client ID:
+
+```bash
+opkssh client provider add google https://accounts.google.com <client-id> --client-secret <client-secret> --replace
+```
+
+The same client ID must be in `/etc/opk/providers` on the servers you log in to.
+
 <details>
 <summary>config.yml</summary>
 
