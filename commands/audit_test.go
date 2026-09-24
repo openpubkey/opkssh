@@ -185,6 +185,30 @@ func TestAuditCmd(t *testing.T) {
 			},
 		},
 		{
+			name: "No provider enabled (installer template)",
+			providerContent: `# OpenID Providers trusted by opkssh, one per line:
+# https://accounts.google.com <CLIENT-ID> 24h`,
+			SystemPolicyContent:  "",
+			currentUsername:      "testuser",
+			hasUserAuthID:        false,
+			expectedSuccessCount: 0,
+			expectedWarningCount: 0,
+			expectedErrorCount:   1,
+			expectedStdErrContains: []string{
+				"error: " + strings.ReplaceAll(policy.SystemDefaultProvidersPath, string(filepath.Separator), "/") + ": no providers configured",
+			},
+		},
+		{
+			name:                   "No provider enabled (Json Output)",
+			providerContent:        `# https://accounts.google.com <CLIENT-ID> 24h`,
+			SystemPolicyContent:    "",
+			currentUsername:        "testuser",
+			hasUserAuthID:          false,
+			jsonOutput:             true,
+			expectedErrorCount:     1,
+			expectedStdOutContains: []string{"{\n  \"ok\": false,", "no providers configured"},
+		},
+		{
 			name: "Json Output (happy path)",
 			providerContent: `https://accounts.google.com google-client-id 24h
 		https://auth.example.com example-client-id 24h`,

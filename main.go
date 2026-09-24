@@ -358,6 +358,7 @@ Arguments:
 
 			pktVerifier, err := providerPolicy.CreateVerifier()
 			if err != nil {
+				err = fmt.Errorf("%s: %w", providerPolicyPath, err)
 				log.Println("Failed to create pk token verifier (likely bad configuration):", err)
 				return err
 			}

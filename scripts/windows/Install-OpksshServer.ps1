@@ -37,6 +37,10 @@
     GitHub repository to download from (format: owner/repo).
     Default is "openpubkey/opkssh".
 
+.PARAMETER InstallProvidersFrom
+    Path to a local file to use as the providers file instead of the
+    commented-out template. Ignored if the providers file is not empty.
+
 .EXAMPLE
     .\Install-OpksshServer.ps1
     
@@ -51,6 +55,11 @@
     .\Install-OpksshServer.ps1 -InstallVersion "v0.10.0" -Verbose
     
     Install a specific version with verbose output.
+
+.EXAMPLE
+    .\Install-OpksshServer.ps1 -InstallProvidersFrom "C:\Config\opkssh-providers"
+
+    Install with your own OpenID Provider client IDs instead of the template.
 
 .NOTES
     Author: OpenPubkey Project
@@ -87,7 +96,16 @@ param(
     [string]$ConfigPath = "C:\ProgramData\opk",
 
     [Parameter(HelpMessage="GitHub repository (owner/repo)")]
-    [string]$GitHubRepo = "openpubkey/opkssh"
+    [string]$GitHubRepo = "openpubkey/opkssh",
+
+    [Parameter(HelpMessage="Path to a local providers file to use instead of the template")]
+    [ValidateScript({
+        if ($_ -and -not (Test-Path $_ -PathType Leaf)) {
+            throw "File not found: $_"
+        }
+        $true
+    })]
+    [string]$InstallProvidersFrom = ""
 )
 
 #region Helper Functions
@@ -476,6 +494,30 @@ function Install-UninstallScript {
     return $scriptPath
 }
 
+function Get-ProvidersTemplate {
+    <#
+    .SYNOPSIS
+        Returns the commented-out providers file written on a new install.
+        No provider is trusted until the administrator adds their own client ID.
+    #>
+    $template = @'
+# OpenID Providers trusted by opkssh, one per line:
+#   <issuer> <client-id> <expiration-policy>
+# expiration-policy is one of: 12h, 24h, 48h, 1week, oidc, oidc_refreshed, never
+#
+# No provider is enabled until you add one. Register a client ID for opkssh
+# with your OpenID Provider, then uncomment its line below and replace
+# <CLIENT-ID> with it. Clients must log in with the same client ID.
+# See https://github.com/openpubkey/opkssh/tree/main/docs/providers
+#
+# https://accounts.google.com <CLIENT-ID> 24h
+# https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0 <CLIENT-ID> 24h
+# https://gitlab.com <CLIENT-ID> 24h
+'@
+    # The here-string takes this file's line endings; always use CRLF
+    return ($template -replace "`r?`n", "`r`n") + "`r`n"
+}
+
 function New-OpksshConfiguration {
     <#
     .SYNOPSIS
@@ -487,9 +529,12 @@ function New-OpksshConfiguration {
         [string]$ConfigPath,
         
         [Parameter(Mandatory=$true)]
-        [string]$AuthCmdUser
+        [string]$AuthCmdUser,
+
+        [Parameter()]
+        [string]$ProvidersFrom = ""
     )
-    
+
     Write-Log "Configuring opkssh at: $ConfigPath"
     
     # Define directory structure
@@ -536,26 +581,30 @@ function New-OpksshConfiguration {
         Write-Verbose "  File exists: config.yml"
     }
     
-    # Create or update providers file
-    if (-not (Test-Path $providersPath)) {
-        $providersContent = @"
-# Issuer Client-ID expiration-policy
-https://accounts.google.com 206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com 24h
-https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0 096ce0a3-5e72-4da8-9c86-12924b294a01 24h
-https://gitlab.com 8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923 24h
-https://issuer.hello.coop app_xejobTKEsDNSRd5vofKB2iay_2rN 24h
-"@
-        
+    # Create the providers file, unless it already lists providers
+    $existingContent = if (Test-Path $providersPath) { Get-Content $providersPath -Raw } else { "" }
+    if (-not [string]::IsNullOrWhiteSpace($existingContent)) {
+        Write-Verbose "  The providers file is not empty. Keeping existing values."
+        if ($ProvidersFrom) {
+            Write-Warning "  Not using $ProvidersFrom because $providersPath is not empty."
+        }
+    } else {
+        if ($ProvidersFrom) {
+            $providersContent = Get-Content $ProvidersFrom -Raw
+            if ($null -eq $providersContent) { $providersContent = "" }
+            Write-Log "Writing providers from $ProvidersFrom"
+        } else {
+            $providersContent = Get-ProvidersTemplate
+            Write-Log "No OpenID Provider is enabled yet. Add one to $providersPath" -Level Warning
+        }
+        # End with a newline so that a line appended later starts on its own line
+        if ($providersContent -and -not $providersContent.EndsWith("`n")) {
+            $providersContent += "`r`n"
+        }
+
         if ($PSCmdlet.ShouldProcess($providersPath, "Create providers file")) {
             [System.IO.File]::WriteAllText($providersPath, $providersContent, [System.Text.UTF8Encoding]::new($false))
             Write-Verbose "  Created file: providers"
-        }
-    } else {
-        $existingContent = Get-Content $providersPath -Raw
-        if ([string]::IsNullOrWhiteSpace($existingContent)) {
-            Write-Warning "  The providers file exists but is empty. Keeping it empty."
-        } else {
-            Write-Verbose "  The providers file is not empty. Keeping existing values."
         }
     }
     
@@ -979,7 +1028,7 @@ function Install-OpksshServer {
         
         # Step 7: Create configuration
         Write-Host "[7/11] Creating configuration..." -ForegroundColor Yellow
-        New-OpksshConfiguration -ConfigPath $ConfigPath -AuthCmdUser $AuthCmdUser | Out-Null
+        New-OpksshConfiguration -ConfigPath $ConfigPath -AuthCmdUser $AuthCmdUser -ProvidersFrom $InstallProvidersFrom | Out-Null
         Write-Host "  Configuration: $ConfigPath" -ForegroundColor Green
         Write-Host ""
         
@@ -1040,6 +1089,7 @@ function Install-OpksshServer {
                               -InstallParams @{
                                   InstallVersion = $InstallVersion
                                   InstallFrom = $InstallFrom
+                                  InstallProvidersFrom = $InstallProvidersFrom
                                   NoRestart = $NoSshdRestart
                                   ConfigPath = $ConfigPath
                               }
@@ -1052,15 +1102,18 @@ function Install-OpksshServer {
         Write-Host "========================================" -ForegroundColor Green
         Write-Host ""
         Write-Host "Next steps:" -ForegroundColor Cyan
-        Write-Host "  1. Authorize users to access this server:" -ForegroundColor White
+        Write-Host "  1. Enable the OpenID Providers you use, with your own client IDs:" -ForegroundColor White
+        Write-Host "       notepad '$(Join-Path $ConfigPath "providers")'" -ForegroundColor Gray
+        Write-Host ""
+        Write-Host "  2. Authorize users to access this server:" -ForegroundColor White
         Write-Host "       & '$binaryPath' add <username> <email> <issuer>" -ForegroundColor Gray
         Write-Host ""
-        Write-Host "  2. Example - Allow alice@gmail.com to SSH as 'Administrator':" -ForegroundColor White
+        Write-Host "  3. Example - Allow alice@gmail.com to SSH as 'Administrator':" -ForegroundColor White
         Write-Host "       & '$binaryPath' add Administrator alice@gmail.com google" -ForegroundColor Gray
         Write-Host ""
-        
+
         if ($uninstallPath) {
-            Write-Host "  3. To uninstall opkssh:" -ForegroundColor White
+            Write-Host "  4. To uninstall opkssh:" -ForegroundColor White
             Write-Host "       & '$uninstallPath'" -ForegroundColor Gray
             Write-Host ""
         }

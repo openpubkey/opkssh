@@ -114,13 +114,28 @@ The client ID must match the aud (audience) claim in the PK Token.
 
 ### Examples
 
-The file lives at `/etc/opk/providers`. The default values are:
+The file lives at `/etc/opk/providers`. The installer writes this template, which enables no provider:
 
 ```bash
-# Issuer Client-ID expiration-policy 
-https://accounts.google.com 206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com 24h
-https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0 096ce0a3-5e72-4da8-9c86-12924b294a01 24h
-https://gitlab.com 8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923 24h
+# OpenID Providers trusted by opkssh, one per line:
+#   <issuer> <client-id> <expiration-policy>
+# expiration-policy is one of: 12h, 24h, 48h, 1week, oidc, oidc_refreshed, never
+#
+# No provider is enabled until you add one. Register a client ID for opkssh
+# with your OpenID Provider, then uncomment its line below and replace
+# <CLIENT-ID> with it. Clients must log in with the same client ID.
+# See https://github.com/openpubkey/opkssh/tree/main/docs/providers
+#
+# https://accounts.google.com <CLIENT-ID> 24h
+# https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0 <CLIENT-ID> 24h
+# https://gitlab.com <CLIENT-ID> 24h
+```
+
+To enable a provider, register a client ID for opkssh with it, uncomment its line and replace `<CLIENT-ID>` with that client ID.
+For example, with a Google client ID:
+
+```bash
+https://accounts.google.com YOUR-CLIENT-ID.apps.googleusercontent.com 24h
 ```
 
 ## Authorized identities files: `/etc/opk/auth_id` and `/home/{USER}/.opk/auth_id` (Linux) or `%ProgramData%\opk\auth_id` (Windows)

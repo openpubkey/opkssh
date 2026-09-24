@@ -79,6 +79,10 @@ func (a *AuditCmd) Audit(opksshVersion string) (*TotalResults, error) {
 	totalResults.ProviderFile = ProviderResults{
 		FilePath: providerPath,
 	}
+	if len(providerPolicy.GetRows()) == 0 {
+		totalResults.ProviderFile.Error = fmt.Sprintf("%s: %v", providerPath, policy.ErrNoProviders)
+		fmt.Fprintf(a.ErrOut, "error: %s\n", totalResults.ProviderFile.Error)
+	}
 
 	// Create validator from provider policy
 	validator := policy.NewPolicyValidator(providerPolicy)
@@ -167,7 +171,7 @@ func (a *AuditCmd) Run(opksshVersion string) error {
 		a.printSummary(summary)
 	}
 
-	if summary.HasErrors() {
+	if summary.HasErrors() || totalResults.ProviderFile.Error != "" {
 		return fmt.Errorf("audit completed and discovered errors")
 	}
 	return nil

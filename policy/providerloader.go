@@ -17,6 +17,7 @@
 package policy
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -25,6 +26,10 @@ import (
 	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/spf13/afero"
 )
+
+// ErrNoProviders is returned when the providers file enables no OpenID Provider,
+// for example a new install that still only has the commented-out template.
+var ErrNoProviders = errors.New(`no providers configured: add a line "<issuer> <client-id> <expiration-policy>" for each OpenID Provider opkssh should trust`)
 
 type ProvidersRow struct {
 	Issuer           string
@@ -123,7 +128,7 @@ func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
 	}
 
 	if len(pvs) == 0 {
-		return nil, fmt.Errorf("no providers configured")
+		return nil, ErrNoProviders
 	}
 	pktVerifier, err := verifier.NewFromMany(
 		pvs,
