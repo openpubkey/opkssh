@@ -538,6 +538,9 @@ Do not reuse a client ID between opkssh and other OpenID Connect services.
 If the same client ID is used for opkssh as another OpenID Connect authentication service, then an SSH server could replay the ID Token sent in an opkssh SSH key to authenticate to that service.
 Such replay attacks can be ruled out by simply using a new client ID with opkssh.
 
+The client IDs that opkssh ships with are shared by everyone using opkssh's defaults and are for trying opkssh out: register your own client ID for production.
+We have guides for [Google](docs/providers/google.md), [Azure](docs/providers/azure.md), [AWS Cognito](docs/providers/cognito.md) and [Keycloak](docs/providers/keycloak.md).
+
 Note that this requirement of using different client IDs for different audiences and uses is not unique to opkssh and is a best practice in OpenID Connect.
 
 ### Provider Server Configuration
@@ -564,6 +567,7 @@ opkssh add root alice@example.com https://authentik.local/application/o/opkssh/
 | [Azure](https://www.azure.com/)                | ✅     | [Entra ID (Azure) Integration Guide](docs/providers/azure.md)                                           |
 | [Forgejo Actions / Codeberg](https://forgejo.org/) | ✅ | [Forgejo Actions Guide](docs/forgejo-actions.md), requires Forgejo v15.0+                               |
 | [GitHub Actions](https://github.com/features/actions) | ✅ | [GitHub Actions Guide](docs/github-actions.md)                                                          |
+| [Google](https://developers.google.com/identity/openid-connect/openid-connect) | ✅ | [Google Integration Guide](docs/providers/google.md)                                   |
 | [Gitlab Self-hosted](https://gitlab.com/)      | ✅     | [Configuration guide](docs/gitlab-selfhosted.md)                                                        |
 | [Kanidm](https://kanidm.com/)                  | ✅ | [Kanidm Integration Guide](https://kanidm.github.io/kanidm/master/integrations/oauth2/examples.html#opkssh)|
 | [Keycloak](https://www.keycloak.org)           | ✅     | [Keycloak Integration Guide](docs/providers/keycloak.md)                                                |
