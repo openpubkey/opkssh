@@ -94,3 +94,14 @@ providers:
 		require.Equal(t, lifetime, clientConfig.AgentLifetime)
 	}
 }
+
+func TestIsDefaultClientID(t *testing.T) {
+	defaultConfig, err := NewClientConfig(DefaultClientConfig)
+	require.NoError(t, err)
+	require.NotEmpty(t, defaultConfig.Providers)
+	for _, provider := range defaultConfig.Providers {
+		require.True(t, IsDefaultClientID(provider.Issuer, provider.ClientID), "%v", provider.AliasList)
+		require.False(t, IsDefaultClientID(provider.Issuer, "my-own-client-id"), "%v", provider.AliasList)
+		require.False(t, IsDefaultClientID("https://issuer.example.com", provider.ClientID), "%v", provider.AliasList)
+	}
+}

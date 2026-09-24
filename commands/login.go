@@ -251,6 +251,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 			return fmt.Errorf("no provider found") // Either the provider or the chooser must be set. If this occurs we have a bug in the code.
 		}
 	}
+	l.warnIfDefaultClientID(provider)
 
 	// This arg is true if set, so if it false it hasn't been set and
 	// we should use the config value for the matching providing.
@@ -704,6 +705,20 @@ func (l *LoginCmd) out() io.Writer {
 		return l.OutWriter
 	}
 	return os.Stdout
+}
+
+// warnIfDefaultClientID warns when logging in with one of the client IDs from
+// the default client config, which are for trying opkssh out, not production.
+func (l *LoginCmd) warnIfDefaultClientID(provider providers.OpenIdProvider) {
+	op, ok := provider.(interface{ ClientID() string })
+	if !ok || !config.IsDefaultClientID(provider.Issuer(), op.ClientID()) {
+		return
+	}
+	fmt.Fprintf(l.out(), "warning: logging in to %s with opkssh's default client ID %s.\n"+
+		"  This client ID is for trying opkssh out and can stop working at any time.\n"+
+		"  Register your own client ID with this OpenID Provider and add it with `opkssh client provider add`,\n"+
+		"  see https://github.com/openpubkey/opkssh/tree/main/docs/providers\n",
+		provider.Issuer(), op.ClientID())
 }
 
 // defaultAgentLifetime matches the opkssh server's default certificate

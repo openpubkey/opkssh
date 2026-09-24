@@ -1670,3 +1670,54 @@ func TestDetermineProviderWebChooserWithOnlyCICDProviders(t *testing.T) {
 	require.ErrorContains(t, err, "no browser-based providers configured")
 	require.Nil(t, chooser)
 }
+
+func TestLoginCmdDefaultClientIDWarning(t *testing.T) {
+	defaultConfig, err := config.NewClientConfig(config.DefaultClientConfig)
+	require.NoError(t, err)
+	googleDefault, ok := defaultConfig.GetByIssuer("https://accounts.google.com")
+	require.True(t, ok)
+	gitlabDefault, ok := defaultConfig.GetByIssuer("https://gitlab.com")
+	require.True(t, ok)
+
+	tests := []struct {
+		name        string
+		issuer      string
+		clientID    string
+		wantWarning bool
+	}{
+		{name: "default Google client ID", issuer: googleDefault.Issuer, clientID: googleDefault.ClientID, wantWarning: true},
+		{name: "default GitLab client ID", issuer: gitlabDefault.Issuer, clientID: gitlabDefault.ClientID, wantWarning: true},
+		{name: "own Google client ID", issuer: googleDefault.Issuer, clientID: "my-own-client-id"},
+		{name: "default Google client ID for another issuer", issuer: "https://accounts.example.com", clientID: googleDefault.ClientID},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("SSH_AUTH_SOCK", "")
+			providerOpts := providers.DefaultMockProviderOpts()
+			providerOpts.Issuer = tt.issuer
+			providerOpts.ClientID = tt.clientID
+			providerOpts.VerifierOpts.ClientID = tt.clientID
+			op, _, idtTemplate, err := providers.NewMockProvider(providerOpts)
+			require.NoError(t, err)
+			idtTemplate.ExtraClaims = map[string]any{"email": "arthur.aardvark@example.com"}
+			var mockOp providers.OpenIdProvider = op
+
+			out := &bytes.Buffer{}
+			loginCmd := LoginCmd{
+				Config:           defaultConfig,
+				Fs:               afero.NewMemMapFs(),
+				OutWriter:        out,
+				overrideProvider: &mockOp,
+			}
+			require.NoError(t, loginCmd.Run(context.Background()))
+
+			warning := "warning: logging in to " + tt.issuer + " with opkssh's default client ID " + tt.clientID
+			if tt.wantWarning {
+				require.Contains(t, out.String(), warning)
+				require.Contains(t, out.String(), "opkssh client provider add")
+			} else {
+				require.NotContains(t, out.String(), "default client ID")
+			}
+		})
+	}
+}

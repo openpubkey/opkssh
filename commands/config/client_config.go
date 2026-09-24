@@ -22,6 +22,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/spf13/afero"
 	"gopkg.in/yaml.v3"
@@ -29,6 +30,28 @@ import (
 
 //go:embed default-client-config.yml
 var DefaultClientConfig []byte
+
+// defaultProviders are the providers in DefaultClientConfig.
+var defaultProviders = sync.OnceValue(func() []ProviderConfig {
+	defaultConfig, err := NewClientConfig(DefaultClientConfig)
+	if err != nil {
+		panic(fmt.Sprintf("failed to parse embedded default client config: %v", err))
+	}
+	return defaultConfig.Providers
+})
+
+// IsDefaultClientID reports whether clientID is the client ID that the
+// default client config uses for issuer. These client IDs are shared by
+// everyone using opkssh's defaults: they are meant for trying opkssh out
+// and can stop working at any time, as the Google one did in #617.
+func IsDefaultClientID(issuer string, clientID string) bool {
+	for _, provider := range defaultProviders() {
+		if provider.Issuer == issuer && provider.ClientID == clientID {
+			return true
+		}
+	}
+	return false
+}
 
 type ClientConfig struct {
 	DefaultProvider string           `yaml:"default_provider"`
