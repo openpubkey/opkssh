@@ -23,20 +23,20 @@ Add a GitLab CI provider entry to `/etc/opk/providers`. The second field must be
 Using the explicit audience from the GitLab CI token:
 
 ```bash
-echo "https://gitlab.com OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod 24h" | sudo tee -a /etc/opk/providers
+echo "https://gitlab.com OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod oidc" | sudo tee -a /etc/opk/providers
 ```
 
 For self-managed GitLab, use your GitLab instance URL as the issuer instead:
 
 ```bash
-echo "https://gitlab.example.com OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod 24h" | sudo tee -a /etc/opk/providers
+echo "https://gitlab.example.com OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod oidc" | sudo tee -a /etc/opk/providers
 ```
 
 If you also want to allow normal interactive GitLab logins, keep the normal GitLab provider entry as well:
 
 ```text
-https://gitlab.com 8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923 24h
-https://gitlab.com OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod 24h
+https://gitlab.com 8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923 oidc
+https://gitlab.com OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod oidc
 ```
 
 For self-managed GitLab, use the same issuer in `/etc/opk/auth_id` as in `/etc/opk/providers`.
@@ -123,11 +123,11 @@ test-ssh:
 ### Key workflow requirements
 
 - **`id_tokens.OPENPUBKEY_JWT`**: This must be configured so GitLab creates an OIDC ID token and exposes it as the `OPENPUBKEY_JWT` environment variable.
-- **Audience must match server policy**: If the job uses `aud: OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod`, the server should have `https://gitlab.com OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod 24h` in `/etc/opk/providers`.
-- **GitLab CI claims are required**: The token must include GitLab CI-specific claims (`ci_config_ref_uri`, `job_id`, `job_project_path`, and `pipeline_id`). These claims distinguish GitLab CI tokens from normal interactive GitLab login tokens that share the same issuer.
+- **Audience must match server policy**: If the job uses `aud: OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod`, the server should have `https://gitlab.com OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod oidc` in `/etc/opk/providers`.
 - **`opkssh login gitlab-ci`**: The `gitlab-ci` argument tells opkssh to use the GitLab CI provider. It reads `OPENPUBKEY_JWT` from the environment.
 - **`CI_SERVER_URL`**: Optional. Set this to your self-managed GitLab issuer URL, such as `https://gitlab.example.com`. If unset, opkssh uses `https://gitlab.com`.
-- **Server-side identity**: The identity in `/etc/opk/auth_id` must match the token's `sub` claim.
+- **Server-side identity**: The identity in `/etc/opk/auth_id` must match the token's `sub` claim. Since gitlab allows anyone to request a ID token with an `aud` of their choice, `sub` security critical and distinguishes ID Tokens issued to different orgs.
+- **Server-side identity**: The identity in `/etc/opk/auth_id` must match the token's `sub` claim, for example `project_path:mygroup/myproject:ref_type:branch:ref:main`. This is the check that decides who may log in. The audience is not a strong protection in gitlab-ci. Any project on the same GitLab instance can request an ID token with whatever `aud` it likes, including yours, so a matching audience only proves the token was minted for opkssh, not which project minted it. Only `sub`, which GitLab sets from the pipeline's project and ref and which a job cannot choose, identifies the caller.
 
 ## Identity format
 
@@ -177,7 +177,7 @@ Verify that the identity in `/etc/opk/auth_id` matches the `Subject` shown by `o
 If the token audience is `OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod`, add a matching provider line:
 
 ```text
-https://gitlab.com OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod 24h
+https://gitlab.com OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod oidc
 ```
 
 **Normal GitLab login works but GitLab CI fails**
