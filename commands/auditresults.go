@@ -26,6 +26,8 @@ type ProviderResults struct {
 	FilePath string `json:"file_path"`
 	// Error records any permission errors found on the provider file
 	Error string `json:"error"`
+	// Warnings records providers that use one of opkssh's default client IDs
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // PolicyFileResult records the results of auditing a policy file, e.g. /etc/opk/auth_id or ~/.opk/auth_id
@@ -84,7 +86,7 @@ func (t *TotalResults) EvaluateOk() bool {
 			}
 		}
 	}
-	if t.ProviderFile.Error != "" {
+	if t.ProviderFile.Error != "" || len(t.ProviderFile.Warnings) > 0 {
 		return false
 	}
 

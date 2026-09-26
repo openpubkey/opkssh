@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/openpubkey/opkssh/commands/config"
 	"github.com/openpubkey/opkssh/policy"
 	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/spf13/afero"
@@ -78,6 +79,15 @@ func (a *AuditCmd) Audit(opksshVersion string) (*TotalResults, error) {
 	}
 	totalResults.ProviderFile = ProviderResults{
 		FilePath: providerPath,
+	}
+	for _, row := range providerPolicy.GetRows() {
+		if config.IsDefaultClientID(row.Issuer, row.ClientID) {
+			warning := fmt.Sprintf("%s trusts %s with opkssh's default client ID %s, which is for trying opkssh out and can stop working at any time; "+
+				"register your own client ID and use it instead, see https://github.com/openpubkey/opkssh/tree/main/docs/providers",
+				providerPath, row.Issuer, row.ClientID)
+			totalResults.ProviderFile.Warnings = append(totalResults.ProviderFile.Warnings, warning)
+			fmt.Fprintf(a.ErrOut, "warning: %s\n", warning)
+		}
 	}
 
 	// Create validator from provider policy
@@ -155,6 +165,7 @@ func (a *AuditCmd) Run(opksshVersion string) error {
 		allResults = append(allResults, homePolicy.Rows...)
 	}
 	summary := policy.CalculateSummary(allResults)
+	summary.Warnings += len(totalResults.ProviderFile.Warnings)
 
 	if a.JsonOutput {
 		jsonBytes, err := json.MarshalIndent(totalResults, "", "  ")
