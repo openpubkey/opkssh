@@ -336,6 +336,25 @@ func TestProviderPolicy_CreateVerifier_Forgejo(t *testing.T) {
 	require.NotNil(t, ver)
 }
 
+func TestProviderPolicy_CreateVerifier_DuplicateGoogleIssuer(t *testing.T) {
+	rows := []ProvidersRow{
+		{Issuer: "https://accounts.google.com", ClientID: "client-a.apps.googleusercontent.com", ExpirationPolicy: "24h"},
+		{Issuer: "https://accounts.google.com", ClientID: "client-b.apps.googleusercontent.com", ExpirationPolicy: "oidc"},
+	}
+	policy := &ProviderPolicy{}
+	for _, row := range rows {
+		policy.AddRow(row)
+
+		provider := providerVerifierFromRow(row)
+		require.IsType(t, &providers.GoogleOp{}, provider)
+		require.Equal(t, row.ClientID, provider.(*providers.GoogleOp).ClientID())
+	}
+
+	ver, err := policy.CreateVerifier()
+	require.NoError(t, err)
+	require.NotNil(t, ver)
+}
+
 // The OP a row is verified against is chosen by issuer alone. A row that
 // silently falls through to the wrong branch is verified with the wrong
 // commitment type, so assert the concrete OP and not just that one was built.
