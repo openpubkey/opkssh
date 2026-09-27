@@ -438,10 +438,11 @@ Exit code: 0 if all entries are valid, 1 if any warnings or errors are found.`,
 	}
 
 	providerCmd := &cobra.Command{
-		Use:     "provider [subcommand]",
-		Short:   "Interact with provider configuration",
-		Example: `  opkssh client provider list`,
-		Args:    cobra.ExactArgs(0),
+		Use:   "provider [subcommand]",
+		Short: "Interact with provider configuration",
+		Example: `  opkssh client provider list
+  opkssh client provider add google https://accounts.google.com <client-id> --client-secret <client-secret> --replace`,
+		Args: cobra.ExactArgs(0),
 	}
 
 	providerListCmd := &cobra.Command{
@@ -488,6 +489,32 @@ Exit code: 0 if all entries are valid, 1 if any warnings or errors are found.`,
 	providerListCmd.Flags().StringVar(&configPathArg, "config-path", "", "Path to the client config file. Default: ~/.opk/config.yml on linux and %APPDATA%\\.opk\\config.yml on windows.")
 
 	providerCmd.AddCommand(providerListCmd)
+
+	providerAdd := commands.NewClientProviderAddCmd(os.Stdout)
+	providerAddCmd := &cobra.Command{
+		Use:   "add <alias> <issuer> <client-id>",
+		Short: "Add your own client ID for an OpenID Provider to the client config",
+		Long: `Add your own client ID for an OpenID Provider to the client config, so that
+"opkssh login <alias>" uses it. The client config is created from the default
+config if it does not exist. The client ID must also be added to
+/etc/opk/providers on the servers that should accept it.
+
+To use your own client ID for a provider that is already configured, such as
+the default google provider, pass --replace.`,
+		Example: `  opkssh client provider add google https://accounts.google.com <client-id> --client-secret <client-secret> --replace
+  opkssh client provider add keycloak https://keycloak.example.com/realms/opkssh opkssh`,
+		Args: cobra.ExactArgs(3),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			providerAdd.Alias, providerAdd.Issuer, providerAdd.ClientID = args[0], args[1], args[2]
+			providerAdd.ConfigPath = configPathArg
+			return providerAdd.Run()
+		},
+	}
+	providerAddCmd.Flags().StringVar(&configPathArg, "config-path", "", "Path to the client config file. Default: ~/.opk/config.yml on linux and %USERPROFILE%\\.opk\\config.yml on windows.")
+	providerAddCmd.Flags().StringVar(&providerAdd.ClientSecret, "client-secret", "", "Client secret, required by some OpenID Providers such as Google")
+	providerAddCmd.Flags().StringVar(&providerAdd.Scopes, "scopes", "", "Space separated scopes to request (default \"openid profile email\")")
+	providerAddCmd.Flags().BoolVar(&providerAdd.Replace, "replace", false, "Replace the client ID of the provider with this alias, keeping its other aliases and settings")
+	providerCmd.AddCommand(providerAddCmd)
 
 	clientCmd.AddCommand(providerCmd)
 
