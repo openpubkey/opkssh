@@ -167,7 +167,7 @@ Arguments:
 		Short:        "Authenticate with an OpenID Provider to generate an SSH key for opkssh",
 		Long: `Login creates opkssh SSH keys
 
-Login generates a key pair, then opens a browser to authenticate the user with the OpenID Provider. Upon successful authentication, opkssh creates an SSH public key (~/.ssh/id_ecdsa) containing the user's PK token. By default, this SSH key expires after 24 hours, after which the user must run "opkssh login" again to generate a new key.
+Login generates a key pair, then opens a browser to authenticate the user with the OpenID Provider. Upon successful authentication, opkssh creates an SSH public key (~/.ssh/id_ecdsa) containing the user's PK token. By default, this SSH key expires after 24 hours, after which the user must run "opkssh login" again to generate a new key. When the default key files already hold a different identity, keys for additional identities are written to the opkssh identity directory (~/.ssh/opkssh) instead of overwriting them.
 
 Users can then SSH into servers configured to use opkssh as the AuthorizedKeysCommand. The server verifies the PK token and grants access if the token is valid and the user is authorized per the auth_id policy.
 Arguments:
@@ -212,7 +212,7 @@ Arguments:
 
 	// Define flags for login.
 	loginCmd.Flags().BoolVar(&autoRefreshArg, "auto-refresh", false, "Automatically refresh PK token after login")
-	loginCmd.Flags().StringVar(&configPathArg, "config-path", "", "Path to the client config file. Default: ~/.opk/config.yml on linux and %APPDATA%\\.opk\\config.yml on windows")
+	loginCmd.Flags().StringVar(&configPathArg, "config-path", "", config.ConfigPathFlagHelp)
 	loginCmd.Flags().BoolVar(&createConfigArg, "create-config", false, "Creates a client config file if it does not exist")
 	loginCmd.Flags().BoolVar(&configureArg, "configure", false, "Apply changes to ssh config and create ~/.ssh/opkssh directory")
 	loginCmd.Flags().StringVar(&logDirArg, "log-dir", "", "Directory to write output logs")
@@ -485,7 +485,7 @@ Exit code: 0 if all entries are valid, 1 if any warnings or errors are found.`,
 		},
 	}
 
-	providerListCmd.Flags().StringVar(&configPathArg, "config-path", "", "Path to the client config file. Default: ~/.opk/config.yml on linux and %APPDATA%\\.opk\\config.yml on windows.")
+	providerListCmd.Flags().StringVar(&configPathArg, "config-path", "", config.ConfigPathFlagHelp)
 
 	providerCmd.AddCommand(providerListCmd)
 

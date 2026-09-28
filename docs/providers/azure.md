@@ -84,9 +84,9 @@ https://login.microsoftonline.com/{TENANT ID}/v2.0 {CLIENT ID} 12h
 To test run `opkssh login --provider="https://login.microsoftonline.com/{TENANT ID}/v2.0,{CLIENT ID}"` with the client ID you registered.
 If this works then server has been setup correctly.
 
-On the client check to see if you have already created a config at `~/.opk/config.yml`. If no config if found, create a config by running `opkssh login --create-config`.
+On the client check to see if you have already created a client config file (see [config locations](../config.md#client-config)). If no config if found, create a config by running `opkssh login --create-config`.
 
-Then edit `~/.opk/config.yml` and change the entry for azure to use the client ID and tenant ID from the App Registration.
+Then edit your client config file and change the entry for azure to use the client ID and tenant ID from the App Registration.
 
 ```yaml
   - alias: azure microsoft
@@ -141,9 +141,9 @@ To add it follow the instructions here: [Configure group claims for applications
 Message: AADSTS900561: The endpoint only accepts POST requests. Received a GET request.
 ```
 
-On the client check to see if you have already created a config at `~/.opk/config.yml`. If no config is found, create a config by running `opkssh login --create-config`.
+On the client check to see if you have already created a client config file (see [config locations](../config.md#client-config)). If no config is found, create a config by running `opkssh login --create-config`.
 
-Edit `~/.opk/config.yml` and for the azure provider change `prompt: consent` to `prompt: none` as shown below.
+Edit your client config file and for the azure provider change `prompt: consent` to `prompt: none` as shown below.
 
 ```yaml
   - alias: azure microsoft

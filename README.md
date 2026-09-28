@@ -107,6 +107,7 @@ opkssh login
 
 This opens a browser window to select which OpenID Provider you want to authenticate against.
 After successfully authenticating opkssh generates an SSH public key in `~/.ssh/id_ecdsa` which contains your PK Token.
+If the default key files already hold a different identity, for instance when you log in with a second account or provider, the new keys are written to the opkssh identity directory (`~/.ssh/opkssh/`) instead of overwriting them.
 By default this ssh key expires after 24 hours and you must run `opkssh login` to generate a new ssh key.
 
 Since your PK Token has been saved as an SSH key you can SSH as normal:
@@ -441,9 +442,9 @@ This alias to provider mapping be can configured using the OPKSSH_PROVIDERS envi
 
 ### Client Config File
 
-Rather than type in the provider each time, you can create a client config file by running `opkssh login --create-config` at
-`C:\Users\{USER}\.opk\config.yml` on windows and `~/.opk/config.yml` on linux.
-You can then edit this config file to add your provider.
+Rather than type in the provider each time, you can create a client config file by running `opkssh login --create-config`.
+The config is created at `~/.config/opk/config.yml` on linux/macOS (or `$XDG_CONFIG_HOME/opk/config.yml` if set) and `%AppData%\opk\config.yml` on windows; an existing legacy `~/.opk/config.yml` keeps working and takes effect instead.
+You can then edit this config file to add your provider. Run `opkssh login -v` to see which config file is in use.
 
 <details>
 <summary>config.yml</summary>

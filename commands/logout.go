@@ -289,11 +289,10 @@ func (l *LogoutCmd) removeFromOpkSSHConfig(configPath string, seckeyPath string)
 		return nil // Config file doesn't exist, nothing to clean up
 	}
 
-	identityLine := "IdentityFile " + seckeyPath
-
-	// Split handling both \r\n (Windows) and \n (Unix) line endings
-	normalized := strings.ReplaceAll(string(content), "\r\n", "\n")
-	lines := strings.Split(normalized, "\n")
+	// Render and split entries via login.go's identityFileLine/fragmentLines
+	// so this remover cannot drift from the writer's entry format.
+	identityLine := identityFileLine(seckeyPath)
+	lines := fragmentLines(content)
 	var newLines []string
 	for _, line := range lines {
 		if strings.TrimSpace(line) != identityLine {
