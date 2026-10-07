@@ -22,6 +22,9 @@ import (
 	"strings"
 )
 
+// ExitCodeReadHome constant is used in Readhome to specify a exitcode on failure
+const ExitCodeReadHome int = 128
+
 var _ Loader = &MultiPolicyLoader{
 	LoaderScript: ReadWithSudoScript,
 }
