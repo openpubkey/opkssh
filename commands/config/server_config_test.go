@@ -35,3 +35,14 @@ func TestCacheConfigDiscoveryCacheConfigRejectsNegativeAges(t *testing.T) {
 	_, err = cfg.Cache.DiscoveryCacheConfig(afero.NewMemMapFs())
 	require.ErrorContains(t, err, "must not be negative")
 }
+
+func TestCacheConfigDiscoveryCacheConfigRejectsInsecureBaseDir(t *testing.T) {
+	cfg, err := NewServerConfig([]byte("cache:\n  base_dir: /var/cache/opkssh\n"))
+	require.NoError(t, err)
+
+	fs := afero.NewMemMapFs()
+	require.NoError(t, fs.MkdirAll("/var/cache/opkssh", 0o777))
+
+	_, err = cfg.Cache.DiscoveryCacheConfig(fs)
+	require.ErrorContains(t, err, "group- or world-writable")
+}
