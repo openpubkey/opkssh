@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/openpubkey/openpubkey/discover"
 	"github.com/openpubkey/openpubkey/pktoken/clientinstance"
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/openpubkey/verifier"
@@ -76,7 +77,7 @@ func (p *ProviderPolicy) GetRows() []ProvidersRow {
 // providerVerifierFromRow selects the OP verifier to use for a row in the
 // providers file. The OP type is determined by the configured issuer alone,
 // never by anything in the token being verified.
-func providerVerifierFromRow(row ProvidersRow) verifier.ProviderVerifier {
+func providerVerifierFromRow(row ProvidersRow, cacheCfg discover.DiscoveryCacheConfig) verifier.ProviderVerifier {
 	// TODO: We should handle this issuer matching in a more generic way
 	// oidc.local and localhost: are a test issuers
 	if row.Issuer == "https://accounts.google.com" ||
@@ -86,44 +87,48 @@ func providerVerifierFromRow(row ProvidersRow) verifier.ProviderVerifier {
 		opts := providers.GetDefaultGoogleOpOptions()
 		opts.Issuer = row.Issuer
 		opts.ClientID = row.ClientID
+		opts.CacheConfig = cacheCfg
 		return providers.NewGoogleOpWithOptions(opts)
 	} else if strings.HasPrefix(row.Issuer, "https://login.microsoftonline.com") {
 		opts := providers.GetDefaultAzureOpOptions()
 		opts.Issuer = row.Issuer
 		opts.ClientID = row.ClientID
+		opts.CacheConfig = cacheCfg
 		return providers.NewAzureOpWithOptions(opts)
 	} else if row.Issuer == "https://token.actions.githubusercontent.com" {
-		return providers.NewGithubOp(row.Issuer, "")
+		return cachedActionsProviderVerifier{issuer: row.Issuer, publicKeyFinder: newCachedPublicKeyFinder(cacheCfg)}
 	} else if providers.IsForgejoIssuer(row.Issuer) {
-		return providers.NewForgejoOp(row.Issuer, "", "")
+		return cachedActionsProviderVerifier{issuer: strings.TrimSuffix(row.Issuer, "/"), publicKeyFinder: newCachedPublicKeyFinder(cacheCfg)}
 	} else if strings.HasPrefix(row.ClientID, "OPENPUBKEY-PKTOKEN:GITLAB-CI:") {
 		// Do the gitlab checks last so that github or forgejo issuers
 		// checks happen first. This is to avoid a case where someone has
 		// a github issuer but sets the client ID prefix to "OPENPUBKEY-PKTOKEN:GITLAB-CI:"
-		provider := providers.NewGitlabCiOp(row.Issuer, "OPENPUBKEY_JWT")
 		return gitLabCiProviderVerifier{
-			provider: provider,
-			audience: row.ClientID,
+			issuer:          row.Issuer,
+			audience:        row.ClientID,
+			publicKeyFinder: newCachedPublicKeyFinder(cacheCfg),
 		}
 	} else if row.Issuer == "https://gitlab.com" {
 		opts := providers.GetDefaultGitlabOpOptions()
 		opts.Issuer = row.Issuer
 		opts.ClientID = row.ClientID
+		opts.CacheConfig = cacheCfg
 		return providers.NewGitlabOpWithOptions(opts)
 	}
 
 	opts := providers.GetDefaultGoogleOpOptions()
 	opts.Issuer = row.Issuer
 	opts.ClientID = row.ClientID
+	opts.CacheConfig = cacheCfg
 	return providers.NewGoogleOpWithOptions(opts)
 }
 
-func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
+func (p *ProviderPolicy) CreateVerifier(cacheCfg discover.DiscoveryCacheConfig) (*verifier.Verifier, error) {
 	pvs := []verifier.ProviderVerifier{}
 	var expirationPolicy verifier.ExpirationPolicy
 	var err error
 	for _, row := range p.rows {
-		provider := providerVerifierFromRow(row)
+		provider := providerVerifierFromRow(row, cacheCfg)
 
 		expirationPolicy, err = row.GetExpirationPolicy()
 		if err != nil {
@@ -150,19 +155,55 @@ func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
 }
 
 type gitLabCiProviderVerifier struct {
-	provider verifier.ProviderVerifier
-	audience string
+	issuer          string
+	audience        string
+	publicKeyFinder *discover.PublicKeyFinder
 }
 
 func (g gitLabCiProviderVerifier) Issuer() string {
-	return g.provider.Issuer()
+	return g.issuer
 }
 
 func (g gitLabCiProviderVerifier) VerifyIDToken(ctx context.Context, idt []byte, cic *clientinstance.Claims) error {
 	if err := verifyGitLabCiTokenClaims(idt, g.audience); err != nil {
 		return err
 	}
-	return g.provider.VerifyIDToken(ctx, idt, cic)
+	return providers.NewProviderVerifier(g.issuer, providers.ProviderVerifierOpts{
+		CommitType:        providers.CommitTypesEnum.GQ_BOUND,
+		DiscoverPublicKey: g.publicKeyFinder,
+		GQOnly:            true,
+		SkipClientIDCheck: true,
+	}).VerifyIDToken(ctx, idt, cic)
+}
+
+// cachedActionsProviderVerifier preserves the GitHub Actions and Forgejo
+// aud-as-commitment verification rules while using the configured persistent
+// JWKS cache. The upstream constructors currently expose no cache option.
+type cachedActionsProviderVerifier struct {
+	issuer          string
+	publicKeyFinder *discover.PublicKeyFinder
+}
+
+func (p cachedActionsProviderVerifier) Issuer() string {
+	return p.issuer
+}
+
+func (p cachedActionsProviderVerifier) VerifyIDToken(ctx context.Context, idt []byte, cic *clientinstance.Claims) error {
+	return providers.NewProviderVerifier(p.issuer, providers.ProviderVerifierOpts{
+		CommitType:        providers.CommitTypesEnum.AUD_CLAIM,
+		DiscoverPublicKey: p.publicKeyFinder,
+		GQOnly:            true,
+		SkipClientIDCheck: true,
+	}).VerifyIDToken(ctx, idt, cic)
+}
+
+func newCachedPublicKeyFinder(cacheCfg discover.DiscoveryCacheConfig) *discover.PublicKeyFinder {
+	return &discover.PublicKeyFinder{
+		JwksFunc: func(ctx context.Context, issuer string) ([]byte, error) {
+			return discover.GetJwksByIssuer(ctx, issuer, nil)
+		},
+		CacheConfig: cacheCfg,
+	}
 }
 
 func verifyGitLabCiTokenClaims(idt []byte, audience string) error {

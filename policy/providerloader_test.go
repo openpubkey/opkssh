@@ -24,6 +24,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/openpubkey/openpubkey/discover"
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/openpubkey/verifier"
 	"github.com/stretchr/testify/require"
@@ -82,7 +83,7 @@ func TestProviderPolicy_CreateVerifier_Google(t *testing.T) {
 		ClientID:         "test-google",
 		ExpirationPolicy: "12h",
 	})
-	ver, err := policy.CreateVerifier()
+	ver, err := policy.CreateVerifier(discover.DiscoveryCacheConfig{})
 	require.NoError(t, err)
 	require.NotNil(t, ver)
 }
@@ -95,7 +96,7 @@ func TestProviderPolicy_CreateVerifier_Azure(t *testing.T) {
 		ClientID:         "test-azure",
 		ExpirationPolicy: "48h",
 	})
-	ver, err := policy.CreateVerifier()
+	ver, err := policy.CreateVerifier(discover.DiscoveryCacheConfig{})
 	require.NoError(t, err)
 	require.NotNil(t, ver)
 }
@@ -107,7 +108,7 @@ func TestProviderPolicy_CreateVerifier_Gitlab(t *testing.T) {
 		ClientID:         "test-gitlab",
 		ExpirationPolicy: "24h",
 	})
-	ver, err := policy.CreateVerifier()
+	ver, err := policy.CreateVerifier(discover.DiscoveryCacheConfig{})
 	require.NoError(t, err)
 	require.NotNil(t, ver)
 }
@@ -125,7 +126,7 @@ func TestProviderPolicy_CreateVerifier_DuplicateGitLabIssuer(t *testing.T) {
 		ExpirationPolicy: "24h",
 	})
 
-	ver, err := policy.CreateVerifier()
+	ver, err := policy.CreateVerifier(discover.DiscoveryCacheConfig{})
 	require.NoError(t, err)
 	require.NotNil(t, ver)
 }
@@ -146,7 +147,7 @@ func TestProviderPolicy_CreateVerifier_GitLabAndGitLabCiKeepOwnExpiration(t *tes
 		ExpirationPolicy: "24h",
 	})
 
-	ver, err := policy.CreateVerifier()
+	ver, err := policy.CreateVerifier(discover.DiscoveryCacheConfig{})
 	require.NoError(t, err)
 	require.NotNil(t, ver)
 }
@@ -157,11 +158,11 @@ func TestProviderVerifierFromRow_GitLabCiCustomIssuer(t *testing.T) {
 		Issuer:           customIssuer,
 		ClientID:         "OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod",
 		ExpirationPolicy: "24h",
-	})
+	}, discover.DiscoveryCacheConfig{})
 
 	gitLabCiProvider, ok := provider.(gitLabCiProviderVerifier)
 	require.True(t, ok)
-	require.IsType(t, &providers.GitlabCiOp{}, gitLabCiProvider.provider)
+	require.NotNil(t, gitLabCiProvider.publicKeyFinder)
 	require.Equal(t, customIssuer, provider.Issuer())
 }
 
@@ -170,13 +171,36 @@ func TestProviderVerifierFromRow_GitLabCi(t *testing.T) {
 		Issuer:           "https://gitlab.com",
 		ClientID:         "OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod",
 		ExpirationPolicy: "24h",
-	})
+	}, discover.DiscoveryCacheConfig{})
 
 	gitLabCiProvider, ok := provider.(gitLabCiProviderVerifier)
 	require.True(t, ok)
-	require.IsType(t, &providers.GitlabCiOp{}, gitLabCiProvider.provider)
+	require.NotNil(t, gitLabCiProvider.publicKeyFinder)
 	require.Equal(t, "OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod", gitLabCiProvider.audience)
 	require.Equal(t, "https://gitlab.com", provider.Issuer())
+}
+
+func TestProviderVerifierFromRowWiresCacheIntoActionProviders(t *testing.T) {
+	cacheCfg := discover.DiscoveryCacheConfig{Cache: discover.NewMapDiscoveryCache()}
+	tests := []ProvidersRow{
+		{Issuer: "https://token.actions.githubusercontent.com", ClientID: "github", ExpirationPolicy: "oidc"},
+		{Issuer: "https://codeberg.org/api/actions", ClientID: "forgejo", ExpirationPolicy: "oidc"},
+		{Issuer: "https://gitlab.example.com", ClientID: "OPENPUBKEY-PKTOKEN:GITLAB-CI:deploy", ExpirationPolicy: "oidc"},
+	}
+
+	for _, row := range tests {
+		t.Run(row.Issuer, func(t *testing.T) {
+			provider := providerVerifierFromRow(row, cacheCfg)
+			switch provider := provider.(type) {
+			case cachedActionsProviderVerifier:
+				require.Same(t, cacheCfg.Cache, provider.publicKeyFinder.CacheConfig.Cache)
+			case gitLabCiProviderVerifier:
+				require.Same(t, cacheCfg.Cache, provider.publicKeyFinder.CacheConfig.Cache)
+			default:
+				t.Fatalf("unexpected provider type %T", provider)
+			}
+		})
+	}
 }
 
 // Test ProviderPolicy.CreateVerifier with an invalid expiration policy.
@@ -187,7 +211,7 @@ func TestProviderPolicy_CreateVerifier_InvalidExpiration(t *testing.T) {
 		ClientID:         "test-google",
 		ExpirationPolicy: "invalid",
 	})
-	ver, err := policy.CreateVerifier()
+	ver, err := policy.CreateVerifier(discover.DiscoveryCacheConfig{})
 	require.ErrorContains(t, err, "invalid expiration policy")
 	require.Nil(t, ver)
 }
@@ -195,7 +219,7 @@ func TestProviderPolicy_CreateVerifier_InvalidExpiration(t *testing.T) {
 // Test ProviderPolicy.CreateVerifier when no providers are configured.
 func TestProviderPolicy_CreateVerifier_NoProviders(t *testing.T) {
 	policy := &ProviderPolicy{}
-	ver, err := policy.CreateVerifier()
+	ver, err := policy.CreateVerifier(discover.DiscoveryCacheConfig{})
 	require.ErrorContains(t, err, "no providers configured")
 	require.Nil(t, ver)
 }
@@ -241,9 +265,9 @@ func TestProviderVerifierFromRow_GitLabCiMarkerUsesNormalGitLabProvider(t *testi
 		Issuer:           "https://gitlab.com",
 		ClientID:         "gitlab-ci",
 		ExpirationPolicy: "24h",
-	})
+	}, discover.DiscoveryCacheConfig{})
 
-	_, isGitLabCiProvider := provider.(*providers.GitlabCiOp)
+	_, isGitLabCiProvider := provider.(gitLabCiProviderVerifier)
 	require.False(t, isGitLabCiProvider)
 	require.Equal(t, "https://gitlab.com", provider.Issuer())
 }
@@ -331,7 +355,7 @@ func TestProviderPolicy_CreateVerifier_Forgejo(t *testing.T) {
 		ClientID:         "codeberg",
 		ExpirationPolicy: "oidc",
 	})
-	ver, err := policy.CreateVerifier()
+	ver, err := policy.CreateVerifier(discover.DiscoveryCacheConfig{})
 	require.NoError(t, err)
 	require.NotNil(t, ver)
 }
@@ -345,12 +369,12 @@ func TestProviderPolicy_CreateVerifier_DuplicateGoogleIssuer(t *testing.T) {
 	for _, row := range rows {
 		policy.AddRow(row)
 
-		provider := providerVerifierFromRow(row)
+		provider := providerVerifierFromRow(row, discover.DiscoveryCacheConfig{})
 		require.IsType(t, &providers.GoogleOp{}, provider)
 		require.Equal(t, row.ClientID, provider.(*providers.GoogleOp).ClientID())
 	}
 
-	ver, err := policy.CreateVerifier()
+	ver, err := policy.CreateVerifier(discover.DiscoveryCacheConfig{})
 	require.NoError(t, err)
 	require.NotNil(t, ver)
 }
@@ -389,22 +413,22 @@ func TestProviderVerifierFromRow(t *testing.T) {
 		{
 			name:   "github actions",
 			issuer: "https://token.actions.githubusercontent.com",
-			wantOp: &providers.GithubOp{},
+			wantOp: cachedActionsProviderVerifier{},
 		},
 		{
 			name:   "forgejo actions on codeberg",
 			issuer: "https://codeberg.org/api/actions",
-			wantOp: &providers.ForgejoOp{},
+			wantOp: cachedActionsProviderVerifier{},
 		},
 		{
 			name:   "forgejo actions self hosted under a path",
 			issuer: "https://git.example.com/forgejo/api/actions",
-			wantOp: &providers.ForgejoOp{},
+			wantOp: cachedActionsProviderVerifier{},
 		},
 		{
 			name:       "forgejo actions issuer with a trailing slash",
 			issuer:     "https://codeberg.org/api/actions/",
-			wantOp:     &providers.ForgejoOp{},
+			wantOp:     cachedActionsProviderVerifier{},
 			wantIssuer: "https://codeberg.org/api/actions",
 		},
 		{
@@ -421,7 +445,7 @@ func TestProviderVerifierFromRow(t *testing.T) {
 				Issuer:           tt.issuer,
 				ClientID:         "client-id",
 				ExpirationPolicy: "oidc",
-			})
+			}, discover.DiscoveryCacheConfig{})
 			require.IsType(t, tt.wantOp, pv)
 			wantIssuer := tt.wantIssuer
 			if wantIssuer == "" {

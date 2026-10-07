@@ -91,6 +91,35 @@ It also supports a `deny_users` field. This field is a YAML array of strings, wh
 
 Both `deny_emails` and `deny_users` are evaluated before policy.
 
+### JWKS cache
+
+By default, `opkssh verify` retrieves the provider's JWKS for every authentication attempt. Configure a persistent cache to reduce login latency and provider load, and to allow a recently cached key set to be used if a provider is temporarily unavailable:
+
+```yml
+cache:
+  base_dir: /var/cache/opkssh
+  max_age: 1h
+  fallback_max_age: 2h
+```
+
+`base_dir` enables the cache and must be writable only by `opksshuser`. `max_age` is the normal maximum age of a JWKS entry. When a fresh fetch fails, `fallback_max_age` is the absolute maximum age of an entry that may still be used. It must be at least `max_age`.
+
+If omitted, `max_age` defaults to one hour and `fallback_max_age` defaults to twice `max_age`. Set both values to the same duration to disable fallback. Cache entries are written by `opkssh verify`; they are never deleted during authentication.
+
+Run the cleanup command periodically as `opksshuser` to limit disk use:
+
+```bash
+opkssh cache clean
+```
+
+To use a different retention period for a one-off cleanup, pass a Go duration:
+
+```bash
+opkssh cache clean 24h
+```
+
+The cache applies to standard OIDC, GitHub Actions, Forgejo Actions, and GitLab CI verification. A shorter maximum age detects provider key rotation sooner; a longer age improves availability but can continue to trust a rotated key for longer.
+
 ### Server config permissions
 
 The server config file requires the following permissions be set:

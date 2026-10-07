@@ -32,6 +32,7 @@ opkssh [flags]
 
 * [opkssh add](opkssh_add.md)	 - Appends new rule to the policy file
 * [opkssh audit](opkssh_audit.md)	 - Validate policy file entries against provider definitions
+* [opkssh cache](opkssh_cache.md)	 - Manage the JWKS cache used by opkssh verify
 * [opkssh client](opkssh_client.md)	 - Interact with client configuration
 * [opkssh inspect](opkssh_inspect.md)	 - Inspect and view details of an opkssh generated SSH key
 * [opkssh login](opkssh_login.md)	 - Authenticate with an OpenID Provider to generate an SSH key for opkssh
