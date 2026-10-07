@@ -239,6 +239,7 @@ func TestGitlabCiToProvider(t *testing.T) {
 	providerConfig := GitlabCiProviderConfig("https://gitlab.com")
 	provider, err := providerConfig.ToProvider(false)
 	require.NoError(t, err)
+	require.IsType(t, &providers.GitlabCiOp{}, provider)
 	require.Equal(t, "https://gitlab.com", provider.Issuer())
 }
 
