@@ -60,20 +60,25 @@ Without max-age, clean uses fallback_max_age from the server configuration.
 Run this command periodically as the opkssh user to bound cache disk use.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
-				deleted, err := c.Expire(cmd.Context(), 0)
+			maxAge := time.Duration(0)
+			useConfiguredAge := true
+			if len(args) == 1 {
+				parsed, err := time.ParseDuration(args[0])
 				if err != nil {
 					return err
 				}
-				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Removed %d stale JWKS cache entries.\n", deleted)
-				return err
+				maxAge = parsed
+				useConfiguredAge = false
 			}
 
-			maxAge, err := time.ParseDuration(args[0])
-			if err != nil {
+			deleted, err := c.expire(cmd.Context(), maxAge, useConfiguredAge)
+			if errors.Is(err, ErrNoCacheConfigured) {
+				// Running on a schedule against a host that has not opted in to
+				// caching must not be a hard failure, or every such host emits a
+				// cron error. Report it and exit successfully.
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), "No persistent JWKS cache configured; nothing to clean.")
 				return err
 			}
-			deleted, err := c.expire(cmd.Context(), maxAge, false)
 			if err != nil {
 				return err
 			}
@@ -94,11 +99,10 @@ func (c *CacheCmd) loadServerConfig() (*config.ServerConfig, error) {
 	return verifyCmd.ReadFromServerConfig()
 }
 
-// Expire removes entries older than maxAge and returns the number removed. A
-// zero maxAge uses the configured fallback maximum age.
-func (c *CacheCmd) Expire(ctx context.Context, maxAge time.Duration) (int, error) {
-	return c.expire(ctx, maxAge, true)
-}
+// ErrNoCacheConfigured is returned by expire when no persistent JWKS cache is
+// configured. Callers that run on a schedule (e.g. a systemd timer) should
+// treat this as a benign no-op rather than a failure.
+var ErrNoCacheConfigured = errors.New("no persistent JWKS cache configured")
 
 func (c *CacheCmd) expire(ctx context.Context, maxAge time.Duration, useConfiguredAge bool) (int, error) {
 	cfg, err := c.loadServerConfig()
@@ -111,7 +115,7 @@ func (c *CacheCmd) expire(ctx context.Context, maxAge time.Duration, useConfigur
 	}
 	cache, ok := cacheCfg.Cache.(*discoverycache.FilesystemDiscoveryCache)
 	if !ok {
-		return 0, errors.New("no persistent JWKS cache configured")
+		return 0, ErrNoCacheConfigured
 	}
 	if useConfiguredAge && maxAge == 0 {
 		maxAge = cacheCfg.FallbackMaxAge

@@ -56,6 +56,28 @@ func (c *FilesystemDiscoveryCache) issuerDir(issuer string) string {
 	return filepath.Join(c.BaseDir, issuerHash, "jwks")
 }
 
+// Validate checks that BaseDir, if it already exists, is a directory that is
+// not writable by group or other. A cache an unprivileged user can write to is
+// a key-substitution vector: an attacker who can drop a crafted JWKS snapshot
+// could have the verifier trust an attacker-controlled signing key. A missing
+// BaseDir is allowed; it is created with safe permissions on first Write.
+func (c *FilesystemDiscoveryCache) Validate() error {
+	info, err := c.Fs.Stat(c.BaseDir)
+	if errors.Is(err, iofs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to stat cache base_dir %q: %w", c.BaseDir, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("cache base_dir %q is not a directory", c.BaseDir)
+	}
+	if perm := info.Mode().Perm(); perm&0o022 != 0 {
+		return fmt.Errorf("cache base_dir %q must not be group- or world-writable, got permissions %#o", c.BaseDir, perm)
+	}
+	return nil
+}
+
 func cacheTimestamp(fileName string, expression *regexp.Regexp) (time.Time, bool) {
 	match := expression.FindStringSubmatch(fileName)
 	if match == nil {

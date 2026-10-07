@@ -102,17 +102,23 @@ cache:
   fallback_max_age: 2h
 ```
 
-`base_dir` enables the cache and must be writable only by `opksshuser`. `max_age` is the normal maximum age of a JWKS entry. When a fresh fetch fails, `fallback_max_age` is the absolute maximum age of an entry that may still be used. It must be at least `max_age`.
+`base_dir` enables the cache and must be writable only by `opksshuser`. `opkssh verify` refuses to start if `base_dir` exists but is group- or world-writable, since a cache an unprivileged user can write to would let an attacker substitute a signing key. `max_age` is the normal maximum age of a JWKS entry. When a fresh fetch fails, `fallback_max_age` is the absolute maximum age of an entry that may still be used. It must be at least `max_age`.
 
 If omitted, `max_age` defaults to one hour and `fallback_max_age` defaults to twice `max_age`. Set both values to the same duration to disable fallback. Cache entries are written by `opkssh verify`; they are never deleted during authentication.
 
-Run the cleanup command periodically as `opksshuser` to limit disk use:
+The easiest way to enable the cache is to let the installer provision it. Set `OPKSSH_INSTALL_CACHE_DIR` when running `install-linux.sh` and it creates `base_dir` with the correct ownership (`root:opksshuser`, mode `0750`), adds the `cache` section to `config.yml`, and installs a `systemd` timer (`opkssh-cache-clean.timer`) that runs the cleanup for you:
+
+```bash
+OPKSSH_INSTALL_CACHE_DIR=/var/cache/opkssh ./install-linux.sh
+```
+
+If you configure the cache by hand instead, create `base_dir` yourself with those permissions and run the cleanup command periodically as `opksshuser` to limit disk use:
 
 ```bash
 opkssh cache clean
 ```
 
-To use a different retention period for a one-off cleanup, pass a Go duration:
+`cache clean` is a no-op (exit 0) on a host that has not configured a cache, so it is safe to schedule unconditionally. To use a different retention period for a one-off cleanup, pass a Go duration:
 
 ```bash
 opkssh cache clean 24h

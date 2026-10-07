@@ -92,8 +92,13 @@ func (c CacheConfig) DiscoveryCacheConfig(fs afero.Fs) (discover.DiscoveryCacheC
 		return discover.DiscoveryCacheConfig{}, fmt.Errorf("cache fallback_max_age (%s) must not be less than max_age (%s)", fallbackMaxAge, standardMaxAge)
 	}
 
+	cache := discoverycache.NewFilesystemDiscoveryCache(fs, c.BaseDir)
+	if err := cache.Validate(); err != nil {
+		return discover.DiscoveryCacheConfig{}, err
+	}
+
 	return discover.DiscoveryCacheConfig{
-		Cache:          discoverycache.NewFilesystemDiscoveryCache(fs, c.BaseDir),
+		Cache:          cache,
 		StandardMaxAge: standardMaxAge,
 		FallbackMaxAge: fallbackMaxAge,
 	}, nil
