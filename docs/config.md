@@ -102,11 +102,11 @@ cache:
   fallback_max_age: 2h
 ```
 
-`base_dir` enables the cache and must be writable only by `opksshuser`. `opkssh verify` refuses to start if `base_dir` exists but is group- or world-writable, since a cache an unprivileged user can write to would let an attacker substitute a signing key. `max_age` is the normal maximum age of a JWKS entry. When a fresh fetch fails, `fallback_max_age` is the absolute maximum age of an entry that may still be used. It must be at least `max_age`.
+`base_dir` enables the cache and must be owned by `opksshuser` and inaccessible to other users (`opkssh verify` writes cache entries as `opksshuser`). `opkssh verify` refuses to start if `base_dir` exists but is group- or world-writable, since a cache a less privileged user can write to would let an attacker substitute a signing key. `max_age` is the normal maximum age of a JWKS entry. When a fresh fetch fails, `fallback_max_age` is the absolute maximum age of an entry that may still be used. It must be at least `max_age`.
 
 If omitted, `max_age` defaults to one hour and `fallback_max_age` defaults to twice `max_age`. Set both values to the same duration to disable fallback. Cache entries are written by `opkssh verify`; they are never deleted during authentication.
 
-The easiest way to enable the cache is to let the installer provision it. Set `OPKSSH_INSTALL_CACHE_DIR` when running `install-linux.sh` and it creates `base_dir` with the correct ownership (`root:opksshuser`, mode `0750`), adds the `cache` section to `config.yml`, and installs a `systemd` timer (`opkssh-cache-clean.timer`) that runs the cleanup for you:
+The easiest way to enable the cache is to let the installer provision it. Set `OPKSSH_INSTALL_CACHE_DIR` when running `install-linux.sh` and it creates `base_dir` with the correct ownership (`opksshuser:opksshuser`, mode `0700`), adds the `cache` section to `config.yml`, and installs a `systemd` timer (`opkssh-cache-clean.timer`) that runs the cleanup for you:
 
 ```bash
 OPKSSH_INSTALL_CACHE_DIR=/var/cache/opkssh ./install-linux.sh
