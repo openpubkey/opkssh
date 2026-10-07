@@ -25,6 +25,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/openpubkey/openpubkey/client"
 	"github.com/openpubkey/openpubkey/jose"
@@ -233,6 +234,152 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 			}
 		})
 
+	}
+}
+
+// TestAuthorizedKeysCommandSameIssuer_TwoClientIDs checks a providers file with
+// two rows for one issuer that differ only in client ID, as when migrating from
+// one Google OAuth client to another:
+//
+//	https://accounts.google.com client-a never
+//	https://accounts.google.com client-b 12h
+func TestAuthorizedKeysCommandSameIssuer_TwoClientIDs(t *testing.T) {
+	t.Parallel()
+	issuer := "https://accounts.google.com"
+
+	alg := jose.ES256
+	signer, err := util.GenKeyPair(alg)
+	require.NoError(t, err)
+
+	providerOpts := providers.DefaultMockProviderOpts()
+	providerOpts.Issuer = issuer
+	providerOpts.ClientID = "client-a"
+
+	providerOpts.VerifierOpts.SkipClientIDCheck = true
+	op, backend, idtTemplate, err := providers.NewMockProvider(providerOpts)
+	require.NoError(t, err)
+
+	mockEmail := "arthur.aardvark@example.com"
+
+	// Two providers-file rows for the same issuer. Both trust the mock OP's
+	// signing keys, as two OAuth clients at one OP would.
+	newRow := func(clientID string, expiration verifier.ExpirationPolicy) verifier.ProviderVerifier {
+		return verifier.ProviderVerifierExpires{
+			ProviderVerifier: providers.NewProviderVerifier(issuer, providers.ProviderVerifierOpts{
+				CommitType:        providers.CommitTypesEnum.NONCE_CLAIM,
+				ClientID:          clientID,
+				DiscoverPublicKey: &backend.PublicKeyFinder,
+			}),
+			Expiration: expiration,
+		}
+	}
+	rowClientA := newRow("client-a", verifier.ExpirationPolicies.NEVER_EXPIRE)
+	rowClientB := newRow("client-b", verifier.ExpirationPolicies.MAX_AGE_12HOURS)
+
+	thirteenHoursAgo := time.Now().Add(-13 * time.Hour).Unix()
+
+	principals := []string{"guest", "dev"}
+	expectedLine := "cert-authority,principals=\"guest,dev\" ecdsa-sha2-nistp256"
+
+	tests := []struct {
+		name        string
+		aud         string
+		issuedAt    int64 // 0 means now
+		rows        []verifier.ProviderVerifier
+		errorString string
+	}{
+		{
+			name: "Token for first client ID (A then B)",
+			aud:  "client-a",
+			rows: []verifier.ProviderVerifier{rowClientA, rowClientB},
+		},
+		{
+			name: "Token for first client ID (B then A)",
+			aud:  "client-a",
+			rows: []verifier.ProviderVerifier{rowClientB, rowClientA},
+		},
+		{
+			name: "Token for second client ID (A then B)",
+			aud:  "client-b",
+			rows: []verifier.ProviderVerifier{rowClientA, rowClientB},
+		},
+		{
+			name: "Token for second client ID (B then A)",
+			aud:  "client-b",
+			rows: []verifier.ProviderVerifier{rowClientB, rowClientA},
+		},
+		{
+			name:        "Rejects token for unknown client ID",
+			aud:         "client-c",
+			rows:        []verifier.ProviderVerifier{rowClientA, rowClientB},
+			errorString: "rejected by all 2 provider verifiers",
+		},
+		{
+			name:     "Old token accepted by row with no max age",
+			aud:      "client-a",
+			issuedAt: thirteenHoursAgo,
+			rows:     []verifier.ProviderVerifier{rowClientB, rowClientA},
+		},
+		{
+			name:        "Old token rejected by row with 12h max age",
+			aud:         "client-b",
+			issuedAt:    thirteenHoursAgo,
+			rows:        []verifier.ProviderVerifier{rowClientA, rowClientB},
+			errorString: "expired",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			idtTemplate.Aud = tt.aud
+			idtTemplate.ExtraClaims = map[string]any{
+				"email": mockEmail,
+			}
+			if tt.issuedAt != 0 {
+				idtTemplate.ExtraClaims["iat"] = tt.issuedAt
+			}
+
+			client, err := client.New(op, client.WithSigner(signer, alg))
+			require.NoError(t, err)
+
+			pkt, err := client.Auth(context.Background())
+			require.NoError(t, err)
+
+			cert, err := sshcert.New(pkt, nil, principals)
+			require.NoError(t, err)
+
+			sshSigner, err := ssh.NewSignerFromSigner(signer)
+			require.NoError(t, err)
+
+			signerMas, err := ssh.NewSignerWithAlgorithms(sshSigner.(ssh.AlgorithmSigner),
+				[]string{ssh.KeyAlgoECDSA256})
+			require.NoError(t, err)
+
+			sshCert, err := cert.SignCert(signerMas)
+			require.NoError(t, err)
+
+			certTypeAndCertB64 := ssh.MarshalAuthorizedKey(sshCert)
+			typeArg := strings.Split(string(certTypeAndCertB64), " ")[0]
+			certB64Arg := strings.Split(string(certTypeAndCertB64), " ")[1]
+
+			verPkt, err := verifier.NewFromMany(tt.rows)
+			require.NoError(t, err)
+
+			userArg := "user"
+			ver := VerifyCmd{
+				PktVerifier: *verPkt,
+				CheckPolicy: AllowAllPolicyEnforcer,
+			}
+
+			pubkeyList, err := ver.AuthorizedKeysCommand(context.Background(), userArg, typeArg, certB64Arg, nil)
+
+			if tt.errorString != "" {
+				require.ErrorContains(t, err, tt.errorString)
+				require.Empty(t, pubkeyList)
+			} else {
+				require.NoError(t, err)
+				require.Contains(t, pubkeyList, expectedLine)
+			}
+		})
 	}
 }
 

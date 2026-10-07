@@ -566,9 +566,10 @@ opkssh add root alice@example.com https://authentik.local/application/o/opkssh/
 | [AWS Cognito](https://aws.amazon.com/cognito/) | ✅     | [Amazon Cognito Integration Guide](docs/providers/cognito.md)                                           |
 | [Azure](https://www.azure.com/)                | ✅     | [Entra ID (Azure) Integration Guide](docs/providers/azure.md)                                           |
 | [Forgejo Actions / Codeberg](https://forgejo.org/) | ✅ | [Forgejo Actions Guide](docs/forgejo-actions.md), requires Forgejo v15.0+                               |
-| [GitHub Actions](https://github.com/features/actions) | ✅ | [GitHub Actions Guide](docs/github-actions.md)                                                          |
-| [Google](https://developers.google.com/identity/openid-connect/openid-connect) | ✅ | [Google Integration Guide](docs/providers/google.md)                                   |
+| [GitHub Actions](https://github.com/features/actions) | ✅ | [GitHub Actions Guide](docs/github-actions.md)                                                          |                                   |
+| [GitLab CI/CD](https://docs.gitlab.com/ci/)    | ✅     | [GitLab CI Guide](docs/gitlab-ci.md)                                                                    |
 | [Gitlab Self-hosted](https://gitlab.com/)      | ✅     | [Configuration guide](docs/gitlab-selfhosted.md)                                                        |
+| [Google](https://developers.google.com/identity/openid-connect/openid-connect) | ✅ | [Google Integration Guide](docs/providers/google.md)
 | [Kanidm](https://kanidm.com/)                  | ✅ | [Kanidm Integration Guide](https://kanidm.github.io/kanidm/master/integrations/oauth2/examples.html#opkssh)|
 | [Keycloak](https://www.keycloak.org)           | ✅     | [Keycloak Integration Guide](docs/providers/keycloak.md)                                                |
 | [PocketID](https://pocket-id.org/)             | ✅     | Create a new OIDC Client and inside the new client, check "Public client" on OIDC Client Settings       |
@@ -657,6 +658,7 @@ For integration tests run:
 
 ### Guides
 - [CONTRIBUTING.md](https://github.com/openpubkey/opkssh/blob/main/CONTRIBUTING.md) Guide to contributing to opkssh (includes developer help).
+- [docs/gitlab-ci.md](docs/gitlab-ci.md) Guide to SSHing via GitLab CI/CD.
 - [docs/gitlab-selfhosted.md](docs/gitlab-selfhosted.md) Guide on configuring and using a self hosted GitLab instance with opkssh.
 - [docs/forgejo-actions.md](docs/forgejo-actions.md) Guide to SSHing via Forgejo Actions (e.g. Codeberg).
 - [docs/paramiko.md](docs/paramiko.md) Guide to using the Python SSH paramiko library with opkssh.
