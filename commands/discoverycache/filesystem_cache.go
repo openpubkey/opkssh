@@ -75,7 +75,18 @@ func (c *FilesystemDiscoveryCache) Validate() error {
 	if perm := info.Mode().Perm(); perm&0o022 != 0 {
 		return fmt.Errorf("cache base_dir %q must not be group- or world-writable, got permissions %#o", c.BaseDir, perm)
 	}
-	return nil
+	return validateCacheOwner(c.BaseDir, info)
+}
+
+// Check verifies that an already-provisioned cache directory is safe and can
+// be used by the current verification account.
+func (c *FilesystemDiscoveryCache) Check() error {
+	if _, err := c.Fs.Stat(c.BaseDir); errors.Is(err, iofs.ErrNotExist) {
+		return fmt.Errorf("cache base_dir %q does not exist", c.BaseDir)
+	} else if err != nil {
+		return fmt.Errorf("failed to stat cache base_dir %q: %w", c.BaseDir, err)
+	}
+	return c.Validate()
 }
 
 func cacheTimestamp(fileName string, expression *regexp.Regexp) (time.Time, bool) {

@@ -13,3 +13,4 @@ Manage the JWKS cache used by opkssh verify
 
 * [opkssh](opkssh.md) - SSH with OpenPubkey
 * [opkssh cache clean](opkssh_cache_clean.md) - Remove stale JWKS cache entries
+* [opkssh cache check](opkssh_cache_check.md) - Check whether the JWKS cache is ready to use

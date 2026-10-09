@@ -364,10 +364,11 @@ Arguments:
 				return err
 			}
 
-			cacheCfg, err := serverConfig.Cache.DiscoveryCacheConfig(v.Fs)
-			if err != nil {
-				log.Println("Invalid JWKS cache configuration:", err)
-				return err
+			cacheCfg, cacheErr := serverConfig.Cache.DiscoveryCacheConfig(v.Fs)
+			if cacheErr != nil {
+				// Caching is an availability optimization. A broken cache must
+				// not prevent authentication with freshly discovered keys.
+				log.Println("Persistent JWKS cache disabled:", cacheErr)
 			}
 			pktVerifier, err := providerPolicy.CreateVerifier(cacheCfg)
 			if err != nil {

@@ -115,7 +115,7 @@ OPKSSH_INSTALL_CACHE_DIR=/var/cache/opkssh \
 ./install-linux.sh
 ```
 
-If you configure the cache by hand instead, create `base_dir` yourself with those permissions and run the cleanup command periodically as `opksshuser` to limit disk use:
+If you configure the cache by hand instead, create `base_dir` yourself with those permissions and run the cleanup command periodically as the verification user to limit disk use:
 
 ```bash
 opkssh cache clean
@@ -125,6 +125,12 @@ opkssh cache clean
 
 ```bash
 opkssh cache clean 24h
+```
+
+Before enabling the cache in production, run the preflight as the verification user. It confirms that the user can read the server configuration and owns a usable cache directory:
+
+```bash
+sudo -u ubuntu opkssh cache check
 ```
 
 The cache applies to standard OIDC, GitHub Actions, Forgejo Actions, and GitLab CI verification. A shorter maximum age detects provider key rotation sooner; a longer age improves availability but can continue to trust a rotated key for longer.

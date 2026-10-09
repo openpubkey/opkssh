@@ -703,28 +703,44 @@ configure_cache() {
         echo "Persistent JWKS cache not requested (CACHE_DIR empty), skipping."
         return 0
     fi
+    if [[ ! "$CACHE_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
+        echo "Cache directory must be an absolute path containing only letters, numbers, '.', '_', '/', or '-': $CACHE_DIR"
+        return 1
+    fi
 
     echo "Configuring persistent JWKS cache:"
 
-    # verify runs as AUTH_CMD_USER and writes cache entries, so that user must
-    # own the directory. 0700 keeps everyone else out: a cache a less
-    # privileged user could write to is a key-substitution vector.
-    if [[ ! -e "$CACHE_DIR" ]]; then
-        mkdir -p "$CACHE_DIR"
-    fi
-    chown "${AUTH_CMD_USER}":"${AUTH_CMD_GROUP}" "$CACHE_DIR"
-    chmod 700 "$CACHE_DIR"
-    echo "  Created cache directory $CACHE_DIR (${AUTH_CMD_USER}:${AUTH_CMD_GROUP}, 0700)"
-
     local config_file="$etc_path/opk/config.yml"
+    local existing_cache_dir=""
     if [[ -f "$config_file" ]] && grep -Eq '^cache:' "$config_file"; then
-        echo "  config.yml already has a cache section, keeping existing values"
+        existing_cache_dir=$(awk '
+            /^cache:[[:space:]]*$/ { in_cache = 1; next }
+            in_cache && /^[^[:space:]#]/ { exit }
+            in_cache && /^[[:space:]]+base_dir:[[:space:]]*/ {
+                sub(/^[[:space:]]+base_dir:[[:space:]]*/, "")
+                sub(/[[:space:]]+#.*$/, "")
+                print
+                exit
+            }
+        ' "$config_file")
+        if [[ "$existing_cache_dir" != "$CACHE_DIR" ]]; then
+            echo "config.yml already contains a cache section for ${existing_cache_dir:-an unknown directory}; refusing to provision $CACHE_DIR"
+            return 1
+        fi
     else
         {
             echo "cache:"
             echo "  base_dir: $CACHE_DIR"
         } >> "$config_file"
         echo "  Added cache section to $config_file"
+    fi
+
+    install -d -o "${AUTH_CMD_USER}" -g "${AUTH_CMD_GROUP}" -m 700 "$CACHE_DIR"
+    echo "  Created cache directory $CACHE_DIR (${AUTH_CMD_USER}:${AUTH_CMD_GROUP}, 0700)"
+
+    if ! runuser -u "$AUTH_CMD_USER" -- "${INSTALL_DIR}/${BINARY_NAME}" cache check; then
+        echo "Cache preflight failed for ${AUTH_CMD_USER}; check config.yml group ownership and cache directory access"
+        return 1
     fi
 
     # A cache that is never cleaned grows without bound, so install a timer.

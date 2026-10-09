@@ -7,7 +7,7 @@ Remove stale JWKS cache entries
 Clean removes cache entries older than max-age.
 
 Without max-age, clean uses fallback_max_age from the server configuration.
-Run this command periodically as the opkssh user to bound cache disk use.
+Run this command periodically as the verification user to bound cache disk use.
 
 ```
 opkssh cache clean [max-age] [flags]

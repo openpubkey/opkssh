@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/openpubkey/openpubkey/discover"
 	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/opkssh/commands/config"
 	"github.com/openpubkey/opkssh/commands/discoverycache"
@@ -57,7 +58,7 @@ func (c *CacheCmd) CobraCommand() *cobra.Command {
 		Long: `Clean removes cache entries older than max-age.
 
 Without max-age, clean uses fallback_max_age from the server configuration.
-Run this command periodically as the opkssh user to bound cache disk use.`,
+Run this command periodically as the verification user to bound cache disk use.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			maxAge := time.Duration(0)
@@ -87,7 +88,29 @@ Run this command periodically as the opkssh user to bound cache disk use.`,
 		},
 	}
 
+	checkCmd := &cobra.Command{
+		Use:   "check",
+		Short: "Check whether the JWKS cache is ready to use",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cache, cacheCfg, err := c.filesystemCache()
+			if errors.Is(err, ErrNoCacheConfigured) {
+				_, writeErr := fmt.Fprintln(cmd.OutOrStdout(), "No persistent JWKS cache configured.")
+				return writeErr
+			}
+			if err != nil {
+				return err
+			}
+			if err := cache.Check(); err != nil {
+				return err
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "JWKS cache is ready: %s (max age %s, fallback %s).\n", cache.BaseDir, cacheCfg.StandardMaxAge, cacheCfg.FallbackMaxAge)
+			return err
+		},
+	}
+
 	cacheCmd.AddCommand(cleanCmd)
+	cacheCmd.AddCommand(checkCmd)
 	return cacheCmd
 }
 
@@ -105,20 +128,28 @@ func (c *CacheCmd) loadServerConfig() (*config.ServerConfig, error) {
 var ErrNoCacheConfigured = errors.New("no persistent JWKS cache configured")
 
 func (c *CacheCmd) expire(ctx context.Context, maxAge time.Duration, useConfiguredAge bool) (int, error) {
-	cfg, err := c.loadServerConfig()
-	if err != nil {
-		return 0, fmt.Errorf("load server config: %w", err)
-	}
-	cacheCfg, err := cfg.Cache.DiscoveryCacheConfig(c.fs)
+	cache, cacheCfg, err := c.filesystemCache()
 	if err != nil {
 		return 0, err
-	}
-	cache, ok := cacheCfg.Cache.(*discoverycache.FilesystemDiscoveryCache)
-	if !ok {
-		return 0, ErrNoCacheConfigured
 	}
 	if useConfiguredAge && maxAge == 0 {
 		maxAge = cacheCfg.FallbackMaxAge
 	}
 	return cache.Expire(ctx, maxAge)
+}
+
+func (c *CacheCmd) filesystemCache() (*discoverycache.FilesystemDiscoveryCache, discover.DiscoveryCacheConfig, error) {
+	cfg, err := c.loadServerConfig()
+	if err != nil {
+		return nil, discover.DiscoveryCacheConfig{}, fmt.Errorf("load server config: %w", err)
+	}
+	cacheCfg, err := cfg.Cache.DiscoveryCacheConfig(c.fs)
+	if err != nil {
+		return nil, discover.DiscoveryCacheConfig{}, err
+	}
+	cache, ok := cacheCfg.Cache.(*discoverycache.FilesystemDiscoveryCache)
+	if !ok {
+		return nil, discover.DiscoveryCacheConfig{}, ErrNoCacheConfigured
+	}
+	return cache, cacheCfg, nil
 }
