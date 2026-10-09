@@ -62,9 +62,9 @@ SUDOERS_PATH="${OPKSSH_INSTALL_SUDOERS_PATH:-/etc/sudoers.d/opkssh}"
 # OPKSSH_INSTALL_CACHE_DIR
 # Default: (empty)
 # Description: Base directory for the persistent JWKS cache. When set, the
-#   installer creates the directory (root:AUTH_CMD_GROUP, 0750), adds a cache
-#   section to config.yml, and installs a systemd timer to clean it. Empty
-#   leaves caching disabled, matching the default server behaviour.
+#   installer creates the directory (AUTH_CMD_USER:AUTH_CMD_GROUP, 0700), adds
+#   a cache section to config.yml, and installs a systemd timer to clean it.
+#   Empty leaves caching disabled, matching the default server behaviour.
 CACHE_DIR="${OPKSSH_INSTALL_CACHE_DIR:-}"
 
 # OPKSSH_INSTALL_CACHE_CLEAN_ON_CALENDAR
