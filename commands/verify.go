@@ -165,7 +165,11 @@ func (v *VerifyCmd) ReadFromServerConfig() (*config.ServerConfig, error) {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	err = v.filePermChecker.CheckPerm(v.ConfigPathArg, []fs.FileMode{0640}, "root", "opksshuser")
+	// The group is deliberately not fixed. Servers may run
+	// AuthorizedKeysCommand as any dedicated account (or a local administrator
+	// account), and that account needs read access to this root-owned config.
+	// Mode 0640 still prevents the group from modifying the configuration.
+	err = v.filePermChecker.CheckPerm(v.ConfigPathArg, []fs.FileMode{0640}, "root", "")
 	if err != nil {
 		return nil, err
 	}
