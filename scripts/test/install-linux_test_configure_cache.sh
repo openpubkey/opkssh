@@ -28,12 +28,14 @@ tearDown() {
 }
 
 # Mock commands so the test does not touch the real system.
-chown() {
-    echo "chown $*" >> "$MOCK_LOG"
+install() {
+    echo "install $*" >> "$MOCK_LOG"
+    mkdir -p "${!#}"
 }
 
-chmod() {
-    echo "chmod $*" >> "$MOCK_LOG"
+runuser() {
+    echo "runuser $*" >> "$MOCK_LOG"
+    return "${runuser_exit_code:-0}"
 }
 
 systemctl() {
@@ -63,8 +65,8 @@ test_configure_cache_provisions_dir_config_and_timer() {
 
     assertEquals "Expected to return 0 on success" 0 "$result"
     assertTrue "Expected cache directory to be created" "[ -d \"$CACHE_DIR\" ]"
-    assertContains "Expected cache dir ownership set to user:group" "${mock_log[*]}" "chown ${AUTH_CMD_USER}:${AUTH_CMD_GROUP} $CACHE_DIR"
-    assertContains "Expected cache dir mode set to 0700" "${mock_log[*]}" "chmod 700 $CACHE_DIR"
+    assertContains "Expected cache dir provisioned for the verification user" "${mock_log[*]}" "install -d -o ${AUTH_CMD_USER} -g ${AUTH_CMD_GROUP} -m 700 $CACHE_DIR"
+    assertContains "Expected cache preflight run as the verification user" "${mock_log[*]}" "runuser -u ${AUTH_CMD_USER} -- ${INSTALL_DIR}/${BINARY_NAME} cache check"
 
     assertTrue "Expected cache section appended to config.yml" "grep -q '^cache:' \"$TEST_TEMP_DIR/opk/config.yml\""
     assertTrue "Expected base_dir written to config.yml" "grep -q 'base_dir: $CACHE_DIR' \"$TEST_TEMP_DIR/opk/config.yml\""
@@ -75,7 +77,7 @@ test_configure_cache_provisions_dir_config_and_timer() {
     assertContains "Expected timer enabled" "${mock_log[*]}" "systemctl enable --now opkssh-cache-clean.timer"
 }
 
-test_configure_cache_keeps_existing_cache_section() {
+test_configure_cache_rejects_existing_cache_section() {
     CACHE_DIR="$TEST_TEMP_DIR/cache"
     mkdir -p "$TEST_TEMP_DIR/systemd"
     printf 'cache:\n  base_dir: /already/set\n' > "$TEST_TEMP_DIR/opk/config.yml"
@@ -83,9 +85,32 @@ test_configure_cache_keeps_existing_cache_section() {
     configure_cache "$TEST_TEMP_DIR" "$TEST_TEMP_DIR/systemd" >/dev/null
     result=$?
 
-    assertEquals "Expected to return 0 on success" 0 "$result"
+    assertEquals "Expected to reject an ambiguous cache configuration" 1 "$result"
     assertTrue "Expected existing base_dir kept" "grep -q 'base_dir: /already/set' \"$TEST_TEMP_DIR/opk/config.yml\""
-    assertFalse "Expected the new cache dir not to be appended" "grep -q 'base_dir: $CACHE_DIR' \"$TEST_TEMP_DIR/opk/config.yml\""
+    assertFalse "Expected no cache directory provisioned" "[ -d \"$CACHE_DIR\" ]"
+}
+
+test_configure_cache_accepts_matching_cache_section() {
+    CACHE_DIR="$TEST_TEMP_DIR/cache"
+    mkdir -p "$TEST_TEMP_DIR/systemd"
+    printf 'cache:\n  base_dir: %s\n' "$CACHE_DIR" > "$TEST_TEMP_DIR/opk/config.yml"
+
+    configure_cache "$TEST_TEMP_DIR" "$TEST_TEMP_DIR/systemd" >/dev/null
+    result=$?
+
+    assertEquals "Expected matching cache configuration to be accepted" 0 "$result"
+    assertTrue "Expected cache directory provisioned" "[ -d \"$CACHE_DIR\" ]"
+    assertContains "Expected cache preflight run" "$(cat "$MOCK_LOG")" "runuser -u ${AUTH_CMD_USER} -- ${INSTALL_DIR}/${BINARY_NAME} cache check"
+}
+
+test_configure_cache_rejects_unsafe_path() {
+    CACHE_DIR="relative/cache"
+
+    configure_cache "$TEST_TEMP_DIR" "$TEST_TEMP_DIR/systemd" >/dev/null
+    result=$?
+
+    assertEquals "Expected to reject a relative cache path" 1 "$result"
+    assertFalse "Expected no cache section added" "grep -q '^cache:' \"$TEST_TEMP_DIR/opk/config.yml\""
 }
 
 # shellcheck disable=SC1091

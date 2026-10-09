@@ -126,3 +126,8 @@ func TestFilesystemDiscoveryCacheValidate(t *testing.T) {
 		require.ErrorContains(t, cache.Validate(), "not a directory")
 	})
 }
+
+func TestFilesystemDiscoveryCacheCheckRequiresExistingDirectory(t *testing.T) {
+	cache := NewFilesystemDiscoveryCache(afero.NewMemMapFs(), "/cache")
+	require.ErrorContains(t, cache.Check(), "does not exist")
+}
