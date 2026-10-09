@@ -1,14 +1,16 @@
 # Configuring Google for OPKSSH
 
-OPKSSH ships with a default Google client ID so that you can try it out without any setup.
-That client ID is shared by everyone using OPKSSH's defaults and can stop working at any time, as it did in [#617](https://github.com/openpubkey/opkssh/issues/617).
-To use Google with OPKSSH in production, register your own client ID as described here. It takes about 10 minutes.
+OPKSSH ships with a default Google client ID for testing and development.
+The default client ID, `206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com`, should not be used in production as it allows the OPKSSH project to have control over your redirect URI.
+Additionally if the OPKSSH client ID where to get shutdown by Google, you would lose access.
+To use Google with OPKSSH in production, make sure to register your own client ID as described below. 
+Ensure you do not reuse a client ID that you use for other services.
 
 **Something not working?** Open a new issue on <https://github.com/openpubkey/opkssh>
 
 ## Setup
 
-You will create an OAuth client in a Google Cloud project and configure it with OPKSSH's three redirect URIs:
+Create an OAuth client in a Google Cloud project and configure it with OPKSSH's three redirect URIs:
 
 ```
 http://localhost:3000/login-callback
@@ -19,9 +21,9 @@ http://localhost:11110/login-callback
 ### 1. Configure the Google Auth Platform
 
 Sign into the [Google Cloud console](https://console.cloud.google.com/) and select or create the project that will own the OAuth client.
-Use a project dedicated to OPKSSH, or one where the client will not be deleted by accident.
+Use a project dedicated to OPKSSH or where the client will not be deleted by accident.
 
-Open the [Google Auth Platform](https://console.developers.google.com/auth/overview).
+Open the [Google Auth Platform](https://console.cloud.google.com/auth/overview).
 If it says that the Google Auth Platform is not configured yet, click **Get started** and fill in:
 
 1. **App Information**: an app name users will recognize on the consent screen, such as `OPKSSH`, and a support email.
@@ -47,7 +49,7 @@ Leave **Authorized JavaScript origins** empty and click **Create**.
 
 Google now shows the **client ID** and the **client secret**.
 Copy both: Google shows the full client secret only once.
-If you lose it, add a new secret to the client on the [Clients page](https://console.developers.google.com/auth/clients).
+If you lose it, add a new secret to the client on the [Clients page](https://console.cloud.google.com/auth/clients).
 
 Google requires the client secret even though OPKSSH runs on your users' computers, where it cannot be kept secret.
 OPKSSH treats it as a public value, like the client ID.
@@ -103,7 +105,7 @@ Error 401: disabled_client
 The OAuth client that `opkssh login` used is disabled or deleted.
 If it is OPKSSH's default client ID, register your own as described above.
 
-If it is your own client, check it on the [Clients page](https://console.developers.google.com/auth/clients) of the Google Auth Platform.
+If it is your own client, check it on the [Clients page](https://console.cloud.google.com/auth/clients) of the Google Auth Platform.
 Google deletes OAuth clients that have not been used for six months, and sends an email 30 days before.
 Deleted clients can usually be restored for 30 days.
 See [Google's documentation on managing OAuth clients](https://support.google.com/cloud/answer/15549257#unused-client-deletion).
