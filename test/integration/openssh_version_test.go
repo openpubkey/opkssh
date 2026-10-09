@@ -23,6 +23,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"unicode"
@@ -99,7 +100,7 @@ func TestOpenSSHVersionDetection(t *testing.T) {
 	osType := os.Getenv("OS_TYPE")
 	// If osType does not match any expected osType, fail loudly. Likely a typo
 	if osType != "" && !slices.ContainsFunc(tests, func(tt OpenSSHVersionTest) bool { return tt.osType == osType }) {
-			t.Fatalf("OS_TYPE=%q matches no version-detection case", osType)
+		t.Fatalf("OS_TYPE=%q matches no version-detection case", osType)
 	}
 	t.Parallel()
 	for _, tt := range tests {
