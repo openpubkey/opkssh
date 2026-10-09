@@ -1,10 +1,9 @@
 FROM golang:1.26.5@sha256:d52df9c279840adf958d017ebb275651ed8338b953d39817bc3633a2e6b1bbcc
 
-# Update/Upgrade
-RUN apt-get update -y && apt-get upgrade -y
-
-# Install dependencies, such as the SSH server
-RUN apt-get install -y sudo openssh-server telnet jq
+# Update/Upgrade and install dependencies, such as the SSH server. These share
+# one RUN so a cached package index is never paired with a newer install step.
+RUN apt-get update -y && apt-get upgrade -y && \
+    apt-get install -y sudo openssh-server telnet jq
 
 # Source:
 # https://medium.com/@ratnesh4209211786/simplified-ssh-server-setup-within-a-docker-container-77eedd87a320

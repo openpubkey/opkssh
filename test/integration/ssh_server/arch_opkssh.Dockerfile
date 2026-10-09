@@ -12,7 +12,6 @@ RUN go mod download
 COPY . ./
 
 # Copy the source code and build the binary
-ARG ISSUER_PORT="9998"
 RUN go build -v -o opksshbuild
 
 # Stage 2: Create a minimal ArchLinux-based image
