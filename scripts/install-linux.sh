@@ -59,6 +59,20 @@ AUTH_CMD_GROUP="${OPKSSH_INSTALL_AUTH_CMD_GROUP:-opksshuser}"
 # Description: Path to the sudoers file for opkssh
 SUDOERS_PATH="${OPKSSH_INSTALL_SUDOERS_PATH:-/etc/sudoers.d/opkssh}"
 
+# OPKSSH_INSTALL_CACHE_DIR
+# Default: (empty)
+# Description: Base directory for the persistent JWKS cache. When set, the
+#   installer creates the directory (AUTH_CMD_USER:AUTH_CMD_GROUP, 0700), adds
+#   a cache section to config.yml, and installs a systemd timer to clean it.
+#   Empty leaves caching disabled, matching the default server behaviour.
+CACHE_DIR="${OPKSSH_INSTALL_CACHE_DIR:-}"
+
+# OPKSSH_INSTALL_CACHE_CLEAN_ON_CALENDAR
+# Default: daily
+# Description: systemd OnCalendar expression for the cache cleanup timer. Only
+#   used when CACHE_DIR is set.
+CACHE_CLEAN_ON_CALENDAR="${OPKSSH_INSTALL_CACHE_CLEAN_ON_CALENDAR:-daily}"
+
 # OPKSSH_HOME_POLICY
 # Default: true
 # Description: Whether to use the home directory policy feature
@@ -667,6 +681,104 @@ configure_opkssh() {
     fi
 }
 
+# configure_cache
+# Provisions the persistent JWKS cache directory and the systemd timer that
+# cleans it. Does nothing unless CACHE_DIR is set.
+#
+# Arguments:
+#   $1 - Path to etc directory (Optional, default /etc)
+#   $2 - Path to systemd system unit directory (Optional, default /etc/systemd/system)
+#
+# Outputs:
+#   Writes to stdout the cache configuration progress
+#
+# Returns:
+#   0 on success, 1 on failure
+# shellcheck disable=SC2120
+configure_cache() {
+    local etc_path="${1:-/etc}"
+    local systemd_dir="${2:-/etc/systemd/system}"
+
+    if [[ -z "$CACHE_DIR" ]]; then
+        echo "Persistent JWKS cache not requested (CACHE_DIR empty), skipping."
+        return 0
+    fi
+    if [[ ! "$CACHE_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
+        echo "Cache directory must be an absolute path containing only letters, numbers, '.', '_', '/', or '-': $CACHE_DIR"
+        return 1
+    fi
+
+    echo "Configuring persistent JWKS cache:"
+
+    local config_file="$etc_path/opk/config.yml"
+    local existing_cache_dir=""
+    if [[ -f "$config_file" ]] && grep -Eq '^cache:' "$config_file"; then
+        existing_cache_dir=$(awk '
+            /^cache:[[:space:]]*$/ { in_cache = 1; next }
+            in_cache && /^[^[:space:]#]/ { exit }
+            in_cache && /^[[:space:]]+base_dir:[[:space:]]*/ {
+                sub(/^[[:space:]]+base_dir:[[:space:]]*/, "")
+                sub(/[[:space:]]+#.*$/, "")
+                print
+                exit
+            }
+        ' "$config_file")
+        if [[ "$existing_cache_dir" != "$CACHE_DIR" ]]; then
+            echo "config.yml already contains a cache section for ${existing_cache_dir:-an unknown directory}; refusing to provision $CACHE_DIR"
+            return 1
+        fi
+    else
+        {
+            echo "cache:"
+            echo "  base_dir: $CACHE_DIR"
+        } >> "$config_file"
+        echo "  Added cache section to $config_file"
+    fi
+
+    install -d -o "${AUTH_CMD_USER}" -g "${AUTH_CMD_GROUP}" -m 700 "$CACHE_DIR"
+    echo "  Created cache directory $CACHE_DIR (${AUTH_CMD_USER}:${AUTH_CMD_GROUP}, 0700)"
+
+    if ! runuser -u "$AUTH_CMD_USER" -- "${INSTALL_DIR}/${BINARY_NAME}" cache check; then
+        echo "Cache preflight failed for ${AUTH_CMD_USER}; check config.yml group ownership and cache directory access"
+        return 1
+    fi
+
+    # A cache that is never cleaned grows without bound, so install a timer.
+    # Fall back to a note if systemd is unavailable.
+    if ! command -v systemctl >/dev/null 2>&1; then
+        echo "  systemd not detected; run 'opkssh cache clean' periodically as ${AUTH_CMD_USER} to bound disk use"
+        return 0
+    fi
+
+    cat > "$systemd_dir/opkssh-cache-clean.service" <<EOF
+[Unit]
+Description=Clean stale opkssh JWKS cache entries
+
+[Service]
+Type=oneshot
+User=${AUTH_CMD_USER}
+Group=${AUTH_CMD_GROUP}
+ExecStart=${INSTALL_DIR}/${BINARY_NAME} cache clean
+EOF
+
+    cat > "$systemd_dir/opkssh-cache-clean.timer" <<EOF
+[Unit]
+Description=Periodically clean stale opkssh JWKS cache entries
+
+[Timer]
+OnCalendar=${CACHE_CLEAN_ON_CALENDAR}
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    echo "  Installed opkssh-cache-clean.timer (OnCalendar=${CACHE_CLEAN_ON_CALENDAR})"
+    systemctl daemon-reload || return 1
+    systemctl enable --now opkssh-cache-clean.timer || return 1
+    echo "  Enabled opkssh-cache-clean.timer"
+}
+
 # configure_openssh_server
 # Configure openSSH-server to use opkssh using AuthorizedKeysCommand
 #
@@ -838,6 +950,7 @@ main() {
     install_opkssh_binary || return 1
     check_selinux
     configure_opkssh
+    configure_cache || return 1
     configure_openssh_server || return 1
     restart_openssh_server || return 1
     if [[ "$HOME_POLICY" == true ]]; then

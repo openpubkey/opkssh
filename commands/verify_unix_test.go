@@ -94,7 +94,7 @@ env_vars:
 					},
 				},
 			}
-			err := ver.ReadFromServerConfig()
+			_, err := ver.ReadFromServerConfig()
 
 			require.ErrorContains(t, err, tt.errorString)
 		})

@@ -357,16 +357,25 @@ Arguments:
 			printConfigProblems()
 			log.Println("Providers loaded: ", providerPolicy.ToString())
 
-			pktVerifier, err := providerPolicy.CreateVerifier()
+			v := commands.NewVerifyCmd(commands.OpkPolicyEnforcerFunc(userArg), serverConfigPathArg)
+			serverConfig, err := v.ReadFromServerConfig()
 			if err != nil {
-				log.Println("Failed to create pk token verifier (likely bad configuration):", err)
+				log.Println("Failed to load server configuration:", err)
 				return err
 			}
 
-			v := commands.NewVerifyCmd(*pktVerifier, commands.OpkPolicyEnforcerFunc(userArg), serverConfigPathArg)
-			if err := v.ReadFromServerConfig(); err != nil {
-				log.Println("Failed to set environment variables in config:", err)
+			cacheCfg, cacheErr := serverConfig.Cache.DiscoveryCacheConfig(v.Fs)
+			if cacheErr != nil {
+				// Caching is an availability optimization. A broken cache must
+				// not prevent authentication with freshly discovered keys.
+				log.Println("Persistent JWKS cache disabled:", cacheErr)
 			}
+			pktVerifier, err := providerPolicy.CreateVerifier(cacheCfg)
+			if err != nil {
+				log.Println("Failed to create pk token verifier (likely bad provider configuration):", err)
+				return err
+			}
+			v.PktVerifier = *pktVerifier
 
 			if authKey, err := v.AuthorizedKeysCommand(ctx, userArg, typArg, certB64Arg, extraArgs); err != nil {
 				log.Println("failed to verify:", err)
@@ -497,6 +506,9 @@ Exit code: 0 if all entries are valid, 1 if any warnings or errors are found.`,
 	// permissions command for checking and fixing file permissions/ACLs
 	permsCmd := commands.NewPermissionsCmd(os.Stdout, os.Stderr)
 	rootCmd.AddCommand(permsCmd.CobraCommand())
+
+	cacheCmd := commands.NewCacheCmd()
+	rootCmd.AddCommand(cacheCmd.CobraCommand())
 
 	// genDocsCmd is a hidden command used as a helper for generating our
 	// command line reference documentation.
