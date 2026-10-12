@@ -18,6 +18,7 @@ package commands
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -46,7 +47,9 @@ func TestClientProviderAdd(t *testing.T) {
 		name string
 		// existing is the client config before the command, nil if there is none
 		existing []byte
-		cmd      ClientProviderAddCmd
+		// existingMode is the mode of the existing client config, 0o600 if unset
+		existingMode os.FileMode
+		cmd          ClientProviderAddCmd
 		// check is called with the client config after a successful command
 		check       func(t *testing.T, content string, clientConfig *config.ClientConfig)
 		wantOut     string
@@ -175,6 +178,31 @@ func TestClientProviderAdd(t *testing.T) {
 			errorString: "provider google already uses issuer https://accounts.google.com; to use your client ID with it, run the same command with alias google and --replace",
 		},
 		{
+			name:        "issuer with a trailing slash",
+			existing:    config.DefaultClientConfig,
+			cmd:         ClientProviderAddCmd{Alias: "mygoogle", Issuer: "https://accounts.google.com/", ClientID: "my-id", ClientSecret: "my-secret"},
+			errorString: "issuer must not end with /: https://accounts.google.com/",
+		},
+		{
+			name:     "issuer the login web chooser cannot tell apart from another provider's",
+			existing: []byte(userClientConfig),
+			cmd:      ClientProviderAddCmd{Alias: "other", Issuer: "https://keycloak.example.com/realms/other", ClientID: "opkssh"},
+			errorString: "provider mykeycloak kc uses issuer https://keycloak.example.com/realms/opkssh, " +
+				"which the login web chooser cannot tell apart from https://keycloak.example.com/realms/other",
+		},
+		{
+			name:        "no client config and the add fails: does not create it",
+			cmd:         ClientProviderAddCmd{Alias: "google", Issuer: "https://accounts.google.com", ClientID: "my-id", Replace: true},
+			errorString: "the Google OpenID Provider requires --client-secret",
+		},
+		{
+			name:         "read-only client config",
+			existing:     config.DefaultClientConfig,
+			existingMode: 0o444,
+			cmd:          ClientProviderAddCmd{Alias: "gitlab", Issuer: "https://gitlab.com", ClientID: "my-gitlab-client-id", Replace: true},
+			errorString:  "is read-only",
+		},
+		{
 			name:        "Google without client secret",
 			existing:    config.DefaultClientConfig,
 			cmd:         ClientProviderAddCmd{Alias: "google", Issuer: "https://accounts.google.com", ClientID: "my-id", Replace: true},
@@ -211,7 +239,11 @@ func TestClientProviderAdd(t *testing.T) {
 			fs := afero.NewMemMapFs()
 			if tt.existing != nil {
 				require.NoError(t, fs.MkdirAll(filepath.Dir(configPath), 0o755))
-				require.NoError(t, afero.WriteFile(fs, configPath, tt.existing, 0o600))
+				mode := tt.existingMode
+				if mode == 0 {
+					mode = 0o600
+				}
+				require.NoError(t, afero.WriteFile(fs, configPath, tt.existing, mode))
 			}
 			out := &bytes.Buffer{}
 			cmd := tt.cmd
@@ -223,6 +255,11 @@ func TestClientProviderAdd(t *testing.T) {
 
 			if tt.errorString != "" {
 				require.ErrorContains(t, err, tt.errorString)
+				if tt.existing == nil {
+					exists, _ := afero.Exists(fs, configPath)
+					require.False(t, exists, "expected no client config to be created")
+					return
+				}
 				content, readErr := afero.ReadFile(fs, configPath)
 				require.NoError(t, readErr)
 				require.Equal(t, string(tt.existing), string(content), "expected the client config to be unchanged")
@@ -255,4 +292,46 @@ func TestClientProviderAdd(t *testing.T) {
 			require.Contains(t, out.String(), "add this line to /etc/opk/providers:\n  "+cmd.Issuer+" "+cmd.ClientID+" 24h\n")
 		})
 	}
+}
+
+func TestClientProviderAddCreatesConfigWithClientConfigPerms(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	configPath := filepath.Join("home", "alice", ".opk", "config.yml")
+	cmd := ClientProviderAddCmd{Fs: fs, Out: &bytes.Buffer{}, ConfigPath: configPath,
+		Alias: "kc", Issuer: "https://keycloak.example.com/realms/opkssh", ClientID: "opkssh"}
+	require.NoError(t, cmd.Run())
+
+	info, err := fs.Stat(configPath)
+	require.NoError(t, err)
+	require.Equal(t, config.ClientConfigFilePerms, info.Mode().Perm())
+	info, err = fs.Stat(filepath.Dir(configPath))
+	require.NoError(t, err)
+	require.Equal(t, config.ClientConfigDirPerms, info.Mode().Perm())
+}
+
+func TestClientProviderAddSymlinkedConfig(t *testing.T) {
+	// Dotfile managers often symlink ~/.opk/config.yml to a file elsewhere
+	dir := t.TempDir()
+	target := filepath.Join(dir, "dotfiles", "opk-config.yml")
+	require.NoError(t, os.MkdirAll(filepath.Dir(target), 0o755))
+	require.NoError(t, os.WriteFile(target, []byte(userClientConfig), 0o600))
+	link := filepath.Join(dir, ".opk", "config.yml")
+	require.NoError(t, os.MkdirAll(filepath.Dir(link), 0o755))
+	if err := os.Symlink(target, link); err != nil {
+		// Creating symlinks on Windows needs Developer Mode or admin rights
+		t.Skipf("cannot create symlinks here: %v", err)
+	}
+
+	cmd := ClientProviderAddCmd{Fs: afero.NewOsFs(), Out: &bytes.Buffer{}, ConfigPath: link,
+		Alias: "gitlab", Issuer: "https://gitlab.com", ClientID: "my-gitlab-client-id"}
+	require.NoError(t, cmd.Run())
+
+	info, err := os.Lstat(link)
+	require.NoError(t, err)
+	require.NotZero(t, info.Mode()&os.ModeSymlink, "expected the config to still be a symlink")
+	content, err := os.ReadFile(target)
+	require.NoError(t, err)
+	require.Contains(t, string(content), "my-gitlab-client-id", "expected the symlink target to be updated")
+	_, err = os.Stat(target + ".tmp")
+	require.True(t, os.IsNotExist(err))
 }

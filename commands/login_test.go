@@ -1684,9 +1684,15 @@ func TestLoginCmdDefaultClientIDWarning(t *testing.T) {
 		issuer      string
 		clientID    string
 		wantWarning bool
+		wantCommand string
+		wantDocs    string
 	}{
-		{name: "default Google client ID", issuer: googleDefault.Issuer, clientID: googleDefault.ClientID, wantWarning: true},
-		{name: "default GitLab client ID", issuer: gitlabDefault.Issuer, clientID: gitlabDefault.ClientID, wantWarning: true},
+		{name: "default Google client ID", issuer: googleDefault.Issuer, clientID: googleDefault.ClientID, wantWarning: true,
+			wantCommand: "opkssh client provider add google https://accounts.google.com <client-id> --client-secret <client-secret> --replace",
+			wantDocs:    "docs/providers/google.md"},
+		{name: "default GitLab client ID", issuer: gitlabDefault.Issuer, clientID: gitlabDefault.ClientID, wantWarning: true,
+			wantCommand: "opkssh client provider add gitlab https://gitlab.com <client-id> --replace",
+			wantDocs:    "docs/config.md"},
 		{name: "own Google client ID", issuer: googleDefault.Issuer, clientID: "my-own-client-id"},
 		{name: "default Google client ID for another issuer", issuer: "https://accounts.example.com", clientID: googleDefault.ClientID},
 	}
@@ -1703,20 +1709,25 @@ func TestLoginCmdDefaultClientIDWarning(t *testing.T) {
 			var mockOp providers.OpenIdProvider = op
 
 			out := &bytes.Buffer{}
+			errOut := &bytes.Buffer{}
 			loginCmd := LoginCmd{
 				Config:           defaultConfig,
 				Fs:               afero.NewMemMapFs(),
 				OutWriter:        out,
+				ErrWriter:        errOut,
 				overrideProvider: &mockOp,
 			}
 			require.NoError(t, loginCmd.Run(context.Background()))
 
+			// The warning goes to stderr so it never mixes with --print-key output
+			require.NotContains(t, out.String(), "default client ID")
 			warning := "warning: logging in to " + tt.issuer + " with opkssh's default client ID " + tt.clientID
 			if tt.wantWarning {
-				require.Contains(t, out.String(), warning)
-				require.Contains(t, out.String(), "opkssh client provider add")
+				require.Contains(t, errOut.String(), warning)
+				require.Contains(t, errOut.String(), tt.wantCommand)
+				require.Contains(t, errOut.String(), tt.wantDocs)
 			} else {
-				require.NotContains(t, out.String(), "default client ID")
+				require.NotContains(t, errOut.String(), "default client ID")
 			}
 		})
 	}

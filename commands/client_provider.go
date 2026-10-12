@@ -21,9 +21,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
+	"github.com/openpubkey/openpubkey/client/choosers"
 	"github.com/openpubkey/opkssh/commands/config"
 	"github.com/spf13/afero"
 	"gopkg.in/yaml.v3"
@@ -59,37 +61,56 @@ func (c *ClientProviderAddCmd) Run() error {
 	if err := config.ResolveClientConfigPath(&c.ConfigPath); err != nil {
 		return err
 	}
-	if _, err := c.Fs.Stat(c.ConfigPath); os.IsNotExist(err) {
-		if err := config.CreateDefaultClientConfig(c.ConfigPath, c.Fs); err != nil {
-			return err
-		}
-	} else if err != nil {
+	// Edit the file a symlinked config points to, so the rename below
+	// replaces the target rather than the symlink.
+	configPath, err := resolveSymlinks(c.Fs, c.ConfigPath)
+	if err != nil {
 		return err
 	}
 
-	content, err := afero.ReadFile(c.Fs, c.ConfigPath)
-	if err != nil {
-		return fmt.Errorf("failed to read client config %s: %w", c.ConfigPath, err)
+	// Build the updated config in memory and only write it once it is valid,
+	// so that a failed add never creates or changes the config file.
+	created := false
+	perm := config.ClientConfigFilePerms
+	content, err := afero.ReadFile(c.Fs, configPath)
+	if os.IsNotExist(err) {
+		content = config.DefaultClientConfig
+		created = true
+	} else if err != nil {
+		return fmt.Errorf("failed to read client config %s: %w", configPath, err)
+	} else if info, err := c.Fs.Stat(configPath); err != nil {
+		return err
+	} else if info.Mode().Perm()&0o200 == 0 {
+		// Respect a config the user made read-only. On Unix the rename below
+		// would replace it anyway, and on Windows it would fail.
+		return fmt.Errorf("client config %s is read-only", configPath)
+	} else {
+		perm = info.Mode().Perm()
 	}
+
 	updated, replaced, err := c.addProvider(content)
 	if err != nil {
 		return fmt.Errorf("%s: %w", c.ConfigPath, err)
 	}
 
-	info, err := c.Fs.Stat(c.ConfigPath)
-	if err != nil {
-		return err
+	if created {
+		if err := c.Fs.MkdirAll(filepath.Dir(configPath), config.ClientConfigDirPerms); err != nil {
+			return fmt.Errorf("failed to create config directory: %w", err)
+		}
 	}
 	// Write to a temporary file and rename it, so a failure never leaves a truncated config
-	tmpPath := c.ConfigPath + ".tmp"
-	if err := afero.WriteFile(c.Fs, tmpPath, updated, info.Mode().Perm()); err != nil {
+	tmpPath := configPath + ".tmp"
+	if err := afero.WriteFile(c.Fs, tmpPath, updated, perm); err != nil {
 		return fmt.Errorf("failed to write client config: %w", err)
 	}
-	if err := c.Fs.Rename(tmpPath, c.ConfigPath); err != nil {
+	if err := c.Fs.Rename(tmpPath, configPath); err != nil {
 		_ = c.Fs.Remove(tmpPath)
 		return fmt.Errorf("failed to write client config: %w", err)
 	}
 
+	if created {
+		fmt.Fprintf(c.Out, "Created client config %s from the default config\n", c.ConfigPath)
+	}
 	action := "Added"
 	if replaced {
 		action = "Replaced"
@@ -98,6 +119,28 @@ func (c *ClientProviderAddCmd) Run() error {
 	fmt.Fprintf(c.Out, "Servers must trust this client ID. On each server, add this line to /etc/opk/providers:\n")
 	fmt.Fprintf(c.Out, "  %s %s 24h\n", c.Issuer, c.ClientID)
 	return nil
+}
+
+// resolveSymlinks returns the path that path points to when it is a symlink
+// on the OS filesystem, and path otherwise. Only a path that is itself a
+// symlink is resolved: on Windows, OneDrive folders, junctions and other
+// reparse points are not reported as symlinks (Go 1.23+), so they are left as
+// they are rather than being rewritten by filepath.EvalSymlinks.
+func resolveSymlinks(fs afero.Fs, path string) (string, error) {
+	if _, ok := fs.(*afero.OsFs); !ok {
+		return path, nil
+	}
+	info, err := os.Lstat(path)
+	if os.IsNotExist(err) || (err == nil && info.Mode()&os.ModeSymlink == 0) {
+		return path, nil
+	} else if err != nil {
+		return "", fmt.Errorf("failed to read client config path %s: %w", path, err)
+	}
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve symlinked client config %s: %w", path, err)
+	}
+	return resolved, nil
 }
 
 // addProvider returns the client config with the provider added, or with the
@@ -111,11 +154,21 @@ func (c *ClientProviderAddCmd) addProvider(content []byte) ([]byte, bool, error)
 	newProvider.Issuer = c.Issuer
 	newProvider.ClientID = c.ClientID
 	newProvider.ClientSecret = c.ClientSecret
+	if strings.HasSuffix(c.Issuer, "/") {
+		// The issuer must match the iss claim of the ID token exactly, which has no trailing slash
+		return nil, false, fmt.Errorf("issuer must not end with /: %s", c.Issuer)
+	}
 	if strings.HasPrefix(c.Issuer, "https://accounts.google.com") && c.ClientSecret == "" {
 		// Google requires the client secret even for public clients; it is not a secret for them.
 		return nil, false, fmt.Errorf("the Google OpenID Provider requires --client-secret")
 	}
 	if _, err := newProvider.ToProvider(false); err != nil {
+		return nil, false, err
+	}
+	// The login web chooser shows one button per OpenID Provider name, so two
+	// providers whose issuers map to the same name break it.
+	newName, err := choosers.IssuerToName(c.Issuer)
+	if err != nil {
 		return nil, false, err
 	}
 
@@ -157,10 +210,13 @@ func (c *ClientProviderAddCmd) addProvider(content []byte) ([]byte, bool, error)
 		}
 		if slices.Contains(aliases, c.Alias) {
 			existing = providerNode
-		} else if issuer == c.Issuer {
-			// The login web chooser does not allow two providers with the same issuer
+		} else if name, err := choosers.IssuerToName(issuer); issuer == c.Issuer || (err == nil && name == newName) {
 			if len(aliases) == 0 {
 				return nil, false, fmt.Errorf("a provider without an alias already uses issuer %s", issuer)
+			}
+			if issuer != c.Issuer {
+				return nil, false, fmt.Errorf("provider %s uses issuer %s, which the login web chooser cannot tell apart from %s",
+					strings.Join(aliases, " "), issuer, c.Issuer)
 			}
 			return nil, false, fmt.Errorf("provider %s already uses issuer %s; to use your client ID with it, run the same command with alias %s and --replace",
 				strings.Join(aliases, " "), issuer, aliases[0])

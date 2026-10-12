@@ -494,17 +494,15 @@ Exit code: 0 if all entries are valid, 1 if any warnings or errors are found.`,
 	providerAdd := commands.NewClientProviderAddCmd(os.Stdout)
 	providerAddCmd := &cobra.Command{
 		Use:   "add <alias> <issuer> <client-id>",
-		Short: "Add your own client ID for an OpenID Provider to the client config",
-		Long: `Add your own client ID for an OpenID Provider to the client config, so that
+		Short: "Add an OpenID Provider to the client config",
+		Long: `Add an OpenID Provider to the client config, so that
 "opkssh login <alias>" uses it. The client config is created from the default
-config if it does not exist. The client ID must also be added to
-/etc/opk/providers on the servers that should accept it.
+config if it does not exist. Note client ID and other values must match what
+is configured on the server at /etc/opk/providers.
 
-To use your own client ID for a provider that is already configured, such as
-the default google provider, pass --replace.`,
-		Example: `  opkssh client provider add google https://accounts.google.com <client-id> --client-secret <client-secret> --replace
-  opkssh client provider add keycloak https://keycloak.example.com/realms/opkssh opkssh`,
-		Args: cobra.ExactArgs(3),
+To replace an already configured provider pass --replace.`,
+		Example: `  opkssh client provider add google https://accounts.google.com <client-id> --client-secret <client-secret> --replace`,
+		Args:    cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			providerAdd.Alias, providerAdd.Issuer, providerAdd.ClientID = args[0], args[1], args[2]
 			providerAdd.ConfigPath = configPathArg

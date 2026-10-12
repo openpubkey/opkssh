@@ -124,6 +124,7 @@ type LoginCmd struct {
 
 	// For testing
 	OutWriter io.Writer // Captures non-logged output that would normally be written to stdout
+	ErrWriter io.Writer // Captures warnings that would normally be written to stderr
 }
 
 // NewLogin creates a new LoginCmd instance with the provided arguments.
@@ -707,18 +708,41 @@ func (l *LoginCmd) out() io.Writer {
 	return os.Stdout
 }
 
-// warnIfDefaultClientID warns when logging in with one of the client IDs from
-// the default client config, which are for trying opkssh out, not production.
+// warnIfDefaultClientID warns during login if the client ID used is
+// the default client ID, as the default client ID should be replaced
+// with the org's client ID. The warning goes to stderr so that it never
+// mixes with output such as the key printed by --print-key.
 func (l *LoginCmd) warnIfDefaultClientID(provider providers.OpenIdProvider) {
 	op, ok := provider.(interface{ ClientID() string })
 	if !ok || !config.IsDefaultClientID(provider.Issuer(), op.ClientID()) {
 		return
 	}
-	fmt.Fprintf(l.out(), "warning: logging in to %s with opkssh's default client ID %s.\n"+
-		"  This client ID is for trying opkssh out and can stop working at any time.\n"+
-		"  Register your own client ID with this OpenID Provider and add it with `opkssh client provider add`,\n"+
-		"  see https://github.com/openpubkey/opkssh/tree/main/docs/providers\n",
-		provider.Issuer(), op.ClientID())
+	issuer := provider.Issuer()
+	alias := "<alias>"
+	if l.Config != nil {
+		if opConfig, ok := l.Config.GetByIssuer(issuer); ok && len(opConfig.AliasList) > 0 {
+			alias = opConfig.AliasList[0]
+		}
+	}
+	command := fmt.Sprintf("opkssh client provider add %s %s <client-id> --replace", alias, issuer)
+	docs := "https://github.com/openpubkey/opkssh/blob/main/docs/config.md"
+	if strings.HasPrefix(issuer, "https://accounts.google.com") {
+		command = fmt.Sprintf("opkssh client provider add %s %s <client-id> --client-secret <client-secret> --replace", alias, issuer)
+		docs = "https://github.com/openpubkey/opkssh/blob/main/docs/providers/google.md"
+	}
+	fmt.Fprintf(l.errOut(), "warning: logging in to %s with opkssh's default client ID %s.\n"+
+		"  This client ID is intended for testing and should not be used in production.\n"+
+		"  To use your own client ID, run: %s\n"+
+		"  See %s\n",
+		issuer, op.ClientID(), command, docs)
+}
+
+// errOut is where warnings go: ErrWriter if set, otherwise stderr.
+func (l *LoginCmd) errOut() io.Writer {
+	if l.ErrWriter != nil {
+		return l.ErrWriter
+	}
+	return os.Stderr
 }
 
 // defaultAgentLifetime matches the opkssh server's default certificate
