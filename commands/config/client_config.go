@@ -19,16 +19,48 @@ package config
 import (
 	_ "embed"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/spf13/afero"
 	"gopkg.in/yaml.v3"
 )
 
+// ClientConfigDirPerms and ClientConfigFilePerms are the permissions opkssh
+// uses when it creates the client config directory (~/.opk) and file
+// (~/.opk/config.yml). On Windows, Go only maps the owner write bit (to the
+// read-only attribute); access is governed by the ACLs inherited from the
+// user's profile directory.
+const (
+	ClientConfigDirPerms  = fs.FileMode(0o755)
+	ClientConfigFilePerms = fs.FileMode(0o644)
+)
+
 //go:embed default-client-config.yml
 var DefaultClientConfig []byte
+
+// defaultProviders are the providers in DefaultClientConfig.
+var defaultProviders = sync.OnceValue(func() []ProviderConfig {
+	defaultConfig, err := NewClientConfig(DefaultClientConfig)
+	if err != nil {
+		panic(fmt.Sprintf("failed to parse embedded default client config: %v", err))
+	}
+	return defaultConfig.Providers
+})
+
+// IsDefaultClientID reports whether clientID is the client ID that the
+// default client config uses for issuer.
+func IsDefaultClientID(issuer string, clientID string) bool {
+	for _, provider := range defaultProviders() {
+		if provider.Issuer == issuer && provider.ClientID == clientID {
+			return true
+		}
+	}
+	return false
+}
 
 type ClientConfig struct {
 	DefaultProvider string           `yaml:"default_provider"`
@@ -94,10 +126,10 @@ func GetClientConfigFromFile(configPath string, Fs afero.Fs) (*ClientConfig, err
 
 func CreateDefaultClientConfig(configPath string, Fs afero.Fs) error {
 	afs := &afero.Afero{Fs: Fs}
-	if err := afs.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+	if err := afs.MkdirAll(filepath.Dir(configPath), ClientConfigDirPerms); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
-	if err := afs.WriteFile(configPath, DefaultClientConfig, 0o644); err != nil {
+	if err := afs.WriteFile(configPath, DefaultClientConfig, ClientConfigFilePerms); err != nil {
 		return fmt.Errorf("failed to write default config file: %w", err)
 	}
 	log.Printf("created client config file at %s", configPath)
