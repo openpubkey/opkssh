@@ -17,6 +17,7 @@ Add this to your OPKSSH config file
               - groups
         clients:
           - client_id: 'opkssh'
+          - device_flow: true
             client_name: 'opkssh'
             public: true
             authorization_policy: 'one_factor'
