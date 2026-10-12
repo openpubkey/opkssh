@@ -487,10 +487,16 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 	} else {
 		// If the default provider is WEBCHOOSER, we need to create a chooser and return it
 		var providerList []providers.BrowserOpenIdProvider
+		var deviceFlowConfigs []config.ProviderConfig
 		for _, providerConfig := range providerConfigs {
 			// CI/CD providers (GitHub/Forgejo Actions) are not browser-based
 			// and cannot be offered by the chooser
 			if config.IsCICDProvider(providerConfig) {
+				continue
+			}
+			// Device flow never redirects back to the chooser
+			if providerConfig.DeviceFlow {
+				deviceFlowConfigs = append(deviceFlowConfigs, providerConfig)
 				continue
 			}
 			if l.RemoteRedirectURI != "" {
@@ -506,6 +512,18 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 				return nil, nil, fmt.Errorf("provider for issuer %s does not support browser-based login", providerConfig.Issuer)
 			}
 			providerList = append(providerList, browserOp)
+		}
+
+		// With only one device flow provider there is nothing to choose
+		if len(providerList) == 0 && len(deviceFlowConfigs) == 1 {
+			provider, err = deviceFlowConfigs[0].ToProvider(openBrowser)
+			if err != nil {
+				return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
+			}
+			return provider, nil, nil
+		}
+		if len(providerList) == 0 && len(deviceFlowConfigs) > 1 {
+			return nil, nil, fmt.Errorf("device flow providers cannot be used with the web chooser, specify one by alias instead, e.g. `opkssh login <alias>`")
 		}
 
 		// The chooser would otherwise serve a page with no providers on it
@@ -546,6 +564,11 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 
 	pkt, err := opkClient.Auth(ctx)
 	if err != nil {
+		// RFC 8628 does not define a nonce, so some OPs drop it in device flow
+		if op, ok := provider.(*providers.StandardOp); ok && op.DeviceFlow &&
+			strings.Contains(err.Error(), "missing commitment claim nonce") {
+			return nil, fmt.Errorf("%w (the OpenID Provider %s does not return the nonce in device flow, so device_flow cannot be used with it)", err, op.Issuer())
+		}
 		return nil, err
 	}
 
