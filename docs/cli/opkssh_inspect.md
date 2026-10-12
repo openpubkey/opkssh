@@ -1,9 +1,9 @@
 ## opkssh inspect
 
-Inspect and view details of an opkssh generated SSH key
+Inspect and view details of an opkssh generated SSH key. If no path is given, every opkssh generated SSH certificate found in ~/.ssh and ~/.ssh/opkssh is printed.
 
 ```
-opkssh inspect <path> [flags]
+opkssh inspect [path] [flags]
 ```
 
 ### Examples

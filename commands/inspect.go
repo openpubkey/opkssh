@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -31,15 +33,22 @@ func NewInspectCmd(keyOrCert string, output io.Writer) *InspectCmd {
 	}
 }
 
-// printf formats a string to the configured output.
+// printf formats a string to the configured output. If writing fails, it
+// falls back to standard output rather than retrying the failing writer.
 func (i *InspectCmd) printf(format string, a ...any) {
 	if _, err := fmt.Fprintf(i.Output, format, a...); err != nil {
-		// Fall back to stdout
-		i.printf(format, a...)
+		fmt.Fprintf(os.Stdout, format, a...)
 	}
 }
 
+// Run inspects the key or certificate named by KeyOrCert. When KeyOrCert is
+// empty, it discovers opkssh-generated certificates in the locations login
+// writes them and prints every one it finds.
 func (i *InspectCmd) Run() error {
+	if i.KeyOrCert == "" {
+		return i.runDiscovery()
+	}
+
 	// Check if the input is a file path
 	if _, err := os.Stat(i.KeyOrCert); err == nil {
 		// It's a file, read its contents
@@ -239,4 +248,136 @@ func (i *InspectCmd) printTokenMetadata(pkt *pktoken.PKToken) {
 	if alg, ok := pkt.ProviderAlgorithm(); ok {
 		i.printf("%-19s %s\n", "Provider Algorithm:", alg)
 	}
+}
+
+// runDiscovery looks for opkssh-generated certificates in the directories
+// that `opkssh login` writes them to and prints the details of every one it
+// finds. The search order matches the precedence login uses when choosing
+// where to write keys, so the certificate login most recently wrote is
+// printed first.
+func (i *InspectCmd) runDiscovery() error {
+	paths, err := DiscoverSSHCerts()
+	if err != nil {
+		return err
+	}
+
+	if len(paths) == 0 {
+		i.printf("No opkssh generated SSH certificates found in ~/.ssh/%s or ~/.ssh\n", opkSshDirName)
+		return nil
+	}
+
+	for _, path := range paths {
+		i.printf("=== %s ===\n", path)
+		inspect := &InspectCmd{KeyOrCert: path, Output: i.Output}
+		if err := inspect.Run(); err != nil {
+			i.printf("Error inspecting %s: %v\n", path, err)
+		}
+	}
+	return nil
+}
+
+// runDiscoveryIn is runDiscovery with the ~/.ssh root made explicit for tests.
+func (i *InspectCmd) runDiscoveryIn(sshPath string) error {
+	paths, err := discoverSSHCertsIn(sshPath)
+	if err != nil {
+		return err
+	}
+
+	if len(paths) == 0 {
+		i.printf("No opkssh generated SSH certificates found in ~/.ssh/%s or ~/.ssh\n", opkSshDirName)
+		return nil
+	}
+
+	for _, path := range paths {
+		i.printf("=== %s ===\n", path)
+		inspect := &InspectCmd{KeyOrCert: path, Output: i.Output}
+		if err := inspect.Run(); err != nil {
+			i.printf("Error inspecting %s: %v\n", path, err)
+		}
+	}
+	return nil
+}
+
+// opkSshDirName is the directory under ~/.ssh where `opkssh login --configure`
+// writes key pairs, kept in sync with LoginCmd.writeKeysToOpkSSHDir.
+const opkSshDirName = "opkssh"
+
+// DiscoverSSHCerts returns the paths of opkssh-generated SSH certificate
+// files found on the local filesystem, sorted for deterministic output. Both
+// locations that `opkssh login` can write certificates to are searched:
+//
+//  1. ~/.ssh/opkssh/, for keys written when the opkssh identity directory is
+//     configured or when an explicit --private-key-file lives there
+//  2. ~/.ssh/, where login writes to the default ssh key file names
+//
+// Only files containing a certificate whose comment was set by opkssh
+// (prefix "openpubkey") are returned, so certificates from other tools are
+// never reported.
+func DiscoverSSHCerts() ([]string, error) {
+	homePath, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get home directory: %w", err)
+	}
+	return discoverSSHCertsIn(filepath.Join(homePath, ".ssh"))
+}
+
+// discoverSSHCertsIn is DiscoverSSHCerts with the ~/.ssh root made
+// explicit. It exists so tests can run discovery against a throwaway
+// directory instead of the user running the tests.
+func discoverSSHCertsIn(sshPath string) ([]string, error) {
+
+	var paths []string
+	seen := make(map[string]bool)
+
+	// 1. The opkssh identity directory. Every *-cert.pub file in it is a
+	// candidate; login is the only writer of this directory.
+	opkSSHDir := filepath.Join(sshPath, opkSshDirName)
+	entries, err := os.ReadDir(opkSSHDir)
+	if err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), "-cert.pub") {
+				continue
+			}
+			path := filepath.Join(opkSSHDir, entry.Name())
+			if isOpenpubkeyCert(path) {
+				paths = append(paths, path)
+				seen[path] = true
+			}
+		}
+	}
+
+	// 2. The default ssh key file names in ~/.ssh. Only these are ever
+	// written by opkssh login, so other keys in ~/.ssh are left alone.
+	for _, keyFilename := range allDefaultSSHKeyFileNames() {
+		path := filepath.Join(sshPath, keyFilename+"-cert.pub")
+		if seen[path] {
+			continue
+		}
+		if isOpenpubkeyCert(path) {
+			paths = append(paths, path)
+			seen[path] = true
+		}
+	}
+
+	sort.Strings(paths)
+	return paths, nil
+}
+
+// isOpenpubkeyCert reports whether the file at path holds an SSH
+// certificate whose comment was written by opkssh. login writes the comment
+// "openpubkey" (default ssh dir) or "openpubkey: <issuer> <audience>"
+// (opkssh identity dir), so the openpubkey prefix identifies both.
+func isOpenpubkeyCert(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	_, comment, _, _, err := ssh.ParseAuthorizedKey(data)
+	if err != nil {
+		return false
+	}
+	// A bare public key in a -cert.pub file parses the same way; only the
+	// comment distinguishes opkssh output, and opkssh never writes a bare
+	// key into a *-cert.pub file.
+	return strings.HasPrefix(comment, "openpubkey")
 }
