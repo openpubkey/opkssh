@@ -62,7 +62,11 @@ func PopulatePluginEnvVars(pkt *pktoken.PKToken, userInfoJson string, principal 
 
 	groupsStr := ""
 	if claims.Groups != nil {
-		groupsStr = fmt.Sprintf(`["%s"]`, strings.Join(*claims.Groups, `","`))
+		groupsJSON, err := json.Marshal(*claims.Groups)
+		if err != nil {
+			return nil, fmt.Errorf("error marshalling groups claim: %w", err)
+		}
+		groupsStr = string(groupsJSON)
 	}
 
 	emailVerifiedStr := string(claims.EmailVerified)
@@ -152,7 +156,11 @@ type Audience string
 func (a *Audience) UnmarshalJSON(data []byte) error {
 	var multi []string
 	if err := json.Unmarshal(data, &multi); err == nil {
-		*a = Audience(`["` + strings.Join(multi, `","`) + `"]`)
+		audJSON, err := json.Marshal(multi)
+		if err != nil {
+			return err
+		}
+		*a = Audience(string(audJSON))
 		return nil
 	}
 

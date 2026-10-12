@@ -133,6 +133,12 @@ func EscapedSplit(s string, sep rune) []string {
 // Validates that the server defined identity attribute matches the
 // respective claim from the identity token
 func validateClaim(claims *checkedClaims, user *User) bool {
+	// An empty identity attribute must never match; otherwise a policy row
+	// with an empty value matches any token that carries no email claim
+	if user.IdentityAttribute == "" {
+		log.Printf("warning: skipping policy row with empty identity attribute")
+		return false
+	}
 	// Should we match on the email claim?
 	if strings.HasPrefix(claims.Email, OIDC_WILDCARD_EMAIL) {
 		return false

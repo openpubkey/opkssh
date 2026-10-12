@@ -18,6 +18,7 @@ package plugins
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -26,6 +27,14 @@ import (
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/stretchr/testify/require"
 )
+
+// roundTripJSONArray asserts env JSON parses back to exactly want.
+func roundTripJSONArray(t *testing.T, got string, want []string) {
+	t.Helper()
+	var parsed []string
+	require.NoError(t, json.Unmarshal([]byte(got), &parsed))
+	require.Equal(t, want, parsed)
+}
 
 func CreateMockPKToken(t *testing.T, claims map[string]any) *pktoken.PKToken {
 	providerOpts := providers.DefaultMockProviderOpts()
@@ -267,4 +276,31 @@ func TestNewTokens(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPluginEnvJSONEscapesSpecialChars(t *testing.T) {
+	groups := []string{`x","ssh-admins`, `a\b`}
+	pkt := CreateMockPKToken(t, map[string]any{
+		"groups": groups,
+		"iat":    1999999990,
+	})
+	tokens, err := PopulatePluginEnvVars(pkt, "", "root", b64("SSH certificate"), "ssh-rsa", nil)
+	require.NoError(t, err)
+	roundTripJSONArray(t, tokens["OPKSSH_PLUGIN_GROUPS"], groups)
+}
+
+func TestAudienceUnmarshalJSONEscapesSpecialChars(t *testing.T) {
+	raw := []byte(`["client\",\"injected","other"]`)
+	// Simulate IdP multi-aud claim values that contain quote/backslash metacharacters.
+	input, err := json.Marshal([]string{`client","injected`, `a\b`, "other"})
+	require.NoError(t, err)
+
+	var aud Audience
+	require.NoError(t, aud.UnmarshalJSON(input))
+	roundTripJSONArray(t, string(aud), []string{`client","injected`, `a\b`, "other"})
+
+	// Control: already-escaped JSON array still unmarshals cleanly.
+	var aud2 Audience
+	require.NoError(t, aud2.UnmarshalJSON(raw))
+	roundTripJSONArray(t, string(aud2), []string{`client","injected`, "other"})
 }
