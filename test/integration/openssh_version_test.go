@@ -21,7 +21,9 @@ package integration
 import (
 	"fmt"
 	"io"
+	"os"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"unicode"
@@ -33,6 +35,7 @@ import (
 
 type OpenSSHVersionTest struct {
 	name           string
+	osType         string // OS_TYPE of the CI integration job that runs this case
 	containerImage string
 	setupCommands  []string
 	versionCommand string
@@ -47,6 +50,7 @@ func TestOpenSSHVersionDetection(t *testing.T) {
 	tests := []OpenSSHVersionTest{
 		{
 			name:           "Debian/Ubuntu",
+			osType:         "ubuntu",
 			containerImage: "debian:latest",
 			setupCommands: []string{
 				"apt-get update",
@@ -57,6 +61,7 @@ func TestOpenSSHVersionDetection(t *testing.T) {
 		},
 		{
 			name:           "RHEL/CentOS",
+			osType:         "centos",
 			containerImage: "rockylinux:9",
 			setupCommands: []string{
 				"dnf clean all && dnf makecache && dnf install -y openssh-server sed",
@@ -66,6 +71,7 @@ func TestOpenSSHVersionDetection(t *testing.T) {
 		},
 		{
 			name:           "SUSE",
+			osType:         "opensuse",
 			containerImage: "opensuse/leap:16.0",
 			setupCommands: []string{
 				"zypper refresh",
@@ -76,6 +82,7 @@ func TestOpenSSHVersionDetection(t *testing.T) {
 		},
 		{
 			name:           "Arch Linux",
+			osType:         "arch",
 			containerImage: "manjarolinux/base:latest",
 			setupCommands: []string{
 				"pacman-key --init",
@@ -88,8 +95,20 @@ func TestOpenSSHVersionDetection(t *testing.T) {
 		},
 	}
 
+	// Each CI integration job sets OS_TYPE, so it only needs the matching
+	// distribution; without OS_TYPE (e.g. locally) run them all.
+	osType := os.Getenv("OS_TYPE")
+	// If osType does not match any expected osType, fail loudly. Likely a typo
+	if osType != "" && !slices.ContainsFunc(tests, func(tt OpenSSHVersionTest) bool { return tt.osType == osType }) {
+		t.Fatalf("OS_TYPE=%q matches no version-detection case", osType)
+	}
+	t.Parallel()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if osType != "" && osType != tt.osType {
+				t.Skipf("covered by the %s integration job", tt.osType)
+			}
+			t.Parallel()
 			testOpenSSHVersionInContainer(t, tt)
 		})
 	}

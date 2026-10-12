@@ -56,8 +56,10 @@ func TestSELinuxPolicyInstallation(t *testing.T) {
 		},
 	}
 
+	t.Parallel()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			testSELinuxPolicyInstallation(t, tt)
 		})
 	}
