@@ -1732,3 +1732,55 @@ func TestLoginCmdDefaultClientIDWarning(t *testing.T) {
 		})
 	}
 }
+
+func TestDetermineProviderDeviceFlowSkipsWebChooser(t *testing.T) {
+	t.Setenv("OPKSSH_DEFAULT", "")
+	t.Setenv("OPKSSH_PROVIDERS", "")
+
+	deviceProvider := func(alias, issuer string) config.ProviderConfig {
+		pc := config.DefaultProviderConfig()
+		pc.AliasList = []string{alias}
+		pc.Issuer = issuer
+		pc.ClientID = "abcde"
+		pc.DeviceFlow = true
+		return pc
+	}
+	browserProvider := deviceProvider("web", "https://web.example.com")
+	browserProvider.DeviceFlow = false
+
+	// A single device flow provider is used directly instead of the chooser
+	login := LoginCmd{Config: &config.ClientConfig{Providers: []config.ProviderConfig{
+		deviceProvider("dev", "https://dev.example.com"),
+	}}}
+	provider, chooser, err := login.determineProvider()
+	require.NoError(t, err)
+	require.Nil(t, chooser)
+	require.Equal(t, "https://dev.example.com", provider.Issuer())
+
+	// Several device flow providers need an alias
+	login = LoginCmd{Config: &config.ClientConfig{Providers: []config.ProviderConfig{
+		deviceProvider("dev", "https://dev.example.com"),
+		deviceProvider("dev2", "https://dev2.example.com"),
+	}}}
+	_, chooser, err = login.determineProvider()
+	require.ErrorContains(t, err, "device flow providers cannot be used with the web chooser")
+	require.Nil(t, chooser)
+
+	// Device flow providers are left out of the chooser
+	login = LoginCmd{Config: &config.ClientConfig{Providers: []config.ProviderConfig{
+		deviceProvider("dev", "https://dev.example.com"),
+		browserProvider,
+	}}}
+	_, chooser, err = login.determineProvider()
+	require.NoError(t, err)
+	require.NotNil(t, chooser)
+	require.Len(t, chooser.OpList, 1)
+	require.Equal(t, "https://web.example.com", chooser.OpList[0].Issuer())
+
+	// The device flow provider is still reachable by alias
+	login.ProviderAliasArg = "dev"
+	provider, chooser, err = login.determineProvider()
+	require.NoError(t, err)
+	require.Nil(t, chooser)
+	require.Equal(t, "https://dev.example.com", provider.Issuer())
+}

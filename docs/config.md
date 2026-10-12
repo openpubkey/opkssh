@@ -60,7 +60,21 @@ providers:
       - http://localhost:10001/login-callback
       - http://localhost:11110/login-callback
 
+```
 
+On machines without a browser, set `device_flow: true` on a provider to use the OIDC device flow.
+With multiple provides available specify with `opkssh login [provider]`
+
+```yaml
+---
+default_provider: my-idp
+
+providers:
+  - alias: my-idp
+    issuer: https://idp.example.com
+    client_id: <CLIENT-ID>
+    scopes: openid email
+    device_flow: true
 ```
 
 ## Server config `/etc/opk/config.yml` (Linux) or `%ProgramData%\opk\config.yml` (Windows)
