@@ -1670,3 +1670,117 @@ func TestDetermineProviderWebChooserWithOnlyCICDProviders(t *testing.T) {
 	require.ErrorContains(t, err, "no browser-based providers configured")
 	require.Nil(t, chooser)
 }
+
+func TestLoginCmdDefaultClientIDWarning(t *testing.T) {
+	defaultConfig, err := config.NewClientConfig(config.DefaultClientConfig)
+	require.NoError(t, err)
+	googleDefault, ok := defaultConfig.GetByIssuer("https://accounts.google.com")
+	require.True(t, ok)
+	gitlabDefault, ok := defaultConfig.GetByIssuer("https://gitlab.com")
+	require.True(t, ok)
+
+	tests := []struct {
+		name        string
+		issuer      string
+		clientID    string
+		wantWarning bool
+		wantCommand string
+		wantDocs    string
+	}{
+		{name: "default Google client ID", issuer: googleDefault.Issuer, clientID: googleDefault.ClientID, wantWarning: true,
+			wantCommand: "opkssh client provider add google https://accounts.google.com <client-id> --client-secret <client-secret> --replace",
+			wantDocs:    "docs/providers/google.md"},
+		{name: "default GitLab client ID", issuer: gitlabDefault.Issuer, clientID: gitlabDefault.ClientID, wantWarning: true,
+			wantCommand: "opkssh client provider add gitlab https://gitlab.com <client-id> --replace",
+			wantDocs:    "docs/config.md"},
+		{name: "own Google client ID", issuer: googleDefault.Issuer, clientID: "my-own-client-id"},
+		{name: "default Google client ID for another issuer", issuer: "https://accounts.example.com", clientID: googleDefault.ClientID},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("SSH_AUTH_SOCK", "")
+			providerOpts := providers.DefaultMockProviderOpts()
+			providerOpts.Issuer = tt.issuer
+			providerOpts.ClientID = tt.clientID
+			providerOpts.VerifierOpts.ClientID = tt.clientID
+			op, _, idtTemplate, err := providers.NewMockProvider(providerOpts)
+			require.NoError(t, err)
+			idtTemplate.ExtraClaims = map[string]any{"email": "arthur.aardvark@example.com"}
+			var mockOp providers.OpenIdProvider = op
+
+			out := &bytes.Buffer{}
+			errOut := &bytes.Buffer{}
+			loginCmd := LoginCmd{
+				Config:           defaultConfig,
+				Fs:               afero.NewMemMapFs(),
+				OutWriter:        out,
+				ErrWriter:        errOut,
+				overrideProvider: &mockOp,
+			}
+			require.NoError(t, loginCmd.Run(context.Background()))
+
+			// The warning goes to stderr so it never mixes with --print-key output
+			require.NotContains(t, out.String(), "default client ID")
+			warning := "warning: logging in to " + tt.issuer + " with opkssh's default client ID " + tt.clientID
+			if tt.wantWarning {
+				require.Contains(t, errOut.String(), warning)
+				require.Contains(t, errOut.String(), tt.wantCommand)
+				require.Contains(t, errOut.String(), tt.wantDocs)
+			} else {
+				require.NotContains(t, errOut.String(), "default client ID")
+			}
+		})
+	}
+}
+
+func TestDetermineProviderDeviceFlowSkipsWebChooser(t *testing.T) {
+	t.Setenv("OPKSSH_DEFAULT", "")
+	t.Setenv("OPKSSH_PROVIDERS", "")
+
+	deviceProvider := func(alias, issuer string) config.ProviderConfig {
+		pc := config.DefaultProviderConfig()
+		pc.AliasList = []string{alias}
+		pc.Issuer = issuer
+		pc.ClientID = "abcde"
+		pc.DeviceFlow = true
+		return pc
+	}
+	browserProvider := deviceProvider("web", "https://web.example.com")
+	browserProvider.DeviceFlow = false
+
+	// A single device flow provider is used directly instead of the chooser
+	login := LoginCmd{Config: &config.ClientConfig{Providers: []config.ProviderConfig{
+		deviceProvider("dev", "https://dev.example.com"),
+	}}}
+	provider, chooser, err := login.determineProvider()
+	require.NoError(t, err)
+	require.Nil(t, chooser)
+	require.Equal(t, "https://dev.example.com", provider.Issuer())
+
+	// Several device flow providers need an alias
+	login = LoginCmd{Config: &config.ClientConfig{Providers: []config.ProviderConfig{
+		deviceProvider("dev", "https://dev.example.com"),
+		deviceProvider("dev2", "https://dev2.example.com"),
+	}}}
+	_, chooser, err = login.determineProvider()
+	require.ErrorContains(t, err, "device flow providers cannot be used with the web chooser")
+	require.Nil(t, chooser)
+
+	// Device flow providers are left out of the chooser
+	login = LoginCmd{Config: &config.ClientConfig{Providers: []config.ProviderConfig{
+		deviceProvider("dev", "https://dev.example.com"),
+		browserProvider,
+	}}}
+	_, chooser, err = login.determineProvider()
+	require.NoError(t, err)
+	require.NotNil(t, chooser)
+	require.Len(t, chooser.OpList, 1)
+	require.Equal(t, "https://web.example.com", chooser.OpList[0].Issuer())
+
+	// The device flow provider is still reachable by alias
+	login.ProviderAliasArg = "dev"
+	provider, chooser, err = login.determineProvider()
+	require.NoError(t, err)
+	require.Nil(t, chooser)
+	require.Equal(t, "https://dev.example.com", provider.Issuer())
+}
