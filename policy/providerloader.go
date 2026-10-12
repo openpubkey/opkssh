@@ -17,9 +17,13 @@
 package policy
 
 import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strings"
 
+	"github.com/openpubkey/openpubkey/pktoken/clientinstance"
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/openpubkey/verifier"
 	"github.com/openpubkey/opkssh/policy/files"
@@ -88,16 +92,26 @@ func providerVerifierFromRow(row ProvidersRow) verifier.ProviderVerifier {
 		opts.Issuer = row.Issuer
 		opts.ClientID = row.ClientID
 		return providers.NewAzureOpWithOptions(opts)
+	} else if row.Issuer == "https://token.actions.githubusercontent.com" {
+		return providers.NewGithubOp(row.Issuer, "")
+	} else if providers.IsForgejoIssuer(row.Issuer) {
+		return providers.NewForgejoOp(row.Issuer, "", "")
+	} else if strings.HasPrefix(row.ClientID, "OPENPUBKEY-PKTOKEN:GITLAB-CI:") {
+		// Do the gitlab checks last so that github or forgejo issuers
+		// checks happen first. This is to avoid a case where someone has
+		// a github issuer but sets the client ID prefix to "OPENPUBKEY-PKTOKEN:GITLAB-CI:"
+		provider := providers.NewGitlabCiOp(row.Issuer, "OPENPUBKEY_JWT")
+		return gitLabCiProviderVerifier{
+			provider: provider,
+			audience: row.ClientID,
+		}
 	} else if row.Issuer == "https://gitlab.com" {
 		opts := providers.GetDefaultGitlabOpOptions()
 		opts.Issuer = row.Issuer
 		opts.ClientID = row.ClientID
 		return providers.NewGitlabOpWithOptions(opts)
-	} else if row.Issuer == "https://token.actions.githubusercontent.com" {
-		return providers.NewGithubOp(row.Issuer, "")
-	} else if providers.IsForgejoIssuer(row.Issuer) {
-		return providers.NewForgejoOp(row.Issuer, "", "")
 	}
+
 	opts := providers.GetDefaultGoogleOpOptions()
 	opts.Issuer = row.Issuer
 	opts.ClientID = row.ClientID
@@ -133,6 +147,88 @@ func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
 		return nil, err
 	}
 	return pktVerifier, nil
+}
+
+type gitLabCiProviderVerifier struct {
+	provider verifier.ProviderVerifier
+	audience string
+}
+
+func (g gitLabCiProviderVerifier) Issuer() string {
+	return g.provider.Issuer()
+}
+
+func (g gitLabCiProviderVerifier) VerifyIDToken(ctx context.Context, idt []byte, cic *clientinstance.Claims) error {
+	if err := verifyGitLabCiTokenClaims(idt, g.audience); err != nil {
+		return err
+	}
+	return g.provider.VerifyIDToken(ctx, idt, cic)
+}
+
+func verifyGitLabCiTokenClaims(idt []byte, audience string) error {
+	claims, err := decodeJwtPayload(idt)
+	if err != nil {
+		return err
+	}
+
+	if !audienceMatches(claims["aud"], audience) {
+		return fmt.Errorf("gitlab-ci token audience does not match expected audience %q", audience)
+	}
+
+	for _, claimName := range []string{"ci_config_ref_uri", "job_id", "job_project_path", "pipeline_id"} {
+		if !claimIsPresent(claims[claimName]) {
+			return fmt.Errorf("gitlab-ci token missing required claim %q", claimName)
+		}
+	}
+	return nil
+}
+
+func decodeJwtPayload(idt []byte) (map[string]any, error) {
+	parts := strings.Split(string(idt), ".")
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("invalid jwt: expected at least two parts")
+	}
+
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		payload, err = base64.URLEncoding.DecodeString(parts[1])
+		if err != nil {
+			return nil, fmt.Errorf("error decoding jwt payload: %w", err)
+		}
+	}
+
+	var claims map[string]any
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return nil, fmt.Errorf("error unmarshalling jwt payload: %w", err)
+	}
+	return claims, nil
+}
+
+func audienceMatches(rawAudience any, expectedAudience string) bool {
+	switch audience := rawAudience.(type) {
+	case string:
+		return audience == expectedAudience
+	case []any:
+		for _, value := range audience {
+			if audienceValue, ok := value.(string); ok && audienceValue == expectedAudience {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func claimIsPresent(value any) bool {
+	switch v := value.(type) {
+	case nil:
+		return false
+	case string:
+		return v != ""
+	case []any:
+		return len(v) > 0
+	default:
+		return true
+	}
 }
 
 func (p ProviderPolicy) ToString() string {

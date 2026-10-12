@@ -76,3 +76,32 @@ providers:
 	require.NotNil(t, clientConfig)
 	require.Equal(t, clientConfig.Providers[0].SendAccessToken, true)
 }
+
+func TestParseConfigWithAgentLifetime(t *testing.T) {
+	// Both value shapes must parse into the string field: a duration string
+	// and a bare integer number of seconds.
+	for _, lifetime := range []string{"12h", "28800"} {
+		c := `---
+agent_lifetime: ` + lifetime + `
+providers:
+  - alias: google
+    issuer: https://accounts.google.com
+    client_id: test-client-id`
+
+		clientConfig, err := NewClientConfig([]byte(c))
+		require.NoError(t, err)
+		require.NotNil(t, clientConfig)
+		require.Equal(t, lifetime, clientConfig.AgentLifetime)
+	}
+}
+
+func TestIsDefaultClientID(t *testing.T) {
+	defaultConfig, err := NewClientConfig(DefaultClientConfig)
+	require.NoError(t, err)
+	require.NotEmpty(t, defaultConfig.Providers)
+	for _, provider := range defaultConfig.Providers {
+		require.True(t, IsDefaultClientID(provider.Issuer, provider.ClientID), "%v", provider.AliasList)
+		require.False(t, IsDefaultClientID(provider.Issuer, "my-own-client-id"), "%v", provider.AliasList)
+		require.False(t, IsDefaultClientID("https://issuer.example.com", provider.ClientID), "%v", provider.AliasList)
+	}
+}

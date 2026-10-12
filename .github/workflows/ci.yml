@@ -16,7 +16,7 @@ jobs:
   # Check that binary can be built
   build:
     name: Build
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     strategy:
       matrix:
@@ -167,7 +167,7 @@ jobs:
       run: go test -tags=integration ./test/integration -timeout=15m -count=1 -parallel=2 -v
   lint-scripts:
     name: Shell Scripts Lint & Test
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     container:
       image: opensuse/tumbleweed:latest@sha256:9b49432a0e304482880d788898380c457816dd525fa8856388c09d3c5357240d
     steps:

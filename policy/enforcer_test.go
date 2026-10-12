@@ -693,6 +693,37 @@ func TestEnforcerTableTest(t *testing.T) {
 	}
 }
 
+// A policy row with an empty identity attribute must never match. Tokens
+// from OPs that omit the email claim (e.g. Azure) would otherwise be matched
+// by the empty value.
+func TestPolicyDeniedEmptyIdentityAttribute(t *testing.T) {
+	t.Parallel()
+
+	// Token carries no email claim
+	op, _, err := NewMockOpenIdProvider2(false, "https://accounts.example.com", "test_client_no_email", map[string]any{})
+	require.NoError(t, err)
+
+	opkClient, err := client.New(op)
+	require.NoError(t, err)
+	pkt, err := opkClient.Auth(context.Background())
+	require.NoError(t, err)
+
+	policyEnforcer := &policy.Enforcer{
+		PolicyLoader: &MockPolicyLoader{Policy: &policy.Policy{
+			Users: []policy.User{
+				{
+					IdentityAttribute: "",
+					Principals:        []string{"test"},
+					Issuer:            "https://accounts.example.com",
+				},
+			},
+		}},
+	}
+
+	err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa", policy.DenyList{}, nil)
+	require.Error(t, err, "empty identity attribute should not match a token with no email claim")
+}
+
 func TestWildcardMatchEntry(t *testing.T) {
 	t.Parallel()
 

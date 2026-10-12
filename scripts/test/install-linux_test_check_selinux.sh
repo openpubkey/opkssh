@@ -19,6 +19,10 @@ setUp() {
     export HOME_POLICY SELINUX_ENABLE_SQUID SELINUX_ENABLE_PROXY
 
     DUMMY_TE_CONTENT="module dummy 1.0; require { type sshd_t; }; allow sshd_t self:process { transition };"
+
+    # Default: legacy policy, no sshd_session_t type.
+    mock_session_domain_unsupported=true
+    mock_checkmodule_fail=false
 }
 
 tearDown() {
@@ -49,7 +53,12 @@ getenforce() {
 
 checkmodule() {
     echo "checkmodule $*" >> "$MOCK_LOG"
-    /usr/bin/cat "$TE_TMP" >> "$MOCK_LOG"
+    # Last argument is the TE file being compiled.
+    local te_file="${!#}"
+    LAST_TE_FILE_CONTENT=$(cat "$te_file" 2>/dev/null)
+    echo "$LAST_TE_FILE_CONTENT" >> "$MOCK_LOG"
+    $mock_checkmodule_fail && return 1
+    return 0
 }
 
 restorecon() {
@@ -62,6 +71,12 @@ semodule_package() {
 
 semodule() {
     echo "semodule $*" >> "$MOCK_LOG"
+    # Simulate a load-time failure when the module requires a type the
+    # target's loaded policy does not define.
+    if [[ "$mock_session_domain_unsupported" == true && "$LAST_TE_FILE_CONTENT" == *"sshd_session_t"* ]]; then
+        return 1
+    fi
+    return 0
 }
 
 setsebool() {
