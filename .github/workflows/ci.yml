@@ -16,7 +16,7 @@ jobs:
   # Check that binary can be built
   build:
     name: Build
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     strategy:
       matrix:
@@ -27,7 +27,7 @@ jobs:
       with:
         persist-credentials: false
     - name: Install Go
-      uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version: ${{ matrix.go-version }}
     - name: Install dependencies
@@ -46,7 +46,7 @@ jobs:
       with:
         persist-credentials: false
     - name: Install Go
-      uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version-file: 'go.mod'
     - name: Install dependencies
@@ -79,7 +79,7 @@ jobs:
       with:
         persist-credentials: false
     - name: Install Go
-      uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version-file: 'go.mod'
     - name: Install dependencies
@@ -102,7 +102,7 @@ jobs:
       with:
         persist-credentials: false
     - name: Install Go
-      uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version-file: 'go.mod'
     - name: Install dependencies
@@ -126,7 +126,7 @@ jobs:
       with:
         persist-credentials: false
     - name: Install Go
-      uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version-file: 'go.mod'
     - name: Install dependencies
@@ -156,7 +156,7 @@ jobs:
       with:
         persist-credentials: false
     - name: Install Go
-      uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version-file: 'go.mod'
     - name: Install Docker
@@ -167,7 +167,7 @@ jobs:
       run: go test -tags=integration ./test/integration -timeout=15m -count=1 -parallel=2 -v
   lint-scripts:
     name: Shell Scripts Lint & Test
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     container:
       image: opensuse/tumbleweed:latest@sha256:9b49432a0e304482880d788898380c457816dd525fa8856388c09d3c5357240d
     steps:

@@ -17,8 +17,12 @@
 package policy_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"log"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/openpubkey/openpubkey/client"
@@ -426,6 +430,123 @@ func TestPolicyDeniedMissingOidcGroupsClaim(t *testing.T) {
 	require.Error(t, err, "user should not as the token is missing the groups claim")
 }
 
+func NewMockOpenIdProviderEmailVerified(t *testing.T, emailVerified any) providers.OpenIdProvider {
+	providerOpts := providers.DefaultMockProviderOpts()
+	op, _, idTokenTemplate, err := providers.NewMockProvider(providerOpts)
+	require.NoError(t, err)
+	extraClaims := map[string]any{"email": "arthur.aardvark@example.com"}
+	if emailVerified != nil {
+		extraClaims["email_verified"] = emailVerified
+	}
+	idTokenTemplate.ExtraClaims = extraClaims
+	return op
+}
+
+// A policy row matching on email should still be allowed when the ID Token
+// does not assert email_verified, but the admin should see a warning.
+func TestEmailVerifiedWarning(t *testing.T) {
+	// Some OPs send email_verified as a string rather than a bool, so both
+	// shapes have to be handled. See oauth2-proxy/oauth2-proxy#629.
+	tests := []struct {
+		name          string
+		emailVerified any
+		wantWarning   string
+	}{
+		{name: "claim absent", emailVerified: nil, wantWarning: "no email_verified claim"},
+		{name: "bool false", emailVerified: false, wantWarning: `email_verified to "false"`},
+		{name: "bool true", emailVerified: true, wantWarning: ""},
+		{name: "string false", emailVerified: "false", wantWarning: `email_verified to "false"`},
+		{name: "string true", emailVerified: "true", wantWarning: ""},
+		{name: "string True", emailVerified: "True", wantWarning: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op := NewMockOpenIdProviderEmailVerified(t, tt.emailVerified)
+			opkClient, err := client.New(op)
+			require.NoError(t, err)
+			pkt, err := opkClient.Auth(context.Background())
+			require.NoError(t, err)
+
+			policyEnforcer := &policy.Enforcer{
+				PolicyLoader: &MockPolicyLoader{Policy: policyTest},
+			}
+
+			var logs bytes.Buffer
+			log.SetOutput(&logs)
+			defer log.SetOutput(os.Stderr)
+
+			err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa", policy.DenyList{}, nil)
+			require.NoError(t, err, "email match should still be allowed")
+
+			if tt.wantWarning == "" {
+				require.NotContains(t, logs.String(), "consider matching on sub")
+			} else {
+				require.Contains(t, logs.String(), tt.wantWarning)
+			}
+		})
+	}
+}
+
+// Matching on sub should not produce an email_verified warning.
+func TestEmailVerifiedNoWarningOnSubMatch(t *testing.T) {
+	op := NewMockOpenIdSubProvider(t, "repo:organization/repository:ref:refs/heads/main")
+	opkClient, err := client.New(op)
+	require.NoError(t, err)
+	pkt, err := opkClient.Auth(context.Background())
+	require.NoError(t, err)
+
+	policyEnforcer := &policy.Enforcer{
+		PolicyLoader: &MockPolicyLoader{Policy: &policy.Policy{
+			Users: []policy.User{
+				{
+					IdentityAttribute: "repo:organization/repository:ref:refs/heads/main",
+					Principals:        []string{"test"},
+					Issuer:            "https://accounts.example.com",
+				},
+			},
+		}},
+	}
+
+	var logs bytes.Buffer
+	log.SetOutput(&logs)
+	defer log.SetOutput(os.Stderr)
+
+	err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa", policy.DenyList{}, nil)
+	require.NoError(t, err)
+	require.False(t, strings.Contains(logs.String(), "consider matching on sub"))
+}
+
+func TestPolicyDeniedMalformedOidcRow(t *testing.T) {
+	t.Parallel()
+
+	op := NewMockOpenIdProviderGroups(t, "groups", []string{"a", "b", "c"})
+
+	opkClient, err := client.New(op)
+	require.NoError(t, err)
+	pkt, err := opkClient.Auth(context.Background())
+	require.NoError(t, err)
+
+	// EscapedSplit drops empty fields, so these rows used to produce a
+	// single section and panic on oidcGroupSections[1].
+	for _, identityAttribute := range []string{"oidc:", "oidc::", "oidc:::"} {
+		policyEnforcer := &policy.Enforcer{
+			PolicyLoader: &MockPolicyLoader{Policy: &policy.Policy{
+				Users: []policy.User{
+					{
+						IdentityAttribute: identityAttribute,
+						Principals:        []string{"test"},
+						Issuer:            "https://accounts.example.com",
+					},
+				},
+			}},
+		}
+
+		err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa", policy.DenyList{}, nil)
+		require.Error(t, err, "malformed row %q should deny, not panic", identityAttribute)
+	}
+}
+
 func TestEnforcerTableTest(t *testing.T) {
 	t.Parallel()
 
@@ -526,6 +647,22 @@ func TestEnforcerTableTest(t *testing.T) {
 			policyLoader:  &MockPolicyLoader{Error: fmt.Errorf("error loading policy")},
 			expectedError: "error loading policy",
 		},
+		{
+			name: "policy email wildcard rejects policies that allow any value",
+			op:   NewMockOpenIdProvider(t),
+			policyLoader: &MockPolicyLoader{
+				Policy: &policy.Policy{
+					[]policy.User{
+						{
+							IdentityAttribute: "oidc-match-end:email:",
+							Issuer:            "https://accounts.example.com",
+							Principals:        []string{"test"},
+						},
+					},
+				},
+			},
+			expectedError: `no policy to allow arthur.aardvark@example.com with (issuer=https://accounts.example.com) to assume test`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -554,6 +691,37 @@ func TestEnforcerTableTest(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A policy row with an empty identity attribute must never match. Tokens
+// from OPs that omit the email claim (e.g. Azure) would otherwise be matched
+// by the empty value.
+func TestPolicyDeniedEmptyIdentityAttribute(t *testing.T) {
+	t.Parallel()
+
+	// Token carries no email claim
+	op, _, err := NewMockOpenIdProvider2(false, "https://accounts.example.com", "test_client_no_email", map[string]any{})
+	require.NoError(t, err)
+
+	opkClient, err := client.New(op)
+	require.NoError(t, err)
+	pkt, err := opkClient.Auth(context.Background())
+	require.NoError(t, err)
+
+	policyEnforcer := &policy.Enforcer{
+		PolicyLoader: &MockPolicyLoader{Policy: &policy.Policy{
+			Users: []policy.User{
+				{
+					IdentityAttribute: "",
+					Principals:        []string{"test"},
+					Issuer:            "https://accounts.example.com",
+				},
+			},
+		}},
+	}
+
+	err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa", policy.DenyList{}, nil)
+	require.Error(t, err, "empty identity attribute should not match a token with no email claim")
 }
 
 func TestWildcardMatchEntry(t *testing.T) {
