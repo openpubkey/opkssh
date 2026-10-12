@@ -124,6 +124,7 @@ type LoginCmd struct {
 
 	// For testing
 	OutWriter io.Writer // Captures non-logged output that would normally be written to stdout
+	ErrWriter io.Writer // Captures warnings that would normally be written to stderr
 }
 
 // NewLogin creates a new LoginCmd instance with the provided arguments.
@@ -251,6 +252,7 @@ func (l *LoginCmd) Run(ctx context.Context) error {
 			return fmt.Errorf("no provider found") // Either the provider or the chooser must be set. If this occurs we have a bug in the code.
 		}
 	}
+	l.warnIfDefaultClientID(provider)
 
 	// This arg is true if set, so if it false it hasn't been set and
 	// we should use the config value for the matching providing.
@@ -485,10 +487,16 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 	} else {
 		// If the default provider is WEBCHOOSER, we need to create a chooser and return it
 		var providerList []providers.BrowserOpenIdProvider
+		var deviceFlowConfigs []config.ProviderConfig
 		for _, providerConfig := range providerConfigs {
 			// CI/CD providers (GitHub/Forgejo Actions) are not browser-based
 			// and cannot be offered by the chooser
 			if config.IsCICDProvider(providerConfig) {
+				continue
+			}
+			// Device flow never redirects back to the chooser
+			if providerConfig.DeviceFlow {
+				deviceFlowConfigs = append(deviceFlowConfigs, providerConfig)
 				continue
 			}
 			if l.RemoteRedirectURI != "" {
@@ -504,6 +512,18 @@ func (l *LoginCmd) determineProvider() (providers.OpenIdProvider, *choosers.WebC
 				return nil, nil, fmt.Errorf("provider for issuer %s does not support browser-based login", providerConfig.Issuer)
 			}
 			providerList = append(providerList, browserOp)
+		}
+
+		// With only one device flow provider there is nothing to choose
+		if len(providerList) == 0 && len(deviceFlowConfigs) == 1 {
+			provider, err = deviceFlowConfigs[0].ToProvider(openBrowser)
+			if err != nil {
+				return nil, nil, fmt.Errorf("error creating provider from config: %w", err)
+			}
+			return provider, nil, nil
+		}
+		if len(providerList) == 0 && len(deviceFlowConfigs) > 1 {
+			return nil, nil, fmt.Errorf("device flow providers cannot be used with the web chooser, specify one by alias instead, e.g. `opkssh login <alias>`")
 		}
 
 		// The chooser would otherwise serve a page with no providers on it
@@ -544,6 +564,11 @@ func (l *LoginCmd) login(ctx context.Context, provider providers.OpenIdProvider,
 
 	pkt, err := opkClient.Auth(ctx)
 	if err != nil {
+		// RFC 8628 does not define a nonce, so some OPs drop it in device flow
+		if op, ok := provider.(*providers.StandardOp); ok && op.DeviceFlow &&
+			strings.Contains(err.Error(), "missing commitment claim nonce") {
+			return nil, fmt.Errorf("%w (the OpenID Provider %s does not return the nonce in device flow, so device_flow cannot be used with it)", err, op.Issuer())
+		}
 		return nil, err
 	}
 
@@ -704,6 +729,43 @@ func (l *LoginCmd) out() io.Writer {
 		return l.OutWriter
 	}
 	return os.Stdout
+}
+
+// warnIfDefaultClientID warns during login if the client ID used is
+// the default client ID, as the default client ID should be replaced
+// with the org's client ID. The warning goes to stderr so that it never
+// mixes with output such as the key printed by --print-key.
+func (l *LoginCmd) warnIfDefaultClientID(provider providers.OpenIdProvider) {
+	op, ok := provider.(interface{ ClientID() string })
+	if !ok || !config.IsDefaultClientID(provider.Issuer(), op.ClientID()) {
+		return
+	}
+	issuer := provider.Issuer()
+	alias := "<alias>"
+	if l.Config != nil {
+		if opConfig, ok := l.Config.GetByIssuer(issuer); ok && len(opConfig.AliasList) > 0 {
+			alias = opConfig.AliasList[0]
+		}
+	}
+	command := fmt.Sprintf("opkssh client provider add %s %s <client-id> --replace", alias, issuer)
+	docs := "https://github.com/openpubkey/opkssh/blob/main/docs/config.md"
+	if strings.HasPrefix(issuer, "https://accounts.google.com") {
+		command = fmt.Sprintf("opkssh client provider add %s %s <client-id> --client-secret <client-secret> --replace", alias, issuer)
+		docs = "https://github.com/openpubkey/opkssh/blob/main/docs/providers/google.md"
+	}
+	fmt.Fprintf(l.errOut(), "warning: logging in to %s with opkssh's default client ID %s.\n"+
+		"  This client ID is intended for testing and should not be used in production.\n"+
+		"  To use your own client ID, run: %s\n"+
+		"  See %s\n",
+		issuer, op.ClientID(), command, docs)
+}
+
+// errOut is where warnings go: ErrWriter if set, otherwise stderr.
+func (l *LoginCmd) errOut() io.Writer {
+	if l.ErrWriter != nil {
+		return l.ErrWriter
+	}
+	return os.Stderr
 }
 
 // defaultAgentLifetime matches the opkssh server's default certificate
