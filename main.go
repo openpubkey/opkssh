@@ -171,6 +171,11 @@ Arguments:
 Login generates a key pair, then opens a browser to authenticate the user with the OpenID Provider. Upon successful authentication, opkssh creates an SSH public key (~/.ssh/id_ecdsa) containing the user's PK token. By default, this SSH key expires after 24 hours, after which the user must run "opkssh login" again to generate a new key.
 
 Users can then SSH into servers configured to use opkssh as the AuthorizedKeysCommand. The server verifies the PK token and grants access if the token is valid and the user is authorized per the auth_id policy.
+
+Device flow:
+  For machines without a browser. To turn on device flow, set "device_flow: true" on a provider in the client config (~/.opk/config.yml). If multiple providers, select one with "opkssh login <alias>".
+  The OpenID Provider must allow the device grant for the client ID and return a nonce in the ID token. If it does not, login fails with "missing commitment claim nonce".
+
 Arguments:
   alias      The provider alias to use. If not specified, the OPKSSH_DEFAULT provider will be used. The aliases are defined by the OPKSSH_PROVIDERS environment variable. The format is <alias>,<issuer>,<client_id>,<client_secret>,<scopes>
 `,
@@ -439,10 +444,11 @@ Exit code: 0 if all entries are valid, 1 if any warnings or errors are found.`,
 	}
 
 	providerCmd := &cobra.Command{
-		Use:     "provider [subcommand]",
-		Short:   "Interact with provider configuration",
-		Example: `  opkssh client provider list`,
-		Args:    cobra.ExactArgs(0),
+		Use:   "provider [subcommand]",
+		Short: "Interact with provider configuration",
+		Example: `  opkssh client provider list
+  opkssh client provider add google https://accounts.google.com <client-id> --client-secret <client-secret> --replace`,
+		Args: cobra.ExactArgs(0),
 	}
 
 	providerListCmd := &cobra.Command{
@@ -489,6 +495,30 @@ Exit code: 0 if all entries are valid, 1 if any warnings or errors are found.`,
 	providerListCmd.Flags().StringVar(&configPathArg, "config-path", "", "Path to the client config file. Default: ~/.opk/config.yml on linux and %APPDATA%\\.opk\\config.yml on windows.")
 
 	providerCmd.AddCommand(providerListCmd)
+
+	providerAdd := commands.NewClientProviderAddCmd(os.Stdout)
+	providerAddCmd := &cobra.Command{
+		Use:   "add <alias> <issuer> <client-id>",
+		Short: "Add an OpenID Provider to the client config",
+		Long: `Add an OpenID Provider to the client config, so that
+"opkssh login <alias>" uses it. The client config is created from the default
+config if it does not exist. Note client ID and other values must match what
+is configured on the server at /etc/opk/providers.
+
+To replace an already configured provider pass --replace.`,
+		Example: `  opkssh client provider add google https://accounts.google.com <client-id> --client-secret <client-secret> --replace`,
+		Args:    cobra.ExactArgs(3),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			providerAdd.Alias, providerAdd.Issuer, providerAdd.ClientID = args[0], args[1], args[2]
+			providerAdd.ConfigPath = configPathArg
+			return providerAdd.Run()
+		},
+	}
+	providerAddCmd.Flags().StringVar(&configPathArg, "config-path", "", "Path to the client config file. Default: ~/.opk/config.yml on linux and %USERPROFILE%\\.opk\\config.yml on windows.")
+	providerAddCmd.Flags().StringVar(&providerAdd.ClientSecret, "client-secret", "", "Client secret, required by some OpenID Providers such as Google")
+	providerAddCmd.Flags().StringVar(&providerAdd.Scopes, "scopes", "", "Space separated scopes to request (default \"openid profile email\")")
+	providerAddCmd.Flags().BoolVar(&providerAdd.Replace, "replace", false, "Replace the client ID of the provider with this alias, keeping its other aliases and settings")
+	providerCmd.AddCommand(providerAddCmd)
 
 	clientCmd.AddCommand(providerCmd)
 
