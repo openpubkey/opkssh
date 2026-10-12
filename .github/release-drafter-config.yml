@@ -32,27 +32,3 @@ template: |
   ## Changes
 
   $CHANGES
-
-autolabeler:
-  - label: "chore"
-    files:
-      - "*.md"
-    branch:
-      - '/docs{0,1}\/.+/'
-      - '/tests{0,1}\/.+/'
-    title:
-      - "/docs/i"
-      - "/test/i"
-  - label: "bug"
-    branch:
-      - '/fix\/.+/'
-      - '/revert\/.+/'
-    title:
-      - "/fix/i"
-      - "/revert/i"
-  - label: "feature"
-    branch:
-      - '/feature\/.+/'
-      - '/feat\/.+/'
-    title:
-      - "/feat/i"
