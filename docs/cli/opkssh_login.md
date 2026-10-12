@@ -9,6 +9,11 @@ Login creates opkssh SSH keys
 Login generates a key pair, then opens a browser to authenticate the user with the OpenID Provider. Upon successful authentication, opkssh creates an SSH public key (~/.ssh/id_ecdsa) containing the user's PK token. By default, this SSH key expires after 24 hours, after which the user must run "opkssh login" again to generate a new key.
 
 Users can then SSH into servers configured to use opkssh as the AuthorizedKeysCommand. The server verifies the PK token and grants access if the token is valid and the user is authorized per the auth_id policy.
+
+Device flow:
+  For machines without a browser. To turn on device flow, set "device_flow: true" on a provider in the client config (~/.opk/config.yml). If multiple providers, select one with "opkssh login <alias>".
+  The OpenID Provider must allow the device grant for the client ID and return a nonce in the ID token. If it does not, login fails with "missing commitment claim nonce".
+
 Arguments:
   alias      The provider alias to use. If not specified, the OPKSSH_DEFAULT provider will be used. The aliases are defined by the OPKSSH_PROVIDERS environment variable. The format is <alias>,<issuer>,<client_id>,<client_secret>,<scopes>
 
