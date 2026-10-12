@@ -150,7 +150,7 @@ func (w *WindowsACLVerifier) VerifyACL(path string, expected ExpectedACL) (ACLRe
 	}
 	// Ensure security descriptor memory is freed
 	if pSD != 0 {
-		defer procLocalFree.Call(pSD)
+		defer procLocalFree.Call(pSD) //nolint:errcheck // free failure not worth handling
 	}
 
 	// Lookup owner name if available

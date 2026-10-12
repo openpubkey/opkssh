@@ -151,29 +151,32 @@ function Test-Prerequisites {
     }
     Write-Verbose "  Running with Administrator privileges: OK"
     
-    # Check OpenSSH Server capability
+    # Check OpenSSH Server installation. GitHub's hosted Windows ARM64 runners
+    # install OpenSSH from the official Win32-OpenSSH package because the
+    # Windows Capability install is unreliable there.
     Write-Verbose "  Checking OpenSSH Server installation..."
     $sshCapability = Get-WindowsCapability -Online -Name "OpenSSH.Server*" -ErrorAction SilentlyContinue
+    $sshdService = Get-Service -Name sshd -ErrorAction SilentlyContinue
+    $sshdConfigPath = "C:\ProgramData\ssh\sshd_config"
+    $sshdConfigExists = Test-Path $sshdConfigPath
     
-    if (-not $sshCapability) {
+    if (-not $sshCapability -and -not $sshdService) {
         throw "OpenSSH Server capability not found. This script requires Windows Server 2019 or later, or Windows 10/11."
     }
     
-    if ($sshCapability.State -ne 'Installed') {
+    if ((-not $sshCapability -or $sshCapability.State -ne 'Installed') -and (-not $sshdService -or -not $sshdConfigExists)) {
         throw "OpenSSH Server is not installed. Install it using: Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0"
     }
     Write-Verbose "  OpenSSH Server is installed"
     
     # Check sshd service
-    $sshdService = Get-Service -Name sshd -ErrorAction SilentlyContinue
     if (-not $sshdService) {
         throw "sshd service not found. OpenSSH Server may not be properly configured."
     }
     Write-Verbose "  sshd service found: $($sshdService.Status)"
     
     # Verify sshd_config exists
-    $sshdConfigPath = "C:\ProgramData\ssh\sshd_config"
-    if (-not (Test-Path $sshdConfigPath)) {
+    if (-not $sshdConfigExists) {
         throw "sshd_config not found at $sshdConfigPath"
     }
     Write-Verbose "  sshd_config found at: $sshdConfigPath"

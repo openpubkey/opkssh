@@ -28,7 +28,6 @@ import (
 
 	"github.com/openpubkey/opkssh/internal/projectpath"
 
-	"github.com/docker/go-connections/nat"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
@@ -55,7 +54,7 @@ func RunExampleOpContainer(ctx context.Context, networkName string, env map[stri
 		},
 		ImagePlatform: "linux/" + runtime.GOARCH,
 		WaitingFor: wait.ForHTTP("/.well-known/openid-configuration").
-			WithPort(nat.Port(issuerServerPort)).
+			WithPort(issuerServerPort).
 			WithStartupTimeout(10 * time.Second).
 			WithMethod(http.MethodGet),
 	}
@@ -67,7 +66,7 @@ func RunExampleOpContainer(ctx context.Context, networkName string, env map[stri
 		return nil, err
 	}
 
-	mappedPort, err := container.MappedPort(ctx, nat.Port(issuerServerPort))
+	mappedPort, err := container.MappedPort(ctx, issuerServerPort)
 	if err != nil {
 		return nil, err
 	}
@@ -78,6 +77,6 @@ func RunExampleOpContainer(ctx context.Context, networkName string, env map[stri
 	return &ExampleOpContainer{
 		Container: container,
 		Host:      hostIP,
-		Port:      mappedPort.Int(),
+		Port:      int(mappedPort.Num()),
 	}, nil
 }

@@ -20,6 +20,18 @@ builds:
     goarch:
       - amd64
       - arm64
+  - id: opkssh-android
+    skip: |
+      {{index .Env "ANDROID_NDK_HOME" | not}}
+    env:
+      - CGO_ENABLED=1 # required due to https://github.com/golang/go/issues/8877
+      - CC={{ .Env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang
+    ldflags:
+      - -s -w -X main.Version={{.Version}}
+    goos:
+      - android
+    goarch:
+      - arm64
 
 # Make binaries available with the same naming format as before
 archives:
@@ -45,6 +57,7 @@ nfpms:
       - deb        # Debian
       - rpm        # RHEL based
       - archlinux  # Archlinux
+      # - termux.deb # Android/Termux (FIX: Needs https://github.com/goreleaser/goreleaser/pull/6668 released)
     # TODO: Add debian overrides and match with https://salsa.debian.org/go-team/packages/opkssh
 
 # Create checksums file

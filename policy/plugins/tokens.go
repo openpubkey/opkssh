@@ -20,6 +20,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/openpubkey/openpubkey/pktoken"
@@ -43,16 +44,16 @@ func PopulatePluginEnvVars(pkt *pktoken.PKToken, userInfoJson string, principal 
 	upkB64 := base64.StdEncoding.EncodeToString(upkJson)
 
 	type Claims struct {
-		Issuer        string    `json:"iss"`
-		Sub           string    `json:"sub"`
-		Email         string    `json:"email"`
-		EmailVerified *bool     `json:"email_verified"`
-		Aud           Audience  `json:"aud"`
-		Exp           *int64    `json:"exp"`
-		Nbf           *int64    `json:"nbf"`
-		Iat           *int64    `json:"iat"`
-		Jti           string    `json:"jti"`
-		Groups        *[]string `json:"groups"`
+		Issuer        string        `json:"iss"`
+		Sub           string        `json:"sub"`
+		Email         string        `json:"email"`
+		EmailVerified EmailVerified `json:"email_verified"`
+		Aud           Audience      `json:"aud"`
+		Exp           *int64        `json:"exp"`
+		Nbf           *int64        `json:"nbf"`
+		Iat           *int64        `json:"iat"`
+		Jti           string        `json:"jti"`
+		Groups        *[]string     `json:"groups"`
 	}
 	var claims Claims
 	if err := json.Unmarshal(pkt.Payload, &claims); err != nil {
@@ -61,13 +62,14 @@ func PopulatePluginEnvVars(pkt *pktoken.PKToken, userInfoJson string, principal 
 
 	groupsStr := ""
 	if claims.Groups != nil {
-		groupsStr = fmt.Sprintf(`["%s"]`, strings.Join(*claims.Groups, `","`))
+		groupsJSON, err := json.Marshal(*claims.Groups)
+		if err != nil {
+			return nil, fmt.Errorf("error marshalling groups claim: %w", err)
+		}
+		groupsStr = string(groupsJSON)
 	}
 
-	emailVerifiedStr := ""
-	if claims.EmailVerified != nil {
-		emailVerifiedStr = fmt.Sprintf("%t", *claims.EmailVerified)
-	}
+	emailVerifiedStr := string(claims.EmailVerified)
 
 	expStr := ""
 	if claims.Exp != nil {
@@ -122,12 +124,43 @@ func PopulatePluginEnvVars(pkt *pktoken.PKToken, userInfoJson string, principal 
 	return tokens, nil
 }
 
+// EmailVerified holds the email_verified claim. It should be a bool, but some
+// OPs send it as a string ("true"), so accept either rather than failing the
+// whole payload. See https://github.com/oauth2-proxy/oauth2-proxy/issues/629.
+// A bool, and a string that parses as one, are normalized to "true"/"false".
+// Any other string is passed through verbatim so the plugin can decide.
+type EmailVerified string
+
+func (e *EmailVerified) UnmarshalJSON(data []byte) error {
+	var b bool
+	if err := json.Unmarshal(data, &b); err == nil {
+		*e = EmailVerified(strconv.FormatBool(b))
+		return nil
+	}
+
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		if b, err := strconv.ParseBool(s); err == nil {
+			*e = EmailVerified(strconv.FormatBool(b))
+		} else {
+			*e = EmailVerified(s)
+		}
+		return nil
+	}
+
+	return fmt.Errorf("email_verified claim must be a bool or a string, got %s", strings.TrimSpace(string(data)))
+}
+
 type Audience string
 
 func (a *Audience) UnmarshalJSON(data []byte) error {
 	var multi []string
 	if err := json.Unmarshal(data, &multi); err == nil {
-		*a = Audience(`["` + strings.Join(multi, `","`) + `"]`)
+		audJSON, err := json.Marshal(multi)
+		if err != nil {
+			return err
+		}
+		*a = Audience(string(audJSON))
 		return nil
 	}
 
