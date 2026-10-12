@@ -463,7 +463,6 @@ providers:
     scopes: openid email profile
     access_type: offline
     prompt: consent
-    device_flow: false
     redirect_uris:
       - http://localhost:3000/login-callback
       - http://localhost:10001/login-callback
@@ -475,7 +474,6 @@ providers:
     scopes: openid profile email offline_access
     access_type: offline
     prompt: consent
-    device_flow: false
     redirect_uris:
       - http://localhost:3000/login-callback
       - http://localhost:10001/login-callback
@@ -487,7 +485,6 @@ providers:
     scopes: openid email
     access_type: offline
     prompt: consent
-    device_flow: false
     redirect_uris:
       - http://localhost:3000/login-callback
       - http://localhost:10001/login-callback
@@ -499,7 +496,6 @@ providers:
     scopes: openid email
     access_type: offline
     prompt: consent
-    device_flow: false
     redirect_uris:
       - http://localhost:3000/login-callback
       - http://localhost:10001/login-callback
@@ -535,15 +531,6 @@ http://localhost:3000/login-callback
 http://localhost:10001/login-callback
 http://localhost:11110/login-callback
 ```
-
-### Supported OIDC Authentications
-
-Other than using the typical authorization flow, you might be interested in the following available authentication methods.
-
-#### Device Flow
-
-Enabled by using the `device_flow: true` mapping entry in the configuration file for your provider.
-When using device flow, redirect_uris are not required. Verification URI will be provider dependent.
 
 ### Security Note: Create a new Client ID for opkssh
 
