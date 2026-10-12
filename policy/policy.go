@@ -72,6 +72,19 @@ func FromTable(input []byte, path string) (*Policy, []files.ConfigProblem) {
 			files.ConfigProblems().RecordProblem(configProblem)
 			continue
 		}
+		// An empty identity attribute matches any token that carries no email
+		// claim, so skip the row rather than guess at the admin's intent
+		if row[1] == "" {
+			configProblem := files.ConfigProblem{
+				Filepath:      path,
+				OffendingLine: strings.Join(row, " "),
+				ErrorMessage:  "identity attribute is empty",
+				Source:        "user policy file",
+			}
+			problems = append(problems, configProblem)
+			files.ConfigProblems().RecordProblem(configProblem)
+			continue
+		}
 		user := User{
 			Principals:        []string{row[0]},
 			IdentityAttribute: row[1],

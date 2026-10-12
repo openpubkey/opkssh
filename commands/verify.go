@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/openpubkey/openpubkey/pktoken"
@@ -32,6 +33,11 @@ import (
 	"github.com/spf13/afero"
 	"golang.org/x/crypto/ssh"
 )
+
+// Conservative allowlist: covers POSIX usernames and the sentinel.
+// Excludes " \ , whitespace and control chars, so neither the quoted
+// option syntax nor the comma-join can be broken by construction.
+var validPrincipal = regexp.MustCompile(`^[a-zA-Z0-9_][a-zA-Z0-9._+@-]{0,127}\$?$`)
 
 // PolicyEnforcerFunc returns nil if the supplied PK token is permitted to login as
 // username. Otherwise, an error is returned indicating the reason for rejection
@@ -127,6 +133,11 @@ func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, t
 			// is no CA.
 			pubkeyBytes := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(cert.SshCert.SignatureKey)))
 
+			// Ensure principals in ssh cert are safe to use in the authorized_keys line
+			if err := errorOnUnsafePrincipal(cert.SshCert.ValidPrincipals); err != nil {
+				return "", err
+			}
+
 			principals := strings.Join(cert.SshCert.ValidPrincipals, ",")
 			if principals != "" {
 				// Makes sshd trust the principals in the certificate.
@@ -186,4 +197,23 @@ func OpkPolicyEnforcerFunc(username string) PolicyEnforcerFunc {
 		PolicyLoader: policy.NewMultiPolicyLoader(username, policy.ReadWithSudoScript),
 	}
 	return policyEnforcer.CheckPolicy
+}
+
+// errorOnUnsafePrincipal checks if the principals contains any strings which
+// should not be allowed in the authorized keys line output. For instance
+// a principal containing whitespace or control characters could allow a
+// user specified principal to change other parts of the
+// AuthorizedKeysCommand output. The security risk here is small because
+// we have already verified the user is allowed to assume the desired account,
+// but it is worth locking down anyways.
+// The obvious solution is to simply set the principals to the desired username,
+// but this is not possible due to the use of the opkssh-wildcard trick used
+// to solve issue 513 "Fix for openssh 10.3 breaking principals wildcard in SSH certificates"
+func errorOnUnsafePrincipal(principals []string) error {
+	for _, p := range principals {
+		if !validPrincipal.MatchString(p) {
+			return fmt.Errorf("cert contains invalid principal %q, rejecting authn", p)
+		}
+	}
+	return nil
 }

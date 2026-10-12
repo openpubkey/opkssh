@@ -1,5 +1,5 @@
 # Stage 1: Build the Go binary
-FROM golang:1.26.4@sha256:32c0e6e5c4f6707717051091b4d0b077464a679eaab563e11474efc5328e2aa5 as builder
+FROM golang:1.26.5@sha256:d52df9c279840adf958d017ebb275651ed8338b953d39817bc3633a2e6b1bbcc as builder
 
 # Set destination for COPY
 WORKDIR /app
@@ -12,7 +12,6 @@ RUN go mod download
 COPY . ./
 
 # Copy the source code and build the binary
-ARG ISSUER_PORT="9998"
 RUN go build -v -o opksshbuild
 
 # Stage 2: Create a minimal ArchLinux-based image
