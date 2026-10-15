@@ -127,11 +127,15 @@ Arguments:
 
 	inspectCmd := &cobra.Command{
 		SilenceUsage: true,
-		Use:          "inspect <path>",
+		Use:          "inspect [path]",
 		Short:        "Inspect and view details of an opkssh generated SSH key",
+		Long:         "Inspect and view details of an opkssh generated SSH key. If no path is given, every opkssh generated SSH certificate found in ~/.ssh and ~/.ssh/opkssh is printed.",
 		Example:      "  opkssh inspect ~/.ssh/id_ecdsa_sk-cert.pub",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			keyPathArg := args[0]
+			keyPathArg := ""
+			if len(args) > 0 {
+				keyPathArg = args[0]
+			}
 			inspect := commands.NewInspectCmd(keyPathArg, cmd.OutOrStdout())
 			if err := inspect.Run(); err != nil {
 				log.Println("Error executing inspect command:", err)
@@ -139,7 +143,7 @@ Arguments:
 			}
 			return nil
 		},
-		Args: cobra.ExactArgs(1),
+		Args: cobra.MaximumNArgs(1),
 	}
 	rootCmd.AddCommand(inspectCmd)
 
