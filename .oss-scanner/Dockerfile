@@ -1,7 +1,7 @@
 # Build environment for Anthropic's OSS Scanner (https://red.anthropic.com/oss-scanner/).
 # The scanner builds this with the repository root as the build context. Network access is
 # available only while this image builds; everything the scanning agent needs must be fetched here.
-FROM golang:1.26-trixie
+FROM golang:1.27-trixie
 
 ENV DEBIAN_FRONTEND=noninteractive \
     CGO_ENABLED=1 \
