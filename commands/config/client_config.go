@@ -62,6 +62,17 @@ func IsDefaultClientID(issuer string, clientID string) bool {
 	return false
 }
 
+// IsDefaultClientIDForAnyIssuer reports whether clientID is one of the client
+// IDs in the default client config, whatever the issuer.
+func IsDefaultClientIDForAnyIssuer(clientID string) bool {
+	for _, provider := range defaultProviders() {
+		if provider.ClientID == clientID {
+			return true
+		}
+	}
+	return false
+}
+
 type ClientConfig struct {
 	DefaultProvider string           `yaml:"default_provider"`
 	Providers       []ProviderConfig `yaml:"providers"`
