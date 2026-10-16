@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/openpubkey/opkssh/commands/config"
 	"github.com/openpubkey/opkssh/policy"
 	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/spf13/afero"
@@ -59,6 +60,24 @@ func NewAuditCmd(out io.Writer, errOut io.Writer) *AuditCmd {
 	}
 }
 
+// defaultClientIDExplanation is printed once after the default client ID
+// warnings, so that each warning can stay short.
+const defaultClientIDExplanation = "opkssh's default client IDs are intended for testing and should not be used in production. " +
+	"To use your own client IDs, see https://github.com/openpubkey/opkssh/blob/main/docs/audit.md#default-client-ids"
+
+// defaultClientIDWarnings returns one warning for each providers file row
+// that uses one of opkssh's default client IDs.
+func defaultClientIDWarnings(providerPath string, rows []policy.ProvidersRow) []string {
+	var warnings []string
+	for _, row := range rows {
+		if config.IsDefaultClientIDForAnyIssuer(row.ClientID) {
+			warnings = append(warnings, fmt.Sprintf("%s trusts %s with opkssh's default client ID %s",
+				providerPath, row.Issuer, row.ClientID))
+		}
+	}
+	return warnings
+}
+
 func (a *AuditCmd) Audit(opksshVersion string) (*TotalResults, error) {
 	providerPath := a.ProviderPath
 	policyPath := a.PolicyPath
@@ -78,6 +97,13 @@ func (a *AuditCmd) Audit(opksshVersion string) (*TotalResults, error) {
 	}
 	totalResults.ProviderFile = ProviderResults{
 		FilePath: providerPath,
+	}
+	totalResults.ProviderFile.Warnings = defaultClientIDWarnings(providerPath, providerPolicy.GetRows())
+	for _, warning := range totalResults.ProviderFile.Warnings {
+		fmt.Fprintf(a.ErrOut, "warning: %s\n", warning)
+	}
+	if len(totalResults.ProviderFile.Warnings) > 0 {
+		fmt.Fprintf(a.ErrOut, "  %s\n", defaultClientIDExplanation)
 	}
 
 	// Create validator from provider policy
@@ -155,6 +181,7 @@ func (a *AuditCmd) Run(opksshVersion string) error {
 		allResults = append(allResults, homePolicy.Rows...)
 	}
 	summary := policy.CalculateSummary(allResults)
+	summary.ProviderWarnings = len(totalResults.ProviderFile.Warnings)
 
 	if a.JsonOutput {
 		jsonBytes, err := json.MarshalIndent(totalResults, "", "  ")
@@ -167,8 +194,11 @@ func (a *AuditCmd) Run(opksshVersion string) error {
 		a.printSummary(summary)
 	}
 
-	if summary.HasErrors() {
+	if summary.Errors > 0 {
 		return fmt.Errorf("audit completed and discovered errors")
+	}
+	if summary.HasErrors() {
+		return fmt.Errorf("audit completed and discovered warnings")
 	}
 	return nil
 }
@@ -274,6 +304,9 @@ func (a *AuditCmd) printSummary(summary policy.ValidationSummary) {
 	fmt.Fprintf(a.Out, "Successful:            %d\n", summary.Successful)
 	fmt.Fprintf(a.Out, "Warnings:              %d\n", summary.Warnings)
 	fmt.Fprintf(a.Out, "Errors:                %d\n", summary.Errors)
+	if summary.ProviderWarnings > 0 {
+		fmt.Fprintf(a.Out, "Provider Warnings:     %d\n", summary.ProviderWarnings)
+	}
 	fmt.Fprintf(a.Out, "\nExit Code: %d", summary.GetExitCode())
 	if summary.GetExitCode() == 0 {
 		fmt.Fprintf(a.Out, " (no issues detected)\n")

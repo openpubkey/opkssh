@@ -135,15 +135,16 @@ func (v *PolicyValidator) ValidateEntry(principal, identityAttr, issuer string, 
 
 // Summary holds aggregated statistics about validation results
 type ValidationSummary struct {
-	TotalTested int
-	Successful  int
-	Warnings    int
-	Errors      int
+	TotalTested      int
+	Successful       int
+	Warnings         int
+	Errors           int
+	ProviderWarnings int
 }
 
 // HasErrors returns true if there are any errors or warnings
 func (s *ValidationSummary) HasErrors() bool {
-	return s.Errors > 0 || s.Warnings > 0
+	return s.Errors > 0 || s.Warnings > 0 || s.ProviderWarnings > 0
 }
 
 // GetExitCode returns the appropriate exit code (0 for success, 1 for errors/warnings)
