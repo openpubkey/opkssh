@@ -131,6 +131,8 @@ GITHUB_REPO="${OPKSSH_INSTALL_GITHUB_REPO:-openpubkey/opkssh}"
 # Global variables used by several functions
 OS_TYPE=""
 CPU_ARCH=""
+DEFAULT_PROVIDERS_WRITTEN=false
+DEFAULT_PROVIDERS_NOTICE="The default client IDs are intended for testing and should not be used in production, and 'opkssh audit' reports them as warnings. To use your own client IDs, see https://github.com/openpubkey/opkssh/blob/main/docs/audit.md#default-client-ids"
 
 # file_exists
 # check is file exists, helpers that wrap real commands so it can be
@@ -625,6 +627,7 @@ check_selinux() {
 #
 # Outputs:
 #   Writes to stdout the configration progress
+#   Sets global variable DEFAULT_PROVIDERS_WRITTEN to true if it wrote the default providers
 #
 # Returns:
 #   0
@@ -678,6 +681,9 @@ configure_opkssh() {
             echo "$provider_gitlab"
             echo "$provider_hello"
         } >> "$etc_path/opk/providers"
+        DEFAULT_PROVIDERS_WRITTEN=true
+        echo "  Wrote the default providers to $etc_path/opk/providers"
+        echo "  $DEFAULT_PROVIDERS_NOTICE"
     fi
 }
 
@@ -907,6 +913,7 @@ configure_sudo() {
 #
 # Output:
 #   Writes to stdout that installation is successful
+#   Writes to stdout a notice about the default client IDs if DEFAULT_PROVIDERS_WRITTEN is true
 #   Writes installation debug information to /var/log/opkssh.log
 #
 # Returns:
@@ -924,6 +931,10 @@ log_opkssh_installation() {
     echo "Successfully installed opkssh (INSTALLED_ON: $INSTALLED_ON, VERSION_INSTALLED: $VERSION_INSTALLED, INSTALL_VERSION: $INSTALL_VERSION, LOCAL_INSTALL_FILE: $LOCAL_INSTALL_FILE, HOME_POLICY: $HOME_POLICY, RESTART_SSH: $RESTART_SSH)" >> "$log_file"
 
     echo "Installation successful! Run '$BINARY_NAME' to use it."
+    if [[ "$DEFAULT_PROVIDERS_WRITTEN" == true ]]; then
+        echo
+        echo "Note: $DEFAULT_PROVIDERS_NOTICE"
+    fi
 }
 
 # main
