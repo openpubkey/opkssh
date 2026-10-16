@@ -26,7 +26,7 @@ type ProviderResults struct {
 	FilePath string `json:"file_path"`
 	// Error records any permission errors found on the provider file
 	Error string `json:"error"`
-	// Warnings records providers that use one of opkssh's default client IDs
+	// Warnings records problems with the providers file
 	Warnings []string `json:"warnings,omitempty"`
 }
 

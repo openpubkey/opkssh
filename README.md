@@ -270,13 +270,17 @@ This file functions as an access control list that enables admins to determine t
 
 By default we use `24h` as it requires that the user authenticate to their OP once a day. Most OPs expire ID Tokens every one to two hours, so if `oidc` the user will have to sign multiple times a day. `oidc_refreshed` is supported but complex and not currently recommended unless you know what you are doing.
 
-The default values for `/etc/opk/providers` are:
+The installers write these default values to `/etc/opk/providers`:
 
 ```bash
 # Issuer Client-ID expiration-policy
 https://accounts.google.com 206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com 24h
 https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0 096ce0a3-5e72-4da8-9c86-12924b294a01 24h
+https://gitlab.com 8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923 24h
+https://issuer.hello.coop app_xejobTKEsDNSRd5vofKB2iay_2rN 24h
 ```
+
+These default client IDs are intended for testing and development. They should not be used in production. Register your own client IDs for production (see [Default client IDs](docs/audit.md#default-client-ids)).
 
 `/etc/opk/providers` requires the following permissions (by default we create all configuration files with the correct permissions):
 
