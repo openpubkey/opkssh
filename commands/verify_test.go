@@ -402,11 +402,11 @@ env_vars:
 		errorString string
 	}{
 		{
-			name:        "Happy Path",
+			name:        "Happy Path with custom service group",
 			configFile:  map[string]string{"server_config.yml": configContent},
 			permission:  0640,
 			owner:       "root",
-			group:       "opksshuser",
+			group:       "ubuntu",
 			errorString: "",
 		},
 		{
@@ -455,7 +455,7 @@ env_vars:
 					},
 				},
 			}
-			err := ver.ReadFromServerConfig()
+			_, err := ver.ReadFromServerConfig()
 
 			if tt.errorString != "" {
 				require.ErrorContains(t, err, tt.errorString)

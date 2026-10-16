@@ -66,11 +66,11 @@ type VerifyCmd struct {
 }
 
 // NewVerifyCmd creates a new VerifyCmd instance with the provided arguments.
-func NewVerifyCmd(pktVerifier verifier.Verifier, checkPolicy PolicyEnforcerFunc, configPathArg string) *VerifyCmd {
+// The verifier is configured after the trusted server configuration has loaded.
+func NewVerifyCmd(checkPolicy PolicyEnforcerFunc, configPathArg string) *VerifyCmd {
 	fs := afero.NewOsFs()
 	return &VerifyCmd{
 		Fs:            fs,
-		PktVerifier:   pktVerifier,
 		CheckPolicy:   checkPolicy,
 		ConfigPathArg: configPathArg,
 		filePermChecker: files.PermsChecker{
@@ -153,32 +153,39 @@ func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, t
 	}
 }
 
-// ReadFromServerConfig sets the environment variables specified in the server config file
-// and assigns configured deny lists to VerifyCmd's denyList
-func (v *VerifyCmd) ReadFromServerConfig() error {
+// ReadFromServerConfig applies the server configuration to VerifyCmd and returns
+// the parsed configuration for verifier construction.
+func (v *VerifyCmd) ReadFromServerConfig() (*config.ServerConfig, error) {
 	var configBytes []byte
 
 	// Load the file from the filesystem
 	afs := &afero.Afero{Fs: v.Fs}
 	configBytes, err := afs.ReadFile(v.ConfigPathArg)
 	if err != nil {
-		return fmt.Errorf("failed to read config file: %w", err)
+		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	err = v.filePermChecker.CheckPerm(v.ConfigPathArg, []fs.FileMode{0640}, "root", "opksshuser")
+	// The group is deliberately not fixed. Servers may run
+	// AuthorizedKeysCommand as any dedicated account (or a local administrator
+	// account), and that account needs read access to this root-owned config.
+	// Mode 0640 still prevents the group from modifying the configuration.
+	err = v.filePermChecker.CheckPerm(v.ConfigPathArg, []fs.FileMode{0640}, "root", "")
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	serverConfig, err := config.NewServerConfig(configBytes)
 	if err != nil {
-		return fmt.Errorf("failed to parse config file: %w", err)
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 	v.denyList = policy.DenyList{
 		Emails: serverConfig.DenyEmails,
 		Users:  serverConfig.DenyUsers,
 	}
-	return serverConfig.SetEnvVars()
+	if err := serverConfig.SetEnvVars(); err != nil {
+		return nil, err
+	}
+	return serverConfig, nil
 }
 
 func (v *VerifyCmd) UserInfoLookup(ctx context.Context, pkt *pktoken.PKToken, accessToken string) (string, error) {
