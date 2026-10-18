@@ -62,8 +62,10 @@ var RequiredPerms = struct {
 	Config: PermInfo{
 		Mode:  ModeSystemPerms, // 0o640
 		Owner: "root",
-		// The group is the group of the account configured as
-		// AuthorizedKeysCommandUser, so it cannot be a fixed value.
+		// The group is opksshuser or the primary group of the account
+		// configured as AuthorizedKeysCommandUser, so it cannot be a fixed
+		// value here. opkssh verify enforces it at runtime (see
+		// commands.defaultConfigGroups).
 		Group:     "",
 		MustExist: false,
 	},

@@ -107,7 +107,7 @@ Both `deny_emails` and `deny_users` are evaluated before policy.
 
 ### JWKS cache
 
-By default, `opkssh verify` retrieves the provider's JWKS for every authentication attempt. Configure a persistent cache to reduce login latency and provider load, and to allow a recently cached key set to be used if a provider is temporarily unavailable:
+`opkssh verify` can cache each provider's JWKS on disk. Most logins then don't contact the provider, and logins keep working for a while if the provider is unreachable. The cache is off by default; to turn it on, add:
 
 ```yml
 cache:
@@ -116,49 +116,25 @@ cache:
   fallback_max_age: 2h
 ```
 
-`base_dir` enables the cache and must be owned by the account configured as `AuthorizedKeysCommandUser`, which writes cache entries. It must be inaccessible to other users. `opkssh verify` refuses to start if `base_dir` exists but is group- or world-writable, since a cache a less privileged user can write to would let an attacker substitute a signing key. `max_age` is the normal maximum age of a JWKS entry. When a fresh fetch fails, `fallback_max_age` is the absolute maximum age of an entry that may still be used. It must be at least `max_age`.
+`base_dir` must be an absolute path owned by the `AuthorizedKeysCommandUser` account, not writable by others, and labelled `opkssh_cache_t` if SELinux is enabled. The installer sets all of this up when you set `OPKSSH_INSTALL_CACHE_DIR`. A cache problem never blocks a login: opkssh logs it and verifies without the cache.
 
-If omitted, `max_age` defaults to one hour and `fallback_max_age` defaults to twice `max_age`. Set both values to the same duration to disable fallback. Cache entries are written by `opkssh verify`; they are never deleted during authentication.
-
-The easiest way to enable the cache is to let the installer provision it. Set `OPKSSH_INSTALL_CACHE_DIR` when running `install-linux.sh` and it creates `base_dir` with the configured verification user and group, mode `0700`, adds the `cache` section to `config.yml`, and installs a `systemd` timer (`opkssh-cache-clean.timer`) that runs the cleanup for you. For example, to use `ubuntu` instead of the default `opksshuser`:
-
-```bash
-OPKSSH_INSTALL_AUTH_CMD_USER=ubuntu \
-OPKSSH_INSTALL_AUTH_CMD_GROUP=ubuntu \
-OPKSSH_INSTALL_CACHE_DIR=/var/cache/opkssh \
-./install-linux.sh
-```
-
-If you configure the cache by hand instead, create `base_dir` yourself with those permissions and run the cleanup command periodically as the verification user to limit disk use:
-
-```bash
-opkssh cache clean
-```
-
-`cache clean` is a no-op (exit 0) on a host that has not configured a cache, so it is safe to schedule unconditionally. To use a different retention period for a one-off cleanup, pass a Go duration:
-
-```bash
-opkssh cache clean 24h
-```
-
-Before enabling the cache in production, run the preflight as the verification user. It confirms that the user can read the server configuration and owns a usable cache directory:
-
-```bash
-sudo -u ubuntu opkssh cache check
-```
-
-The cache applies to standard OIDC, GitHub Actions, Forgejo Actions, and GitLab CI verification. A shorter maximum age detects provider key rotation sooner; a longer age improves availability but can continue to trust a rotated key for longer.
+See [docs/cache.md](cache.md) for how the cache works, all settings, debugging with `opkssh verify --cache`, SELinux and security considerations.
 
 ### Server config permissions
 
-The server config file must be owned by `root`, readable by the account (or
-group) configured as `AuthorizedKeysCommandUser`, and not writable by that
-account. For example, if verification runs as `ubuntu`:
+The server config file is optional. If it exists, it must be owned by `root`
+with mode `640`, and its group must be either `opksshuser` or the primary group
+of the account configured as `AuthorizedKeysCommandUser`. Any other group is
+rejected, because the file can contain `env_vars` such as proxy credentials.
+For example, if verification runs as `ubuntu`:
 
 ```bash
 sudo chown root:ubuntu /etc/opk/config.yml
 sudo chmod 640 /etc/opk/config.yml
 ```
+
+If the file has the wrong permissions or can't be parsed, `opkssh verify` logs
+the error and continues without it: no cache, deny lists or `env_vars`.
 
 ## Allowed OpenID Providers: `/etc/opk/providers` (Linux) or `%ProgramData%\opk\providers` (Windows)
 

@@ -64,6 +64,16 @@ env_vars:
 			group:       "opksshuser",
 			errorString: "expected owner (root), got (opksshuser)",
 		},
+		{
+			// A group the verify process is not in, such as "users", would
+			// make env_vars and the deny lists readable by all its members.
+			name:        "Group not allowed",
+			configFile:  map[string]string{"server_config.yml": configContent},
+			permission:  0o640,
+			owner:       "root",
+			group:       "users",
+			errorString: "config file group must be one of [opksshuser, ubuntu]",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -93,6 +103,7 @@ env_vars:
 						return []byte(tt.owner + " " + tt.group), nil
 					},
 				},
+				configGroups: []string{"opksshuser", "ubuntu"},
 			}
 			_, err := ver.ReadFromServerConfig()
 

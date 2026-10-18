@@ -687,6 +687,53 @@ configure_opkssh() {
     fi
 }
 
+# selinux_enabled
+# Returns 0 if SELinux is enabled (enforcing or permissive), 1 otherwise.
+selinux_enabled() {
+    command -v getenforce >/dev/null 2>&1 && [[ "$(getenforce)" != "Disabled" ]]
+}
+
+# systemd_running
+# Returns 0 if systemd is the running init system, 1 otherwise (for example
+# while building a container image or inside a chroot).
+systemd_running() {
+    [[ -d /run/systemd/system ]]
+}
+
+# semanage_available
+# Returns 0 if the semanage command is installed, 1 otherwise.
+semanage_available() {
+    command -v semanage >/dev/null 2>&1
+}
+
+# label_cache_dir
+# On SELinux systems, labels CACHE_DIR and everything below it
+# opkssh_cache_t, the type the opkssh policy module lets opkssh verify write
+# to. The label is recorded with semanage so it survives a relabel.
+#
+# Returns:
+#   0 on success or when SELinux is disabled, 1 on failure
+label_cache_dir() {
+    if ! selinux_enabled; then
+        return 0
+    fi
+    if ! semanage_available; then
+        echo "SELinux is enabled, but semanage is not installed. Install the package that provides it (policycoreutils-python-utils on RHEL, CentOS and Fedora) and run the installer again."
+        return 1
+    fi
+    # semanage takes a regular expression; escape the dots in the path.
+    local spec="${CACHE_DIR//./\\.}(/.*)?"
+    if ! semanage fcontext -a -t opkssh_cache_t "$spec" 2>/dev/null; then
+        # The path already has a file context rule: change it instead.
+        if ! semanage fcontext -m -t opkssh_cache_t "$spec"; then
+            echo "Failed to set the SELinux file context for $CACHE_DIR"
+            return 1
+        fi
+    fi
+    restorecon -R "$CACHE_DIR" || return 1
+    echo "  Labelled $CACHE_DIR opkssh_cache_t for SELinux"
+}
+
 # configure_cache
 # Provisions the persistent JWKS cache directory and the systemd timer that
 # cleans it. Does nothing unless CACHE_DIR is set.
@@ -718,6 +765,7 @@ configure_cache() {
 
     local config_file="$etc_path/opk/config.yml"
     local existing_cache_dir=""
+    local needs_cache_section=true
     if [[ -f "$config_file" ]] && grep -Eq '^cache:' "$config_file"; then
         existing_cache_dir=$(awk '
             /^cache:[[:space:]]*$/ { in_cache = 1; next }
@@ -733,20 +781,51 @@ configure_cache() {
             echo "config.yml already contains a cache section for ${existing_cache_dir:-an unknown directory}; refusing to provision $CACHE_DIR"
             return 1
         fi
-    else
-        {
-            echo "cache:"
-            echo "  base_dir: $CACHE_DIR"
-        } >> "$config_file"
-        echo "  Added cache section to $config_file"
+        needs_cache_section=false
     fi
 
     install -d -o "${AUTH_CMD_USER}" -g "${AUTH_CMD_GROUP}" -m 700 "$CACHE_DIR"
     echo "  Created cache directory $CACHE_DIR (${AUTH_CMD_USER}:${AUTH_CMD_GROUP}, 0700)"
+    label_cache_dir || return 1
 
-    if ! runuser -u "$AUTH_CMD_USER" -- "${INSTALL_DIR}/${BINARY_NAME}" cache check; then
+    # opkssh verify reads config.yml on every login, so never leave it half
+    # edited. Write the new section to a copy with the same owner and mode,
+    # run the preflight against the copy, and only then move it into place.
+    local preflight_config="$config_file"
+    local new_config=""
+    if [[ "$needs_cache_section" == true ]]; then
+        new_config="${config_file}.opkssh-new"
+        if [[ -f "$config_file" ]]; then
+            cp -p "$config_file" "$new_config" || return 1
+        else
+            touch "$new_config" || return 1
+            chown root:"${AUTH_CMD_GROUP}" "$new_config" || return 1
+            chmod 640 "$new_config" || return 1
+        fi
+        # Appending to a file without a trailing newline would join the
+        # last line and "cache:" into invalid YAML.
+        if [[ -s "$new_config" && -n "$(tail -c 1 "$new_config")" ]]; then
+            echo >> "$new_config"
+        fi
+        {
+            echo "cache:"
+            echo "  base_dir: $CACHE_DIR"
+        } >> "$new_config"
+        preflight_config="$new_config"
+    fi
+
+    if ! runuser -u "$AUTH_CMD_USER" -- "${INSTALL_DIR}/${BINARY_NAME}" cache check --config-path "$preflight_config"; then
         echo "Cache preflight failed for ${AUTH_CMD_USER}; check config.yml group ownership and cache directory access"
+        if [[ -n "$new_config" ]]; then
+            rm -f "$new_config"
+            echo "  $config_file was left unchanged"
+        fi
         return 1
+    fi
+
+    if [[ -n "$new_config" ]]; then
+        mv -f "$new_config" "$config_file" || return 1
+        echo "  Added cache section to $config_file"
     fi
 
     # A cache that is never cleaned grows without bound, so install a timer.
@@ -780,9 +859,17 @@ WantedBy=timers.target
 EOF
 
     echo "  Installed opkssh-cache-clean.timer (OnCalendar=${CACHE_CLEAN_ON_CALENDAR})"
-    systemctl daemon-reload || return 1
-    systemctl enable --now opkssh-cache-clean.timer || return 1
-    echo "  Enabled opkssh-cache-clean.timer"
+    if systemd_running; then
+        systemctl daemon-reload || return 1
+        systemctl enable --now opkssh-cache-clean.timer || return 1
+        echo "  Enabled and started opkssh-cache-clean.timer"
+    else
+        # Not booted with systemd, for example while building a container
+        # image. systemctl daemon-reload would fail, but enable works offline
+        # and the timer starts when systemd next boots.
+        systemctl enable opkssh-cache-clean.timer || return 1
+        echo "  Enabled opkssh-cache-clean.timer; it starts when systemd next boots"
+    fi
 }
 
 # configure_openssh_server

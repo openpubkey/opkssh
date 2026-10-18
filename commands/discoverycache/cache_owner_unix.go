@@ -25,10 +25,10 @@ import (
 	"syscall"
 )
 
+// validateCacheOwner requires base_dir to be owned by the effective user. This
+// also applies to root: when AuthorizedKeysCommandUser is root, a base_dir
+// owned by another account would let that account plant a JWKS.
 func validateCacheOwner(path string, info fs.FileInfo) error {
-	if os.Geteuid() == 0 {
-		return nil
-	}
 	return validateCacheOwnerUID(path, info, os.Geteuid())
 }
 

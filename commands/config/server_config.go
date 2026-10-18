@@ -19,6 +19,8 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/openpubkey/openpubkey/discover"
@@ -64,6 +66,39 @@ func (c *ServerConfig) SetEnvVars() error {
 	return nil
 }
 
+// DefaultCacheBaseDir is the cache directory used by opkssh verify --cache=on
+// when the server config does not set one.
+const DefaultCacheBaseDir = "/var/cache/opkssh"
+
+// Cache modes for opkssh verify --cache.
+const (
+	// CacheModeAuto uses the cache section of the server config as written.
+	CacheModeAuto = "auto"
+	// CacheModeOn enables the cache even if the server config does not,
+	// using DefaultCacheBaseDir unless the config sets base_dir.
+	CacheModeOn = "on"
+	// CacheModeOff disables the cache whatever the server config says.
+	CacheModeOff = "off"
+)
+
+// WithMode applies an opkssh verify --cache mode to the configured cache
+// settings.
+func (c CacheConfig) WithMode(mode string) (CacheConfig, error) {
+	switch mode {
+	case CacheModeAuto, "":
+		return c, nil
+	case CacheModeOn:
+		if c.BaseDir == "" {
+			c.BaseDir = DefaultCacheBaseDir
+		}
+		return c, nil
+	case CacheModeOff:
+		return CacheConfig{}, nil
+	default:
+		return CacheConfig{}, fmt.Errorf("invalid --cache value %q: want %s, %s or %s", mode, CacheModeAuto, CacheModeOn, CacheModeOff)
+	}
+}
+
 // DiscoveryCacheConfig returns the cache settings used by provider verifiers.
 // Defaults are applied only when a persistent cache is configured.
 func (c CacheConfig) DiscoveryCacheConfig(fs afero.Fs) (discover.DiscoveryCacheConfig, error) {
@@ -72,6 +107,11 @@ func (c CacheConfig) DiscoveryCacheConfig(fs afero.Fs) (discover.DiscoveryCacheC
 	}
 	if fs == nil {
 		return discover.DiscoveryCacheConfig{}, fmt.Errorf("cache filesystem is required")
+	}
+	if !filepath.IsAbs(c.BaseDir) && !strings.HasPrefix(filepath.ToSlash(c.BaseDir), "/") {
+		// A relative path would resolve against sshd's working directory.
+		// A rooted path without a drive letter is accepted on Windows.
+		return discover.DiscoveryCacheConfig{}, fmt.Errorf("cache base_dir %q must be an absolute path", c.BaseDir)
 	}
 
 	standardMaxAge := c.StandardMaxAge

@@ -88,12 +88,14 @@ func providerVerifierFromRow(row ProvidersRow, cacheCfg discover.DiscoveryCacheC
 		opts.Issuer = row.Issuer
 		opts.ClientID = row.ClientID
 		opts.CacheConfig = cacheCfg
+		opts.HttpClient = NewProviderHTTPClient()
 		return providers.NewGoogleOpWithOptions(opts)
 	} else if strings.HasPrefix(row.Issuer, "https://login.microsoftonline.com") {
 		opts := providers.GetDefaultAzureOpOptions()
 		opts.Issuer = row.Issuer
 		opts.ClientID = row.ClientID
 		opts.CacheConfig = cacheCfg
+		opts.HttpClient = NewProviderHTTPClient()
 		return providers.NewAzureOpWithOptions(opts)
 	} else if row.Issuer == "https://token.actions.githubusercontent.com" {
 		return cachedActionsProviderVerifier{issuer: row.Issuer, publicKeyFinder: newCachedPublicKeyFinder(cacheCfg)}
@@ -113,6 +115,7 @@ func providerVerifierFromRow(row ProvidersRow, cacheCfg discover.DiscoveryCacheC
 		opts.Issuer = row.Issuer
 		opts.ClientID = row.ClientID
 		opts.CacheConfig = cacheCfg
+		opts.HttpClient = NewProviderHTTPClient()
 		return providers.NewGitlabOpWithOptions(opts)
 	}
 
@@ -120,6 +123,7 @@ func providerVerifierFromRow(row ProvidersRow, cacheCfg discover.DiscoveryCacheC
 	opts.Issuer = row.Issuer
 	opts.ClientID = row.ClientID
 	opts.CacheConfig = cacheCfg
+	opts.HttpClient = NewProviderHTTPClient()
 	return providers.NewGoogleOpWithOptions(opts)
 }
 
@@ -198,9 +202,10 @@ func (p cachedActionsProviderVerifier) VerifyIDToken(ctx context.Context, idt []
 }
 
 func newCachedPublicKeyFinder(cacheCfg discover.DiscoveryCacheConfig) *discover.PublicKeyFinder {
+	httpClient := NewProviderHTTPClient()
 	return &discover.PublicKeyFinder{
 		JwksFunc: func(ctx context.Context, issuer string) ([]byte, error) {
-			return discover.GetJwksByIssuer(ctx, issuer, nil)
+			return discover.GetJwksByIssuer(ctx, issuer, httpClient)
 		},
 		CacheConfig: cacheCfg,
 	}

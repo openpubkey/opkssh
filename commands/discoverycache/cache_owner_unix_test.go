@@ -22,6 +22,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/spf13/afero"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -31,4 +33,19 @@ func TestValidateCacheOwnerUID(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, validateCacheOwnerUID(path, info, os.Geteuid()))
 	require.ErrorContains(t, validateCacheOwnerUID(path, info, os.Geteuid()+1), "must be owned")
+}
+
+func TestValidateRejectsForeignOwnerEvenAsRoot(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("requires root to chown the test directory")
+	}
+	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0o700))
+	require.NoError(t, os.Chown(dir, 65534, -1))
+
+	cache := NewFilesystemDiscoveryCache(afero.NewOsFs(), dir)
+	require.ErrorContains(t, cache.Validate(), "must be owned by the verification user")
+
+	require.NoError(t, os.Chown(dir, 0, -1))
+	require.NoError(t, cache.Validate())
 }

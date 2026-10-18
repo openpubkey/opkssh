@@ -1,8 +1,27 @@
+// Copyright 2026 OpenPubkey
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package discoverycache
 
 import (
 	"context"
 	"fmt"
+	iofs "io/fs"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -39,8 +58,9 @@ func TestFilesystemDiscoveryCacheIgnoresAndCleansFutureEntries(t *testing.T) {
 	issuer := "https://issuer.example"
 	require.NoError(t, cache.Write(issuer, []byte("current")))
 
-	futureName := fmt.Sprintf("jwks-%019d-future", now.Add(time.Hour).UnixMilli())
-	require.NoError(t, afero.WriteFile(fs, cache.issuerDir(issuer)+"/"+futureName, []byte("future"), 0o640))
+	futurePath := filepath.Join(cache.issuerDir(issuer), jwksFileName([]byte("future")))
+	require.NoError(t, afero.WriteFile(fs, futurePath, []byte("future"), 0o640))
+	require.NoError(t, fs.Chtimes(futurePath, now.Add(time.Hour), now.Add(time.Hour)))
 
 	content, err := cache.Read(context.Background(), issuer, time.Minute)
 	require.NoError(t, err)
@@ -65,7 +85,7 @@ func TestFilesystemDiscoveryCacheHonorsCancelledContext(t *testing.T) {
 }
 
 func TestFilesystemDiscoveryCacheWrittenFilenameMatchesRegex(t *testing.T) {
-	// Guards against the Write filename format and the parsing regexes drifting
+	// Guards against the Write filename format and the parsing regex drifting
 	// apart, which would silently turn every entry into a permanent cache miss.
 	fs := afero.NewMemMapFs()
 	now := time.UnixMilli(1_700_000_000_000)
@@ -76,10 +96,122 @@ func TestFilesystemDiscoveryCacheWrittenFilenameMatchesRegex(t *testing.T) {
 	entries, err := afero.ReadDir(fs, cache.issuerDir(issuer))
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
+	require.Regexp(t, jwksFileRegex, entries[0].Name())
+	require.Equal(t, jwksFileName([]byte("keys")), entries[0].Name())
+	require.True(t, entries[0].ModTime().Equal(now))
+}
 
-	ts, ok := cacheTimestamp(entries[0].Name(), jwksFileRegex)
-	require.True(t, ok, "written filename %q did not match jwksFileRegex", entries[0].Name())
-	require.Equal(t, now.UnixMilli(), ts.UnixMilli())
+func TestFilesystemDiscoveryCacheUnchangedJWKSRefreshesModTime(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	now := time.UnixMilli(1_700_000_000_000)
+	cache := NewFilesystemDiscoveryCacheWithClock(func() time.Time { return now }, fs, "/cache")
+	issuer := "https://issuer.example"
+	dir := cache.issuerDir(issuer)
+
+	require.NoError(t, cache.Write(issuer, []byte("keys")))
+	now = now.Add(50 * time.Minute)
+	require.NoError(t, cache.Write(issuer, []byte("keys")))
+
+	entries, err := afero.ReadDir(fs, dir)
+	require.NoError(t, err)
+	require.Len(t, entries, 1, "an unchanged JWKS must not create a second file")
+	require.True(t, entries[0].ModTime().Equal(now), "an unchanged JWKS must count as freshly fetched")
+
+	// 50 minutes after the first fetch but 10 after the second: still fresh.
+	now = now.Add(10 * time.Minute)
+	content, err := cache.Read(context.Background(), issuer, time.Hour)
+	require.NoError(t, err)
+	require.Equal(t, []byte("keys"), content)
+}
+
+func TestFilesystemDiscoveryCacheChangedJWKSReplacesOldFile(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	now := time.UnixMilli(1_700_000_000_000)
+	cache := NewFilesystemDiscoveryCacheWithClock(func() time.Time { return now }, fs, "/cache")
+	issuer := "https://issuer.example"
+	other := "https://other.example"
+	dir := cache.issuerDir(issuer)
+
+	require.NoError(t, cache.Write(other, []byte("other")))
+	tmpPath := filepath.Join(dir, tmpFilePrefix+"inprogress")
+	require.NoError(t, afero.WriteFile(fs, tmpPath, []byte("partial"), 0o640))
+
+	for i := 0; i < 20; i++ {
+		require.NoError(t, cache.Write(issuer, []byte(fmt.Sprintf("keys-%d", i))))
+		now = now.Add(time.Second)
+	}
+
+	entries, err := afero.ReadDir(fs, dir)
+	require.NoError(t, err)
+	names := []string{}
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	require.ElementsMatch(t, []string{jwksFileName([]byte("keys-19")), tmpFilePrefix + "inprogress"}, names,
+		"only the newest JWKS and another process's in-progress write may remain")
+
+	content, err := cache.Read(context.Background(), issuer, time.Hour)
+	require.NoError(t, err)
+	require.Equal(t, []byte("keys-19"), content)
+	content, err = cache.Read(context.Background(), other, time.Hour)
+	require.NoError(t, err)
+	require.Equal(t, []byte("other"), content, "other issuers must not be affected")
+}
+
+func TestFilesystemDiscoveryCacheSameInstantWritesKeepLast(t *testing.T) {
+	// The clock does not advance, so every file gets the same modification
+	// time. Read must still return the JWKS written last.
+	fs := afero.NewMemMapFs()
+	now := time.UnixMilli(1_700_000_000_000)
+	cache := NewFilesystemDiscoveryCacheWithClock(func() time.Time { return now }, fs, "/cache")
+	issuer := "https://issuer.example"
+
+	for i := 0; i < 50; i++ {
+		want := []byte(fmt.Sprintf("keys-%d", i))
+		require.NoError(t, cache.Write(issuer, want))
+		got, err := cache.Read(context.Background(), issuer, time.Hour)
+		require.NoError(t, err)
+		require.Equal(t, want, got, "write %d", i)
+	}
+}
+
+func TestFilesystemDiscoveryCacheRewritesCorruptedFile(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	now := time.UnixMilli(1_700_000_000_000)
+	cache := NewFilesystemDiscoveryCacheWithClock(func() time.Time { return now }, fs, "/cache")
+	issuer := "https://issuer.example"
+	require.NoError(t, cache.Write(issuer, []byte(`{"keys":[]}`)))
+
+	path := filepath.Join(cache.issuerDir(issuer), jwksFileName([]byte(`{"keys":[]}`)))
+	require.NoError(t, afero.WriteFile(fs, path, []byte(`{"ke`), 0o640))
+
+	require.NoError(t, cache.Write(issuer, []byte(`{"keys":[]}`)))
+	content, err := afero.ReadFile(fs, path)
+	require.NoError(t, err)
+	require.Equal(t, []byte(`{"keys":[]}`), content, "a corrupted file must be rewritten")
+}
+
+// vanishingFs makes every JWKS file unreadable, as if each were deleted
+// between listing and reading by a concurrent Write.
+type vanishingFs struct{ afero.Fs }
+
+func (v vanishingFs) Open(name string) (afero.File, error) {
+	if strings.HasPrefix(filepath.Base(name), "jwks-") {
+		return nil, iofs.ErrNotExist
+	}
+	return v.Fs.Open(name)
+}
+
+func TestFilesystemDiscoveryCacheVanishedFileIsCacheMiss(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	now := time.UnixMilli(1_700_000_000_000)
+	cache := NewFilesystemDiscoveryCacheWithClock(func() time.Time { return now }, fs, "/cache")
+	issuer := "https://issuer.example"
+	require.NoError(t, cache.Write(issuer, []byte("keys")))
+
+	reader := NewFilesystemDiscoveryCacheWithClock(cache.Now, vanishingFs{Fs: fs}, "/cache")
+	_, err := reader.Read(context.Background(), issuer, time.Hour)
+	require.ErrorIs(t, err, discover.ErrCacheMiss, "a vanished file must be a cache miss, not an error")
 }
 
 func TestFilesystemDiscoveryCacheInvalidateDoesNotDelete(t *testing.T) {

@@ -43,6 +43,7 @@ opkssh verify <principal> <cert> <key_type> [flags]
 ### Options
 
 ```
+      --cache string         Persistent JWKS cache: "auto" uses the cache section of the server config, "on" enables the cache even if the config doesn't (default directory /var/cache/opkssh), "off" disables it. Useful for debugging. (default "auto")
       --config-path string   Path to the server config file. Default: /etc/opk/config.yml (default "/etc/opk/config.yml")
   -h, --help                 help for verify
 ```

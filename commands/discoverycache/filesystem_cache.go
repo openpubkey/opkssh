@@ -24,19 +24,33 @@ import (
 	iofs "io/fs"
 	"path/filepath"
 	"regexp"
-	"strconv"
+	"strings"
 	"time"
 
 	"github.com/openpubkey/openpubkey/discover"
 	"github.com/spf13/afero"
 )
 
-var jwksFileRegex = regexp.MustCompile(`^jwks-([0-9]{19})-[A-Za-z0-9._-]+$`)
-var tmpFileRegex = regexp.MustCompile(`^tmp-([0-9]{19})-[A-Za-z0-9._-]+$`)
+var jwksFileRegex = regexp.MustCompile(`^jwks-[0-9a-f]{64}$`)
 
-// FilesystemDiscoveryCache stores immutable JWKS snapshots below BaseDir. Cache
-// entries are only removed by Expire so parallel verifier invocations never
-// delete an entry another invocation may be reading.
+const tmpFilePrefix = "tmp-"
+
+// FilesystemDiscoveryCache stores JWKS documents below BaseDir, in one
+// directory per issuer.
+//
+// Each file is named after the SHA-256 of its contents, and its modification
+// time records when that JWKS was last fetched. Fetching an unchanged JWKS
+// atomically replaces the existing file with an identical one, which only
+// refreshes its modification time. The issuer's other files are deleted only
+// when the provider's keys change. This keeps one file per issuer however often JWKS are fetched
+// (for example when clients offer tokens with unknown key IDs, which forces a
+// fresh fetch), and a file is only deleted when it is genuinely out of date.
+// If a concurrent Read loses that race, it reports a cache miss and the
+// reader fetches the JWKS again.
+//
+// Expire (opkssh cache clean) removes what Write leaves behind: interrupted
+// temporary files, future-dated files and issuers that are no longer
+// configured.
 type FilesystemDiscoveryCache struct {
 	Now     func() time.Time
 	Fs      afero.Fs
@@ -49,6 +63,10 @@ func NewFilesystemDiscoveryCache(fs afero.Fs, baseDir string) *FilesystemDiscove
 
 func NewFilesystemDiscoveryCacheWithClock(now func() time.Time, fs afero.Fs, baseDir string) *FilesystemDiscoveryCache {
 	return &FilesystemDiscoveryCache{Now: now, Fs: fs, BaseDir: baseDir}
+}
+
+func jwksFileName(value []byte) string {
+	return fmt.Sprintf("jwks-%x", sha256.Sum256(value))
 }
 
 func (c *FilesystemDiscoveryCache) issuerDir(issuer string) string {
@@ -75,7 +93,10 @@ func (c *FilesystemDiscoveryCache) Validate() error {
 	if perm := info.Mode().Perm(); perm&0o022 != 0 {
 		return fmt.Errorf("cache base_dir %q must not be group- or world-writable, got permissions %#o", c.BaseDir, perm)
 	}
-	return validateCacheOwner(c.BaseDir, info)
+	if err := validateCacheOwner(c.BaseDir, info); err != nil {
+		return err
+	}
+	return validateCacheLabel(c.BaseDir)
 }
 
 // Check verifies that an already-provisioned cache directory is safe and can
@@ -89,18 +110,8 @@ func (c *FilesystemDiscoveryCache) Check() error {
 	return c.Validate()
 }
 
-func cacheTimestamp(fileName string, expression *regexp.Regexp) (time.Time, bool) {
-	match := expression.FindStringSubmatch(fileName)
-	if match == nil {
-		return time.Time{}, false
-	}
-	millis, err := strconv.ParseInt(match[1], 10, 64)
-	if err != nil {
-		return time.Time{}, false
-	}
-	return time.UnixMilli(millis), true
-}
-
+// Read returns the most recently fetched JWKS for issuer if it was fetched no
+// more than maxAge ago.
 func (c *FilesystemDiscoveryCache) Read(ctx context.Context, issuer string, maxAge time.Duration) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -113,50 +124,43 @@ func (c *FilesystemDiscoveryCache) Read(ctx context.Context, issuer string, maxA
 	}
 
 	now := c.Now()
-	for i := len(entries) - 1; i >= 0; i-- {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-
-		entry := entries[i]
-		if entry.IsDir() {
+	var newest iofs.FileInfo
+	for _, entry := range entries {
+		if !entry.Mode().IsRegular() || !jwksFileRegex.MatchString(entry.Name()) {
 			continue
 		}
-		timestamp, ok := cacheTimestamp(entry.Name(), jwksFileRegex)
-		if !ok {
+		if entry.ModTime().After(now) {
+			// A future modification time can result from clock skew or
+			// tampering. It must not extend the lifetime of an old key set.
 			continue
 		}
-		if timestamp.After(now) {
-			// A future entry can result from clock skew or tampering. It must
-			// not extend the lifetime of an old key set.
-			continue
+		if newest == nil || entry.ModTime().After(newest.ModTime()) {
+			newest = entry
 		}
-		if now.Sub(timestamp) > maxAge {
-			// Entries are timestamp-sorted, so every remaining valid cache
-			// entry is at least as old as this one.
-			return nil, discover.ErrCacheMiss
-		}
-
-		content, err := afero.ReadFile(c.Fs, filepath.Join(targetDir, entry.Name()))
-		if err != nil {
-			// Ignore a concurrently removed or corrupt snapshot and try an
-			// older usable entry.
-			continue
-		}
-		return content, nil
+	}
+	if newest == nil || now.Sub(newest.ModTime()) > maxAge {
+		return nil, discover.ErrCacheMiss
 	}
 
-	return nil, discover.ErrCacheMiss
+	content, err := afero.ReadFile(c.Fs, filepath.Join(targetDir, newest.Name()))
+	if err != nil {
+		// Most likely a concurrent Write replaced it with a newer JWKS.
+		return nil, discover.ErrCacheMiss
+	}
+	return content, nil
 }
 
+// Write records that value was just fetched for issuer.
 func (c *FilesystemDiscoveryCache) Write(issuer string, value []byte) error {
 	targetDir := c.issuerDir(issuer)
 	if err := c.Fs.MkdirAll(targetDir, 0o750); err != nil {
 		return err
 	}
+	name := jwksFileName(value)
+	path := filepath.Join(targetDir, name)
+	now := c.Now()
 
-	now := c.Now().UnixMilli()
-	tmp, err := afero.TempFile(c.Fs, targetDir, fmt.Sprintf("tmp-%019d-", now))
+	tmp, err := afero.TempFile(c.Fs, targetDir, tmpFilePrefix)
 	if err != nil {
 		return err
 	}
@@ -174,20 +178,49 @@ func (c *FilesystemDiscoveryCache) Write(issuer string, value []byte) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-
-	finalName := filepath.Join(targetDir, fmt.Sprintf("jwks-%019d-%s", now, filepath.Base(tmpName)))
-	return c.Fs.Rename(tmpName, finalName)
+	if err := c.Fs.Chtimes(tmpName, now, now); err != nil {
+		return err
+	}
+	// Rename is atomic: a reader sees either the old file or the complete
+	// new one, never a missing file. The JWKS is usually unchanged since
+	// the last fetch, so this replaces a file with identical contents and
+	// only its modification time changes.
+	if err := c.Fs.Rename(tmpName, path); err != nil {
+		return err
+	}
+	c.removeOtherFiles(targetDir, name)
+	return nil
 }
 
-// Invalidate intentionally does not remove persistent cache entries. Verification
-// processes may run concurrently; opkssh cache clean owns deletion instead.
+// removeOtherFiles deletes the issuer's JWKS files other than keep. They hold
+// key sets the provider no longer serves. Temporary files are left for
+// Expire, as another process may still be writing them. Errors are ignored: a
+// file that is not removed here is never newer than keep, so Read does not
+// use it, and Expire removes it once it is old enough.
+func (c *FilesystemDiscoveryCache) removeOtherFiles(dir, keep string) {
+	entries, err := afero.ReadDir(c.Fs, dir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if name == keep || !entry.Mode().IsRegular() || !jwksFileRegex.MatchString(name) {
+			continue
+		}
+		_ = c.Fs.Remove(filepath.Join(dir, name))
+	}
+}
+
+// Invalidate is a no-op. openpubkey does not call it; when a cached key fails
+// verification it fetches the JWKS again, and the Write of that fetch replaces
+// the out-of-date file.
 func (c *FilesystemDiscoveryCache) Invalidate(context.Context, string) error {
 	return nil
 }
 
-// Expire deletes cache snapshots and interrupted temporary files older than
-// maxAge. Future-dated files are removed because they would otherwise evade
-// expiry after a system clock correction.
+// Expire deletes JWKS files fetched more than maxAge ago and interrupted
+// temporary files older than maxAge. Future-dated files are removed because
+// they would otherwise evade expiry after a system clock correction.
 func (c *FilesystemDiscoveryCache) Expire(ctx context.Context, maxAge time.Duration) (int, error) {
 	if err := ctx.Err(); err != nil {
 		return 0, err
@@ -223,17 +256,15 @@ func (c *FilesystemDiscoveryCache) Expire(ctx context.Context, maxAge time.Durat
 			if err := ctx.Err(); err != nil {
 				return deleted, err
 			}
-			if entry.IsDir() {
+			name := entry.Name()
+			if !entry.Mode().IsRegular() || (!jwksFileRegex.MatchString(name) && !strings.HasPrefix(name, tmpFilePrefix)) {
 				continue
 			}
-			timestamp, ok := cacheTimestamp(entry.Name(), jwksFileRegex)
-			if !ok {
-				timestamp, ok = cacheTimestamp(entry.Name(), tmpFileRegex)
-			}
-			if !ok || (!timestamp.After(now) && now.Sub(timestamp) <= maxAge) {
+			modTime := entry.ModTime()
+			if !modTime.After(now) && now.Sub(modTime) <= maxAge {
 				continue
 			}
-			if err := c.Fs.Remove(filepath.Join(targetDir, entry.Name())); err != nil && !errors.Is(err, iofs.ErrNotExist) {
+			if err := c.Fs.Remove(filepath.Join(targetDir, name)); err != nil && !errors.Is(err, iofs.ErrNotExist) {
 				return deleted, err
 			}
 			deleted++

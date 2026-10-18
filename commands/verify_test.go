@@ -34,6 +34,7 @@ import (
 	"github.com/openpubkey/openpubkey/providers/mocks"
 	"github.com/openpubkey/openpubkey/util"
 	"github.com/openpubkey/openpubkey/verifier"
+	"github.com/openpubkey/opkssh/commands/config"
 	"github.com/openpubkey/opkssh/policy"
 	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/openpubkey/opkssh/sshcert"
@@ -400,6 +401,7 @@ env_vars:
 		owner       string
 		group       string
 		errorString string
+		missing     bool
 	}{
 		{
 			name:        "Happy Path with custom service group",
@@ -410,12 +412,14 @@ env_vars:
 			errorString: "",
 		},
 		{
+			// The config file is optional, so a missing file is an empty config.
 			name:        "Missing config",
 			configFile:  map[string]string{"wrong-filename.yml": configContent},
 			permission:  0640,
 			owner:       "root",
 			group:       "opksshuser",
-			errorString: "file does not exist",
+			errorString: "",
+			missing:     true,
 		},
 		{
 			name:        "Corrupted file",
@@ -454,11 +458,18 @@ env_vars:
 						return []byte(tt.owner + " " + tt.group), nil
 					},
 				},
+				// The verify process's own group, as defaultConfigGroups
+				// would report for an AuthorizedKeysCommandUser of ubuntu.
+				configGroups: []string{"opksshuser", "ubuntu"},
 			}
-			_, err := ver.ReadFromServerConfig()
+			serverConfig, err := ver.ReadFromServerConfig()
 
 			if tt.errorString != "" {
 				require.ErrorContains(t, err, tt.errorString)
+			} else if tt.missing {
+				require.NoError(t, err)
+				require.Equal(t, &config.ServerConfig{}, serverConfig)
+				require.Empty(t, os.Getenv("OPKSSH_TEST_EXAMPLE_VAR1"))
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, "ABC", os.Getenv("OPKSSH_TEST_EXAMPLE_VAR1"))

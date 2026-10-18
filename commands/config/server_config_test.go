@@ -46,3 +46,54 @@ func TestCacheConfigDiscoveryCacheConfigRejectsInsecureBaseDir(t *testing.T) {
 	_, err = cfg.Cache.DiscoveryCacheConfig(fs)
 	require.ErrorContains(t, err, "group- or world-writable")
 }
+
+func TestCacheConfigDiscoveryCacheConfigRejectsRelativeBaseDir(t *testing.T) {
+	cfg, err := NewServerConfig([]byte("cache:\n  base_dir: relative/dir\n"))
+	require.NoError(t, err)
+
+	_, err = cfg.Cache.DiscoveryCacheConfig(afero.NewMemMapFs())
+	require.ErrorContains(t, err, "must be an absolute path")
+}
+
+func TestCacheConfigWithMode(t *testing.T) {
+	configured := CacheConfig{BaseDir: "/srv/opkssh-cache", StandardMaxAge: 30 * time.Minute, FallbackMaxAge: 3 * time.Hour}
+
+	tests := []struct {
+		name    string
+		in      CacheConfig
+		mode    string
+		want    CacheConfig
+		wantErr string
+	}{
+		{name: "auto keeps the config", in: configured, mode: CacheModeAuto, want: configured},
+		{name: "empty mode is auto", in: configured, mode: "", want: configured},
+		{name: "auto with no cache stays off", in: CacheConfig{}, mode: CacheModeAuto, want: CacheConfig{}},
+		{name: "off ignores the config", in: configured, mode: CacheModeOff, want: CacheConfig{}},
+		{name: "on keeps configured settings", in: configured, mode: CacheModeOn, want: configured},
+		{name: "on without config uses the default dir", in: CacheConfig{}, mode: CacheModeOn, want: CacheConfig{BaseDir: DefaultCacheBaseDir}},
+		{name: "on keeps configured ages without base_dir", in: CacheConfig{StandardMaxAge: time.Minute}, mode: CacheModeOn,
+			want: CacheConfig{BaseDir: DefaultCacheBaseDir, StandardMaxAge: time.Minute}},
+		{name: "invalid mode", in: configured, mode: "yes", wantErr: `invalid --cache value "yes": want auto, on or off`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.in.WithMode(tt.mode)
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestCacheConfigOffDisablesDiscoveryCache(t *testing.T) {
+	cfg, err := NewServerConfig([]byte("cache:\n  base_dir: /var/cache/opkssh\n"))
+	require.NoError(t, err)
+	off, err := cfg.Cache.WithMode(CacheModeOff)
+	require.NoError(t, err)
+	cacheCfg, err := off.DiscoveryCacheConfig(afero.NewMemMapFs())
+	require.NoError(t, err)
+	require.Nil(t, cacheCfg.Cache)
+}

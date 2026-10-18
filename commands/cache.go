@@ -24,10 +24,10 @@ import (
 	"time"
 
 	"github.com/openpubkey/openpubkey/discover"
-	"github.com/openpubkey/openpubkey/pktoken"
 	"github.com/openpubkey/opkssh/commands/config"
 	"github.com/openpubkey/opkssh/commands/discoverycache"
 	"github.com/openpubkey/opkssh/policy"
+	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 )
@@ -115,11 +115,10 @@ Run this command periodically as the verification user to bound cache disk use.`
 }
 
 func (c *CacheCmd) loadServerConfig() (*config.ServerConfig, error) {
-	verifyCmd := NewVerifyCmd(func(string, *pktoken.PKToken, string, string, string, policy.DenyList, []string) error {
-		return nil
-	}, c.ConfigPathArg)
-	c.fs = verifyCmd.Fs
-	return verifyCmd.ReadFromServerConfig()
+	if c.fs == nil {
+		c.fs = afero.NewOsFs()
+	}
+	return loadServerConfig(c.fs, *files.NewPermsChecker(c.fs), c.ConfigPathArg, defaultConfigGroups())
 }
 
 // ErrNoCacheConfigured is returned by expire when no persistent JWKS cache is

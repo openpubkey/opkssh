@@ -84,7 +84,7 @@ func testSELinuxPolicyInstallation(t *testing.T, tt selinuxPolicyTest) {
 		}
 	})
 
-	runSELinuxContainerCommand(t, container, "dnf install -y checkpolicy policycoreutils selinux-policy-devel")
+	runSELinuxContainerCommand(t, container, "dnf install -y checkpolicy policycoreutils selinux-policy-devel policycoreutils-python-utils setools-console")
 
 	for _, source := range []string{"opkssh.te", "scripts/install-linux.sh"} {
 		err := container.CopyFileToContainer(
@@ -112,6 +112,63 @@ INSTALL_VERSION=local
 output=$(check_selinux 2>&1)
 echo "$output"
 echo "$output" | grep -Fq 'Installed module for ` + tt.expectedPolicyType + `'
+`
+	runSELinuxContainerCommand(t, container, script)
+
+	testSELinuxCachePolicy(t, container, tt.expectedPolicyType)
+}
+
+// testSELinuxCachePolicy provisions the JWKS cache with the installer against
+// the module installed above, then checks the compiled policy: the cache
+// directory and every file below it must get the opkssh_cache_t label, and
+// the SSH daemon domain that runs opkssh verify must be allowed every
+// operation the cache performs on it. semanage and sesearch run for real
+// against the container's policy store; only restorecon, which needs an
+// SELinux kernel, and the preflight, which needs the opkssh binary, are
+// replaced.
+func testSELinuxCachePolicy(t *testing.T, container testcontainers.Container, domain string) {
+	script := `
+set -euo pipefail
+export SHUNIT_RUNNING=1
+getenforce() { echo Enforcing; }
+restorecon() { echo "restorecon $*"; }
+runuser() { echo "runuser $*"; }
+systemd_running() { return 1; }
+systemctl() { echo "systemctl $*"; }
+source /app/install-linux.sh
+getent group opksshuser >/dev/null || groupadd -r opksshuser
+getent passwd opksshuser >/dev/null || useradd -r -g opksshuser opksshuser
+mkdir -p /etc/opk /tmp/systemd
+CACHE_DIR=/var/cache/opkssh
+configure_cache /etc /tmp/systemd
+
+echo "--- file contexts"
+semanage fcontext -l > /tmp/fcontexts
+grep -F '/var/cache/opkssh(/.*)?' /tmp/fcontexts | grep opkssh_cache_t
+for path in /var/cache/opkssh /var/cache/opkssh/0123abcd/jwks /var/cache/opkssh/0123abcd/jwks/jwks-0123abcd /var/cache/opkssh/0123abcd/jwks/tmp-123; do
+    context=$(matchpathcon -n "$path")
+    echo "$path $context"
+    [[ "$context" == *:opkssh_cache_t:* ]]
+done
+
+policy=$(ls /etc/selinux/targeted/policy/policy.* | sort -V | tail -n 1)
+allowed() {
+    # sesearch prints the rules granting the permission, including rules
+    # granted through attributes such as file_type.
+    [[ -n "$(sesearch -A -s ` + domain + ` -t "$1" -c "$2" -p "$3" "$policy")" ]]
+}
+echo "--- ` + domain + ` permissions on opkssh_cache_t ($policy)"
+for perm in add_name create getattr open read remove_name search setattr write; do
+    allowed opkssh_cache_t dir "$perm" || { echo "missing dir $perm"; exit 1; }
+done
+for perm in create getattr open read rename setattr unlink write; do
+    allowed opkssh_cache_t file "$perm" || { echo "missing file $perm"; exit 1; }
+done
+echo "--- without the label, the cache is not writable"
+if allowed var_t file write; then
+    echo "` + domain + ` can write var_t files; this test no longer shows the label is needed"
+    exit 1
+fi
 `
 	runSELinuxContainerCommand(t, container, script)
 }
