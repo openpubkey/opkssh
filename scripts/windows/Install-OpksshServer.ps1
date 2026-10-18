@@ -549,6 +549,7 @@ https://issuer.hello.coop app_xejobTKEsDNSRd5vofKB2iay_2rN 24h
         if ($PSCmdlet.ShouldProcess($providersPath, "Create providers file")) {
             [System.IO.File]::WriteAllText($providersPath, $providersContent, [System.Text.UTF8Encoding]::new($false))
             Write-Verbose "  Created file: providers"
+            $script:DefaultProvidersWritten = $true
         }
     } else {
         $existingContent = Get-Content $providersPath -Raw
@@ -979,6 +980,7 @@ function Install-OpksshServer {
         
         # Step 7: Create configuration
         Write-Host "[7/11] Creating configuration..." -ForegroundColor Yellow
+        $script:DefaultProvidersWritten = $false
         New-OpksshConfiguration -ConfigPath $ConfigPath -AuthCmdUser $AuthCmdUser | Out-Null
         Write-Host "  Configuration: $ConfigPath" -ForegroundColor Green
         Write-Host ""
@@ -1062,6 +1064,14 @@ function Install-OpksshServer {
         if ($uninstallPath) {
             Write-Host "  3. To uninstall opkssh:" -ForegroundColor White
             Write-Host "       & '$uninstallPath'" -ForegroundColor Gray
+            Write-Host ""
+        }
+
+        if ($script:DefaultProvidersWritten) {
+            Write-Host "Note: $(Join-Path $ConfigPath 'providers') uses the default client IDs, which are intended for testing" -ForegroundColor Yellow
+            Write-Host "  and should not be used in production. 'opkssh audit' reports them as warnings." -ForegroundColor Yellow
+            Write-Host "  To use your own client IDs, see:" -ForegroundColor Yellow
+            Write-Host "    https://github.com/openpubkey/opkssh/blob/main/docs/audit.md#default-client-ids" -ForegroundColor Gray
             Write-Host ""
         }
 

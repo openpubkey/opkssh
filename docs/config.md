@@ -128,14 +128,17 @@ The client ID must match the aud (audience) claim in the PK Token.
 
 ### Examples
 
-The file lives at `/etc/opk/providers`. The default values are:
+The file lives at `/etc/opk/providers`. The installers write these default values:
 
 ```bash
 # Issuer Client-ID expiration-policy 
 https://accounts.google.com 206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com 24h
 https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0 096ce0a3-5e72-4da8-9c86-12924b294a01 24h
 https://gitlab.com 8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923 24h
+https://issuer.hello.coop app_xejobTKEsDNSRd5vofKB2iay_2rN 24h
 ```
+
+These default client IDs are intended for testing and should not be used in production: register your own client IDs for production (see [Default client IDs](audit.md#default-client-ids)).
 
 ## Authorized identities files: `/etc/opk/auth_id` and `/home/{USER}/.opk/auth_id` (Linux) or `%ProgramData%\opk\auth_id` (Windows)
 

@@ -402,6 +402,7 @@ The audit command checks that:
   - Each issuer in policy files is defined in the providers file
   - The protocol (http:// or https://) exactly matches between policy and provider files
   - The auth_id policy files do not throw parsing errors
+  - If the providers file uses one of opkssh's default client IDs, these client IDs are intended for testing (reported as a warning)
 
 Results are reported with the following status:
   SUCCESS  - Entry is valid

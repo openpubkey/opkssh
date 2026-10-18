@@ -117,6 +117,8 @@ GITHUB_REPO="${OPKSSH_INSTALL_GITHUB_REPO:-openpubkey/opkssh}"
 # Global variables used by several functions
 OS_TYPE=""
 CPU_ARCH=""
+DEFAULT_PROVIDERS_WRITTEN=false
+DEFAULT_PROVIDERS_NOTICE="The default client IDs are intended for testing and should not be used in production, and 'opkssh audit' reports them as warnings. To use your own client IDs, see https://github.com/openpubkey/opkssh/blob/main/docs/audit.md#default-client-ids"
 
 # file_exists
 # check is file exists, helpers that wrap real commands so it can be
@@ -532,7 +534,7 @@ install_selinux_module() {
 # Returns:
 #   0 if SELinux is disabled or if context is correctly
 check_selinux() {
-    local te_tmp te_session_tmp mod_tmp pp_tmp version use_session_variant
+    local te_tmp te_session_tmp mod_tmp pp_tmp version
     te_tmp="/tmp/opkssh.te"
     te_session_tmp="/tmp/opkssh.session.te"
     mod_tmp="/tmp/opkssh.mod" # SELinux requires that modules have the same file name as the module name
@@ -544,7 +546,6 @@ check_selinux() {
             echo "  Restoring context for $INSTALL_DIR/$BINARY_NAME..."
             restorecon "$INSTALL_DIR/$BINARY_NAME"
 
-            use_session_variant=false
             if [[ -n "$LOCAL_TE_FILE" ]]; then
                 echo "  Using local TE-file"
                 cp "$LOCAL_TE_FILE" "$te_tmp"
@@ -556,32 +557,25 @@ check_selinux() {
                 fi
                 echo "  Downloading TE-file"
                 wget -q -O "$te_tmp" "https://raw.githubusercontent.com/${GITHUB_REPO}/refs/tags/${version}/opkssh.te"
-                use_session_variant=true
             fi
 
             echo "  Compiling SELinux module..."
-            if [[ "$use_session_variant" == true ]]; then
-                # Some policies run AuthorizedKeysCommand in sshd_session_t,
-                # not sshd_t. Try that first; if the loaded policy lacks the
-                # type, the module fails to load and we fall back to sshd_t.
-                sed 's/sshd_t/sshd_session_t/g' "$te_tmp" > "$te_session_tmp"
-                if install_selinux_module "$te_session_tmp" "$mod_tmp" "$pp_tmp"; then
-                    echo "  Installed module for sshd_session_t"
-                elif install_selinux_module "$te_tmp" "$mod_tmp" "$pp_tmp"; then
-                    echo "  Installed module for sshd_t"
-                else
-                    rm -f "$te_tmp" "$te_session_tmp" "$mod_tmp" "$pp_tmp"
-                    echo "Failed to compile/install the opkssh SELinux module" >&2
-                    return 1
-                fi
-                rm -f "$te_session_tmp"
+            # Some policies run AuthorizedKeysCommand in sshd_session_t,
+            # not sshd_t. Try that first; if the loaded policy lacks the
+            # type, the module fails to load and we fall back to sshd_t.
+            # This applies to local TE-files too: opkssh.te is written for
+            # sshd_t.
+            sed 's/sshd_t/sshd_session_t/g' "$te_tmp" > "$te_session_tmp"
+            if install_selinux_module "$te_session_tmp" "$mod_tmp" "$pp_tmp"; then
+                echo "  Installed module for sshd_session_t"
+            elif install_selinux_module "$te_tmp" "$mod_tmp" "$pp_tmp"; then
+                echo "  Installed module for sshd_t"
             else
-                if ! install_selinux_module "$te_tmp" "$mod_tmp" "$pp_tmp"; then
-                    rm -f "$te_tmp" "$mod_tmp" "$pp_tmp"
-                    echo "Failed to compile/install the opkssh SELinux module" >&2
-                    return 1
-                fi
+                rm -f "$te_tmp" "$te_session_tmp" "$mod_tmp" "$pp_tmp"
+                echo "Failed to compile/install the opkssh SELinux module" >&2
+                return 1
             fi
+            rm -f "$te_session_tmp"
 
             rm -f "$te_tmp" "$mod_tmp" "$pp_tmp"
             if [[ "$HOME_POLICY" == true ]]; then
@@ -611,6 +605,7 @@ check_selinux() {
 #
 # Outputs:
 #   Writes to stdout the configration progress
+#   Sets global variable DEFAULT_PROVIDERS_WRITTEN to true if it wrote the default providers
 #
 # Returns:
 #   0
@@ -664,6 +659,9 @@ configure_opkssh() {
             echo "$provider_gitlab"
             echo "$provider_hello"
         } >> "$etc_path/opk/providers"
+        DEFAULT_PROVIDERS_WRITTEN=true
+        echo "  Wrote the default providers to $etc_path/opk/providers"
+        echo "  $DEFAULT_PROVIDERS_NOTICE"
     fi
 }
 
@@ -795,6 +793,7 @@ configure_sudo() {
 #
 # Output:
 #   Writes to stdout that installation is successful
+#   Writes to stdout a notice about the default client IDs if DEFAULT_PROVIDERS_WRITTEN is true
 #   Writes installation debug information to /var/log/opkssh.log
 #
 # Returns:
@@ -812,6 +811,10 @@ log_opkssh_installation() {
     echo "Successfully installed opkssh (INSTALLED_ON: $INSTALLED_ON, VERSION_INSTALLED: $VERSION_INSTALLED, INSTALL_VERSION: $INSTALL_VERSION, LOCAL_INSTALL_FILE: $LOCAL_INSTALL_FILE, HOME_POLICY: $HOME_POLICY, RESTART_SSH: $RESTART_SSH)" >> "$log_file"
 
     echo "Installation successful! Run '$BINARY_NAME' to use it."
+    if [[ "$DEFAULT_PROVIDERS_WRITTEN" == true ]]; then
+        echo
+        echo "Note: $DEFAULT_PROVIDERS_NOTICE"
+    fi
 }
 
 # main
