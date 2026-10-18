@@ -548,7 +548,7 @@ install_selinux_module() {
 # Returns:
 #   0 if SELinux is disabled or if context is correctly
 check_selinux() {
-    local te_tmp te_session_tmp mod_tmp pp_tmp version use_session_variant
+    local te_tmp te_session_tmp mod_tmp pp_tmp version
     te_tmp="/tmp/opkssh.te"
     te_session_tmp="/tmp/opkssh.session.te"
     mod_tmp="/tmp/opkssh.mod" # SELinux requires that modules have the same file name as the module name
@@ -560,7 +560,6 @@ check_selinux() {
             echo "  Restoring context for $INSTALL_DIR/$BINARY_NAME..."
             restorecon "$INSTALL_DIR/$BINARY_NAME"
 
-            use_session_variant=false
             if [[ -n "$LOCAL_TE_FILE" ]]; then
                 echo "  Using local TE-file"
                 cp "$LOCAL_TE_FILE" "$te_tmp"
@@ -572,32 +571,25 @@ check_selinux() {
                 fi
                 echo "  Downloading TE-file"
                 wget -q -O "$te_tmp" "https://raw.githubusercontent.com/${GITHUB_REPO}/refs/tags/${version}/opkssh.te"
-                use_session_variant=true
             fi
 
             echo "  Compiling SELinux module..."
-            if [[ "$use_session_variant" == true ]]; then
-                # Some policies run AuthorizedKeysCommand in sshd_session_t,
-                # not sshd_t. Try that first; if the loaded policy lacks the
-                # type, the module fails to load and we fall back to sshd_t.
-                sed 's/sshd_t/sshd_session_t/g' "$te_tmp" > "$te_session_tmp"
-                if install_selinux_module "$te_session_tmp" "$mod_tmp" "$pp_tmp"; then
-                    echo "  Installed module for sshd_session_t"
-                elif install_selinux_module "$te_tmp" "$mod_tmp" "$pp_tmp"; then
-                    echo "  Installed module for sshd_t"
-                else
-                    rm -f "$te_tmp" "$te_session_tmp" "$mod_tmp" "$pp_tmp"
-                    echo "Failed to compile/install the opkssh SELinux module" >&2
-                    return 1
-                fi
-                rm -f "$te_session_tmp"
+            # Some policies run AuthorizedKeysCommand in sshd_session_t,
+            # not sshd_t. Try that first; if the loaded policy lacks the
+            # type, the module fails to load and we fall back to sshd_t.
+            # This applies to local TE-files too: opkssh.te is written for
+            # sshd_t.
+            sed 's/sshd_t/sshd_session_t/g' "$te_tmp" > "$te_session_tmp"
+            if install_selinux_module "$te_session_tmp" "$mod_tmp" "$pp_tmp"; then
+                echo "  Installed module for sshd_session_t"
+            elif install_selinux_module "$te_tmp" "$mod_tmp" "$pp_tmp"; then
+                echo "  Installed module for sshd_t"
             else
-                if ! install_selinux_module "$te_tmp" "$mod_tmp" "$pp_tmp"; then
-                    rm -f "$te_tmp" "$mod_tmp" "$pp_tmp"
-                    echo "Failed to compile/install the opkssh SELinux module" >&2
-                    return 1
-                fi
+                rm -f "$te_tmp" "$te_session_tmp" "$mod_tmp" "$pp_tmp"
+                echo "Failed to compile/install the opkssh SELinux module" >&2
+                return 1
             fi
+            rm -f "$te_session_tmp"
 
             rm -f "$te_tmp" "$mod_tmp" "$pp_tmp"
             if [[ "$HOME_POLICY" == true ]]; then

@@ -30,11 +30,11 @@ type selinuxPolicyTest struct {
 	expectedPolicyType string
 }
 
-// TestSELinuxPolicyInstallation verifies that the installer generates a
-// loadable policy module for both SSH daemon domains used by supported
-// SELinux policies. The containers do not need SELinux enforcing on the host:
-// semodule validates and links the module against each container's policy
-// store.
+// TestSELinuxPolicyInstallation verifies that the installer turns a local
+// opkssh.te (OPKSSH_LOCAL_TE_FILE) into a loadable policy module for both SSH
+// daemon domains used by supported SELinux policies. The containers do not
+// need SELinux enforcing on the host: semodule validates and links the
+// module against each container's policy store.
 func TestSELinuxPolicyInstallation(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Docker-based integration tests are not supported on Windows")
@@ -99,16 +99,19 @@ func testSELinuxPolicyInstallation(t *testing.T, tt selinuxPolicyTest) {
 	// Only commands requiring an enforcing kernel are replaced; checkmodule,
 	// semodule_package, and semodule are real and link against the
 	// container's actual policy store, so Stream 9 (no sshd_session_t type)
-	// exercises the fallback path and Stream 10 loads it directly.
+	// exercises the fallback path and Stream 10 loads it directly. The
+	// installer gets the repository's opkssh.te through OPKSSH_LOCAL_TE_FILE,
+	// the option for installing a local build; wget fails so that nothing
+	// is downloaded.
 	script := `
 set -euo pipefail
 export SHUNIT_RUNNING=1
+export OPKSSH_LOCAL_TE_FILE=/app/opkssh.te
 getenforce() { echo Enforcing; }
 restorecon() { :; }
 setsebool() { :; }
-wget() { cp /app/opkssh.te "$3"; }
+wget() { echo "unexpected download: wget $*" >&2; return 1; }
 source /app/install-linux.sh
-INSTALL_VERSION=local
 output=$(check_selinux 2>&1)
 echo "$output"
 echo "$output" | grep -Fq 'Installed module for ` + tt.expectedPolicyType + `'
