@@ -105,14 +105,36 @@ It also supports a `deny_users` field. This field is a YAML array of strings, wh
 
 Both `deny_emails` and `deny_users` are evaluated before policy.
 
+### JWKS cache
+
+`opkssh verify` can cache each provider's JWKS on disk. Most logins then don't contact the provider, and logins keep working for a while if the provider is unreachable. The cache is off by default; to turn it on, add:
+
+```yml
+cache:
+  base_dir: /var/cache/opkssh
+  max_age: 1h
+  fallback_max_age: 2h
+```
+
+`base_dir` must be an absolute path owned by the `AuthorizedKeysCommandUser` account, not writable by others, and labelled `opkssh_cache_t` if SELinux is enabled. The installer sets all of this up when you set `OPKSSH_INSTALL_CACHE_DIR`. A cache problem never blocks a login: opkssh logs it and verifies without the cache. The cache is supported on Linux and macOS, not on Windows.
+
+See [docs/cache.md](cache.md) for how the cache works, all settings, debugging with `opkssh verify --cache`, SELinux and security considerations.
+
 ### Server config permissions
 
-The server config file requires the following permissions be set:
+The server config file is optional. If it exists, it must be owned by `root`
+with mode `640`, and its group must be either `opksshuser` or the primary group
+of the account configured as `AuthorizedKeysCommandUser`. Any other group is
+rejected, because the file can contain `env_vars` such as proxy credentials.
+For example, if verification runs as `ubuntu`:
 
 ```bash
-sudo chown root:opksshuser /etc/opk/config.yml
+sudo chown root:ubuntu /etc/opk/config.yml
 sudo chmod 640 /etc/opk/config.yml
 ```
+
+If the file has the wrong permissions or can't be parsed, `opkssh verify` logs
+the error and continues without it: no cache, deny lists or `env_vars`.
 
 ## Allowed OpenID Providers: `/etc/opk/providers` (Linux) or `%ProgramData%\opk\providers` (Windows)
 

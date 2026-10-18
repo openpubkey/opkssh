@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/openpubkey/opkssh/internal/projectpath"
@@ -84,7 +85,7 @@ func testSELinuxPolicyInstallation(t *testing.T, tt selinuxPolicyTest) {
 		}
 	})
 
-	runSELinuxContainerCommand(t, container, "dnf install -y checkpolicy policycoreutils selinux-policy-devel")
+	runSELinuxContainerCommand(t, container, "dnf install -y checkpolicy policycoreutils selinux-policy-devel policycoreutils-python-utils setools-console")
 
 	for _, source := range []string{"opkssh.te", "scripts/install-linux.sh"} {
 		err := container.CopyFileToContainer(
@@ -117,6 +118,78 @@ echo "$output"
 echo "$output" | grep -Fq 'Installed module for ` + tt.expectedPolicyType + `'
 `
 	runSELinuxContainerCommand(t, container, script)
+
+	testSELinuxCachePolicy(t, container, tt.expectedPolicyType)
+}
+
+// cachePolicyPermissions are the operations opkssh verify performs in the
+// JWKS cache directory: create the per-provider directories, list them,
+// write a temporary file, set its mode and modification time, rename it into
+// place, read it and delete outdated files.
+var cachePolicyPermissions = map[string][]string{
+	"dir":  {"add_name", "create", "getattr", "open", "read", "remove_name", "search", "setattr", "write"},
+	"file": {"create", "getattr", "open", "read", "rename", "setattr", "unlink", "write"},
+}
+
+// testSELinuxCachePolicy provisions the JWKS cache with the installer against
+// the module installed above, then checks the result: the cache directory and
+// every file below it get the opkssh_cache_t label, and the SSH daemon domain
+// that runs opkssh verify is allowed every operation in
+// cachePolicyPermissions on that type. semanage, matchpathcon and sesearch
+// run for real against the container's policy store.
+func testSELinuxCachePolicy(t *testing.T, container testcontainers.Container, domain string) {
+	// Only the installer call needs bash. restorecon needs an SELinux kernel
+	// and the preflight needs the opkssh binary, so both are replaced.
+	runSELinuxContainerCommand(t, container, `
+set -euo pipefail
+export SHUNIT_RUNNING=1
+getenforce() { echo Enforcing; }
+restorecon() { echo "restorecon $*"; }
+runuser() { echo "runuser $*"; }
+systemd_running() { return 1; }
+systemctl() { echo "systemctl $*"; }
+source /app/install-linux.sh
+getent group opksshuser >/dev/null || groupadd -r opksshuser
+getent passwd opksshuser >/dev/null || useradd -r -g opksshuser opksshuser
+mkdir -p /etc/opk /tmp/systemd
+CACHE_DIR=/var/cache/opkssh
+configure_cache /etc /tmp/systemd
+`)
+
+	run := func(cmd ...string) string {
+		t.Helper()
+		code, out := executeCommandAsUser(t, container, cmd, RootUser)
+		require.Equalf(t, 0, code, "%s failed:\n%s", strings.Join(cmd, " "), out)
+		return out
+	}
+
+	fileContexts := run("semanage", "fcontext", "-l", "-C")
+	require.Regexp(t, `(?m)^/var/cache/opkssh\(/\.\*\)\?\s.*:opkssh_cache_t:`, fileContexts,
+		"the installer must record a file context for the cache directory")
+
+	for _, path := range []string{
+		"/var/cache/opkssh",
+		"/var/cache/opkssh/0123abcd/jwks",
+		"/var/cache/opkssh/0123abcd/jwks/jwks-0123abcd",
+		"/var/cache/opkssh/0123abcd/jwks/tmp-123",
+	} {
+		require.Contains(t, run("matchpathcon", "-n", path), ":opkssh_cache_t:", "label of %s", path)
+	}
+
+	policy := strings.TrimSpace(run("bash", "-c", "ls /etc/selinux/targeted/policy/policy.* | sort -V | tail -n 1"))
+	allowed := func(targetType, class, perm string) bool {
+		// sesearch prints the rules granting the permission, including
+		// rules granted through attributes such as file_type.
+		return strings.TrimSpace(run("sesearch", "-A", "-s", domain, "-t", targetType, "-c", class, "-p", perm, policy)) != ""
+	}
+	for class, perms := range cachePolicyPermissions {
+		for _, perm := range perms {
+			require.Truef(t, allowed("opkssh_cache_t", class, perm),
+				"%s is not allowed %s on opkssh_cache_t %s, which opkssh verify needs for the JWKS cache", domain, perm, class)
+		}
+	}
+	require.False(t, allowed("var_t", "file", "write"),
+		"%s can write var_t files, so this test no longer shows that the opkssh_cache_t label is needed", domain)
 }
 
 func runSELinuxContainerCommand(t *testing.T, container testcontainers.Container, script string) {

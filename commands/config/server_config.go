@@ -17,20 +17,40 @@
 package config
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"time"
 
+	"github.com/openpubkey/openpubkey/discover"
+	"github.com/openpubkey/opkssh/commands/discoverycache"
+	"github.com/spf13/afero"
 	"gopkg.in/yaml.v3"
 )
+
+// CacheConfig controls persistent caching of OIDC JWKS documents on a server.
+// An empty BaseDir disables persistent caching.
+type CacheConfig struct {
+	BaseDir        string        `yaml:"base_dir"`
+	StandardMaxAge time.Duration `yaml:"max_age"`
+	FallbackMaxAge time.Duration `yaml:"fallback_max_age"`
+}
 
 // ServerConfig struct to represent the /etc/opk/config.yml file that runs on the server that the user is SSHing into
 type ServerConfig struct {
 	EnvVars    map[string]string `yaml:"env_vars"`
 	DenyUsers  []string          `yaml:"deny_users"`
 	DenyEmails []string          `yaml:"deny_emails"`
+	Cache      CacheConfig       `yaml:"cache"`
 }
 
 func NewServerConfig(c []byte) (*ServerConfig, error) {
 	var serverConfig ServerConfig
+	if len(c) == 0 {
+		c = []byte("{}")
+	}
 	if err := yaml.Unmarshal(c, &serverConfig); err != nil {
 		return nil, err
 	}
@@ -45,4 +65,93 @@ func (c *ServerConfig) SetEnvVars() error {
 		}
 	}
 	return nil
+}
+
+// DefaultCacheBaseDir is the cache directory used by opkssh verify --cache=on
+// when the server config does not set one.
+const DefaultCacheBaseDir = "/var/cache/opkssh"
+
+// Cache modes for opkssh verify --cache.
+const (
+	// CacheModeAuto uses the cache section of the server config as written.
+	CacheModeAuto = "auto"
+	// CacheModeOn enables the cache even if the server config does not,
+	// using DefaultCacheBaseDir unless the config sets base_dir.
+	CacheModeOn = "on"
+	// CacheModeOff disables the cache whatever the server config says.
+	CacheModeOff = "off"
+)
+
+// WithMode applies an opkssh verify --cache mode to the configured cache
+// settings.
+func (c CacheConfig) WithMode(mode string) (CacheConfig, error) {
+	switch mode {
+	case CacheModeAuto, "":
+		return c, nil
+	case CacheModeOn:
+		if c.BaseDir == "" {
+			c.BaseDir = DefaultCacheBaseDir
+		}
+		return c, nil
+	case CacheModeOff:
+		return CacheConfig{}, nil
+	default:
+		return CacheConfig{}, fmt.Errorf("invalid --cache value %q: want %s, %s or %s", mode, CacheModeAuto, CacheModeOn, CacheModeOff)
+	}
+}
+
+// DiscoveryCacheConfig returns the cache settings used by provider verifiers.
+// Defaults are applied only when a persistent cache is configured.
+func (c CacheConfig) DiscoveryCacheConfig(fs afero.Fs) (discover.DiscoveryCacheConfig, error) {
+	return c.discoveryCacheConfig(fs, runtime.GOOS)
+}
+
+// discoveryCacheConfig is DiscoveryCacheConfig for the operating system goos.
+// The cache is not supported on Windows, where directory permissions are ACLs
+// that the cache's safety checks don't understand. Tests pass goos so they
+// can cover every case on any operating system.
+func (c CacheConfig) discoveryCacheConfig(fs afero.Fs, goos string) (discover.DiscoveryCacheConfig, error) {
+	if c.BaseDir == "" {
+		return discover.DiscoveryCacheConfig{}, nil
+	}
+	if goos == "windows" {
+		return discover.DiscoveryCacheConfig{}, fmt.Errorf("the persistent JWKS cache is not supported on %s", goos)
+	}
+	if fs == nil {
+		return discover.DiscoveryCacheConfig{}, fmt.Errorf("cache filesystem is required")
+	}
+	if !filepath.IsAbs(c.BaseDir) && !strings.HasPrefix(filepath.ToSlash(c.BaseDir), "/") {
+		// A relative path would resolve against sshd's working directory.
+		// A rooted path without a drive letter is accepted on Windows.
+		return discover.DiscoveryCacheConfig{}, fmt.Errorf("cache base_dir %q must be an absolute path", c.BaseDir)
+	}
+
+	standardMaxAge := c.StandardMaxAge
+	if standardMaxAge == 0 {
+		standardMaxAge = time.Hour
+	}
+	if standardMaxAge < 0 {
+		return discover.DiscoveryCacheConfig{}, fmt.Errorf("cache max_age must not be negative")
+	}
+	fallbackMaxAge := c.FallbackMaxAge
+	if fallbackMaxAge == 0 {
+		fallbackMaxAge = 2 * standardMaxAge
+	}
+	if fallbackMaxAge < 0 {
+		return discover.DiscoveryCacheConfig{}, fmt.Errorf("cache fallback_max_age must not be negative")
+	}
+	if fallbackMaxAge < standardMaxAge {
+		return discover.DiscoveryCacheConfig{}, fmt.Errorf("cache fallback_max_age (%s) must not be less than max_age (%s)", fallbackMaxAge, standardMaxAge)
+	}
+
+	cache := discoverycache.NewFilesystemDiscoveryCache(fs, c.BaseDir)
+	if err := cache.Validate(); err != nil {
+		return discover.DiscoveryCacheConfig{}, err
+	}
+
+	return discover.DiscoveryCacheConfig{
+		Cache:          cache,
+		StandardMaxAge: standardMaxAge,
+		FallbackMaxAge: fallbackMaxAge,
+	}, nil
 }

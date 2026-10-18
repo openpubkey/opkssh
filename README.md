@@ -656,6 +656,7 @@ For integration tests run:
 ### Documentation
 - [docs/cli/](docs/cli/opkssh.md) CLI reference documentation for all opkssh commands.
 - [docs/config.md](docs/config.md) Documentation of opkssh configuration files.
+- [docs/cache.md](docs/cache.md) Documentation of the persistent JWKS cache used by `opkssh verify`.
 - [docs/audit.md](docs/audit.md) Documentation of the audit command.
 - [docs/policyplugins.md](docs/policyplugins.md) Documentation of opkssh policy plugins and how to use them to implement complex policies.
 - [scripts/installing.md](scripts/installing.md) Documentation of the server install script that opkssh uses to configure an SSH server to accept opkssh SSH certificates. Explains how to manually install opkssh on a server.
