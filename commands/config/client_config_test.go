@@ -105,3 +105,14 @@ func TestIsDefaultClientID(t *testing.T) {
 		require.False(t, IsDefaultClientID("https://issuer.example.com", provider.ClientID), "%v", provider.AliasList)
 	}
 }
+
+func TestIsDefaultClientIDForAnyIssuer(t *testing.T) {
+	defaultConfig, err := NewClientConfig(DefaultClientConfig)
+	require.NoError(t, err)
+	require.NotEmpty(t, defaultConfig.Providers)
+	for _, provider := range defaultConfig.Providers {
+		require.True(t, IsDefaultClientIDForAnyIssuer(provider.ClientID), "%v", provider.AliasList)
+	}
+	require.False(t, IsDefaultClientIDForAnyIssuer("my-own-client-id"))
+	require.False(t, IsDefaultClientIDForAnyIssuer(""))
+}

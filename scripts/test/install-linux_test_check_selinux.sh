@@ -19,6 +19,7 @@ setUp() {
     export HOME_POLICY SELINUX_ENABLE_SQUID SELINUX_ENABLE_PROXY
 
     DUMMY_TE_CONTENT="module dummy 1.0; require { type sshd_t; }; allow sshd_t self:process { transition };"
+    LOCAL_TE_FILE=""
 
     # Default: legacy policy, no sshd_session_t type.
     mock_session_domain_unsupported=true
@@ -195,6 +196,56 @@ test_check_selinux_enable_proxy() {
     assertNotContains "Expected opkssh_enable_squid set" "$mock_log" "setsebool -P opkssh_enable_squid on"
     assertContains "Expected opkssh_enable_proxy set" "$mock_log" "setsebool -P opkssh_enable_proxy on"
     assertContains "Expected rm called" "$mock_log" "rm -f /tmp/opkssh.te /tmp/opkssh.mod /tmp/opkssh.pp"
+}
+
+test_check_selinux_local_te_file_uses_session_domain_when_supported() {
+    # A policy with sshd_session_t, such as RHEL and CentOS 10.
+    mock_session_domain_unsupported=false
+    LOCAL_TE_FILE="$TEST_TEMP_DIR/local.te"
+    echo "module opkssh 2.0; require { type sshd_t; }; allow sshd_t self:process { transition }; # local" > "$LOCAL_TE_FILE"
+
+    output=$(check_selinux 2>&1)
+    result=$?
+    mock_log=$(cat "$MOCK_LOG")
+
+    assertEquals "Expected return code 0" 0 "$result"
+    assertContains "Expected the local file used" "$output" "Using local TE-file"
+    assertNotContains "Expected no download" "$mock_log" "wget"
+    assertContains "Expected the local file rewritten for sshd_session_t" "$mock_log" "allow sshd_session_t self:process { transition }; # local"
+    assertContains "Expected the sshd_session_t module installed" "$output" "Installed module for sshd_session_t"
+}
+
+test_check_selinux_local_te_file_falls_back_to_sshd_t() {
+    # A policy without sshd_session_t, such as RHEL and CentOS 9.
+    mock_session_domain_unsupported=true
+    LOCAL_TE_FILE="$TEST_TEMP_DIR/local.te"
+    echo "module opkssh 2.0; require { type sshd_t; }; allow sshd_t self:process { transition }; # local" > "$LOCAL_TE_FILE"
+
+    output=$(check_selinux 2>&1)
+    result=$?
+    mock_log=$(cat "$MOCK_LOG")
+
+    assertEquals "Expected return code 0" 0 "$result"
+    assertNotContains "Expected no download" "$mock_log" "wget"
+    assertContains "Expected the local file installed as written" "$mock_log" "allow sshd_t self:process { transition }; # local"
+    assertContains "Expected the sshd_t module installed" "$output" "Installed module for sshd_t"
+}
+
+test_check_selinux_records_policy_without_cache_type() {
+    check_selinux >/dev/null 2>&1
+
+    assertEquals "Expected the downloaded dummy policy to lack the cache type" "false" "$SELINUX_POLICY_SUPPORTS_CACHE"
+    assertContains "Expected the release recorded" "$SELINUX_POLICY_SOURCE" "release "
+}
+
+test_check_selinux_records_policy_with_cache_type() {
+    LOCAL_TE_FILE="$TEST_TEMP_DIR/local.te"
+    echo "module opkssh 2.1; require { type sshd_t; }; type opkssh_cache_t;" > "$LOCAL_TE_FILE"
+
+    check_selinux >/dev/null 2>&1
+
+    assertEquals "Expected the local policy to have the cache type" "true" "$SELINUX_POLICY_SUPPORTS_CACHE"
+    assertEquals "Expected the local file recorded" "the local file $LOCAL_TE_FILE" "$SELINUX_POLICY_SOURCE"
 }
 
 # shellcheck disable=SC1091
