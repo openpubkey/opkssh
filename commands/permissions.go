@@ -139,7 +139,7 @@ func (p *PermissionsCmd) Check() error {
 		if result.ACLErr != nil {
 			problems = append(problems, fmt.Sprintf("%s: acl verify error: %v", path, result.ACLErr))
 			cr.ACLErr = result.ACLErr.Error()
-		} else if result.ACLReport != nil {
+		} else if result.ACLReport != nil && !p.JsonOutput {
 			report := result.ACLReport
 			if report.OwnerSIDStr != "" {
 				fmt.Fprintf(p.Out, "%s: owner=%s ownerSID=%s mode=%o\n", path, report.Owner, report.OwnerSIDStr, report.Mode)
@@ -226,13 +226,16 @@ func (p *PermissionsCmd) Check() error {
 	if p.JsonOutput {
 		enc := json.NewEncoder(p.Out)
 		enc.SetIndent("", "  ")
-		return enc.Encode(results)
-	}
-
-	if len(problems) > 0 {
+		if err := enc.Encode(results); err != nil {
+			return err
+		}
+	} else {
 		for _, prob := range problems {
 			fmt.Fprintln(p.Out, "Problem:", prob)
 		}
+	}
+
+	if len(problems) > 0 {
 		return fmt.Errorf("permissions check failed: %d problems found", len(problems))
 	}
 	// Success: print nothing and return nil
@@ -460,16 +463,21 @@ func (p *PermissionsCmd) Fix() error {
 	if p.JsonOutput {
 		enc := json.NewEncoder(p.Out)
 		enc.SetIndent("", "  ")
-		return enc.Encode(fixResult{Planned: planned, Errors: errorsFound})
-	}
-
-	if len(errorsFound) > 0 {
+		if err := enc.Encode(fixResult{Planned: planned, Errors: errorsFound}); err != nil {
+			return err
+		}
+	} else {
 		for _, e := range errorsFound {
 			fmt.Fprintln(p.Out, "Error:", e)
 		}
+	}
+
+	if len(errorsFound) > 0 {
 		return fmt.Errorf("fix completed with %d errors", len(errorsFound))
 	}
 
-	fmt.Fprintln(p.Out, "fix completed successfully")
+	if !p.JsonOutput {
+		fmt.Fprintln(p.Out, "fix completed successfully")
+	}
 	return nil
 }
