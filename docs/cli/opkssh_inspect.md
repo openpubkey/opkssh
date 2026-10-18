@@ -2,13 +2,23 @@
 
 Inspect and view details of an opkssh generated SSH key
 
+### Synopsis
+
+Inspect and view details of an opkssh generated SSH key or certificate.
+
+With no path, inspect prints every opkssh certificate in ~/.ssh/opkssh, under
+default key names in ~/.ssh (id_ecdsa, id_ed25519, ...) and in ssh-agent.
+Certificates written elsewhere with "opkssh login -i <path>" are not
+searched; pass their path instead.
+
 ```
-opkssh inspect <path> [flags]
+opkssh inspect [path] [flags]
 ```
 
 ### Examples
 
 ```
+  opkssh inspect
   opkssh inspect ~/.ssh/id_ecdsa_sk-cert.pub
 ```
 
