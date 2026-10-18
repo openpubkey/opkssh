@@ -306,6 +306,18 @@ func TestRun(t *testing.T) {
 			wantExit:   1,
 		},
 		{
+			name:       "Inspect with two paths",
+			args:       []string{"opkssh", "inspect", "a", "b"},
+			wantOutput: "Error: accepts at most 1 arg(s), received 2",
+			wantExit:   1,
+		},
+		{
+			name:       "Inspect missing file",
+			args:       []string{"opkssh", "inspect", "does-not-exist-cert.pub"},
+			wantOutput: "failed to parse SSH key",
+			wantExit:   1,
+		},
+		{
 			name: "Client provider list",
 			args: []string{"opkssh", "client", "provider", "list", "--config-path=commands/config/default-client-config.yml"},
 			wantOutput: "" +
@@ -325,6 +337,21 @@ func TestRun(t *testing.T) {
 
 		})
 	}
+}
+
+// TestInspectNoPath is outside TestRun because it sets HOME, which a parallel
+// test can't.
+func TestInspectNoPath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("SSH_AUTH_SOCK", "")
+	sshDir := filepath.Join(home, ".ssh")
+
+	output, exitCode := RunCliAndCaptureResult(t, []string{"opkssh", "inspect"})
+	require.Equal(t, 0, exitCode)
+	require.Contains(t, output, "No opkssh certificates found in "+filepath.Join(sshDir, "opkssh")+" or "+sshDir+"\n")
+
 }
 
 func TestWithEnvVars(t *testing.T) {
