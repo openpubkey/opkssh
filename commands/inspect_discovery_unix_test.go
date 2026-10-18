@@ -35,7 +35,7 @@ func TestFindOpkSSHCertsSkipsFIFO(t *testing.T) {
 
 	done := make(chan []string)
 	go func() {
-		certPaths, _ := findOpkSSHCerts(sshDir)
+		certPaths, _ := findOpkSSHCertPaths(sshDir)
 		done <- certPaths
 	}()
 	select {

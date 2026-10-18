@@ -1,4 +1,4 @@
-// Copyright 2026 OpenPubkey
+// Copyright 2025 OpenPubkey
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,8 +23,10 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -113,7 +115,8 @@ func (i *InspectCmd) inspectCertificate(cert *ssh.Certificate) {
 
 	// Format extensions nicely
 	i.printf("Extensions:\n")
-	for key, value := range cert.Extensions {
+	for _, key := range slices.Sorted(maps.Keys(cert.Extensions)) {
+		value := cert.Extensions[key]
 		if key == "openpubkey-pkt" {
 			i.printf("  %s: [PKToken data] %d bytes\n", key, len(value))
 		} else {
@@ -299,6 +302,7 @@ func (i *InspectCmd) printExpiration(pkt *pktoken.PKToken) {
 	for _, name := range expirationPolicyNames {
 		expirationPolicy, err := policy.ProvidersRow{ExpirationPolicy: name}.GetExpirationPolicy()
 		if err != nil {
+			i.printf("%-19s %v\n", name+":", err)
 			continue
 		}
 		status := "valid"
@@ -351,7 +355,7 @@ func (i *InspectCmd) RunDiscovery() error {
 }
 
 func (i *InspectCmd) inspectCertsIn(sshDir string) error {
-	certPaths, readErrs := findOpkSSHCerts(sshDir)
+	certFiles, readErrs := findOpkSSHCerts(sshDir)
 	for _, err := range readErrs {
 		i.warnf("Warning: %v\n", err)
 	}
@@ -361,7 +365,7 @@ func (i *InspectCmd) inspectCertsIn(sshDir string) error {
 		i.warnf("Warning: could not list ssh-agent certificates (%s): %v\n", agentSock, err)
 	}
 
-	if len(certPaths) == 0 && len(agentCerts) == 0 {
+	if len(certFiles) == 0 && len(agentCerts) == 0 {
 		searched := filepath.Join(sshDir, opkSSHDirName) + " or " + sshDir
 		if agentSock != "" {
 			searched = filepath.Join(sshDir, opkSSHDirName) + ", " + sshDir + " or ssh-agent"
@@ -372,22 +376,19 @@ func (i *InspectCmd) inspectCertsIn(sshDir string) error {
 	}
 
 	printed := 0
-	inspectOne := func(header, keyOrCert string) {
+	inspectOne := func(header string, cert *ssh.Certificate) {
 		if printed > 0 {
 			i.printf("\n")
 		}
 		printed++
 		i.printf("=== %s ===\n", header)
-		inspect := &InspectCmd{KeyOrCert: keyOrCert, Output: i.Output}
-		if err := inspect.Run(); err != nil {
-			i.warnf("Error inspecting %s: %v\n", header, err)
-		}
+		i.inspectCertificate(cert)
 	}
-	for _, certPath := range certPaths {
-		inspectOne(certPath, certPath)
+	for _, certFile := range certFiles {
+		inspectOne(certFile.Path, certFile.Cert)
 	}
 	for _, cert := range agentCerts {
-		inspectOne("ssh-agent "+ssh.FingerprintSHA256(cert.Key), string(ssh.MarshalAuthorizedKey(cert)))
+		inspectOne("ssh-agent "+ssh.FingerprintSHA256(cert.Key), cert)
 	}
 	return nil
 }
@@ -425,10 +426,16 @@ func listOpkSSHAgentCerts(sock string) ([]*ssh.Certificate, error) {
 // opkSSHDirName is the directory under ~/.ssh that LoginCmd.writeKeysToOpkSSHDir writes to.
 const opkSSHDirName = "opkssh"
 
-// findOpkSSHCerts returns, sorted, the opkssh certificates that login can have
-// written under sshDir, plus any errors other than "does not exist" hit
-// while looking.
-func findOpkSSHCerts(sshDir string) ([]string, []error) {
+type opkSSHCertFile struct {
+	Path string
+	Cert *ssh.Certificate
+}
+
+// findOpkSSHCerts returns, sorted by path, the opkssh certificates that login
+// can have written under sshDir, plus any errors other than "does not exist"
+// hit while looking. Each file is read once, so what is printed is what was
+// checked.
+func findOpkSSHCerts(sshDir string) ([]opkSSHCertFile, []error) {
 	var candidates []string
 	var readErrs []error
 
@@ -446,37 +453,42 @@ func findOpkSSHCerts(sshDir string) ([]string, []error) {
 		candidates = append(candidates, filepath.Join(sshDir, keyFileName+"-cert.pub"))
 	}
 
-	var certPaths []string
+	var certFiles []opkSSHCertFile
 	for _, path := range candidates {
-		isCert, err := isOpkSSHCertFile(path)
+		cert, err := readOpkSSHCertFile(path)
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			readErrs = append(readErrs, err)
 		}
-		if isCert {
-			certPaths = append(certPaths, path)
+		if cert != nil {
+			certFiles = append(certFiles, opkSSHCertFile{Path: path, Cert: cert})
 		}
 	}
-	sort.Strings(certPaths)
-	return certPaths, readErrs
+	sort.Slice(certFiles, func(a, b int) bool { return certFiles[a].Path < certFiles[b].Path })
+	return certFiles, readErrs
 }
 
-func isOpkSSHCertFile(path string) (bool, error) {
+// readOpkSSHCertFile returns the certificate in path, or nil if path doesn't
+// hold an opkssh certificate.
+func readOpkSSHCertFile(path string) (*ssh.Certificate, error) {
 	info, err := os.Stat(path)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	// Reading a FIFO or device would block forever.
 	if !info.Mode().IsRegular() {
-		return false, nil
+		return nil, nil
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	pubKey, _, _, _, err := ssh.ParseAuthorizedKey(data)
 	if err != nil {
-		return false, nil
+		return nil, nil
 	}
-	_, isCert := pubKey.(*ssh.Certificate)
-	return isCert && isOpenpubkeyComment(data), nil
+	cert, isCert := pubKey.(*ssh.Certificate)
+	if !isCert || !isOpenpubkeyComment(data) {
+		return nil, nil
+	}
+	return cert, nil
 }
