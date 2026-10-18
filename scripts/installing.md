@@ -239,3 +239,12 @@ sudo semanage port -a -t http_cache_port_t -p tcp 9991
 ```bash
 sudo semanage port -d -t http_cache_port_t -p tcp 9991
 ```
+
+### 5. Label the JWKS cache directory (optional)
+
+If you enable the persistent JWKS cache (`cache.base_dir` in `/etc/opk/config.yml`), label the directory `opkssh_cache_t`. The module only lets `opkssh verify` write to directories with that type. The installer does this for whatever directory you set in `OPKSSH_INSTALL_CACHE_DIR`. If you enable the cache any other way, by editing `config.yml` or with `opkssh verify --cache=on` (which uses `/var/cache/opkssh`), create and label the directory yourself:
+
+```bash
+sudo semanage fcontext -a -t opkssh_cache_t '/var/cache/opkssh(/.*)?'
+sudo restorecon -R /var/cache/opkssh
+```

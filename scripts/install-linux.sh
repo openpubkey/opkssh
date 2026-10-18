@@ -59,6 +59,20 @@ AUTH_CMD_GROUP="${OPKSSH_INSTALL_AUTH_CMD_GROUP:-opksshuser}"
 # Description: Path to the sudoers file for opkssh
 SUDOERS_PATH="${OPKSSH_INSTALL_SUDOERS_PATH:-/etc/sudoers.d/opkssh}"
 
+# OPKSSH_INSTALL_CACHE_DIR
+# Default: (empty)
+# Description: Base directory for the persistent JWKS cache. When set, the
+#   installer creates the directory (AUTH_CMD_USER:AUTH_CMD_GROUP, 0700), adds
+#   a cache section to config.yml, and installs a systemd timer to clean it.
+#   Empty leaves caching disabled, matching the default server behaviour.
+CACHE_DIR="${OPKSSH_INSTALL_CACHE_DIR:-}"
+
+# OPKSSH_INSTALL_CACHE_CLEAN_ON_CALENDAR
+# Default: daily
+# Description: systemd OnCalendar expression for the cache cleanup timer. Only
+#   used when CACHE_DIR is set.
+CACHE_CLEAN_ON_CALENDAR="${OPKSSH_INSTALL_CACHE_CLEAN_ON_CALENDAR:-daily}"
+
 # OPKSSH_HOME_POLICY
 # Default: true
 # Description: Whether to use the home directory policy feature
@@ -549,6 +563,7 @@ check_selinux() {
             if [[ -n "$LOCAL_TE_FILE" ]]; then
                 echo "  Using local TE-file"
                 cp "$LOCAL_TE_FILE" "$te_tmp"
+                SELINUX_POLICY_SOURCE="the local file $LOCAL_TE_FILE"
             else
                 if [[ "$INSTALL_VERSION" == "latest" ]]; then
                     version=$(wget --server-response --max-redirect=0 -O /dev/null "https://github.com/${GITHUB_REPO}/releases/latest" 2>&1 | sed -n -E 's/^  Location: .*\/tag\/(v[0-9.]+).*/\1/p')
@@ -557,6 +572,14 @@ check_selinux() {
                 fi
                 echo "  Downloading TE-file"
                 wget -q -O "$te_tmp" "https://raw.githubusercontent.com/${GITHUB_REPO}/refs/tags/${version}/opkssh.te"
+                SELINUX_POLICY_SOURCE="release ${version}"
+            fi
+            # Recorded for configure_cache, which needs the opkssh_cache_t
+            # type. Policies from releases before the JWKS cache lack it.
+            if grep -q 'opkssh_cache_t' "$te_tmp" 2>/dev/null; then
+                SELINUX_POLICY_SUPPORTS_CACHE=true
+            else
+                SELINUX_POLICY_SUPPORTS_CACHE=false
             fi
 
             echo "  Compiling SELinux module..."
@@ -662,6 +685,197 @@ configure_opkssh() {
         DEFAULT_PROVIDERS_WRITTEN=true
         echo "  Wrote the default providers to $etc_path/opk/providers"
         echo "  $DEFAULT_PROVIDERS_NOTICE"
+    fi
+}
+
+# selinux_enabled
+# Returns 0 if SELinux is enabled (enforcing or permissive), 1 otherwise.
+selinux_enabled() {
+    command -v getenforce >/dev/null 2>&1 && [[ "$(getenforce)" != "Disabled" ]]
+}
+
+# systemd_running
+# Returns 0 if systemd is the running init system, 1 otherwise (for example
+# while building a container image or inside a chroot).
+systemd_running() {
+    [[ -d /run/systemd/system ]]
+}
+
+# semanage_available
+# Returns 0 if the semanage command is installed, 1 otherwise.
+semanage_available() {
+    command -v semanage >/dev/null 2>&1
+}
+
+# label_cache_dir
+# On SELinux systems, labels CACHE_DIR and everything below it
+# opkssh_cache_t, the type the opkssh policy module lets opkssh verify write
+# to. The label is recorded with semanage so it survives a relabel.
+#
+# Returns:
+#   0 on success or when SELinux is disabled, 1 on failure
+label_cache_dir() {
+    if ! selinux_enabled; then
+        return 0
+    fi
+    # check_selinux records whether the policy it installed defines
+    # opkssh_cache_t. Without it semanage fails with an unhelpful error.
+    if [[ "${SELINUX_POLICY_SUPPORTS_CACHE:-}" == false ]]; then
+        echo "The opkssh SELinux policy installed from ${SELINUX_POLICY_SOURCE:-an unknown source} does not support the JWKS cache (it has no opkssh_cache_t type). Install a version of opkssh whose policy supports the cache, or pass --install-te-from with the opkssh.te that matches your build."
+        return 1
+    fi
+    if ! semanage_available; then
+        echo "SELinux is enabled, but semanage is not installed. Install the package that provides it (policycoreutils-python-utils on RHEL, CentOS and Fedora) and run the installer again."
+        return 1
+    fi
+    # semanage takes a regular expression; escape the dots in the path.
+    local spec="${CACHE_DIR//./\\.}(/.*)?"
+    if ! semanage fcontext -a -t opkssh_cache_t "$spec" 2>/dev/null; then
+        # The path already has a file context rule: change it instead.
+        if ! semanage fcontext -m -t opkssh_cache_t "$spec"; then
+            echo "Failed to set the SELinux file context for $CACHE_DIR"
+            return 1
+        fi
+    fi
+    restorecon -R "$CACHE_DIR" || return 1
+    echo "  Labelled $CACHE_DIR opkssh_cache_t for SELinux"
+}
+
+# configure_cache
+# Provisions the persistent JWKS cache directory and the systemd timer that
+# cleans it. Does nothing unless CACHE_DIR is set.
+#
+# Arguments:
+#   $1 - Path to etc directory (Optional, default /etc)
+#   $2 - Path to systemd system unit directory (Optional, default /etc/systemd/system)
+#
+# Outputs:
+#   Writes to stdout the cache configuration progress
+#
+# Returns:
+#   0 on success, 1 on failure
+# shellcheck disable=SC2120
+configure_cache() {
+    local etc_path="${1:-/etc}"
+    local systemd_dir="${2:-/etc/systemd/system}"
+
+    if [[ -z "$CACHE_DIR" ]]; then
+        echo "Persistent JWKS cache not requested (CACHE_DIR empty), skipping."
+        return 0
+    fi
+    if [[ ! "$CACHE_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
+        echo "Cache directory must be an absolute path containing only letters, numbers, '.', '_', '/', or '-': $CACHE_DIR"
+        return 1
+    fi
+
+    echo "Configuring persistent JWKS cache:"
+
+    local config_file="$etc_path/opk/config.yml"
+    local existing_cache_dir=""
+    local needs_cache_section=true
+    if [[ -f "$config_file" ]] && grep -Eq '^cache:' "$config_file"; then
+        existing_cache_dir=$(awk '
+            /^cache:[[:space:]]*$/ { in_cache = 1; next }
+            in_cache && /^[^[:space:]#]/ { exit }
+            in_cache && /^[[:space:]]+base_dir:[[:space:]]*/ {
+                sub(/^[[:space:]]+base_dir:[[:space:]]*/, "")
+                sub(/[[:space:]]+#.*$/, "")
+                print
+                exit
+            }
+        ' "$config_file")
+        if [[ "$existing_cache_dir" != "$CACHE_DIR" ]]; then
+            echo "config.yml already contains a cache section for ${existing_cache_dir:-an unknown directory}; refusing to provision $CACHE_DIR"
+            return 1
+        fi
+        needs_cache_section=false
+    fi
+
+    install -d -o "${AUTH_CMD_USER}" -g "${AUTH_CMD_GROUP}" -m 700 "$CACHE_DIR"
+    echo "  Created cache directory $CACHE_DIR (${AUTH_CMD_USER}:${AUTH_CMD_GROUP}, 0700)"
+    label_cache_dir || return 1
+
+    # opkssh verify reads config.yml on every login, so never leave it half
+    # edited. Write the new section to a copy with the same owner and mode,
+    # run the preflight against the copy, and only then move it into place.
+    local preflight_config="$config_file"
+    local new_config=""
+    if [[ "$needs_cache_section" == true ]]; then
+        new_config="${config_file}.opkssh-new"
+        if [[ -f "$config_file" ]]; then
+            cp -p "$config_file" "$new_config" || return 1
+        else
+            touch "$new_config" || return 1
+            chown root:"${AUTH_CMD_GROUP}" "$new_config" || return 1
+            chmod 640 "$new_config" || return 1
+        fi
+        # Appending to a file without a trailing newline would join the
+        # last line and "cache:" into invalid YAML.
+        if [[ -s "$new_config" && -n "$(tail -c 1 "$new_config")" ]]; then
+            echo >> "$new_config"
+        fi
+        {
+            echo "cache:"
+            echo "  base_dir: $CACHE_DIR"
+        } >> "$new_config"
+        preflight_config="$new_config"
+    fi
+
+    if ! runuser -u "$AUTH_CMD_USER" -- "${INSTALL_DIR}/${BINARY_NAME}" cache check --config-path "$preflight_config"; then
+        echo "Cache preflight failed for ${AUTH_CMD_USER}; check config.yml group ownership and cache directory access"
+        if [[ -n "$new_config" ]]; then
+            rm -f "$new_config"
+            echo "  $config_file was left unchanged"
+        fi
+        return 1
+    fi
+
+    if [[ -n "$new_config" ]]; then
+        mv -f "$new_config" "$config_file" || return 1
+        echo "  Added cache section to $config_file"
+    fi
+
+    # A cache that is never cleaned grows without bound, so install a timer.
+    # Fall back to a note if systemd is unavailable.
+    if ! command -v systemctl >/dev/null 2>&1; then
+        echo "  systemd not detected; run 'opkssh cache clean' periodically as ${AUTH_CMD_USER} to bound disk use"
+        return 0
+    fi
+
+    cat > "$systemd_dir/opkssh-cache-clean.service" <<EOF
+[Unit]
+Description=Clean stale opkssh JWKS cache entries
+
+[Service]
+Type=oneshot
+User=${AUTH_CMD_USER}
+Group=${AUTH_CMD_GROUP}
+ExecStart=${INSTALL_DIR}/${BINARY_NAME} cache clean
+EOF
+
+    cat > "$systemd_dir/opkssh-cache-clean.timer" <<EOF
+[Unit]
+Description=Periodically clean stale opkssh JWKS cache entries
+
+[Timer]
+OnCalendar=${CACHE_CLEAN_ON_CALENDAR}
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    echo "  Installed opkssh-cache-clean.timer (OnCalendar=${CACHE_CLEAN_ON_CALENDAR})"
+    if systemd_running; then
+        systemctl daemon-reload || return 1
+        systemctl enable --now opkssh-cache-clean.timer || return 1
+        echo "  Enabled and started opkssh-cache-clean.timer"
+    else
+        # Not booted with systemd, for example while building a container
+        # image. systemctl daemon-reload would fail, but enable works offline
+        # and the timer starts when systemd next boots.
+        systemctl enable opkssh-cache-clean.timer || return 1
+        echo "  Enabled opkssh-cache-clean.timer; it starts when systemd next boots"
     fi
 }
 
@@ -841,6 +1055,7 @@ main() {
     install_opkssh_binary || return 1
     check_selinux
     configure_opkssh
+    configure_cache || return 1
     configure_openssh_server || return 1
     restart_openssh_server || return 1
     if [[ "$HOME_POLICY" == true ]]; then

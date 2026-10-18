@@ -294,6 +294,7 @@ You should not call this command directly. It is called by the opkssh verify com
 	rootCmd.AddCommand(readhomeCmd)
 
 	var serverConfigPathArg string
+	var cacheModeArg string
 	verifyCmd := &cobra.Command{
 		SilenceUsage: true,
 		Use:          "verify <principal> <cert> <key_type>",
@@ -366,16 +367,36 @@ Arguments:
 			printConfigProblems()
 			log.Println("Providers loaded: ", providerPolicy.ToString())
 
-			pktVerifier, err := providerPolicy.CreateVerifier()
+			v := commands.NewVerifyCmd(commands.OpkPolicyEnforcerFunc(userArg), serverConfigPathArg)
+			serverConfig, err := v.ReadFromServerConfig()
 			if err != nil {
-				log.Println("Failed to create pk token verifier (likely bad configuration):", err)
-				return err
+				log.Println("Failed to load server configuration, continuing without it:", err)
+				serverConfig = &config.ServerConfig{}
 			}
 
-			v := commands.NewVerifyCmd(*pktVerifier, commands.OpkPolicyEnforcerFunc(userArg), serverConfigPathArg)
-			if err := v.ReadFromServerConfig(); err != nil {
-				log.Println("Failed to set environment variables in config:", err)
+			cacheSettings, err := serverConfig.Cache.WithMode(cacheModeArg)
+			if err != nil {
+				log.Println(err)
+				return err
 			}
+			cacheCfg, cacheErr := cacheSettings.DiscoveryCacheConfig(v.Fs)
+			switch {
+			case cacheErr != nil:
+				// Caching is an availability optimization. A broken cache must
+				// not prevent authentication with freshly discovered keys.
+				log.Printf("Persistent JWKS cache disabled (--cache=%s): %v\n", cacheModeArg, cacheErr)
+			case cacheCfg.Cache == nil:
+				log.Printf("Persistent JWKS cache off (--cache=%s)\n", cacheModeArg)
+			default:
+				log.Printf("Persistent JWKS cache on (--cache=%s): %s, max_age %s, fallback_max_age %s\n",
+					cacheModeArg, cacheSettings.BaseDir, cacheCfg.StandardMaxAge, cacheCfg.FallbackMaxAge)
+			}
+			pktVerifier, err := providerPolicy.CreateVerifier(cacheCfg)
+			if err != nil {
+				log.Println("Failed to create pk token verifier (likely bad provider configuration):", err)
+				return err
+			}
+			v.PktVerifier = *pktVerifier
 
 			if authKey, err := v.AuthorizedKeysCommand(ctx, userArg, typArg, certB64Arg, extraArgs); err != nil {
 				log.Println("failed to verify:", err)
@@ -390,6 +411,9 @@ Arguments:
 	}
 	defaultConfigPath := filepath.Join(policy.GetSystemConfigBasePath(), "config.yml")
 	verifyCmd.Flags().StringVar(&serverConfigPathArg, "config-path", defaultConfigPath, fmt.Sprintf("Path to the server config file. Default: %s", defaultConfigPath))
+	verifyCmd.Flags().StringVar(&cacheModeArg, "cache", config.CacheModeAuto,
+		fmt.Sprintf("Persistent JWKS cache: %q uses the cache section of the server config, %q enables the cache even if the config doesn't (default directory %s), %q disables it.",
+			config.CacheModeAuto, config.CacheModeOn, config.DefaultCacheBaseDir, config.CacheModeOff))
 	rootCmd.AddCommand(verifyCmd)
 
 	auditCmd := &cobra.Command{
@@ -532,6 +556,9 @@ To replace an already configured provider pass --replace.`,
 	// permissions command for checking and fixing file permissions/ACLs
 	permsCmd := commands.NewPermissionsCmd(os.Stdout, os.Stderr)
 	rootCmd.AddCommand(permsCmd.CobraCommand())
+
+	cacheCmd := commands.NewCacheCmd()
+	rootCmd.AddCommand(cacheCmd.CobraCommand())
 
 	// genDocsCmd is a hidden command used as a helper for generating our
 	// command line reference documentation.
