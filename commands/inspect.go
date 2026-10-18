@@ -1,3 +1,17 @@
+// Copyright 2026 OpenPubkey
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
 // SPDX-License-Identifier: Apache-2.0
 
 package commands
@@ -5,8 +19,10 @@ package commands
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -15,7 +31,9 @@ import (
 
 	"github.com/openpubkey/openpubkey/oidc"
 	"github.com/openpubkey/openpubkey/pktoken"
+	"github.com/openpubkey/opkssh/policy"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
 )
 
 type InspectCmd struct {
@@ -23,6 +41,8 @@ type InspectCmd struct {
 	KeyOrCert string
 	// Output is where output should be written to.
 	Output io.Writer
+	// ErrOutput is where warnings are written. Nil means os.Stderr.
+	ErrOutput io.Writer
 }
 
 // NewInspectCmd creates a new InspectCmd instance with the provided arguments.
@@ -41,14 +61,16 @@ func (i *InspectCmd) printf(format string, a ...any) {
 	}
 }
 
-// Run inspects the key or certificate named by KeyOrCert. When KeyOrCert is
-// empty, it discovers opkssh-generated certificates in the locations login
-// writes them and prints every one it finds.
-func (i *InspectCmd) Run() error {
-	if i.KeyOrCert == "" {
-		return i.runDiscovery()
+func (i *InspectCmd) warnf(format string, a ...any) {
+	errOutput := i.ErrOutput
+	if errOutput == nil {
+		errOutput = os.Stderr
 	}
+	fmt.Fprintf(errOutput, format, a...)
+}
 
+// Run inspects KeyOrCert, which is either a file path or the key or certificate itself.
+func (i *InspectCmd) Run() error {
 	// Check if the input is a file path
 	if _, err := os.Stat(i.KeyOrCert); err == nil {
 		// It's a file, read its contents
@@ -197,6 +219,7 @@ func (i *InspectCmd) inspectPKToken(pktStr string) {
 	// Print token metadata
 	i.printf("\n--- Token Metadata ---\n")
 	i.printTokenMetadata(pkt)
+	i.printExpiration(pkt)
 }
 
 func (i *InspectCmd) printJSON(data []byte) {
@@ -250,134 +273,210 @@ func (i *InspectCmd) printTokenMetadata(pkt *pktoken.PKToken) {
 	}
 }
 
-// runDiscovery looks for opkssh-generated certificates in the directories
-// that `opkssh login` writes them to and prints the details of every one it
-// finds. The search order matches the precedence login uses when choosing
-// where to write keys, so the certificate login most recently wrote is
-// printed first.
-func (i *InspectCmd) runDiscovery() error {
-	paths, err := DiscoverSSHCerts()
-	if err != nil {
-		return err
-	}
+// expirationPolicyNames lists the expiration policies a server can set in
+// /etc/opk/providers, in the order inspect prints them.
+var expirationPolicyNames = []string{"12h", "24h", "48h", "1week", "oidc", "oidc_refreshed", "never"}
 
-	if len(paths) == 0 {
-		i.printf("No opkssh generated SSH certificates found in ~/.ssh/%s or ~/.ssh\n", opkSshDirName)
-		return nil
-	}
-
-	for _, path := range paths {
-		i.printf("=== %s ===\n", path)
-		inspect := &InspectCmd{KeyOrCert: path, Output: i.Output}
-		if err := inspect.Run(); err != nil {
-			i.printf("Error inspecting %s: %v\n", path, err)
-		}
-	}
-	return nil
+var expirationPolicyMaxAges = map[string]time.Duration{
+	"12h":   12 * time.Hour,
+	"24h":   24 * time.Hour,
+	"48h":   48 * time.Hour,
+	"1week": 7 * 24 * time.Hour,
 }
 
-// runDiscoveryIn is runDiscovery with the ~/.ssh root made explicit for tests.
-func (i *InspectCmd) runDiscoveryIn(sshPath string) error {
-	paths, err := discoverSSHCertsIn(sshPath)
+// printExpiration shows, for each server expiration policy, when the PK token
+// stops being accepted. The SSH certificate itself never expires; the server
+// decides from the ID token.
+func (i *InspectCmd) printExpiration(pkt *pktoken.PKToken) {
+	idt, err := oidc.NewJwt(pkt.OpToken)
 	if err != nil {
-		return err
+		i.printf("Error parsing ID token: %v\n", err)
+		return
 	}
+	claims := idt.GetClaims()
 
-	if len(paths) == 0 {
-		i.printf("No opkssh generated SSH certificates found in ~/.ssh/%s or ~/.ssh\n", opkSshDirName)
-		return nil
-	}
-
-	for _, path := range paths {
-		i.printf("=== %s ===\n", path)
-		inspect := &InspectCmd{KeyOrCert: path, Output: i.Output}
-		if err := inspect.Run(); err != nil {
-			i.printf("Error inspecting %s: %v\n", path, err)
-		}
-	}
-	return nil
-}
-
-// opkSshDirName is the directory under ~/.ssh where `opkssh login --configure`
-// writes key pairs, kept in sync with LoginCmd.writeKeysToOpkSSHDir.
-const opkSshDirName = "opkssh"
-
-// DiscoverSSHCerts returns the paths of opkssh-generated SSH certificate
-// files found on the local filesystem, sorted for deterministic output. Both
-// locations that `opkssh login` can write certificates to are searched:
-//
-//  1. ~/.ssh/opkssh/, for keys written when the opkssh identity directory is
-//     configured or when an explicit --private-key-file lives there
-//  2. ~/.ssh/, where login writes to the default ssh key file names
-//
-// Only files containing a certificate whose comment was set by opkssh
-// (prefix "openpubkey") are returned, so certificates from other tools are
-// never reported.
-func DiscoverSSHCerts() ([]string, error) {
-	homePath, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get home directory: %w", err)
-	}
-	return discoverSSHCertsIn(filepath.Join(homePath, ".ssh"))
-}
-
-// discoverSSHCertsIn is DiscoverSSHCerts with the ~/.ssh root made
-// explicit. It exists so tests can run discovery against a throwaway
-// directory instead of the user running the tests.
-func discoverSSHCertsIn(sshPath string) ([]string, error) {
-
-	var paths []string
-	seen := make(map[string]bool)
-
-	// 1. The opkssh identity directory. Every *-cert.pub file in it is a
-	// candidate; login is the only writer of this directory.
-	opkSSHDir := filepath.Join(sshPath, opkSshDirName)
-	entries, err := os.ReadDir(opkSSHDir)
-	if err == nil {
-		for _, entry := range entries {
-			if entry.IsDir() || !strings.HasSuffix(entry.Name(), "-cert.pub") {
-				continue
-			}
-			path := filepath.Join(opkSSHDir, entry.Name())
-			if isOpenpubkeyCert(path) {
-				paths = append(paths, path)
-				seen[path] = true
-			}
-		}
-	}
-
-	// 2. The default ssh key file names in ~/.ssh. Only these are ever
-	// written by opkssh login, so other keys in ~/.ssh are left alone.
-	for _, keyFilename := range allDefaultSSHKeyFileNames() {
-		path := filepath.Join(sshPath, keyFilename+"-cert.pub")
-		if seen[path] {
+	i.printf("\n--- Expiration by Server Policy ---\n")
+	for _, name := range expirationPolicyNames {
+		expirationPolicy, err := policy.ProvidersRow{ExpirationPolicy: name}.GetExpirationPolicy()
+		if err != nil {
 			continue
 		}
-		if isOpenpubkeyCert(path) {
-			paths = append(paths, path)
-			seen[path] = true
+		status := "valid"
+		if expirationPolicy.CheckExpiration(pkt) != nil {
+			status = "expired"
 		}
+		i.printf("%-19s %-25s %s\n", name+":", policyExpiresAt(name, claims, pkt), status)
 	}
-
-	sort.Strings(paths)
-	return paths, nil
 }
 
-// isOpenpubkeyCert reports whether the file at path holds an SSH
-// certificate whose comment was written by opkssh. login writes the comment
-// "openpubkey" (default ssh dir) or "openpubkey: <issuer> <audience>"
-// (opkssh identity dir), so the openpubkey prefix identifies both.
-func isOpenpubkeyCert(path string) bool {
+func policyExpiresAt(name string, claims *oidc.OidcClaims, pkt *pktoken.PKToken) string {
+	switch name {
+	case "never":
+		return "Never"
+	case "oidc":
+		return formatUnixTime(claims.Expiration)
+	case "oidc_refreshed":
+		// Accepted while either the ID token or the refreshed ID token is unexpired.
+		expiration := claims.Expiration
+		if pkt.FreshIDToken != nil {
+			if freshIdt, err := oidc.NewJwt(pkt.FreshIDToken); err == nil {
+				expiration = max(expiration, freshIdt.GetClaims().Expiration)
+			}
+		}
+		return formatUnixTime(expiration)
+	default:
+		if claims.IssuedAt <= 0 {
+			return "Unknown"
+		}
+		return time.Unix(claims.IssuedAt, 0).Add(expirationPolicyMaxAges[name]).Format(time.RFC3339)
+	}
+}
+
+func formatUnixTime(seconds int64) string {
+	if seconds <= 0 {
+		return "Unknown"
+	}
+	return time.Unix(seconds, 0).Format(time.RFC3339)
+}
+
+// RunDiscovery inspects every opkssh certificate found in ~/.ssh/opkssh,
+// under the default key names in ~/.ssh, and in the ssh-agent at
+// SSH_AUTH_SOCK.
+func (i *InspectCmd) RunDiscovery() error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %w", err)
+	}
+	return i.inspectCertsIn(filepath.Join(homeDir, ".ssh"))
+}
+
+func (i *InspectCmd) inspectCertsIn(sshDir string) error {
+	certPaths, readErrs := findOpkSSHCerts(sshDir)
+	for _, err := range readErrs {
+		i.warnf("Warning: %v\n", err)
+	}
+	agentSock := os.Getenv("SSH_AUTH_SOCK")
+	agentCerts, err := listOpkSSHAgentCerts(agentSock)
+	if err != nil {
+		i.warnf("Warning: could not list ssh-agent certificates (%s): %v\n", agentSock, err)
+	}
+
+	if len(certPaths) == 0 && len(agentCerts) == 0 {
+		searched := filepath.Join(sshDir, opkSSHDirName) + " or " + sshDir
+		if agentSock != "" {
+			searched = filepath.Join(sshDir, opkSSHDirName) + ", " + sshDir + " or ssh-agent"
+		}
+		i.printf("No opkssh certificates found in %s\n", searched)
+		i.printf("For a key written with `opkssh login -i <path>`, run `opkssh inspect <path>-cert.pub`\n")
+		return nil
+	}
+
+	printed := 0
+	inspectOne := func(header, keyOrCert string) {
+		if printed > 0 {
+			i.printf("\n")
+		}
+		printed++
+		i.printf("=== %s ===\n", header)
+		inspect := &InspectCmd{KeyOrCert: keyOrCert, Output: i.Output}
+		if err := inspect.Run(); err != nil {
+			i.warnf("Error inspecting %s: %v\n", header, err)
+		}
+	}
+	for _, certPath := range certPaths {
+		inspectOne(certPath, certPath)
+	}
+	for _, cert := range agentCerts {
+		inspectOne("ssh-agent "+ssh.FingerprintSHA256(cert.Key), string(ssh.MarshalAuthorizedKey(cert)))
+	}
+	return nil
+}
+
+// listOpkSSHAgentCerts returns the opkssh certificates in the ssh-agent at
+// sock. An empty sock means there is no agent to ask.
+func listOpkSSHAgentCerts(sock string) ([]*ssh.Certificate, error) {
+	if sock == "" {
+		return nil, nil
+	}
+	conn, err := dialSSHAgent(sock)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	keys, err := agent.NewClient(conn).List()
+	if err != nil {
+		return nil, err
+	}
+	var certs []*ssh.Certificate
+	for _, key := range keys {
+		// Not filtered on the comment: ssh-add sets it to the key's file path.
+		pubKey, err := ssh.ParsePublicKey(key.Blob)
+		if err != nil {
+			continue
+		}
+		if cert, ok := pubKey.(*ssh.Certificate); ok && cert.Extensions["openpubkey-pkt"] != "" {
+			certs = append(certs, cert)
+		}
+	}
+	return certs, nil
+}
+
+// opkSSHDirName is the directory under ~/.ssh that LoginCmd.writeKeysToOpkSSHDir writes to.
+const opkSSHDirName = "opkssh"
+
+// findOpkSSHCerts returns, sorted, the opkssh certificates that login can have
+// written under sshDir, plus any errors other than "does not exist" hit
+// while looking.
+func findOpkSSHCerts(sshDir string) ([]string, []error) {
+	var candidates []string
+	var readErrs []error
+
+	opkDir := filepath.Join(sshDir, opkSSHDirName)
+	entries, err := os.ReadDir(opkDir)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		readErrs = append(readErrs, err)
+	}
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), "-cert.pub") {
+			candidates = append(candidates, filepath.Join(opkDir, entry.Name()))
+		}
+	}
+	for _, keyFileName := range allDefaultSSHKeyFileNames() {
+		candidates = append(candidates, filepath.Join(sshDir, keyFileName+"-cert.pub"))
+	}
+
+	var certPaths []string
+	for _, path := range candidates {
+		isCert, err := isOpkSSHCertFile(path)
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			readErrs = append(readErrs, err)
+		}
+		if isCert {
+			certPaths = append(certPaths, path)
+		}
+	}
+	sort.Strings(certPaths)
+	return certPaths, readErrs
+}
+
+func isOpkSSHCertFile(path string) (bool, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false, err
+	}
+	// Reading a FIFO or device would block forever.
+	if !info.Mode().IsRegular() {
+		return false, nil
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return false
+		return false, err
 	}
-	_, comment, _, _, err := ssh.ParseAuthorizedKey(data)
+	pubKey, _, _, _, err := ssh.ParseAuthorizedKey(data)
 	if err != nil {
-		return false
+		return false, nil
 	}
-	// A bare public key in a -cert.pub file parses the same way; only the
-	// comment distinguishes opkssh output, and opkssh never writes a bare
-	// key into a *-cert.pub file.
-	return strings.HasPrefix(comment, "openpubkey")
+	_, isCert := pubKey.(*ssh.Certificate)
+	return isCert && isOpenpubkeyComment(data), nil
 }

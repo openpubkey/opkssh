@@ -129,15 +129,25 @@ Arguments:
 		SilenceUsage: true,
 		Use:          "inspect [path]",
 		Short:        "Inspect and view details of an opkssh generated SSH key",
-		Long:         "Inspect and view details of an opkssh generated SSH key. If no path is given, every opkssh generated SSH certificate found in ~/.ssh and ~/.ssh/opkssh is printed.",
-		Example:      "  opkssh inspect ~/.ssh/id_ecdsa_sk-cert.pub",
+		Long: `Inspect and view details of an opkssh generated SSH key or certificate.
+
+With no path, inspect prints every opkssh certificate in ~/.ssh/opkssh, under
+default key names in ~/.ssh (id_ecdsa, id_ed25519, ...) and in ssh-agent. 
+Certificates written elsewhere with "opkssh login -i <path>" are not 
+searched; pass their path instead.`,
+		Example: `  opkssh inspect
+  opkssh inspect ~/.ssh/id_ecdsa_sk-cert.pub`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			keyPathArg := ""
-			if len(args) > 0 {
-				keyPathArg = args[0]
+			inspect := commands.NewInspectCmd("", cmd.OutOrStdout())
+			inspect.ErrOutput = cmd.ErrOrStderr()
+			var err error
+			if len(args) == 0 {
+				err = inspect.RunDiscovery()
+			} else {
+				inspect.KeyOrCert = args[0]
+				err = inspect.Run()
 			}
-			inspect := commands.NewInspectCmd(keyPathArg, cmd.OutOrStdout())
-			if err := inspect.Run(); err != nil {
+			if err != nil {
 				log.Println("Error executing inspect command:", err)
 				return err
 			}

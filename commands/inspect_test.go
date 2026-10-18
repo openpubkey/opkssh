@@ -1,18 +1,40 @@
+// Copyright 2026 OpenPubkey
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
 // SPDX-License-Identifier: Apache-2.0
 
 package commands
 
 import (
 	"bytes"
+	"crypto"
 	"encoding/base64"
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/openpubkey/openpubkey/jose"
+	"github.com/openpubkey/openpubkey/pktoken"
+	pktokenmocks "github.com/openpubkey/openpubkey/pktoken/mocks"
+	"github.com/openpubkey/openpubkey/providers"
+	"github.com/openpubkey/openpubkey/providers/mocks"
+	"github.com/openpubkey/openpubkey/util"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh"
 )
@@ -72,12 +94,13 @@ func TestInspectSSHCert(t *testing.T) {
 
 			output := buf.String()
 
-			// Verify all four section headers appear in order
+			// Verify all section headers appear in order
 			sections := []string{
 				"--- SSH Certificate Information ---",
 				"--- PKToken Structure ---",
 				"--- Signature Information ---",
 				"--- Token Metadata ---",
+				"--- Expiration by Server Policy ---",
 			}
 			lastIdx := -1
 			for _, section := range sections {
@@ -306,4 +329,73 @@ func TestInspectFormatTime(t *testing.T) {
 			require.Equal(t, tt.outputString, output)
 		})
 	}
+}
+
+func TestInspectExpiration(t *testing.T) {
+	now := time.Now()
+	tests := []struct {
+		name     string
+		issuedAt time.Time
+		expires  time.Time
+		// refreshedExpires, if set, adds a refreshed ID token with this exp.
+		refreshedExpires time.Time
+		// wantExpired lists the policies that should report expired.
+		wantExpired []string
+	}{
+		{name: "fresh", issuedAt: now, expires: now.Add(time.Hour)},
+		{name: "13 hours old", issuedAt: now.Add(-13 * time.Hour), expires: now.Add(time.Hour), wantExpired: []string{"12h"}},
+		{name: "3 days old", issuedAt: now.Add(-72 * time.Hour), expires: now.Add(time.Hour), wantExpired: []string{"12h", "24h", "48h"}},
+		{name: "8 days old", issuedAt: now.Add(-8 * 24 * time.Hour), expires: now.Add(time.Hour), wantExpired: []string{"12h", "24h", "48h", "1week"}},
+		{name: "ID token exp passed", issuedAt: now.Add(-2 * time.Hour), expires: now.Add(-time.Hour), wantExpired: []string{"oidc", "oidc_refreshed"}},
+		{name: "ID token exp passed, refreshed ID token valid", issuedAt: now.Add(-2 * time.Hour), expires: now.Add(-time.Hour),
+			refreshedExpires: now.Add(time.Hour), wantExpired: []string{"oidc"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			signer, err := util.GenKeyPair(jose.ES256)
+			require.NoError(t, err)
+			pkt := unverifiedMockPKToken(t, signer, tt.issuedAt, tt.expires)
+			refreshedExpires := tt.expires
+			if !tt.refreshedExpires.IsZero() {
+				pkt.FreshIDToken = unverifiedMockPKToken(t, signer, now, tt.refreshedExpires).OpToken
+				refreshedExpires = tt.refreshedExpires
+			}
+			sshCertBytes, _, err := createSSHCert(pkt, signer, []string{"guest"})
+			require.NoError(t, err)
+
+			buf := new(bytes.Buffer)
+			require.NoError(t, NewInspectCmd(string(sshCertBytes), buf).Run())
+			output := buf.String()
+			section := output[strings.Index(output, "--- Expiration by Server Policy ---"):]
+
+			wantDeadlines := map[string]string{
+				"12h":            tt.issuedAt.Add(12 * time.Hour).Format(time.RFC3339),
+				"24h":            tt.issuedAt.Add(24 * time.Hour).Format(time.RFC3339),
+				"48h":            tt.issuedAt.Add(48 * time.Hour).Format(time.RFC3339),
+				"1week":          tt.issuedAt.Add(7 * 24 * time.Hour).Format(time.RFC3339),
+				"oidc":           tt.expires.Format(time.RFC3339),
+				"oidc_refreshed": refreshedExpires.Format(time.RFC3339),
+				"never":          "Never",
+			}
+			for _, policyName := range expirationPolicyNames {
+				status := "valid"
+				if slices.Contains(tt.wantExpired, policyName) {
+					status = "expired"
+				}
+				requireLineInSection(t, section, `^`+regexp.QuoteMeta(policyName+":")+`\s+`+regexp.QuoteMeta(wantDeadlines[policyName])+`\s+`+status+`$`)
+			}
+		})
+	}
+}
+
+// unverifiedMockPKToken makes a PK token with the given iat and exp. Unlike
+// Mocks it skips verification, which would reject old or expired tokens.
+func unverifiedMockPKToken(t *testing.T, signer crypto.Signer, issuedAt, expires time.Time) *pktoken.PKToken {
+	t.Helper()
+	idtTemplate := mocks.DefaultIDTokenTemplate()
+	idtTemplate.ExtraClaims = map[string]any{"iat": issuedAt.Unix(), "exp": expires.Unix()}
+	pkt, _, err := pktokenmocks.GenerateMockPKTokenWithOpts(t, signer, jose.ES256, idtTemplate,
+		&pktokenmocks.MockPKTokenOpts{CommitType: providers.CommitTypesEnum.NONCE_CLAIM, CorrectCicHash: true, CorrectCicSig: true})
+	require.NoError(t, err)
+	return pkt
 }
