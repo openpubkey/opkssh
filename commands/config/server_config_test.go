@@ -13,7 +13,7 @@ func TestCacheConfigDiscoveryCacheConfigDefaults(t *testing.T) {
 	cfg, err := NewServerConfig([]byte("cache:\n  base_dir: /var/cache/opkssh\n"))
 	require.NoError(t, err)
 
-	cacheCfg, err := cfg.Cache.DiscoveryCacheConfig(afero.NewMemMapFs())
+	cacheCfg, err := cfg.Cache.discoveryCacheConfig(afero.NewMemMapFs(), "linux")
 	require.NoError(t, err)
 	require.IsType(t, &discoverycache.FilesystemDiscoveryCache{}, cacheCfg.Cache)
 	require.Equal(t, time.Hour, cacheCfg.StandardMaxAge)
@@ -24,7 +24,7 @@ func TestCacheConfigDiscoveryCacheConfigRejectsInvalidFallback(t *testing.T) {
 	cfg, err := NewServerConfig([]byte("cache:\n  base_dir: /var/cache/opkssh\n  max_age: 2h\n  fallback_max_age: 1h\n"))
 	require.NoError(t, err)
 
-	_, err = cfg.Cache.DiscoveryCacheConfig(afero.NewMemMapFs())
+	_, err = cfg.Cache.discoveryCacheConfig(afero.NewMemMapFs(), "linux")
 	require.ErrorContains(t, err, "must not be less")
 }
 
@@ -32,7 +32,7 @@ func TestCacheConfigDiscoveryCacheConfigRejectsNegativeAges(t *testing.T) {
 	cfg, err := NewServerConfig([]byte("cache:\n  base_dir: /var/cache/opkssh\n  max_age: -1h\n"))
 	require.NoError(t, err)
 
-	_, err = cfg.Cache.DiscoveryCacheConfig(afero.NewMemMapFs())
+	_, err = cfg.Cache.discoveryCacheConfig(afero.NewMemMapFs(), "linux")
 	require.ErrorContains(t, err, "must not be negative")
 }
 
@@ -43,7 +43,7 @@ func TestCacheConfigDiscoveryCacheConfigRejectsInsecureBaseDir(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	require.NoError(t, fs.MkdirAll("/var/cache/opkssh", 0o777))
 
-	_, err = cfg.Cache.DiscoveryCacheConfig(fs)
+	_, err = cfg.Cache.discoveryCacheConfig(fs, "linux")
 	require.ErrorContains(t, err, "group- or world-writable")
 }
 
@@ -51,7 +51,7 @@ func TestCacheConfigDiscoveryCacheConfigRejectsRelativeBaseDir(t *testing.T) {
 	cfg, err := NewServerConfig([]byte("cache:\n  base_dir: relative/dir\n"))
 	require.NoError(t, err)
 
-	_, err = cfg.Cache.DiscoveryCacheConfig(afero.NewMemMapFs())
+	_, err = cfg.Cache.discoveryCacheConfig(afero.NewMemMapFs(), "linux")
 	require.ErrorContains(t, err, "must be an absolute path")
 }
 
@@ -93,23 +93,19 @@ func TestCacheConfigOffDisablesDiscoveryCache(t *testing.T) {
 	require.NoError(t, err)
 	off, err := cfg.Cache.WithMode(CacheModeOff)
 	require.NoError(t, err)
-	cacheCfg, err := off.DiscoveryCacheConfig(afero.NewMemMapFs())
+	cacheCfg, err := off.discoveryCacheConfig(afero.NewMemMapFs(), "linux")
 	require.NoError(t, err)
 	require.Nil(t, cacheCfg.Cache)
 }
 
 func TestCacheConfigUnsupportedOS(t *testing.T) {
-	old := cacheSupported
-	cacheSupported = false
-	t.Cleanup(func() { cacheSupported = old })
-
 	cfg, err := NewServerConfig([]byte("cache:\n  base_dir: /var/cache/opkssh\n"))
 	require.NoError(t, err)
-	_, err = cfg.Cache.DiscoveryCacheConfig(afero.NewMemMapFs())
-	require.ErrorContains(t, err, "the persistent JWKS cache is not supported on ")
+	_, err = cfg.Cache.discoveryCacheConfig(afero.NewMemMapFs(), "windows")
+	require.ErrorContains(t, err, "the persistent JWKS cache is not supported on windows")
 
 	// Without a cache section there is nothing to report.
-	cacheCfg, err := CacheConfig{}.DiscoveryCacheConfig(afero.NewMemMapFs())
+	cacheCfg, err := CacheConfig{}.discoveryCacheConfig(afero.NewMemMapFs(), "windows")
 	require.NoError(t, err)
 	require.Nil(t, cacheCfg.Cache)
 }
