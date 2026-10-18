@@ -19,165 +19,85 @@
 package integration
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"runtime"
-	"slices"
 	"strings"
 	"testing"
-	"unicode"
+	"time"
 
+	"github.com/openpubkey/opkssh/test/integration/ssh_server"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
+	tcexec "github.com/testcontainers/testcontainers-go/exec"
 )
 
-type OpenSSHVersionTest struct {
-	name           string
-	osType         string // OS_TYPE of the CI integration job that runs this case
-	containerImage string
-	setupCommands  []string
-	versionCommand string
-	expectedPrefix string
-}
-
+// TestOpenSSHVersionDetection checks that opkssh's package-manager based
+// OpenSSH version detection works on the distribution of this CI job.
+//
+// It runs the real opkssh binary inside the SSH server image that the other
+// integration tests already build (so the image comes from the Docker build
+// cache).
 func TestOpenSSHVersionDetection(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Docker-based integration tests are not supported on Windows")
 	}
 
-	tests := []OpenSSHVersionTest{
-		{
-			name:           "Debian/Ubuntu",
-			osType:         "ubuntu",
-			containerImage: "debian:latest",
-			setupCommands: []string{
-				"apt-get update",
-				"apt-get install -y openssh-server sed",
-			},
-			versionCommand: `version=$(/usr/bin/dpkg-query -W -f='${Version}\n' openssh-server | /bin/sed -E 's/^[0-9]*:?([0-9]+\.[0-9]+).*/\1/'); /bin/echo "OpenSSH_$version"`,
-			expectedPrefix: "OpenSSH_",
-		},
-		{
-			name:           "RHEL/CentOS",
-			osType:         "centos",
-			containerImage: "rockylinux:9",
-			setupCommands: []string{
-				"dnf clean all && dnf makecache && dnf install -y openssh-server sed",
-			},
-			versionCommand: `version=$(/usr/bin/rpm -q --qf "%{VERSION}\n" openssh-server | /bin/sed -E 's/^([0-9]+\.[0-9]+).*/\1/'); /bin/echo "OpenSSH_$version"`,
-			expectedPrefix: "OpenSSH_",
-		},
-		{
-			name:           "SUSE",
-			osType:         "opensuse",
-			containerImage: "opensuse/leap:16.0",
-			setupCommands: []string{
-				"zypper refresh",
-				"zypper install -y openssh sed",
-			},
-			versionCommand: `version=$(/usr/bin/rpm -q --qf "%{VERSION}\n" openssh | /bin/sed -E 's/^([0-9]+\.[0-9]+).*/\1/'); /bin/echo "OpenSSH_$version"`,
-			expectedPrefix: "OpenSSH_",
-		},
-		{
-			name:           "Arch Linux",
-			osType:         "arch",
-			containerImage: "manjarolinux/base:latest",
-			setupCommands: []string{
-				"pacman-key --init",
-				"pacman-key --populate archlinux manjaro",
-				"pacman -Sy --noconfirm --needed manjaro-keyring archlinux-keyring",
-				"pacman -Sy --noconfirm --needed openssh sed",
-			},
-			versionCommand: `version=$(/usr/bin/pacman -Qi openssh | /usr/bin/awk '/^Version/ {print $3}' | /bin/sed -E 's/^([0-9]+\.[0-9]+).*/\1/'); /bin/echo "OpenSSH_$version"`,
-			expectedPrefix: "OpenSSH_",
-		},
+	// sysdetails.OSType that opkssh should detect in each job's server image.
+	expectedOS := map[string]string{
+		"ubuntu":   "debian",
+		"centos":   "rhel",
+		"arch":     "arch",
+		"opensuse": "suse",
 	}
-
-	// Each CI integration job sets OS_TYPE, so it only needs the matching
-	// distribution; without OS_TYPE (e.g. locally) run them all.
 	osType := os.Getenv("OS_TYPE")
-	// If osType does not match any expected osType, fail loudly. Likely a typo
-	if osType != "" && !slices.ContainsFunc(tests, func(tt OpenSSHVersionTest) bool { return tt.osType == osType }) {
+	wantOS, ok := expectedOS[osType]
+	if !ok {
 		t.Fatalf("OS_TYPE=%q matches no version-detection case", osType)
 	}
 	t.Parallel()
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if osType != "" && osType != tt.osType {
-				t.Skipf("covered by the %s integration job", tt.osType)
-			}
-			t.Parallel()
-			testOpenSSHVersionInContainer(t, tt)
-		})
-	}
-}
 
-func testOpenSSHVersionInContainer(t *testing.T, test OpenSSHVersionTest) {
-	ctx := TestCtx
-
-	// Create container request
-	req := testcontainers.ContainerRequest{
-		Image:           test.containerImage,
-		Cmd:             []string{"sleep", "3600"}, // Keep container running
-		WaitingFor:      wait.ForLog(""),
-		AutoRemove:      true,
-		AlwaysPullImage: true,
-	}
-
-	// Start container
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: req,
-		Started:          true,
-	})
-	require.NoError(t, err, "failed to start container")
+	container, err := ssh_server.RunOpkSshContainer(TestCtx, "", "", "", false)
+	require.NoError(t, err, "failed to start SSH server container")
 	defer func() {
-		if termErr := container.Terminate(ctx); termErr != nil {
-			t.Logf("Warning: failed to terminate container: %v", termErr)
-		}
+		require.NoError(t, container.Terminate(TestCtx, testcontainers.StopTimeout(time.Millisecond)))
 	}()
 
-	// Run setup commands
-	for _, cmd := range test.setupCommands {
-		t.Logf("Running setup command: %s", cmd)
-		code, reader, err := container.Exec(ctx, []string{"/bin/bash", "-c", cmd})
-		out, err := readAllFromReader(reader)
-		success := 0
-		require.Equalf(t, success, code, "setup command failed:\n%s", string(out))
-
-		require.NoError(t, err, "failed to read setup command output")
-		require.NoError(t, err, "failed to execute setup command")
-	}
-
-	// Test the version detection command
-	t.Logf("Testing version command: %s", test.versionCommand)
-	code, reader, err := container.Exec(ctx, []string{"/bin/sh", "-c", test.versionCommand})
-	require.NoError(t, err, "failed to execute version command")
-	require.Equal(t, 0, code, "version command failed")
-
-	// Read and validate output
-	output, err := readAllFromReader(reader)
-	require.NoError(t, err, "failed to read command output")
-
-	// Clean output by keeping only printable ASCII characters
-	var cleanedBytes []byte
-	for _, b := range output {
-		if unicode.IsPrint(rune(b)) && b < 128 {
-			cleanedBytes = append(cleanedBytes, b)
+	run := func(cmd string) string {
+		t.Helper()
+		code, reader, err := container.Exec(TestCtx, []string{"/bin/sh", "-c", cmd}, tcexec.Multiplexed())
+		require.NoError(t, err, "failed to run %q", cmd)
+		out, err := io.ReadAll(reader)
+		require.NoError(t, err)
+		// audit exits 1 because the installer writes the default client IDs;
+		// only the JSON on stdout matters here.
+		if !strings.HasPrefix(cmd, "/usr/local/bin/opkssh audit") {
+			require.Equal(t, 0, code, "%q failed:\n%s", cmd, out)
 		}
+		return strings.TrimSpace(string(out))
 	}
-	outputStr := strings.TrimSpace(string(cleanedBytes))
 
-	t.Logf("Output: --'%s'--", outputStr)
+	auditJSON := run("/usr/local/bin/opkssh audit --json --skip-user-policy 2>/dev/null")
+	var results struct {
+		OpenSSHVersion string `json:"openssh_version"`
+		OsInfo         string `json:"os_info"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(auditJSON), &results), "audit output is not JSON:\n%s", auditJSON)
+	t.Logf("opkssh detected OS %q, OpenSSH %q", results.OsInfo, results.OpenSSHVersion)
 
-	// Validate output format - should be OpenSSH_X.Y format
-	require.Regexp(t, `^OpenSSH_\d+\.\d+`, outputStr,
-		"expected output to match OpenSSH_X.Y format, got: %s", outputStr)
+	require.Equal(t, wantOS, results.OsInfo)
+	// The package-manager query yields exactly "OpenSSH_X.Y". Anything longer
+	// means detection fell back to `ssh -V`, i.e. the distro query is broken.
+	require.Regexp(t, `^OpenSSH_\d+\.\d+$`, results.OpenSSHVersion)
 
-	// Extract version number for logging
-	version := strings.TrimPrefix(outputStr, "OpenSSH_")
-	t.Logf("✓ Successfully detected OpenSSH version: %s", version)
+	// Cross-check against the installed binary.
+	sshV := run("ssh -V 2>&1")
+	m := regexp.MustCompile(`^OpenSSH_(\d+\.\d+)`).FindStringSubmatch(sshV)
+	require.NotNil(t, m, "unexpected ssh -V output: %s", sshV)
+	require.Equal(t, "OpenSSH_"+m[1], results.OpenSSHVersion, "ssh -V reports %s", sshV)
 }
 
 func readAllFromReader(reader io.Reader) ([]byte, error) {
