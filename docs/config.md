@@ -116,7 +116,7 @@ cache:
   fallback_max_age: 2h
 ```
 
-`base_dir` must be an absolute path owned by the `AuthorizedKeysCommandUser` account, not writable by others, and labelled `opkssh_cache_t` if SELinux is enabled. The installer sets all of this up when you set `OPKSSH_INSTALL_CACHE_DIR`. A cache problem never blocks a login: opkssh logs it and verifies without the cache.
+`base_dir` must be an absolute path owned by the `AuthorizedKeysCommandUser` account, not writable by others, and labelled `opkssh_cache_t` if SELinux is enabled. The installer sets all of this up when you set `OPKSSH_INSTALL_CACHE_DIR`. A cache problem never blocks a login: opkssh logs it and verifies without the cache. The cache is supported on Linux and macOS, not on Windows.
 
 See [docs/cache.md](cache.md) for how the cache works, all settings, debugging with `opkssh verify --cache`, SELinux and security considerations.
 

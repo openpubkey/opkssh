@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -66,6 +67,12 @@ func (c *ServerConfig) SetEnvVars() error {
 	return nil
 }
 
+// cacheSupported reports whether the persistent JWKS cache can be used on
+// this operating system. On Windows, directory permissions are ACLs that the
+// cache's safety checks don't understand, so the cache is not supported
+// there. It is a variable so tests can change it.
+var cacheSupported = runtime.GOOS != "windows"
+
 // DefaultCacheBaseDir is the cache directory used by opkssh verify --cache=on
 // when the server config does not set one.
 const DefaultCacheBaseDir = "/var/cache/opkssh"
@@ -104,6 +111,9 @@ func (c CacheConfig) WithMode(mode string) (CacheConfig, error) {
 func (c CacheConfig) DiscoveryCacheConfig(fs afero.Fs) (discover.DiscoveryCacheConfig, error) {
 	if c.BaseDir == "" {
 		return discover.DiscoveryCacheConfig{}, nil
+	}
+	if !cacheSupported {
+		return discover.DiscoveryCacheConfig{}, fmt.Errorf("the persistent JWKS cache is not supported on %s", runtime.GOOS)
 	}
 	if fs == nil {
 		return discover.DiscoveryCacheConfig{}, fmt.Errorf("cache filesystem is required")

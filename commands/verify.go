@@ -19,6 +19,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"regexp"
 	"strings"
@@ -163,6 +164,9 @@ func (v *VerifyCmd) ReadFromServerConfig() (*config.ServerConfig, error) {
 	groups := v.configGroups
 	if groups == nil {
 		groups = defaultConfigGroups()
+	}
+	if exists, err := afero.Exists(v.Fs, v.ConfigPathArg); err == nil && !exists {
+		log.Printf("No server config file at %s: running without deny lists, env_vars or a JWKS cache\n", v.ConfigPathArg)
 	}
 	serverConfig, err := loadServerConfig(v.Fs, v.filePermChecker, v.ConfigPathArg, groups)
 	if err != nil {

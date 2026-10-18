@@ -17,9 +17,11 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -462,19 +464,25 @@ env_vars:
 				// would report for an AuthorizedKeysCommandUser of ubuntu.
 				configGroups: []string{"opksshuser", "ubuntu"},
 			}
+			var logs bytes.Buffer
+			log.SetOutput(&logs)
+			defer log.SetOutput(os.Stderr)
 			serverConfig, err := ver.ReadFromServerConfig()
 
 			if tt.errorString != "" {
 				require.ErrorContains(t, err, tt.errorString)
-			} else if tt.missing {
-				require.NoError(t, err)
+				return
+			}
+			require.NoError(t, err)
+			if tt.missing {
 				require.Equal(t, &config.ServerConfig{}, serverConfig)
 				require.Empty(t, os.Getenv("OPKSSH_TEST_EXAMPLE_VAR1"))
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, "ABC", os.Getenv("OPKSSH_TEST_EXAMPLE_VAR1"))
-				require.Equal(t, "DEF", os.Getenv("OPKSSH_TEST_EXAMPLE_VAR2"))
+				require.Contains(t, logs.String(), "No server config file at "+ver.ConfigPathArg+": running without deny lists, env_vars or a JWKS cache")
+				return
 			}
+			require.NotContains(t, logs.String(), "No server config file")
+			require.Equal(t, "ABC", os.Getenv("OPKSSH_TEST_EXAMPLE_VAR1"))
+			require.Equal(t, "DEF", os.Getenv("OPKSSH_TEST_EXAMPLE_VAR2"))
 		})
 	}
 

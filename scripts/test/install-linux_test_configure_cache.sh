@@ -14,6 +14,10 @@ setUp() {
     semanage_available_exit_code=0
     semanage_add_exit_code=0
     runuser_exit_code=0
+    SELINUX_POLICY_SUPPORTS_CACHE=""
+    SELINUX_POLICY_SOURCE=""
+    # Read by the sourced installer.
+    export SELINUX_POLICY_SUPPORTS_CACHE SELINUX_POLICY_SOURCE
     TEST_TEMP_DIR=$(mktemp -d /tmp/opkssh.XXXXXX)
     MOCK_LOG="$TEST_TEMP_DIR/mock.log"
     # Exported so configure_cache in the sourced script picks them up.
@@ -170,7 +174,7 @@ test_configure_cache_failed_preflight_leaves_config_unchanged() {
     runuser_exit_code=0
 
     assertEquals "Expected to return 1 when the preflight fails" 1 "$result"
-    assertTrue "Expected config.yml to be byte-for-byte unchanged" "cmp -s \"$TEST_TEMP_DIR/original.yml\" \"$TEST_TEMP_DIR/opk/config.yml\""
+    assertEquals "Expected config.yml to be byte-for-byte unchanged" "$(sha256sum < "$TEST_TEMP_DIR/original.yml")" "$(sha256sum < "$TEST_TEMP_DIR/opk/config.yml")"
     assertFalse "Expected the temporary config to be removed" "[ -e \"$TEST_TEMP_DIR/opk/config.yml.opkssh-new\" ]"
     assertFalse "Expected no timer to be installed" "[ -f \"$TEST_TEMP_DIR/systemd/opkssh-cache-clean.timer\" ]"
 }
@@ -241,8 +245,40 @@ test_configure_cache_selinux_without_semanage_fails_safely() {
 
     assertEquals "Expected to fail without semanage" 1 "$result"
     assertContains "Expected the missing package named" "$output" "policycoreutils-python-utils"
-    assertTrue "Expected config.yml unchanged" "cmp -s \"$TEST_TEMP_DIR/original.yml\" \"$TEST_TEMP_DIR/opk/config.yml\""
+    assertEquals "Expected config.yml unchanged" "$(sha256sum < "$TEST_TEMP_DIR/original.yml")" "$(sha256sum < "$TEST_TEMP_DIR/opk/config.yml")"
     assertNotContains "Expected no preflight" "$(cat "$MOCK_LOG")" "runuser"
+}
+
+test_configure_cache_selinux_policy_without_cache_type_fails_clearly() {
+    CACHE_DIR="$TEST_TEMP_DIR/cache"
+    mkdir -p "$TEST_TEMP_DIR/systemd"
+    printf 'deny_users:\n  - bob\n' > "$TEST_TEMP_DIR/opk/config.yml"
+    cp "$TEST_TEMP_DIR/opk/config.yml" "$TEST_TEMP_DIR/original.yml"
+    selinux_enabled_exit_code=0
+    SELINUX_POLICY_SUPPORTS_CACHE=false
+    SELINUX_POLICY_SOURCE="release v0.17.0"
+
+    output=$(configure_cache "$TEST_TEMP_DIR" "$TEST_TEMP_DIR/systemd")
+    result=$?
+
+    assertEquals "Expected to fail" 1 "$result"
+    assertContains "Expected the policy source named" "$output" "installed from release v0.17.0 does not support the JWKS cache"
+    assertContains "Expected the fix named" "$output" "--install-te-from"
+    assertNotContains "Expected no semanage call" "$(cat "$MOCK_LOG")" "semanage"
+    assertEquals "Expected config.yml unchanged" "$(sha256sum < "$TEST_TEMP_DIR/original.yml")" "$(sha256sum < "$TEST_TEMP_DIR/opk/config.yml")"
+}
+
+test_configure_cache_selinux_policy_with_cache_type_is_labelled() {
+    CACHE_DIR="$TEST_TEMP_DIR/cache"
+    mkdir -p "$TEST_TEMP_DIR/systemd"
+    selinux_enabled_exit_code=0
+    SELINUX_POLICY_SUPPORTS_CACHE=true
+
+    configure_cache "$TEST_TEMP_DIR" "$TEST_TEMP_DIR/systemd" >/dev/null
+    result=$?
+
+    assertEquals "Expected to succeed" 0 "$result"
+    assertContains "Expected the directory labelled" "$(cat "$MOCK_LOG")" "semanage fcontext -a -t opkssh_cache_t"
 }
 
 test_configure_cache_skips_selinux_when_disabled() {

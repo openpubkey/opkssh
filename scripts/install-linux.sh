@@ -563,6 +563,7 @@ check_selinux() {
             if [[ -n "$LOCAL_TE_FILE" ]]; then
                 echo "  Using local TE-file"
                 cp "$LOCAL_TE_FILE" "$te_tmp"
+                SELINUX_POLICY_SOURCE="the local file $LOCAL_TE_FILE"
             else
                 if [[ "$INSTALL_VERSION" == "latest" ]]; then
                     version=$(wget --server-response --max-redirect=0 -O /dev/null "https://github.com/${GITHUB_REPO}/releases/latest" 2>&1 | sed -n -E 's/^  Location: .*\/tag\/(v[0-9.]+).*/\1/p')
@@ -571,6 +572,14 @@ check_selinux() {
                 fi
                 echo "  Downloading TE-file"
                 wget -q -O "$te_tmp" "https://raw.githubusercontent.com/${GITHUB_REPO}/refs/tags/${version}/opkssh.te"
+                SELINUX_POLICY_SOURCE="release ${version}"
+            fi
+            # Recorded for configure_cache, which needs the opkssh_cache_t
+            # type. Policies from releases before the JWKS cache lack it.
+            if grep -q 'opkssh_cache_t' "$te_tmp" 2>/dev/null; then
+                SELINUX_POLICY_SUPPORTS_CACHE=true
+            else
+                SELINUX_POLICY_SUPPORTS_CACHE=false
             fi
 
             echo "  Compiling SELinux module..."
@@ -708,6 +717,12 @@ semanage_available() {
 label_cache_dir() {
     if ! selinux_enabled; then
         return 0
+    fi
+    # check_selinux records whether the policy it installed defines
+    # opkssh_cache_t. Without it semanage fails with an unhelpful error.
+    if [[ "${SELINUX_POLICY_SUPPORTS_CACHE:-}" == false ]]; then
+        echo "The opkssh SELinux policy installed from ${SELINUX_POLICY_SOURCE:-an unknown source} does not support the JWKS cache (it has no opkssh_cache_t type). Install a version of opkssh whose policy supports the cache, or pass --install-te-from with the opkssh.te that matches your build."
+        return 1
     fi
     if ! semanage_available; then
         echo "SELinux is enabled, but semanage is not installed. Install the package that provides it (policycoreutils-python-utils on RHEL, CentOS and Fedora) and run the installer again."

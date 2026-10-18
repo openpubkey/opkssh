@@ -7,7 +7,7 @@ The persistent JWKS cache saves the JWKS on disk, so that:
 - most logins don't contact the provider, which makes them faster and reduces load on the provider, and
 - logins keep working for a while if the provider can't be reached.
 
-The cache is off by default.
+The cache is off by default, including after upgrading opkssh: nothing changes until you enable it. It is supported on Linux and macOS, not on Windows.
 
 ## Enabling the cache
 
@@ -25,9 +25,11 @@ The installer:
 4. only if the check passes, adds the `cache` section to `/etc/opk/config.yml`,
 5. installs and enables a daily `opkssh-cache-clean.timer`. If systemd isn't running, for example while building a container image, the timer is enabled to start on the next boot.
 
+The installer does this for whatever directory you set; `/var/cache/opkssh` is only the conventional choice.
+
 To use another account, set `OPKSSH_INSTALL_AUTH_CMD_USER` and `OPKSSH_INSTALL_AUTH_CMD_GROUP`. To change the cleanup schedule, set `OPKSSH_INSTALL_CACHE_CLEAN_ON_CALENDAR` to a systemd `OnCalendar` expression.
 
-To set the cache up by hand, create the directory with the ownership and mode above, label it if SELinux is enabled, add the `cache` section below to `/etc/opk/config.yml`, and schedule `opkssh cache clean` to run as the verify account. Then run the preflight:
+If you enable the cache any other way, by editing `config.yml` or with `opkssh verify --cache=on`, nothing creates or labels the directory for you. Create it with the ownership and mode above, label it if SELinux is enabled (see [SELinux](#selinux)), add the `cache` section below to `/etc/opk/config.yml`, and schedule `opkssh cache clean` to run as the verify account. Then run the preflight:
 
 ```bash
 sudo -u opksshuser opkssh cache check
@@ -154,7 +156,7 @@ AuthorizedKeysCommand /usr/local/bin/opkssh verify --cache=off %u %k %t
 |---|---|
 | `auto` (default) | Use the `cache` section of `config.yml`. |
 | `off` | Don't use the cache, whatever `config.yml` says. |
-| `on` | Use the cache even if `config.yml` has no `cache` section, with `/var/cache/opkssh` and the default ages unless `config.yml` sets them. The `base_dir` checks above still apply. |
+| `on` | Use the cache even if `config.yml` has no `cache` section, with `/var/cache/opkssh` and the default ages unless `config.yml` sets them. The `base_dir` checks above still apply. The directory must already exist; see [Enabling the cache](#enabling-the-cache). |
 
 `opkssh cache check`, run as the verify account, reports any problem with the cache directory or the server configuration.
 
@@ -168,6 +170,8 @@ sudo restorecon -R /var/cache/opkssh
 ```
 
 If the label is missing, `opkssh verify` logs an error with these commands and runs without the cache.
+
+The installer can only label the directory if the opkssh SELinux policy it installs defines `opkssh_cache_t`. Policies published before the JWKS cache don't. When you install a local build with `--install-from`, also pass `--install-te-from` with the `opkssh.te` from the same build; otherwise the installer stops with an error naming the policy it found.
 
 ## Proxies
 

@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/user"
+	"strconv"
 	"syscall"
 )
 
@@ -38,7 +40,20 @@ func validateCacheOwnerUID(path string, info fs.FileInfo, uid int) error {
 		return nil
 	}
 	if int(stat.Uid) != uid {
-		return fmt.Errorf("cache base_dir %q must be owned by the verification user", path)
+		owner := userName(int(stat.Uid))
+		return fmt.Errorf("cache base_dir %q is owned by %s, but this process runs as %s. "+
+			"The cache must be owned by the account that runs opkssh verify (AuthorizedKeysCommandUser). "+
+			"To run cache commands by hand, run them as that account, for example: sudo -u %s opkssh cache check",
+			path, owner, userName(uid), owner)
 	}
 	return nil
+}
+
+// userName returns the name of the user with the given uid, or "uid N" if
+// it has none.
+func userName(uid int) string {
+	if u, err := user.LookupId(strconv.Itoa(uid)); err == nil {
+		return u.Username
+	}
+	return "uid " + strconv.Itoa(uid)
 }

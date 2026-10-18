@@ -160,10 +160,18 @@ configure_cache'`, cacheDir))
 	require.Less(t, elapsed, 60*time.Second, "the fallback must be reached well within LoginGraceTime")
 	t.Logf("Fallback login took %v", elapsed)
 
+	// The stopped provider drops packets, so every download waits out the
+	// 10s timeout; the fallback login above covers that case. For the rest
+	// of the test, resolve the provider to an address where the connection
+	// is refused at once. /etc/hosts is a bind mount, so rewrite it in place.
+	run(`sudo sh -c 'sed "s/^.*[[:space:]]oidc\.local$/127.0.0.1 oidc.local/" /etc/hosts > /tmp/hosts && cat /tmp/hosts > /etc/hosts'`)
+	require.Equal(t, "127.0.0.1", strings.Fields(run("getent hosts oidc.local"))[0])
+
 	t.Log("Provider down, no fallback window: the same login must fail")
 	setCacheAges("1s", "1s")
-	_, err = sshLogin()
+	elapsed, err = sshLogin()
 	require.Error(t, err, "without a fallback window the login must fail, or the previous login was not served by the fallback")
+	t.Logf("Failed login took %v", elapsed)
 
 	require.Equal(t, []string{firstFile}, cacheFiles(), "the cache must still hold exactly the one file")
 

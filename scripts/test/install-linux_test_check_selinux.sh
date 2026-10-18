@@ -231,5 +231,22 @@ test_check_selinux_local_te_file_falls_back_to_sshd_t() {
     assertContains "Expected the sshd_t module installed" "$output" "Installed module for sshd_t"
 }
 
+test_check_selinux_records_policy_without_cache_type() {
+    check_selinux >/dev/null 2>&1
+
+    assertEquals "Expected the downloaded dummy policy to lack the cache type" "false" "$SELINUX_POLICY_SUPPORTS_CACHE"
+    assertContains "Expected the release recorded" "$SELINUX_POLICY_SOURCE" "release "
+}
+
+test_check_selinux_records_policy_with_cache_type() {
+    LOCAL_TE_FILE="$TEST_TEMP_DIR/local.te"
+    echo "module opkssh 2.1; require { type sshd_t; }; type opkssh_cache_t;" > "$LOCAL_TE_FILE"
+
+    check_selinux >/dev/null 2>&1
+
+    assertEquals "Expected the local policy to have the cache type" "true" "$SELINUX_POLICY_SUPPORTS_CACHE"
+    assertEquals "Expected the local file recorded" "the local file $LOCAL_TE_FILE" "$SELINUX_POLICY_SOURCE"
+}
+
 # shellcheck disable=SC1091
 source shunit2

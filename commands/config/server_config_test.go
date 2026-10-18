@@ -97,3 +97,19 @@ func TestCacheConfigOffDisablesDiscoveryCache(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, cacheCfg.Cache)
 }
+
+func TestCacheConfigUnsupportedOS(t *testing.T) {
+	old := cacheSupported
+	cacheSupported = false
+	t.Cleanup(func() { cacheSupported = old })
+
+	cfg, err := NewServerConfig([]byte("cache:\n  base_dir: /var/cache/opkssh\n"))
+	require.NoError(t, err)
+	_, err = cfg.Cache.DiscoveryCacheConfig(afero.NewMemMapFs())
+	require.ErrorContains(t, err, "the persistent JWKS cache is not supported on ")
+
+	// Without a cache section there is nothing to report.
+	cacheCfg, err := CacheConfig{}.DiscoveryCacheConfig(afero.NewMemMapFs())
+	require.NoError(t, err)
+	require.Nil(t, cacheCfg.Cache)
+}

@@ -32,7 +32,9 @@ func TestValidateCacheOwnerUID(t *testing.T) {
 	info, err := os.Stat(path)
 	require.NoError(t, err)
 	require.NoError(t, validateCacheOwnerUID(path, info, os.Geteuid()))
-	require.ErrorContains(t, validateCacheOwnerUID(path, info, os.Geteuid()+1), "must be owned")
+	err = validateCacheOwnerUID(path, info, os.Geteuid()+1)
+	require.ErrorContains(t, err, "is owned by "+userName(os.Geteuid())+", but this process runs as "+userName(os.Geteuid()+1))
+	require.ErrorContains(t, err, "sudo -u "+userName(os.Geteuid())+" opkssh cache check")
 }
 
 func TestValidateRejectsForeignOwnerEvenAsRoot(t *testing.T) {
@@ -44,8 +46,13 @@ func TestValidateRejectsForeignOwnerEvenAsRoot(t *testing.T) {
 	require.NoError(t, os.Chown(dir, 65534, -1))
 
 	cache := NewFilesystemDiscoveryCache(afero.NewOsFs(), dir)
-	require.ErrorContains(t, cache.Validate(), "must be owned by the verification user")
+	require.ErrorContains(t, cache.Validate(), "is owned by "+userName(65534)+", but this process runs as root")
 
 	require.NoError(t, os.Chown(dir, 0, -1))
 	require.NoError(t, cache.Validate())
+}
+
+func TestUserName(t *testing.T) {
+	require.Equal(t, "root", userName(0))
+	require.Equal(t, "uid 4294967290", userName(4294967290))
 }
