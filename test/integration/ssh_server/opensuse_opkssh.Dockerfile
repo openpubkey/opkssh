@@ -17,8 +17,11 @@ RUN go build -v -o opksshbuild
 # Stage 2: Create a minimal opensuse leap:16 image
 FROM opensuse/leap:16.1
 
-# Install dependencies required for runtime (e.g., SSH server)
-RUN zypper refresh && \
+# Install dependencies required for runtime (e.g., SSH server).
+# Disable the third-party OpenH264 codec repo the base image enables: nothing
+# here needs it, and when codecs.opensuse.org is unreachable `zypper refresh`
+# exits 4 and fails the whole build.
+RUN (zypper -n mr --disable openSUSE:repo-openh264 || true) && \
     zypper -n ref && \
     zypper -n dup --allow-vendor-change && \
     zypper -n in --no-recommends \
