@@ -22,6 +22,15 @@ Running `./install-linux.sh --help` will show you all available flags.
 `--install-from=FILEPATH` allows you to install the opkssh binary from a local file.
 This is useful if you want to install a locally built opkssh binary.
 
+`--install-te-from=FILEPATH` installs the SELinux policy from a local `opkssh.te` instead of downloading the one published with the release.
+On SELinux systems, use it together with `--install-from` so the policy matches your build; otherwise the installer downloads the policy of the latest release:
+
+```bash
+sudo ./scripts/install-linux.sh --install-from=./opkssh --install-te-from=./opkssh.te
+```
+
+As with a downloaded policy, the installer loads it for the `sshd_session_t` domain if the system has one (for example RHEL and CentOS 10), and for `sshd_t` otherwise.
+
 `--install-version=VER` downloads and installs a particular release of opkssh. By default we download and install the latest release of opkssh.
 > [!NOTE]
 > To install versions earlier than v0.10.0, you need to run the install-linux.sh script from the specific version tag.
