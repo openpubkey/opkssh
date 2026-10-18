@@ -3,6 +3,7 @@ package commands
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -131,11 +132,14 @@ func TestPermissionsCheck_JsonOutputIsParseable(t *testing.T) {
 func TestPermissionsCheck_JsonShape(t *testing.T) {
 	vfs := afero.NewMemMapFs()
 	writeCompleteConfig(t, vfs)
-	require.NoError(t, vfs.Chmod(policy.SystemDefaultProvidersPath, 0o644))
 
 	stdOut := &bytes.Buffer{}
 	p := newTestPermissionsCmdSplit(vfs, stdOut, &bytes.Buffer{})
-	p.FileSystem.(*ownerStubFileSystem).aclProblems = map[string][]string{
+	stub := p.FileSystem.(*ownerStubFileSystem)
+	stub.permErrors = map[string]error{
+		policy.SystemDefaultProvidersPath: errors.New("expected one of the following permissions [640], got (644)"),
+	}
+	stub.aclProblems = map[string][]string{
 		policy.SystemDefaultProvidersPath: {"expected mode 640, got 644"},
 	}
 	require.Error(t, runPermissionsCobra(p, "check", "--json"))
@@ -264,12 +268,15 @@ func TestPermissionsFix_JsonDryRunNeedsNoYes(t *testing.T) {
 func TestPermissionsCheck_PermsErrAndACLProblemCountOnce(t *testing.T) {
 	vfs := afero.NewMemMapFs()
 	writeCompleteConfig(t, vfs)
-	require.NoError(t, vfs.Chmod(policy.SystemDefaultProvidersPath, 0o644))
 
 	stdOut := &bytes.Buffer{}
 	p := newTestPermissionsCmdSplit(vfs, stdOut, &bytes.Buffer{})
 	p.JsonOutput = true
-	p.FileSystem.(*ownerStubFileSystem).aclProblems = map[string][]string{
+	stub := p.FileSystem.(*ownerStubFileSystem)
+	stub.permErrors = map[string]error{
+		policy.SystemDefaultProvidersPath: errors.New("expected one of the following permissions [640], got (644)"),
+	}
+	stub.aclProblems = map[string][]string{
 		policy.SystemDefaultProvidersPath: {"expected mode 640, got 644"},
 	}
 

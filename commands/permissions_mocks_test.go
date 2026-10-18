@@ -23,17 +23,32 @@ func newTestPermissionsCmd(vfs afero.Fs, out io.Writer) *PermissionsCmd {
 	}
 }
 
-// ownerStubFileSystem fills in what an in-memory filesystem can't: file
-// owners. The real Chown calls os.Chown on the host path, and the real ACL
-// verifier can't read an owner from an in-memory file.
+// ownerStubFileSystem fills in what an in-memory filesystem can't: owners
+// and ACLs. The real Chown and ApplyACE act on the host path, the real ACL
+// verifier can't read an owner from an in-memory file, and CheckPerm's mode
+// check differs by platform (Windows doesn't check POSIX modes).
 type ownerStubFileSystem struct {
 	files.FileSystem
 	// aclProblems are the ACL problems VerifyACL reports, by path.
 	aclProblems map[string][]string
+	// permErrors are the errors CheckPerm returns, by path. Other paths use
+	// the real CheckPerm.
+	permErrors map[string]error
 }
 
 func (o *ownerStubFileSystem) Chown(path string, owner string, group string) error {
 	return nil
+}
+
+func (o *ownerStubFileSystem) ApplyACE(path string, ace files.ACE) error {
+	return nil
+}
+
+func (o *ownerStubFileSystem) CheckPerm(path string, requirePerm []fs.FileMode, requiredOwner string, requiredGroup string) error {
+	if err, ok := o.permErrors[path]; ok {
+		return err
+	}
+	return o.FileSystem.CheckPerm(path, requirePerm, requiredOwner, requiredGroup)
 }
 
 func (o *ownerStubFileSystem) VerifyACL(path string, expected files.ExpectedACL) (files.ACLReport, error) {
