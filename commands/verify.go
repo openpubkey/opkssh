@@ -19,7 +19,7 @@ package commands
 import (
 	"context"
 	"fmt"
-	"io/fs"
+	"log"
 	"net/http"
 	"regexp"
 	"strings"
@@ -59,6 +59,9 @@ type VerifyCmd struct {
 	ConfigPathArg string
 	// filePermChecker is used to check the file permissions of the config file
 	filePermChecker files.PermsChecker
+	// configGroups are the groups allowed to own the config file. Nil means
+	// defaultConfigGroups().
+	configGroups []string
 	// HTTPClient can be mocked using a roundtripper in tests
 	HttpClient *http.Client
 	// denyList is populated from ServerConfig after successful parsing
@@ -66,13 +69,14 @@ type VerifyCmd struct {
 }
 
 // NewVerifyCmd creates a new VerifyCmd instance with the provided arguments.
-func NewVerifyCmd(pktVerifier verifier.Verifier, checkPolicy PolicyEnforcerFunc, configPathArg string) *VerifyCmd {
+// The verifier is configured after the trusted server configuration has loaded.
+func NewVerifyCmd(checkPolicy PolicyEnforcerFunc, configPathArg string) *VerifyCmd {
 	fs := afero.NewOsFs()
 	return &VerifyCmd{
 		Fs:            fs,
-		PktVerifier:   pktVerifier,
 		CheckPolicy:   checkPolicy,
 		ConfigPathArg: configPathArg,
+		HttpClient:    policy.NewProviderHTTPClient(),
 		filePermChecker: files.PermsChecker{
 			Fs:        fs,
 			CmdRunner: files.ExecCmd,
@@ -153,32 +157,29 @@ func (v *VerifyCmd) AuthorizedKeysCommand(ctx context.Context, userArg string, t
 	}
 }
 
-// ReadFromServerConfig sets the environment variables specified in the server config file
-// and assigns configured deny lists to VerifyCmd's denyList
-func (v *VerifyCmd) ReadFromServerConfig() error {
-	var configBytes []byte
-
-	// Load the file from the filesystem
-	afs := &afero.Afero{Fs: v.Fs}
-	configBytes, err := afs.ReadFile(v.ConfigPathArg)
-	if err != nil {
-		return fmt.Errorf("failed to read config file: %w", err)
+// ReadFromServerConfig applies the server configuration to VerifyCmd and returns
+// the parsed configuration for verifier construction. A missing config file is
+// not an error and yields an empty configuration.
+func (v *VerifyCmd) ReadFromServerConfig() (*config.ServerConfig, error) {
+	groups := v.configGroups
+	if groups == nil {
+		groups = defaultConfigGroups()
 	}
-
-	err = v.filePermChecker.CheckPerm(v.ConfigPathArg, []fs.FileMode{0640}, "root", "opksshuser")
-	if err != nil {
-		return err
+	if exists, err := afero.Exists(v.Fs, v.ConfigPathArg); err == nil && !exists {
+		log.Printf("No server config file at %s: running without deny lists, env_vars or a JWKS cache\n", v.ConfigPathArg)
 	}
-
-	serverConfig, err := config.NewServerConfig(configBytes)
+	serverConfig, err := loadServerConfig(v.Fs, v.filePermChecker, v.ConfigPathArg, groups)
 	if err != nil {
-		return fmt.Errorf("failed to parse config file: %w", err)
+		return nil, err
 	}
 	v.denyList = policy.DenyList{
 		Emails: serverConfig.DenyEmails,
 		Users:  serverConfig.DenyUsers,
 	}
-	return serverConfig.SetEnvVars()
+	if err := serverConfig.SetEnvVars(); err != nil {
+		return nil, err
+	}
+	return serverConfig, nil
 }
 
 func (v *VerifyCmd) UserInfoLookup(ctx context.Context, pkt *pktoken.PKToken, accessToken string) (string, error) {

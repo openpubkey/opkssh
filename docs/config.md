@@ -105,14 +105,36 @@ It also supports a `deny_users` field. This field is a YAML array of strings, wh
 
 Both `deny_emails` and `deny_users` are evaluated before policy.
 
+### JWKS cache
+
+`opkssh verify` can cache each provider's JWKS on disk. Most logins then don't contact the provider, and logins keep working for a while if the provider is unreachable. The cache is off by default; to turn it on, add:
+
+```yml
+cache:
+  base_dir: /var/cache/opkssh
+  max_age: 1h
+  fallback_max_age: 2h
+```
+
+`base_dir` must be an absolute path owned by the `AuthorizedKeysCommandUser` account, not writable by others, and labelled `opkssh_cache_t` if SELinux is enabled. The installer sets all of this up when you set `OPKSSH_INSTALL_CACHE_DIR`. A cache problem never blocks a login: opkssh logs it and verifies without the cache. The cache is supported on Linux and macOS, not on Windows.
+
+See [docs/cache.md](cache.md) for how the cache works, all settings, debugging with `opkssh verify --cache`, SELinux and security considerations.
+
 ### Server config permissions
 
-The server config file requires the following permissions be set:
+The server config file is optional. If it exists, it must be owned by `root`
+with mode `640`, and its group must be either `opksshuser` or the primary group
+of the account configured as `AuthorizedKeysCommandUser`. Any other group is
+rejected, because the file can contain `env_vars` such as proxy credentials.
+For example, if verification runs as `ubuntu`:
 
 ```bash
-sudo chown root:opksshuser /etc/opk/config.yml
+sudo chown root:ubuntu /etc/opk/config.yml
 sudo chmod 640 /etc/opk/config.yml
 ```
+
+If the file has the wrong permissions or can't be parsed, `opkssh verify` logs
+the error and continues without it: no cache, deny lists or `env_vars`.
 
 ## Allowed OpenID Providers: `/etc/opk/providers` (Linux) or `%ProgramData%\opk\providers` (Windows)
 
@@ -128,14 +150,17 @@ The client ID must match the aud (audience) claim in the PK Token.
 
 ### Examples
 
-The file lives at `/etc/opk/providers`. The default values are:
+The file lives at `/etc/opk/providers`. The installers write these default values:
 
 ```bash
 # Issuer Client-ID expiration-policy 
 https://accounts.google.com 206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com 24h
 https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0 096ce0a3-5e72-4da8-9c86-12924b294a01 24h
 https://gitlab.com 8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923 24h
+https://issuer.hello.coop app_xejobTKEsDNSRd5vofKB2iay_2rN 24h
 ```
+
+These default client IDs are intended for testing and should not be used in production: register your own client IDs for production (see [Default client IDs](audit.md#default-client-ids)).
 
 ## Authorized identities files: `/etc/opk/auth_id` and `/home/{USER}/.opk/auth_id` (Linux) or `%ProgramData%\opk\auth_id` (Windows)
 

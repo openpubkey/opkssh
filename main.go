@@ -127,19 +127,33 @@ Arguments:
 
 	inspectCmd := &cobra.Command{
 		SilenceUsage: true,
-		Use:          "inspect <path>",
+		Use:          "inspect [path]",
 		Short:        "Inspect and view details of an opkssh generated SSH key",
-		Example:      "  opkssh inspect ~/.ssh/id_ecdsa_sk-cert.pub",
+		Long: `Inspect and view details of an opkssh generated SSH key or certificate.
+
+With no path, inspect prints every opkssh certificate in ~/.ssh/opkssh, under
+default key names in ~/.ssh (id_ecdsa, id_ed25519, ...) and in ssh-agent.
+Certificates written elsewhere with "opkssh login -i <path>" are not
+searched; pass their path instead.`,
+		Example: `  opkssh inspect
+  opkssh inspect ~/.ssh/id_ecdsa_sk-cert.pub`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			keyPathArg := args[0]
-			inspect := commands.NewInspectCmd(keyPathArg, cmd.OutOrStdout())
-			if err := inspect.Run(); err != nil {
+			inspect := commands.NewInspectCmd("", cmd.OutOrStdout())
+			inspect.ErrOutput = cmd.ErrOrStderr()
+			var err error
+			if len(args) == 0 {
+				err = inspect.RunDiscovery()
+			} else {
+				inspect.KeyOrCert = args[0]
+				err = inspect.Run()
+			}
+			if err != nil {
 				log.Println("Error executing inspect command:", err)
 				return err
 			}
 			return nil
 		},
-		Args: cobra.ExactArgs(1),
+		Args: cobra.MaximumNArgs(1),
 	}
 	rootCmd.AddCommand(inspectCmd)
 
@@ -290,6 +304,7 @@ You should not call this command directly. It is called by the opkssh verify com
 	rootCmd.AddCommand(readhomeCmd)
 
 	var serverConfigPathArg string
+	var cacheModeArg string
 	verifyCmd := &cobra.Command{
 		SilenceUsage: true,
 		Use:          "verify <principal> <cert> <key_type>",
@@ -362,16 +377,36 @@ Arguments:
 			printConfigProblems()
 			log.Println("Providers loaded: ", providerPolicy.ToString())
 
-			pktVerifier, err := providerPolicy.CreateVerifier()
+			v := commands.NewVerifyCmd(commands.OpkPolicyEnforcerFunc(userArg), serverConfigPathArg)
+			serverConfig, err := v.ReadFromServerConfig()
 			if err != nil {
-				log.Println("Failed to create pk token verifier (likely bad configuration):", err)
-				return err
+				log.Println("Failed to load server configuration, continuing without it:", err)
+				serverConfig = &config.ServerConfig{}
 			}
 
-			v := commands.NewVerifyCmd(*pktVerifier, commands.OpkPolicyEnforcerFunc(userArg), serverConfigPathArg)
-			if err := v.ReadFromServerConfig(); err != nil {
-				log.Println("Failed to set environment variables in config:", err)
+			cacheSettings, err := serverConfig.Cache.WithMode(cacheModeArg)
+			if err != nil {
+				log.Println(err)
+				return err
 			}
+			cacheCfg, cacheErr := cacheSettings.DiscoveryCacheConfig(v.Fs)
+			switch {
+			case cacheErr != nil:
+				// Caching is an availability optimization. A broken cache must
+				// not prevent authentication with freshly discovered keys.
+				log.Printf("Persistent JWKS cache disabled (--cache=%s): %v\n", cacheModeArg, cacheErr)
+			case cacheCfg.Cache == nil:
+				log.Printf("Persistent JWKS cache off (--cache=%s)\n", cacheModeArg)
+			default:
+				log.Printf("Persistent JWKS cache on (--cache=%s): %s, max_age %s, fallback_max_age %s\n",
+					cacheModeArg, cacheSettings.BaseDir, cacheCfg.StandardMaxAge, cacheCfg.FallbackMaxAge)
+			}
+			pktVerifier, err := providerPolicy.CreateVerifier(cacheCfg)
+			if err != nil {
+				log.Println("Failed to create pk token verifier (likely bad provider configuration):", err)
+				return err
+			}
+			v.PktVerifier = *pktVerifier
 
 			if authKey, err := v.AuthorizedKeysCommand(ctx, userArg, typArg, certB64Arg, extraArgs); err != nil {
 				log.Println("failed to verify:", err)
@@ -386,6 +421,9 @@ Arguments:
 	}
 	defaultConfigPath := filepath.Join(policy.GetSystemConfigBasePath(), "config.yml")
 	verifyCmd.Flags().StringVar(&serverConfigPathArg, "config-path", defaultConfigPath, fmt.Sprintf("Path to the server config file. Default: %s", defaultConfigPath))
+	verifyCmd.Flags().StringVar(&cacheModeArg, "cache", config.CacheModeAuto,
+		fmt.Sprintf("Persistent JWKS cache: %q uses the cache section of the server config, %q enables the cache even if the config doesn't (default directory %s), %q disables it.",
+			config.CacheModeAuto, config.CacheModeOn, config.DefaultCacheBaseDir, config.CacheModeOff))
 	rootCmd.AddCommand(verifyCmd)
 
 	auditCmd := &cobra.Command{
@@ -398,6 +436,7 @@ The audit command checks that:
   - Each issuer in policy files is defined in the providers file
   - The protocol (http:// or https://) exactly matches between policy and provider files
   - The auth_id policy files do not throw parsing errors
+  - If the providers file uses one of opkssh's default client IDs, these client IDs are intended for testing (reported as a warning)
 
 Results are reported with the following status:
   SUCCESS  - Entry is valid
@@ -527,6 +566,9 @@ To replace an already configured provider pass --replace.`,
 	// permissions command for checking and fixing file permissions/ACLs
 	permsCmd := commands.NewPermissionsCmd(os.Stdout, os.Stderr)
 	rootCmd.AddCommand(permsCmd.CobraCommand())
+
+	cacheCmd := commands.NewCacheCmd()
+	rootCmd.AddCommand(cacheCmd.CobraCommand())
 
 	// genDocsCmd is a hidden command used as a helper for generating our
 	// command line reference documentation.

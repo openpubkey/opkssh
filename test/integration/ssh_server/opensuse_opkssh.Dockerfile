@@ -1,5 +1,5 @@
 # Stage 1: Build the Go binary
-FROM golang:1.26.5@sha256:d52df9c279840adf958d017ebb275651ed8338b953d39817bc3633a2e6b1bbcc as builder
+FROM golang:1.27.2@sha256:820153096fda4de6ac1b7194d12e416b7dd8f4e9a33d17e0345b111b945162d8 as builder
 
 # Set destination for COPY
 WORKDIR /app
@@ -15,10 +15,13 @@ COPY . ./
 RUN go build -v -o opksshbuild
 
 # Stage 2: Create a minimal opensuse leap:16 image
-FROM opensuse/leap:16.0
+FROM opensuse/leap:16.1
 
-# Install dependencies required for runtime (e.g., SSH server)
-RUN zypper refresh && \
+# Install dependencies required for runtime (e.g., SSH server).
+# Disable the third-party OpenH264 codec repo the base image enables: nothing
+# here needs it, and when codecs.opensuse.org is unreachable `zypper refresh`
+# exits 4 and fails the whole build.
+RUN (zypper -n mr --disable openSUSE:repo-openh264 || true) && \
     zypper -n ref && \
     zypper -n dup --allow-vendor-change && \
     zypper -n in --no-recommends \

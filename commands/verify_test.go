@@ -17,9 +17,11 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -34,6 +36,7 @@ import (
 	"github.com/openpubkey/openpubkey/providers/mocks"
 	"github.com/openpubkey/openpubkey/util"
 	"github.com/openpubkey/openpubkey/verifier"
+	"github.com/openpubkey/opkssh/commands/config"
 	"github.com/openpubkey/opkssh/policy"
 	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/openpubkey/opkssh/sshcert"
@@ -400,22 +403,25 @@ env_vars:
 		owner       string
 		group       string
 		errorString string
+		missing     bool
 	}{
 		{
-			name:        "Happy Path",
+			name:        "Happy Path with custom service group",
 			configFile:  map[string]string{"server_config.yml": configContent},
 			permission:  0640,
 			owner:       "root",
-			group:       "opksshuser",
+			group:       "ubuntu",
 			errorString: "",
 		},
 		{
+			// The config file is optional, so a missing file is an empty config.
 			name:        "Missing config",
 			configFile:  map[string]string{"wrong-filename.yml": configContent},
 			permission:  0640,
 			owner:       "root",
 			group:       "opksshuser",
-			errorString: "file does not exist",
+			errorString: "",
+			missing:     true,
 		},
 		{
 			name:        "Corrupted file",
@@ -454,16 +460,29 @@ env_vars:
 						return []byte(tt.owner + " " + tt.group), nil
 					},
 				},
+				// The verify process's own group, as defaultConfigGroups
+				// would report for an AuthorizedKeysCommandUser of ubuntu.
+				configGroups: []string{"opksshuser", "ubuntu"},
 			}
-			err := ver.ReadFromServerConfig()
+			var logs bytes.Buffer
+			log.SetOutput(&logs)
+			defer log.SetOutput(os.Stderr)
+			serverConfig, err := ver.ReadFromServerConfig()
 
 			if tt.errorString != "" {
 				require.ErrorContains(t, err, tt.errorString)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, "ABC", os.Getenv("OPKSSH_TEST_EXAMPLE_VAR1"))
-				require.Equal(t, "DEF", os.Getenv("OPKSSH_TEST_EXAMPLE_VAR2"))
+				return
 			}
+			require.NoError(t, err)
+			if tt.missing {
+				require.Equal(t, &config.ServerConfig{}, serverConfig)
+				require.Empty(t, os.Getenv("OPKSSH_TEST_EXAMPLE_VAR1"))
+				require.Contains(t, logs.String(), "No server config file at "+ver.ConfigPathArg+": running without deny lists, env_vars or a JWKS cache")
+				return
+			}
+			require.NotContains(t, logs.String(), "No server config file")
+			require.Equal(t, "ABC", os.Getenv("OPKSSH_TEST_EXAMPLE_VAR1"))
+			require.Equal(t, "DEF", os.Getenv("OPKSSH_TEST_EXAMPLE_VAR2"))
 		})
 	}
 
