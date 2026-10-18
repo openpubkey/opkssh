@@ -13,14 +13,37 @@ import (
 // tests don't need real OS privileges.
 func newTestPermissionsCmd(vfs afero.Fs, out io.Writer) *PermissionsCmd {
 	return &PermissionsCmd{
-		FileSystem: files.NewFileSystem(vfs, files.WithCmdRunner(func(name string, arg ...string) ([]byte, error) {
+		FileSystem: &ownerStubFileSystem{FileSystem: files.NewFileSystem(vfs, files.WithCmdRunner(func(name string, arg ...string) ([]byte, error) {
 			return []byte("root opksshuser"), nil
-		})),
+		}))},
 		Out:           out,
 		ErrOut:        out,
 		IsElevatedFn:  func() (bool, error) { return true, nil },
 		ConfirmPrompt: func(prompt string, in io.Reader) (bool, error) { return true, nil },
 	}
+}
+
+// ownerStubFileSystem fills in what an in-memory filesystem can't: file
+// owners. The real Chown calls os.Chown on the host path, and the real ACL
+// verifier can't read an owner from an in-memory file.
+type ownerStubFileSystem struct {
+	files.FileSystem
+	// aclProblems are the ACL problems VerifyACL reports, by path.
+	aclProblems map[string][]string
+}
+
+func (o *ownerStubFileSystem) Chown(path string, owner string, group string) error {
+	return nil
+}
+
+func (o *ownerStubFileSystem) VerifyACL(path string, expected files.ExpectedACL) (files.ACLReport, error) {
+	return files.ACLReport{
+		Path:     path,
+		Exists:   true,
+		Owner:    expected.Owner,
+		Mode:     expected.Mode,
+		Problems: o.aclProblems[path],
+	}, nil
 }
 
 // mockFileSystem is a configurable mock implementing files.FileSystem.

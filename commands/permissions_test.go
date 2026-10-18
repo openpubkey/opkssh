@@ -82,6 +82,27 @@ func writeCheckableConfig(t *testing.T, vfs afero.Fs) {
 		[]byte("https://accounts.google.com google-client-id 24h\n"), 0o640))
 }
 
+// requireSingleJSONDocument decodes stdOut strictly into v and fails unless
+// it holds exactly one JSON document and nothing else.
+func requireSingleJSONDocument(t *testing.T, stdOut *bytes.Buffer, v any) {
+	t.Helper()
+	decoder := json.NewDecoder(bytes.NewReader(stdOut.Bytes()))
+	decoder.DisallowUnknownFields()
+	require.NoError(t, decoder.Decode(v), "Expected stdOut to be valid JSON:\n%s", stdOut.String())
+	require.False(t, decoder.More(), "Expected nothing after the JSON document on stdOut:\n%s", stdOut.String())
+}
+
+// runPermissionsCobra runs the permissions command tree the way main does,
+// so the --json flag wiring is exercised too.
+func runPermissionsCobra(p *PermissionsCmd, args ...string) error {
+	cmd := p.CobraCommand()
+	cmd.SetArgs(args)
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	cmd.SilenceUsage = true
+	return cmd.Execute()
+}
+
 // In JSON mode stdout must be exactly one JSON document, so that
 // `opkssh permissions check --json 2>/dev/null` can be piped to a parser,
 // the same contract audit --json already keeps.
@@ -90,17 +111,174 @@ func TestPermissionsCheck_JsonOutputIsParseable(t *testing.T) {
 	writeCheckableConfig(t, vfs)
 
 	stdOut := &bytes.Buffer{}
-	errOut := &bytes.Buffer{}
-	p := newTestPermissionsCmdSplit(vfs, stdOut, errOut)
+	p := newTestPermissionsCmdSplit(vfs, stdOut, &bytes.Buffer{})
+	p.FileSystem.(*ownerStubFileSystem).aclProblems = map[string][]string{
+		policy.SystemDefaultPolicyPath: {"expected owner (root), got (alice)"},
+	}
+
+	require.Error(t, runPermissionsCobra(p, "check", "--json"))
+
+	var parsed checkReport
+	requireSingleJSONDocument(t, stdOut, &parsed)
+	require.False(t, parsed.Ok)
+	require.Contains(t, parsed.Problems, policy.SystemDefaultPolicyPath+": acl: expected owner (root), got (alice)")
+	require.Equal(t, policy.SystemDefaultPolicyPath, parsed.Files[0].Path)
+	require.Equal(t, []string{"expected owner (root), got (alice)"}, parsed.Files[0].ACLProblems)
+}
+
+// The JSON key names are part of the output contract; they are snake_case
+// like audit --json.
+func TestPermissionsCheck_JsonShape(t *testing.T) {
+	vfs := afero.NewMemMapFs()
+	writeCompleteConfig(t, vfs)
+	require.NoError(t, vfs.Chmod(policy.SystemDefaultProvidersPath, 0o644))
+
+	stdOut := &bytes.Buffer{}
+	p := newTestPermissionsCmdSplit(vfs, stdOut, &bytes.Buffer{})
+	p.FileSystem.(*ownerStubFileSystem).aclProblems = map[string][]string{
+		policy.SystemDefaultProvidersPath: {"expected mode 640, got 644"},
+	}
+	require.Error(t, runPermissionsCobra(p, "check", "--json"))
+
+	providers := policy.SystemDefaultProvidersPath
+	policyD := filepath.Join(policy.GetSystemConfigBasePath(), "policy.d")
+	require.JSONEq(t, fmt.Sprintf(`{
+		"ok": false,
+		"problems": [%[2]q],
+		"files": [
+			{"path": %[1]q, "exists": true},
+			{"path": %[3]q, "exists": true, "perms_error": %[4]q, "acl_problems": ["expected mode 640, got 644"]},
+			{"path": %[5]q, "exists": true}
+		]
+	}`, policy.SystemDefaultPolicyPath,
+		providers+": expected one of the following permissions [640], got (644)",
+		providers, "expected one of the following permissions [640], got (644)", policyD),
+		stdOut.String())
+}
+
+// A passing check reports ok and an empty problems list, not null.
+func TestPermissionsCheck_JsonPassingCheck(t *testing.T) {
+	vfs := afero.NewMemMapFs()
+	writeCompleteConfig(t, vfs)
+
+	stdOut := &bytes.Buffer{}
+	p := newTestPermissionsCmdSplit(vfs, stdOut, &bytes.Buffer{})
+	require.NoError(t, runPermissionsCobra(p, "check", "--json"))
+
+	var raw map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(stdOut.Bytes(), &raw))
+	require.JSONEq(t, `true`, string(raw["ok"]))
+	require.JSONEq(t, `[]`, string(raw["problems"]))
+}
+
+// writeCompleteConfig lays down every file and directory Check expects, with
+// the expected permissions, so that a check of it passes.
+func writeCompleteConfig(t *testing.T, vfs afero.Fs) {
+	t.Helper()
+	writeCheckableConfig(t, vfs)
+	require.NoError(t, vfs.MkdirAll(filepath.Join(policy.GetSystemConfigBasePath(), "policy.d"), 0o750))
+}
+
+// An ACL problem on its own fails the check, in text and in JSON mode.
+func TestPermissionsCheck_ACLProblemFailsCheck(t *testing.T) {
+	for _, jsonOutput := range []bool{false, true} {
+		t.Run(fmt.Sprintf("json=%v", jsonOutput), func(t *testing.T) {
+			vfs := afero.NewMemMapFs()
+			writeCompleteConfig(t, vfs)
+
+			// Control: the same configuration passes without the ACL problem.
+			require.NoError(t, newTestPermissionsCmd(vfs, &bytes.Buffer{}).Check())
+
+			stdOut := &bytes.Buffer{}
+			p := newTestPermissionsCmdSplit(vfs, stdOut, &bytes.Buffer{})
+			p.JsonOutput = jsonOutput
+			p.FileSystem.(*ownerStubFileSystem).aclProblems = map[string][]string{
+				policy.SystemDefaultProvidersPath: {"expected owner (root), got (alice)"},
+			}
+
+			err := p.Check()
+			require.EqualError(t, err, "permissions check failed: 1 problems found")
+			if !jsonOutput {
+				require.Contains(t, stdOut.String(),
+					"Problem: "+policy.SystemDefaultProvidersPath+": acl: expected owner (root), got (alice)")
+			}
+		})
+	}
+}
+
+// fixTestCmd returns a PermissionsCmd for fix tests whose stdout and stderr
+// are kept apart.
+func fixTestCmd(t *testing.T, stdOut, errOut *bytes.Buffer) *PermissionsCmd {
+	t.Helper()
+	vfs := afero.NewMemMapFs()
+	writeCheckableConfig(t, vfs)
+	return newTestPermissionsCmdSplit(vfs, stdOut, errOut)
+}
+
+// A successful fix in JSON mode prints only the JSON result on stdout.
+func TestPermissionsFix_JsonOutputIsParseable(t *testing.T) {
+	stdOut, errOut := &bytes.Buffer{}, &bytes.Buffer{}
+	p := fixTestCmd(t, stdOut, errOut)
+
+	require.NoError(t, runPermissionsCobra(p, "fix", "--json", "--yes"))
+
+	var parsed fixResult
+	requireSingleJSONDocument(t, stdOut, &parsed)
+	require.NotEmpty(t, parsed.Planned)
+	require.Empty(t, parsed.Errors)
+}
+
+// fix --json can't prompt, so it needs --yes or --dry-run, as terraform apply
+// -json needs -auto-approve. It refuses before planning or changing anything.
+func TestPermissionsFix_JsonRequiresYesOrDryRun(t *testing.T) {
+	stdOut, errOut := &bytes.Buffer{}, &bytes.Buffer{}
+	p := fixTestCmd(t, stdOut, errOut)
+	p.ConfirmPrompt = func(prompt string, in io.Reader) (bool, error) {
+		t.Fatal("fix --json must not prompt")
+		return false, nil
+	}
+	p.IsElevatedFn = func() (bool, error) {
+		t.Fatal("fix --json without --yes must stop before the elevation check")
+		return false, nil
+	}
+
+	require.ErrorIs(t, runPermissionsCobra(p, "fix", "--json"), errJsonNeedsYes)
+	require.Empty(t, stdOut.String())
+}
+
+// --dry-run is enough for fix --json: nothing is changed, so nothing to confirm.
+func TestPermissionsFix_JsonDryRunNeedsNoYes(t *testing.T) {
+	stdOut := &bytes.Buffer{}
+	p := fixTestCmd(t, stdOut, &bytes.Buffer{})
+
+	require.NoError(t, runPermissionsCobra(p, "fix", "--json", "--dry-run"))
+
+	var parsed fixResult
+	requireSingleJSONDocument(t, stdOut, &parsed)
+	require.True(t, parsed.DryRun)
+	require.Contains(t, stdOut.String(), `"dry_run": true`)
+}
+
+// A file with a wrong mode counts as one problem, even though the ACL
+// verifier also reports the mode.
+func TestPermissionsCheck_PermsErrAndACLProblemCountOnce(t *testing.T) {
+	vfs := afero.NewMemMapFs()
+	writeCompleteConfig(t, vfs)
+	require.NoError(t, vfs.Chmod(policy.SystemDefaultProvidersPath, 0o644))
+
+	stdOut := &bytes.Buffer{}
+	p := newTestPermissionsCmdSplit(vfs, stdOut, &bytes.Buffer{})
 	p.JsonOutput = true
+	p.FileSystem.(*ownerStubFileSystem).aclProblems = map[string][]string{
+		policy.SystemDefaultProvidersPath: {"expected mode 640, got 644"},
+	}
 
-	_ = p.Check()
-
-	var parsed []checkResult
-	decoder := json.NewDecoder(bytes.NewReader(stdOut.Bytes()))
-	decoder.DisallowUnknownFields()
-	require.NoError(t, decoder.Decode(&parsed), "Expected stdOut to be valid JSON:\n%s", stdOut.String())
-	require.False(t, decoder.More(), "Expected nothing after the JSON document on stdOut:\n%s", stdOut.String())
+	require.EqualError(t, p.Check(), "permissions check failed: 1 problems found")
+	var parsed checkReport
+	requireSingleJSONDocument(t, stdOut, &parsed)
+	require.Equal(t, policy.SystemDefaultProvidersPath, parsed.Files[1].Path)
+	require.NotEmpty(t, parsed.Files[1].PermsErr)
+	require.Equal(t, []string{"expected mode 640, got 644"}, parsed.Files[1].ACLProblems)
 }
 
 // A failed check must exit non-zero whichever output format was asked for.
