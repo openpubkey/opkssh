@@ -25,7 +25,7 @@ The installer:
 4. only if the check passes, adds the `cache` section to `/etc/opk/config.yml`,
 5. installs and enables a daily `opkssh-cache-clean.timer`. If systemd isn't running, for example while building a container image, the timer is enabled to start on the next boot.
 
-The installer does this for whatever directory you set; `/var/cache/opkssh` is only the conventional choice.
+The installer does this for whatever directory you set; `/var/cache/opkssh` is only the conventional choice. The directory must not exist yet, be empty, or already hold an opkssh cache: the installer re-owns and relabels the whole directory, so it refuses one that contains anything else (for example `/var/cache` itself).
 
 To use another account, set `OPKSSH_INSTALL_AUTH_CMD_USER` and `OPKSSH_INSTALL_AUTH_CMD_GROUP`. To change the cleanup schedule, set `OPKSSH_INSTALL_CACHE_CLEAN_ON_CALENDAR` to a systemd `OnCalendar` expression.
 
@@ -144,6 +144,13 @@ Because unchanged keys keep the same file name, a login reading the cache never 
 
 ```text
 Persistent JWKS cache on (--cache=auto): /var/cache/opkssh, max_age 1h0m0s, fallback_max_age 2h0m0s
+```
+
+It also logs the two events that matter when a provider is down or the cache stays empty: a login served from the fallback window, and a JWKS that could not be written (for example because the directory is missing or the verify account can't write to it):
+
+```text
+Using fallback JWKS from cache for https://accounts.google.com, fetched 1h30m0s ago: the provider could not be reached or served no usable keys
+Failed to write JWKS cache for https://accounts.google.com: mkdir /var/cache/opkssh: permission denied
 ```
 
 To rule the cache in or out, override `config.yml` with the `--cache` flag of `opkssh verify`, for example in the `AuthorizedKeysCommand` line of your sshd configuration:
