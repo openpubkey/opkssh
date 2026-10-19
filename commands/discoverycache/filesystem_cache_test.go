@@ -263,3 +263,92 @@ func TestFilesystemDiscoveryCacheCheckRequiresExistingDirectory(t *testing.T) {
 	cache := NewFilesystemDiscoveryCache(afero.NewMemMapFs(), "/cache")
 	require.ErrorContains(t, cache.Check(), "does not exist")
 }
+
+func TestFilesystemDiscoveryCacheLogsFallbackReadsAndFailedWrites(t *testing.T) {
+	const issuer = "https://issuer.example"
+	jwks := []byte(`{"keys":[]}`)
+
+	tests := []struct {
+		name    string
+		fs      afero.Fs
+		prepare bool
+		// age of the prepared entry when run is called
+		age     time.Duration
+		run     func(t *testing.T, cache *FilesystemDiscoveryCache)
+		wantLog string
+	}{
+		{
+			name:    "read within StandardMaxAge is not logged",
+			fs:      afero.NewMemMapFs(),
+			prepare: true,
+			age:     30 * time.Minute,
+			run: func(t *testing.T, cache *FilesystemDiscoveryCache) {
+				got, err := cache.Read(context.Background(), issuer, time.Hour)
+				require.NoError(t, err)
+				require.Equal(t, jwks, got)
+			},
+		},
+		{
+			name:    "fallback read is logged with the entry's age",
+			fs:      afero.NewMemMapFs(),
+			prepare: true,
+			age:     90 * time.Minute,
+			run: func(t *testing.T, cache *FilesystemDiscoveryCache) {
+				got, err := cache.Read(context.Background(), issuer, 2*time.Hour)
+				require.NoError(t, err)
+				require.Equal(t, jwks, got)
+			},
+			wantLog: "Using fallback JWKS from cache for " + issuer + ", fetched 1h30m0s ago",
+		},
+		{
+			name: "fallback miss is not logged",
+			fs:   afero.NewMemMapFs(),
+			run: func(t *testing.T, cache *FilesystemDiscoveryCache) {
+				_, err := cache.Read(context.Background(), issuer, 2*time.Hour)
+				require.ErrorIs(t, err, discover.ErrCacheMiss)
+			},
+		},
+		{
+			name: "successful write is not logged",
+			fs:   afero.NewMemMapFs(),
+			run: func(t *testing.T, cache *FilesystemDiscoveryCache) {
+				require.NoError(t, cache.Write(issuer, jwks))
+			},
+		},
+		{
+			name: "failed write is logged and the error is still returned",
+			fs:   afero.NewReadOnlyFs(afero.NewMemMapFs()),
+			run: func(t *testing.T, cache *FilesystemDiscoveryCache) {
+				require.Error(t, cache.Write(issuer, jwks))
+			},
+			wantLog: "Failed to write JWKS cache for " + issuer + ": ",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			now := time.UnixMilli(1_000_000)
+			cache := NewFilesystemDiscoveryCacheWithClock(func() time.Time { return now }, tt.fs, "/cache")
+			if tt.prepare {
+				require.NoError(t, cache.Write(issuer, jwks))
+				now = now.Add(tt.age)
+			}
+			var logged strings.Builder
+			cache.StandardMaxAge = time.Hour
+			cache.Logf = func(format string, args ...any) { fmt.Fprintf(&logged, format, args...) }
+
+			tt.run(t, cache)
+
+			if tt.wantLog == "" {
+				require.Empty(t, logged.String())
+			} else {
+				require.Contains(t, logged.String(), tt.wantLog)
+			}
+		})
+	}
+}
+
+func TestFilesystemDiscoveryCacheWithoutLogfIsSilent(t *testing.T) {
+	cache := NewFilesystemDiscoveryCache(afero.NewReadOnlyFs(afero.NewMemMapFs()), "/cache")
+	cache.StandardMaxAge = time.Hour
+	require.Error(t, cache.Write("https://issuer.example", []byte("jwks")))
+}

@@ -741,6 +741,35 @@ label_cache_dir() {
     echo "  Labelled $CACHE_DIR opkssh_cache_t for SELinux"
 }
 
+# cache_dir_is_unused
+# Succeeds when the directory does not exist, is empty, or holds only the
+# per-issuer directories opkssh verify writes (named by a SHA-256 hex digest),
+# so taking it over for the JWKS cache cannot destroy anything else.
+#
+# Arguments:
+#   $1 - Directory to check
+#
+# Returns:
+#   0 if the directory can be used for the cache, 1 if it is a regular file or
+#   contains other data
+cache_dir_is_unused() {
+    local dir="$1"
+    local entry
+    if [[ ! -e "$dir" ]]; then
+        return 0
+    fi
+    if [[ ! -d "$dir" ]]; then
+        return 1
+    fi
+    for entry in "$dir"/* "$dir"/.[!.]* "$dir"/..?*; do
+        [[ -e "$entry" ]] || continue
+        if [[ ! -d "$entry" || ! "$(basename "$entry")" =~ ^[0-9a-f]{64}$ ]]; then
+            return 1
+        fi
+    done
+    return 0
+}
+
 # configure_cache
 # Provisions the persistent JWKS cache directory and the systemd timer that
 # cleans it. Does nothing unless CACHE_DIR is set.
@@ -791,6 +820,14 @@ configure_cache() {
         needs_cache_section=false
     fi
 
+    # install -d also re-owns and chmods a directory that already exists, and
+    # on SELinux systems restorecon relabels everything below it. Both are
+    # right for a directory that is empty or holds only this cache, and
+    # destructive for anything else (OPKSSH_INSTALL_CACHE_DIR=/var/cache).
+    if ! cache_dir_is_unused "$CACHE_DIR"; then
+        echo "Cache directory $CACHE_DIR already exists and contains something other than an opkssh JWKS cache; refusing to take it over. Choose an empty directory, for example /var/cache/opkssh."
+        return 1
+    fi
     install -d -o "${AUTH_CMD_USER}" -g "${AUTH_CMD_GROUP}" -m 700 "$CACHE_DIR"
     echo "  Created cache directory $CACHE_DIR (${AUTH_CMD_USER}:${AUTH_CMD_GROUP}, 0700)"
     label_cache_dir || return 1

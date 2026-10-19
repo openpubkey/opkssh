@@ -305,6 +305,60 @@ test_configure_cache_enables_timer_offline_without_running_systemd() {
     assertNotContains "Expected no --now" "$(cat "$MOCK_LOG")" "--now"
 }
 
+test_configure_cache_refuses_existing_dir_with_other_data() {
+    CACHE_DIR="$TEST_TEMP_DIR/var-cache"
+    mkdir -p "$CACHE_DIR/apt"
+    echo data > "$CACHE_DIR/apt/pkgcache.bin"
+
+    configure_cache "$TEST_TEMP_DIR" "$TEST_TEMP_DIR/systemd" >/dev/null
+    result=$?
+
+    assertEquals "Expected to refuse a directory holding other data" 1 "$result"
+    assertFalse "Expected no install -d on the existing directory" "grep -q 'install -d' \"$MOCK_LOG\""
+    assertFalse "Expected no cache section added" "grep -q '^cache:' \"$TEST_TEMP_DIR/opk/config.yml\""
+}
+
+test_configure_cache_refuses_existing_dir_with_hidden_file() {
+    CACHE_DIR="$TEST_TEMP_DIR/cache"
+    mkdir -p "$CACHE_DIR"
+    touch "$CACHE_DIR/.keep"
+
+    configure_cache "$TEST_TEMP_DIR" "$TEST_TEMP_DIR/systemd" >/dev/null
+    result=$?
+
+    assertEquals "Expected to refuse a directory holding a hidden file" 1 "$result"
+    assertFalse "Expected no install -d on the existing directory" "grep -q 'install -d' \"$MOCK_LOG\""
+}
+
+test_configure_cache_refuses_regular_file() {
+    CACHE_DIR="$TEST_TEMP_DIR/cache"
+    touch "$CACHE_DIR"
+
+    configure_cache "$TEST_TEMP_DIR" "$TEST_TEMP_DIR/systemd" >/dev/null
+    result=$?
+
+    assertEquals "Expected to refuse a path that is a file" 1 "$result"
+}
+
+test_configure_cache_accepts_existing_empty_dir_and_existing_cache() {
+    CACHE_DIR="$TEST_TEMP_DIR/cache"
+    mkdir -p "$TEST_TEMP_DIR/systemd"
+    # An existing cache: one issuer directory named by a SHA-256 digest.
+    mkdir -p "$CACHE_DIR/af304c580d0294de9b145ade557c9d4cddb8cd7d420f5956da80a898def933ae/jwks"
+    touch "$CACHE_DIR/af304c580d0294de9b145ade557c9d4cddb8cd7d420f5956da80a898def933ae/jwks/jwks-0000"
+
+    result=$(configure_cache "$TEST_TEMP_DIR" "$TEST_TEMP_DIR/systemd" >/dev/null; echo $?)
+    assertEquals "Expected an existing opkssh cache to be accepted (upgrade)" 0 "$result"
+    assertTrue "Expected install -d on the existing cache" "grep -q 'install -d' \"$MOCK_LOG\""
+
+    : > "$MOCK_LOG"
+    rm -rf "$CACHE_DIR"
+    mkdir -p "$CACHE_DIR"
+    sed -i '/^cache:/,$d' "$TEST_TEMP_DIR/opk/config.yml"
+    result=$(configure_cache "$TEST_TEMP_DIR" "$TEST_TEMP_DIR/systemd" >/dev/null; echo $?)
+    assertEquals "Expected an existing empty directory to be accepted" 0 "$result"
+}
+
 test_configure_cache_rejects_unsafe_path() {
     CACHE_DIR="relative/cache"
 
