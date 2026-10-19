@@ -33,7 +33,7 @@ type PermCheckResult struct {
 	// PermsErr is non-empty when the mode or ownership check failed.
 	PermsErr string
 	// ACLReport contains detailed ACL information (owner, ACEs, problems).
-	// It is nil when no ACLVerifier was provided or the path does not exist.
+	// It is nil when the path does not exist or its existence can't be checked.
 	ACLReport *files.ACLReport
 	// ACLErr is non-nil when VerifyACL itself returned an error.
 	ACLErr error

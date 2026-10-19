@@ -13,14 +13,52 @@ import (
 // tests don't need real OS privileges.
 func newTestPermissionsCmd(vfs afero.Fs, out io.Writer) *PermissionsCmd {
 	return &PermissionsCmd{
-		FileSystem: files.NewFileSystem(vfs, files.WithCmdRunner(func(name string, arg ...string) ([]byte, error) {
+		FileSystem: &ownerStubFileSystem{FileSystem: files.NewFileSystem(vfs, files.WithCmdRunner(func(name string, arg ...string) ([]byte, error) {
 			return []byte("root opksshuser"), nil
-		})),
+		}))},
 		Out:           out,
 		ErrOut:        out,
 		IsElevatedFn:  func() (bool, error) { return true, nil },
 		ConfirmPrompt: func(prompt string, in io.Reader) (bool, error) { return true, nil },
 	}
+}
+
+// ownerStubFileSystem fills in what an in-memory filesystem can't: owners
+// and ACLs. The real Chown and ApplyACE act on the host path, the real ACL
+// verifier can't read an owner from an in-memory file, and CheckPerm's mode
+// check differs by platform (Windows doesn't check POSIX modes).
+type ownerStubFileSystem struct {
+	files.FileSystem
+	// aclProblems are the ACL problems VerifyACL reports, by path.
+	aclProblems map[string][]string
+	// permErrors are the errors CheckPerm returns, by path. Other paths use
+	// the real CheckPerm.
+	permErrors map[string]error
+}
+
+func (o *ownerStubFileSystem) Chown(path string, owner string, group string) error {
+	return nil
+}
+
+func (o *ownerStubFileSystem) ApplyACE(path string, ace files.ACE) error {
+	return nil
+}
+
+func (o *ownerStubFileSystem) CheckPerm(path string, requirePerm []fs.FileMode, requiredOwner string, requiredGroup string) error {
+	if err, ok := o.permErrors[path]; ok {
+		return err
+	}
+	return o.FileSystem.CheckPerm(path, requirePerm, requiredOwner, requiredGroup)
+}
+
+func (o *ownerStubFileSystem) VerifyACL(path string, expected files.ExpectedACL) (files.ACLReport, error) {
+	return files.ACLReport{
+		Path:     path,
+		Exists:   true,
+		Owner:    expected.Owner,
+		Mode:     expected.Mode,
+		Problems: o.aclProblems[path],
+	}, nil
 }
 
 // mockFileSystem is a configurable mock implementing files.FileSystem.
