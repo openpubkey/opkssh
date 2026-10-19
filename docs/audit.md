@@ -103,7 +103,7 @@ The `opkssh audit` and `opkssh permissions` commands are related but serve diffe
 | **Focus** | Are issuers valid? Do entries match providers? | Are file modes, ownership and ACLs correct? |
 | **User home dirs** | Enumerates and audits all user `~/.opk/auth_id` files | Does **not** check user policy files |
 | **Modifies files** | Never (read-only) | `permissions fix` can repair permissions |
-| **Output** | Human-readable table or JSON (`--json`) | Problem list or planned actions |
+| **Output** | Human-readable table or JSON (`--json`) | Problem list or planned actions, or JSON (`--json`) |
 
 **When to use which:**
 
@@ -209,3 +209,32 @@ validating /home/alice2/.opk/auth_id...
   "os_info": "debian"
 }
 ```
+
+## permissions JSON output
+
+`opkssh permissions check --json` and `opkssh permissions fix --json` print a single JSON document on stdout; messages and errors go to stderr. Both exit non-zero when they find a problem, so a script can check the exit code and parse stdout:
+
+```bash
+sudo opkssh permissions check --json 2> /dev/null
+```
+
+```json
+{
+  "ok": false,
+  "problems": [
+    "/etc/opk/providers: expected one of the following permissions [640], got (644)"
+  ],
+  "files": [
+    { "path": "/etc/opk/auth_id", "exists": true },
+    {
+      "path": "/etc/opk/providers",
+      "exists": true,
+      "perms_error": "expected one of the following permissions [640], got (644)",
+      "acl_problems": ["expected mode 640, got 644"]
+    },
+    { "path": "/etc/opk/policy.d", "exists": true }
+  ]
+}
+```
+
+`problems` lists the same problems the text output prints. `fix --json` can't ask for confirmation, so it needs `--yes` (or `--dry-run` to only list the planned changes).
