@@ -14,7 +14,7 @@ GitLab CI tokens are verified using OpenPubkey's GitLab CI provider. These token
 
 ### 1. Install opkssh on the server
 
-Follow the standard [installation instructions](../README.md#install-opkssh-on-a-server) to install opkssh on your server.
+Follow the standard [installation instructions](../README.md#installing-on-a-linux-server) to install opkssh on your server.
 
 ### 2. Add the GitLab CI provider
 
@@ -32,12 +32,14 @@ For self-managed GitLab, use your GitLab instance URL as the issuer instead:
 echo "https://gitlab.example.com OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod oidc" | sudo tee -a /etc/opk/providers
 ```
 
-If you also want to allow normal interactive GitLab logins, keep the normal GitLab provider entry as well:
+If you also want to allow normal interactive GitLab logins, keep a GitLab provider entry with the client ID of your own GitLab OAuth application as well (see [Default client IDs](audit.md#default-client-ids) for how to create one):
 
 ```text
-https://gitlab.com 8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923 oidc
+https://gitlab.com <YOUR-GITLAB-CLIENT-ID> oidc
 https://gitlab.com OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod oidc
 ```
+
+The default GitLab client ID that the installers write, `8d8b7024…`, is intended for testing and should not be used in production, and `opkssh audit` reports it as a warning (see [Default client IDs](audit.md#default-client-ids)).
 
 For self-managed GitLab, use the same issuer in `/etc/opk/auth_id` as in `/etc/opk/providers`.
 

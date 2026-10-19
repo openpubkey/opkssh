@@ -812,20 +812,12 @@ func (l *LoginCmd) addCertToAgent(certBytes []byte, signer crypto.Signer) {
 		return
 	}
 
-	conn, err := net.Dial("unix", sock)
+	conn, err := dialSSHAgent(sock)
 	if err != nil {
 		fmt.Fprintf(l.out(), "warning: could not connect to ssh-agent (%s): %v\n", sock, err)
 		return
 	}
 	defer conn.Close()
-
-	// A dead socket (e.g. one left behind by agent forwarding) accepts the
-	// dial but never responds; without a deadline the exchange would hang
-	// the login after authentication has already succeeded.
-	if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
-		fmt.Fprintf(l.out(), "warning: could not set ssh-agent I/O deadline: %v\n", err)
-		return
-	}
 
 	agentClient := agent.NewClient(conn)
 	// Removing the superseded certificate is advisory: if the agent has
@@ -837,7 +829,7 @@ func (l *LoginCmd) addCertToAgent(certBytes []byte, signer crypto.Signer) {
 	if err := agentClient.Add(agent.AddedKey{
 		PrivateKey:   signer,
 		Certificate:  cert,
-		Comment:      "opkssh",
+		Comment:      agentKeyComment,
 		LifetimeSecs: lifetimeSecs,
 	}); err != nil {
 		fmt.Fprintf(l.out(), "warning: failed to add certificate to ssh-agent: %v\n", err)
@@ -845,6 +837,27 @@ func (l *LoginCmd) addCertToAgent(certBytes []byte, signer crypto.Signer) {
 	}
 	l.agentCert = cert
 	fmt.Fprintf(l.out(), "Certificate added to ssh-agent (lifetime %s)\n", time.Duration(lifetimeSecs)*time.Second)
+}
+
+// agentKeyComment marks the certificates opkssh login adds to the ssh-agent.
+const agentKeyComment = "opkssh"
+
+// agentIODeadline bounds a whole ssh-agent exchange.
+var agentIODeadline = 5 * time.Second
+
+// dialSSHAgent connects to the ssh-agent at sock.
+func dialSSHAgent(sock string) (net.Conn, error) {
+	conn, err := net.Dial("unix", sock)
+	if err != nil {
+		return nil, err
+	}
+	// A dead socket (e.g. one left behind by agent forwarding) accepts the
+	// dial but never responds; without a deadline the exchange would hang.
+	if err := conn.SetDeadline(time.Now().Add(agentIODeadline)); err != nil {
+		conn.Close()
+		return nil, err
+	}
+	return conn, nil
 }
 
 // resolveAgentLifetimeSecs picks how long ssh-agent retains the key: the

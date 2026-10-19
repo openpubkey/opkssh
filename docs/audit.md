@@ -1,6 +1,6 @@
 # using the audit command
 
-The opkssh [audit command](cli/opkssh_audit.d) is useful for catch and troubleshooting server side misconfigurations.
+The opkssh [audit command](cli/opkssh_audit.md) is useful for catch and troubleshooting server side misconfigurations.
 It checks the `auth_id` policy files (`/etc/opk/auth_id`, `~/opk/auth_id`) and the providers config file (`/etc/opk/providers`).
 
 To perform run the command: `sudo opkssh audit`
@@ -38,7 +38,60 @@ Exit Code: 0 (no issues detected)
 **Known limitations:**
 
 * The audit command currently only checks server side configurations. It does not report on client-side configurations.
-* The audit command does not currently support checking [policy plugins](policyplugins.m) or openssh server config (`sshd_config`).
+* The audit command does not currently support checking [policy plugins](policyplugins.md) or openssh server config (`sshd_config`).
+
+## Default client IDs
+
+opkssh ships with default client IDs for Google, Microsoft, GitLab and hello.coop for testing and development, and the installers write them to `/etc/opk/providers`.
+They should not be used in production, as they allow the opkssh project to have control over your redirect URIs.
+
+`opkssh audit` reports a warning for each row in the providers file that uses one of opkssh's default client IDs, whatever the issuer, and exits with code 1:
+
+```bash
+$ sudo opkssh audit
+warning: /etc/opk/providers trusts https://accounts.google.com with opkssh's default client ID 206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com
+  opkssh's default client IDs are intended for testing and should not be used in production. To use your own client IDs, see https://github.com/openpubkey/opkssh/blob/main/docs/audit.md#default-client-ids
+
+validating /etc/opk/auth_id...
+[OK] SUCCESS : root alice@example.com https://accounts.google.com (issuer matches provider entry)
+
+=== SUMMARY ===
+Total Entries Tested:  1
+Successful:            1
+Warnings:              0
+Errors:                0
+Provider Warnings:     1
+
+Exit Code: 1 (warnings detected)
+Error: audit completed and discovered warnings
+```
+
+To use your own client IDs, for each provider you use:
+
+1. Register your own OAuth client with the provider:
+
+   | Provider | Issuer | How to register |
+   |---|---|---|
+   | Google | `https://accounts.google.com` | [Google guide](providers/google.md) |
+   | Microsoft | `https://login.microsoftonline.com/{TENANT ID}/v2.0` | [Entra ID (Azure) guide](providers/azure.md) |
+   | GitLab | `https://gitlab.com` | Create an application under **Edit profile > Access > Applications** on gitlab.com, with the settings in the [self-hosted GitLab guide](gitlab-selfhosted.md#create-an-oauth-application-in-gitlab) |
+   | hello.coop | `https://issuer.hello.coop` | Register an application in the [Hellō console](https://console.hello.coop/) and allow the redirect URIs below |
+   | Others | | See [docs/providers](providers/) |
+
+   opkssh logs in through these redirect URIs, so allow all three:
+
+   ```text
+   http://localhost:3000/login-callback
+   http://localhost:10001/login-callback
+   http://localhost:11110/login-callback
+   ```
+
+2. Replace opkssh's client ID with yours in `/etc/opk/providers`.
+3. Give your users a client config that uses the same client ID (see the [client config file](../README.md#client-config-file)).
+
+Remove the rows for providers you don't use.
+
+In the JSON output, these warnings are listed under `providers_file.warnings`, and `ok` is `false`.
 
 ## audit vs permissions
 
@@ -50,7 +103,7 @@ The `opkssh audit` and `opkssh permissions` commands are related but serve diffe
 | **Focus** | Are issuers valid? Do entries match providers? | Are file modes, ownership and ACLs correct? |
 | **User home dirs** | Enumerates and audits all user `~/.opk/auth_id` files | Does **not** check user policy files |
 | **Modifies files** | Never (read-only) | `permissions fix` can repair permissions |
-| **Output** | Human-readable table or JSON (`--json`) | Problem list or planned actions |
+| **Output** | Human-readable table or JSON (`--json`) | Problem list or planned actions, or JSON (`--json`) |
 
 **When to use which:**
 
@@ -156,3 +209,32 @@ validating /home/alice2/.opk/auth_id...
   "os_info": "debian"
 }
 ```
+
+## permissions JSON output
+
+`opkssh permissions check --json` and `opkssh permissions fix --json` print a single JSON document on stdout; messages and errors go to stderr. Both exit non-zero when they find a problem, so a script can check the exit code and parse stdout:
+
+```bash
+sudo opkssh permissions check --json 2> /dev/null
+```
+
+```json
+{
+  "ok": false,
+  "problems": [
+    "/etc/opk/providers: expected one of the following permissions [640], got (644)"
+  ],
+  "files": [
+    { "path": "/etc/opk/auth_id", "exists": true },
+    {
+      "path": "/etc/opk/providers",
+      "exists": true,
+      "perms_error": "expected one of the following permissions [640], got (644)",
+      "acl_problems": ["expected mode 640, got 644"]
+    },
+    { "path": "/etc/opk/policy.d", "exists": true }
+  ]
+}
+```
+
+`problems` lists the same problems the text output prints. `fix --json` can't ask for confirmation, so it needs `--yes` (or `--dry-run` to only list the planned changes).
