@@ -55,6 +55,15 @@ type FilesystemDiscoveryCache struct {
 	Now     func() time.Time
 	Fs      afero.Fs
 	BaseDir string
+	// Logf receives the two events an administrator looks for when a provider
+	// is down or the cache never fills: a login served from the fallback
+	// window and a JWKS that could not be written. openpubkey reports them
+	// only to its own error writer, which the providers never expose, so the
+	// cache logs them itself. nil discards them.
+	Logf func(format string, args ...any)
+	// StandardMaxAge is the age Read allows normally. A Read that allows an
+	// older entry is the fallback after a failed download.
+	StandardMaxAge time.Duration
 }
 
 func NewFilesystemDiscoveryCache(fs afero.Fs, baseDir string) *FilesystemDiscoveryCache {
@@ -63,6 +72,12 @@ func NewFilesystemDiscoveryCache(fs afero.Fs, baseDir string) *FilesystemDiscove
 
 func NewFilesystemDiscoveryCacheWithClock(now func() time.Time, fs afero.Fs, baseDir string) *FilesystemDiscoveryCache {
 	return &FilesystemDiscoveryCache{Now: now, Fs: fs, BaseDir: baseDir}
+}
+
+func (c *FilesystemDiscoveryCache) logf(format string, args ...any) {
+	if c.Logf != nil {
+		c.Logf(format, args...)
+	}
 }
 
 func jwksFileName(value []byte) string {
@@ -147,11 +162,23 @@ func (c *FilesystemDiscoveryCache) Read(ctx context.Context, issuer string, maxA
 		// Most likely a concurrent Write replaced it with a newer JWKS.
 		return nil, discover.ErrCacheMiss
 	}
+	if c.StandardMaxAge > 0 && maxAge > c.StandardMaxAge {
+		c.logf("Using fallback JWKS from cache for %s, fetched %s ago: the provider could not be reached or served no usable keys\n",
+			issuer, now.Sub(newest.ModTime()).Round(time.Second))
+	}
 	return content, nil
 }
 
 // Write records that value was just fetched for issuer.
 func (c *FilesystemDiscoveryCache) Write(issuer string, value []byte) error {
+	err := c.write(issuer, value)
+	if err != nil {
+		c.logf("Failed to write JWKS cache for %s: %v\n", issuer, err)
+	}
+	return err
+}
+
+func (c *FilesystemDiscoveryCache) write(issuer string, value []byte) error {
 	targetDir := c.issuerDir(issuer)
 	if err := c.Fs.MkdirAll(targetDir, 0o750); err != nil {
 		return err

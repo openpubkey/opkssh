@@ -18,6 +18,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -145,6 +146,8 @@ func (c CacheConfig) discoveryCacheConfig(fs afero.Fs, goos string) (discover.Di
 	}
 
 	cache := discoverycache.NewFilesystemDiscoveryCache(fs, c.BaseDir)
+	cache.StandardMaxAge = standardMaxAge
+	cache.Logf = log.Printf
 	if err := cache.Validate(); err != nil {
 		return discover.DiscoveryCacheConfig{}, err
 	}
