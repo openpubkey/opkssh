@@ -2,7 +2,7 @@ module github.com/openpubkey/opkssh
 
 go 1.25.0
 
-toolchain go1.26.6
+toolchain go1.27.2
 
 require (
 	github.com/jeremija/gosubmit v0.2.8
