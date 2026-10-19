@@ -109,3 +109,16 @@ func TestCacheConfigUnsupportedOS(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, cacheCfg.Cache)
 }
+
+func TestCacheConfigDiscoveryCacheConfigEnablesCacheLogging(t *testing.T) {
+	cfg, err := NewServerConfig([]byte("cache:\n  base_dir: /var/cache/opkssh\n  max_age: 30m\n"))
+	require.NoError(t, err)
+
+	cacheCfg, err := cfg.Cache.discoveryCacheConfig(afero.NewMemMapFs(), "linux")
+	require.NoError(t, err)
+	cache := cacheCfg.Cache.(*discoverycache.FilesystemDiscoveryCache)
+	// Fallback reads can only be recognized, and logged, when the cache
+	// knows the normal maximum age.
+	require.Equal(t, 30*time.Minute, cache.StandardMaxAge)
+	require.NotNil(t, cache.Logf, "cache diagnostics must reach the verify log")
+}
