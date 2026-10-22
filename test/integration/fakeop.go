@@ -20,6 +20,7 @@ package integration
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -51,9 +52,39 @@ type deferredHandler struct {
 	http.Handler
 }
 
+// FakeOpOption changes how a FakeOpServer responds.
+type FakeOpOption func(http.Handler) http.Handler
+
+// WithExtraJwksKeys makes the server list the given JWKs, as JSON objects,
+// before its own signing keys in its JWKS.
+func WithExtraJwksKeys(keys ...string) FakeOpOption {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/keys" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			rec := httptest.NewRecorder()
+			next.ServeHTTP(rec, r)
+			var jwks struct {
+				Keys []json.RawMessage `json:"keys"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &jwks); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			for i := len(keys) - 1; i >= 0; i-- {
+				jwks.Keys = append([]json.RawMessage{json.RawMessage(keys[i])}, jwks.Keys...)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(jwks)
+		})
+	}
+}
+
 // NewFakeOpServer starts and returns a new FakeOpServer. The caller should call
 // Close() when finished to shut it down.
-func NewFakeOpServer() (*FakeOpServer, error) {
+func NewFakeOpServer(opts ...FakeOpOption) (*FakeOpServer, error) {
 	exampleStorage := storage.NewStorage(storage.NewUserStore("http://localhost"))
 
 	// Start new HTTP server
@@ -69,7 +100,10 @@ func NewFakeOpServer() (*FakeOpServer, error) {
 
 	// Create the OIDC server handler and set this as the test HTTP server's
 	// handler
-	opRouter := exampleop.SetupServer(issuerUrl, exampleStorage, serverLogger, false)
+	var opRouter http.Handler = exampleop.SetupServer(issuerUrl, exampleStorage, serverLogger, false)
+	for _, opt := range opts {
+		opRouter = opt(opRouter)
+	}
 	dh.Handler = opRouter
 
 	return &FakeOpServer{
