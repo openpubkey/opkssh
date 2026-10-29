@@ -29,6 +29,12 @@
     {
       "groupName": "Docker",
       "matchDatasources": ["docker"]
+    },
+    {
+      "description": "openSUSE Leap restarted its version numbers at 15, so the old 42.x tags look newer than current releases.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["opensuse/leap"],
+      "allowedVersions": "!/^42[.]/"
     }
   ]
 }
