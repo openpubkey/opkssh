@@ -242,8 +242,8 @@ func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, us
 	for _, email := range denyList.Emails {
 		if claims.Email == "" {
 			// If the email deny list is set, clearly the admin wants to reject
-			// particular emails. To prevent a user with a denied email from 
-			// bypassing the check by simply requesting an ID Token without 
+			// particular emails. To prevent a user with a denied email from
+			// bypassing the check by simply requesting an ID Token without
 			// the email scope we must reject all ID Tokens with an empty email
 			// if the email denylist has any entries.
 			return fmt.Errorf("email claim is empty and email deny list is set")
