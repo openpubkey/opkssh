@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-//go:build linux || darwin
+//go:build linux || darwin || zos
 
 package commands
 
