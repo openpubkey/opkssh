@@ -89,7 +89,7 @@ env_vars:
   HTTPS_PROXY: http://yourproxy:3128
 ```
 
-It also supports a `deny_emails` field. This field is a YAML array of strings, where each string is an email address opkssh should never allow. An ID Token has a claim for an email on this list it will reject it.
+It also supports a `deny_emails` field. This field is a YAML array of strings, where each string is an email address opkssh should never allow. An ID Token has a claim for an email on this list it will reject it. If `deny_emails` has at least one email, policy will reject any ID Token without an email claim. This is done to prevent bypassing the denylist by requesting an ID Token without the email scope.
 
 ```yml
 ---
