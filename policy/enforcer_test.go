@@ -124,6 +124,11 @@ var policyTest = &policy.Policy{
 			Principals:        []string{"test"},
 			Issuer:            "http://127.0.0.1:8090/accounts",
 		},
+		{
+			IdentityAttribute: "sub12345",
+			Principals:        []string{"test"},
+			Issuer:            "https://accounts.example.com",
+		},
 	},
 }
 
@@ -559,6 +564,7 @@ func TestEnforcerTableTest(t *testing.T) {
 			},
 		},
 	}
+
 	tests := []struct {
 		name          string
 		op            providers.OpenIdProvider
@@ -591,13 +597,30 @@ func TestEnforcerTableTest(t *testing.T) {
 			expectedError: "denied user test",
 		},
 		{
-			name:          "DenyList Match (user)",
+			name:          "DenyList Match (email)",
 			op:            NewMockOpenIdProvider(t),
 			principal:     "test",
 			userInfoJson:  "",
 			policyLoader:  &MockPolicyLoader{Policy: policyTest},
 			denyList:      policy.DenyList{Emails: []string{"bob@example.com", "arthur.aardvark@example.com"}, Users: []string{"guest", "test"}},
 			expectedError: "denied email arthur.aardvark@example.com",
+		},
+		{
+			name:          "Email Denylist, no email claim ",
+			op:            NewMockOpenIdSubProvider(t, "sub12345"), // Use the sub provider so no email claim is set
+			principal:     "test",
+			userInfoJson:  "",
+			policyLoader:  &MockPolicyLoader{Policy: policyTest},
+			denyList:      policy.DenyList{Emails: []string{"bob@example.com", "arthur.aardvark@example.com"}, Users: []string{"guest", "test"}},
+			expectedError: "email claim is empty and email deny list is set",
+		},
+		{
+			name:         "No email denylist, no email claim",
+			op:           NewMockOpenIdSubProvider(t, "sub12345"), // Use the sub provider so no email claim is set
+			principal:    "test",
+			userInfoJson: "",
+			policyLoader: &MockPolicyLoader{Policy: policyTest},
+			denyList:     policy.DenyList{},
 		},
 		{
 			name:          "No groups claim in ID Token",
