@@ -564,7 +564,6 @@ func TestEnforcerTableTest(t *testing.T) {
 			},
 		},
 	}
-
 	tests := []struct {
 		name          string
 		op            providers.OpenIdProvider
