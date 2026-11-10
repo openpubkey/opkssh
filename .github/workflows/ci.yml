@@ -169,7 +169,7 @@ jobs:
     name: Shell Scripts Lint & Test
     runs-on: ubuntu-26.04
     container:
-      image: opensuse/tumbleweed:latest@sha256:b1478b4a86bc78f4b5b413d9927764ca7850193116bdcf9c86e26ac1fa48608f
+      image: opensuse/tumbleweed:latest@sha256:3dbec1a6a4248919c18707d1c1d58cb0e982581c2243e11c5a08f14d0977f430
     steps:
     - name: Install packages
       run: |
