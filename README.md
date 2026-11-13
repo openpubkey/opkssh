@@ -2,23 +2,39 @@
 
 [![Go Coverage](https://github.com/openpubkey/opkssh/wiki/coverage.svg)](https://raw.githack.com/wiki/openpubkey/opkssh/coverage.html)
 
-**opkssh** is a tool which enables ssh to be used with OpenID Connect allowing SSH access to be managed via identities like `alice@example.com` instead of long-lived SSH keys.
-It does not replace SSH, but instead generates SSH public keys containing PK Tokens and configures sshd to verify them. These PK Tokens contain standard [OpenID Connect ID Tokens](https://openid.net/specs/openid-connect-core-1_0.html). This protocol builds on [OpenPubkey](https://github.com/openpubkey/openpubkey/blob/main/README.md) which adds user public keys to OpenID Connect without breaking compatibility with existing OpenID Providers.
+Opkssh performs an OpenID Connect authentication in your standard desktop browser and uses the result to provide SSH access to an OPKSSH-ready server. You do not have to trust the server and you do not have to distribute static SSH keys to the server.
+
+Exactly one CLI tool is installed on both, the client and server. The name of the tool is opkssh. On the client it integrates with ssh via dynamically created key pairs (files or ssh-agent) and on the server it integrates with sshd via AuthorizedKeysCommand. The rest of the system remains untouched. Opkssh aims at minimal change to an existing setup. The statically compiled binary has no dependencies other than its own configuration files.
+
+OIDC solutions like [Keycloak](https://www.keycloak.org/) or [Microsoft Entra ID](https://www.microsoft.com/de-de/security/business/identity-access/microsoft-entra-id) and OIDC providers like [Amazon Cognito](https://aws.amazon.com/de/cognito/) or [Google Identity](https://developers.google.com/identity/openid-connect/openid-connect) have one thing in common: they provide an external multi-factor authentication (MFA). One could say that opkssh is about bringing multi-factor authentication for SSH through such solutions and providers. Now. Even for the former generation of Linux distributions. And even for Windows.
+
+The approach is standardized the the upstream project [OpenPubkey](https://github.com/openpubkey/openpubkey/blob/main/README.md)
+
+## Overview
+The goal of this overview is to guide through an evaluation of opkssh. What to get ready before using it. For detailed instructions see further below.
+
+## Installation
+The installation consists of three main steps: Provider, Server, and Client. In that order. 
+
+| OIDC Provider | OPKSSH-ready Server | OPKSSH-ready Client |
+|---|---|---|
+|Decide which OIDC provider to use. See below for a list of successfully tested providers. Three providers are pre-configured for testing purposes. Using your own provider would require setting up an OIDC client.|Download opkssh from Github, edit /etc/opk/{providers,auth_id}, and edit /etc/ssh/sshd_config. |Download opkssh and configure your provider in ~/.opk/config.yml|
 
 Currently opkssh is compatible with Google, Microsoft/Azure, GitLab, hello.dev, Authelia, Authentik, Keycloak, Zitadel, PocketID, AWS Cognito, and Kanidm OpenID Providers (OP). See below for the entire list. If you have a Gmail, Microsoft, or a GitLab account you can ssh with that account.
 
-To ssh with opkssh you first need to download the opkssh binary and then run:
+You do not configure the SSH server to be an OIDC client like approaches based on Linux PAM or Linux SSSD do. You configure all OPKSSH clients to share one **separate** OIDC client dedicated to the purpose of opkssh'ing. Administrative effort for introducing MFA is significantly reduced that way.
 
-```bash
-opkssh login
-```
+## User Interface
+Basically the login command initiates an OIDC authentication, which is symbolized by a keycloak login form here. Afterwards a normal ssh connection to _myserver_ will succeed. Depending on the choosen timeout value, the login might only be necassary once a day. High security meets high comfort.
 
-This opens a browser window where you can authenticate to your OpenID Provider. This will generate an SSH key in `~/.ssh/id_ecdsa` which contains your OpenID Connect identity.
-Then you can ssh under this identity to any ssh server which is configured to use opkssh to authenticate users using their OpenID Connect identities.
+| OPKSSH-ready Client | OIDC Provider | Client again |
+|---|---|---|
+|Step 1|Step 2|Step 3|
+|opkssh login|<img width="275" height="185" alt="image" src="https://github.com/user-attachments/assets/4180b10f-401f-41d9-a8ba-8e51c593219b" />|ssh myserver|
 
-```bash
-ssh user@example.com
-```
+In the background `opkssh login` generates a SSH key pair containing PK Tokens. A likewise hidden `opkssh verify` verifies them on the server. The PK Tokens contain standard [OpenID Connect ID Tokens](https://openid.net/specs/openid-connect-core-1_0.html). This protocol builds on [OpenPubkey](https://github.com/openpubkey/openpubkey/blob/main/README.md) which adds user public keys to OpenID Connect without breaking compatibility with existing OpenID Providers.
+
+Note how an authentication on the client side solves one problem of shared root access. Your desktop can stay on a higher level of trust. Your ssh server, which is accessed by a dozen colleagues having root access, naturally stays on a lower level of trust.
 
 ### OpenPubkey Mailing List
 For updates and announcements join the [OpenPubkey mailing list.](https://groups.google.com/g/openpubkey)
