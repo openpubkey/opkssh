@@ -28,6 +28,7 @@ setUp() {
     ensure_opkssh_user_and_group_exit_code=0
     ensure_openssh_server_exit_code=0
     install_opkssh_binary_exit_code=0
+    configure_cache_exit_code=0
     configure_openssh_server_exit_code=0
     restart_openssh_server_exit_code=0
     export HOME_POLICY AUTH_CMD_USER AUTH_CMD_GROUP OS_TYPE
@@ -100,6 +101,11 @@ configure_opkssh() {
     echo "configure_opkssh $*" >> "$MOCK_LOG"
 }
 
+configure_cache() {
+    echo "configure_cache $*" >> "$MOCK_LOG"
+    return "$configure_cache_exit_code"
+}
+
 configure_openssh_server() {
     echo "configure_openssh_server $*" >> "$MOCK_LOG"
     return "$configure_openssh_server_exit_code"
@@ -139,10 +145,11 @@ test_main_with_home_policy() {
     assertEquals "Expected install_opkssh_binary to be called with no parameters" "install_opkssh_binary " "${mock_log[9]}"
     assertEquals "Expected check_selinux to be called with no parameters" "check_selinux " "${mock_log[10]}"
     assertEquals "Expected configure_opkssh to be called with no parameters" "configure_opkssh " "${mock_log[11]}"
-    assertEquals "Expected configure_openssh_server to be called with no parameters" "configure_openssh_server " "${mock_log[12]}"
-    assertEquals "Expected restart_openssh_server to be called with no parameters" "restart_openssh_server " "${mock_log[13]}"
-    assertEquals "Expected configure_sudo to be called with no parameters" "configure_sudo " "${mock_log[14]}"
-    assertEquals "Expected log_opkssh_installation to be called with no parameters" "log_opkssh_installation " "${mock_log[15]}"
+    assertEquals "Expected configure_cache to be called with no parameters" "configure_cache " "${mock_log[12]}"
+    assertEquals "Expected configure_openssh_server to be called with no parameters" "configure_openssh_server " "${mock_log[13]}"
+    assertEquals "Expected restart_openssh_server to be called with no parameters" "restart_openssh_server " "${mock_log[14]}"
+    assertEquals "Expected configure_sudo to be called with no parameters" "configure_sudo " "${mock_log[15]}"
+    assertEquals "Expected log_opkssh_installation to be called with no parameters" "log_opkssh_installation " "${mock_log[16]}"
 }
 
 test_main_with_no_home_policy() {
@@ -164,9 +171,10 @@ test_main_with_no_home_policy() {
     assertEquals "Expected install_opkssh_binary to be called with no parameters" "install_opkssh_binary " "${mock_log[8]}"
     assertEquals "Expected check_selinux to be called with no parameters" "check_selinux " "${mock_log[9]}"
     assertEquals "Expected configure_opkssh to be called with no parameters" "configure_opkssh " "${mock_log[10]}"
-    assertEquals "Expected configure_openssh_server to be called with no parameters" "configure_openssh_server " "${mock_log[11]}"
-    assertEquals "Expected restart_openssh_server to be called with no parameters" "restart_openssh_server " "${mock_log[12]}"
-    assertEquals "Expected log_opkssh_installation to be called with no parameters" "log_opkssh_installation " "${mock_log[13]}"
+    assertEquals "Expected configure_cache to be called with no parameters" "configure_cache " "${mock_log[11]}"
+    assertEquals "Expected configure_openssh_server to be called with no parameters" "configure_openssh_server " "${mock_log[12]}"
+    assertEquals "Expected restart_openssh_server to be called with no parameters" "restart_openssh_server " "${mock_log[13]}"
+    assertEquals "Expected log_opkssh_installation to be called with no parameters" "log_opkssh_installation " "${mock_log[14]}"
 }
 
 
@@ -281,6 +289,18 @@ test_main_install_opkssh_binary_failes() {
 }
 
 
+test_main_configure_cache_failes() {
+    configure_cache_exit_code=1
+    main
+    result=$?
+
+    readarray -t mock_log < "$MOCK_LOG"
+
+    assertEquals "Expected result to return 1 when failes" 1 "$result"
+    assertEquals "Expected that only a few function are called" 13 "${#mock_log[@]}"
+}
+
+
 test_main_configure_openssh_server_failes() {
     configure_openssh_server_exit_code=1
     main
@@ -289,7 +309,7 @@ test_main_configure_openssh_server_failes() {
     readarray -t mock_log < "$MOCK_LOG"
 
     assertEquals "Expected result to return 1 when failes" 1 "$result"
-    assertEquals "Expected that only a few function are called" 13 "${#mock_log[@]}"
+    assertEquals "Expected that only a few function are called" 14 "${#mock_log[@]}"
 }
 
 # shellcheck disable=SC1091

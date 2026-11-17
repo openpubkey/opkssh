@@ -1,3 +1,17 @@
+// Copyright 2025 OpenPubkey
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
 // SPDX-License-Identifier: Apache-2.0
 
 package commands
@@ -5,15 +19,23 @@ package commands
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"maps"
 	"os"
+	"path/filepath"
+	"slices"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/openpubkey/openpubkey/oidc"
 	"github.com/openpubkey/openpubkey/pktoken"
+	"github.com/openpubkey/opkssh/policy"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
 )
 
 type InspectCmd struct {
@@ -21,6 +43,8 @@ type InspectCmd struct {
 	KeyOrCert string
 	// Output is where output should be written to.
 	Output io.Writer
+	// ErrOutput is where warnings are written. Nil means os.Stderr.
+	ErrOutput io.Writer
 }
 
 // NewInspectCmd creates a new InspectCmd instance with the provided arguments.
@@ -31,14 +55,23 @@ func NewInspectCmd(keyOrCert string, output io.Writer) *InspectCmd {
 	}
 }
 
-// printf formats a string to the configured output.
+// printf formats a string to the configured output. If writing fails, it
+// falls back to standard output rather than retrying the failing writer.
 func (i *InspectCmd) printf(format string, a ...any) {
 	if _, err := fmt.Fprintf(i.Output, format, a...); err != nil {
-		// Fall back to stdout
-		i.printf(format, a...)
+		fmt.Fprintf(os.Stdout, format, a...)
 	}
 }
 
+func (i *InspectCmd) warnf(format string, a ...any) {
+	errOutput := i.ErrOutput
+	if errOutput == nil {
+		errOutput = os.Stderr
+	}
+	fmt.Fprintf(errOutput, format, a...)
+}
+
+// Run inspects KeyOrCert, which is either a file path or the key or certificate itself.
 func (i *InspectCmd) Run() error {
 	// Check if the input is a file path
 	if _, err := os.Stat(i.KeyOrCert); err == nil {
@@ -82,7 +115,8 @@ func (i *InspectCmd) inspectCertificate(cert *ssh.Certificate) {
 
 	// Format extensions nicely
 	i.printf("Extensions:\n")
-	for key, value := range cert.Extensions {
+	for _, key := range slices.Sorted(maps.Keys(cert.Extensions)) {
+		value := cert.Extensions[key]
 		if key == "openpubkey-pkt" {
 			i.printf("  %s: [PKToken data] %d bytes\n", key, len(value))
 		} else {
@@ -188,6 +222,7 @@ func (i *InspectCmd) inspectPKToken(pktStr string) {
 	// Print token metadata
 	i.printf("\n--- Token Metadata ---\n")
 	i.printTokenMetadata(pkt)
+	i.printExpiration(pkt)
 }
 
 func (i *InspectCmd) printJSON(data []byte) {
@@ -239,4 +274,221 @@ func (i *InspectCmd) printTokenMetadata(pkt *pktoken.PKToken) {
 	if alg, ok := pkt.ProviderAlgorithm(); ok {
 		i.printf("%-19s %s\n", "Provider Algorithm:", alg)
 	}
+}
+
+// expirationPolicyNames lists the expiration policies a server can set in
+// /etc/opk/providers, in the order inspect prints them.
+var expirationPolicyNames = []string{"12h", "24h", "48h", "1week", "oidc", "oidc_refreshed", "never"}
+
+var expirationPolicyMaxAges = map[string]time.Duration{
+	"12h":   12 * time.Hour,
+	"24h":   24 * time.Hour,
+	"48h":   48 * time.Hour,
+	"1week": 7 * 24 * time.Hour,
+}
+
+// printExpiration shows, for each server expiration policy, when the PK token
+// stops being accepted. The SSH certificate itself never expires; the server
+// decides from the ID token.
+func (i *InspectCmd) printExpiration(pkt *pktoken.PKToken) {
+	idt, err := oidc.NewJwt(pkt.OpToken)
+	if err != nil {
+		i.printf("Error parsing ID token: %v\n", err)
+		return
+	}
+	claims := idt.GetClaims()
+
+	i.printf("\n--- Expiration by Server Policy ---\n")
+	for _, name := range expirationPolicyNames {
+		expirationPolicy, err := policy.ProvidersRow{ExpirationPolicy: name}.GetExpirationPolicy()
+		if err != nil {
+			i.printf("%-19s %v\n", name+":", err)
+			continue
+		}
+		status := "valid"
+		if expirationPolicy.CheckExpiration(pkt) != nil {
+			status = "expired"
+		}
+		i.printf("%-19s %-25s %s\n", name+":", policyExpiresAt(name, claims, pkt), status)
+	}
+}
+
+func policyExpiresAt(name string, claims *oidc.OidcClaims, pkt *pktoken.PKToken) string {
+	switch name {
+	case "never":
+		return "Never"
+	case "oidc":
+		return formatUnixTime(claims.Expiration)
+	case "oidc_refreshed":
+		// Accepted while either the ID token or the refreshed ID token is unexpired.
+		expiration := claims.Expiration
+		if pkt.FreshIDToken != nil {
+			if freshIdt, err := oidc.NewJwt(pkt.FreshIDToken); err == nil {
+				expiration = max(expiration, freshIdt.GetClaims().Expiration)
+			}
+		}
+		return formatUnixTime(expiration)
+	default:
+		if claims.IssuedAt <= 0 {
+			return "Unknown"
+		}
+		return time.Unix(claims.IssuedAt, 0).Add(expirationPolicyMaxAges[name]).Format(time.RFC3339)
+	}
+}
+
+func formatUnixTime(seconds int64) string {
+	if seconds <= 0 {
+		return "Unknown"
+	}
+	return time.Unix(seconds, 0).Format(time.RFC3339)
+}
+
+// RunDiscovery inspects every opkssh certificate found in ~/.ssh/opkssh,
+// under the default key names in ~/.ssh, and in the ssh-agent at
+// SSH_AUTH_SOCK.
+func (i *InspectCmd) RunDiscovery() error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %w", err)
+	}
+	return i.inspectCertsIn(filepath.Join(homeDir, ".ssh"))
+}
+
+func (i *InspectCmd) inspectCertsIn(sshDir string) error {
+	certFiles, readErrs := findOpkSSHCerts(sshDir)
+	for _, err := range readErrs {
+		i.warnf("Warning: %v\n", err)
+	}
+	agentSock := os.Getenv("SSH_AUTH_SOCK")
+	agentCerts, err := listOpkSSHAgentCerts(agentSock)
+	if err != nil {
+		i.warnf("Warning: could not list ssh-agent certificates (%s): %v\n", agentSock, err)
+	}
+
+	if len(certFiles) == 0 && len(agentCerts) == 0 {
+		searched := filepath.Join(sshDir, opkSSHDirName) + " or " + sshDir
+		if agentSock != "" {
+			searched = filepath.Join(sshDir, opkSSHDirName) + ", " + sshDir + " or ssh-agent"
+		}
+		i.printf("No opkssh certificates found in %s\n", searched)
+		i.printf("For a key written with `opkssh login -i <path>`, run `opkssh inspect <path>-cert.pub`\n")
+		return nil
+	}
+
+	printed := 0
+	inspectOne := func(header string, cert *ssh.Certificate) {
+		if printed > 0 {
+			i.printf("\n")
+		}
+		printed++
+		i.printf("=== %s ===\n", header)
+		i.inspectCertificate(cert)
+	}
+	for _, certFile := range certFiles {
+		inspectOne(certFile.Path, certFile.Cert)
+	}
+	for _, cert := range agentCerts {
+		inspectOne("ssh-agent "+ssh.FingerprintSHA256(cert.Key), cert)
+	}
+	return nil
+}
+
+// listOpkSSHAgentCerts returns the opkssh certificates in the ssh-agent at
+// sock. An empty sock means there is no agent to ask.
+func listOpkSSHAgentCerts(sock string) ([]*ssh.Certificate, error) {
+	if sock == "" {
+		return nil, nil
+	}
+	conn, err := dialSSHAgent(sock)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	keys, err := agent.NewClient(conn).List()
+	if err != nil {
+		return nil, err
+	}
+	var certs []*ssh.Certificate
+	for _, key := range keys {
+		// Not filtered on the comment: ssh-add sets it to the key's file path.
+		pubKey, err := ssh.ParsePublicKey(key.Blob)
+		if err != nil {
+			continue
+		}
+		if cert, ok := pubKey.(*ssh.Certificate); ok && cert.Extensions["openpubkey-pkt"] != "" {
+			certs = append(certs, cert)
+		}
+	}
+	return certs, nil
+}
+
+// opkSSHDirName is the directory under ~/.ssh that LoginCmd.writeKeysToOpkSSHDir writes to.
+const opkSSHDirName = "opkssh"
+
+type opkSSHCertFile struct {
+	Path string
+	Cert *ssh.Certificate
+}
+
+// findOpkSSHCerts returns, sorted by path, the opkssh certificates that login
+// can have written under sshDir, plus any errors other than "does not exist"
+// hit while looking. Each file is read once, so what is printed is what was
+// checked.
+func findOpkSSHCerts(sshDir string) ([]opkSSHCertFile, []error) {
+	var candidates []string
+	var readErrs []error
+
+	opkDir := filepath.Join(sshDir, opkSSHDirName)
+	entries, err := os.ReadDir(opkDir)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		readErrs = append(readErrs, err)
+	}
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), "-cert.pub") {
+			candidates = append(candidates, filepath.Join(opkDir, entry.Name()))
+		}
+	}
+	for _, keyFileName := range allDefaultSSHKeyFileNames() {
+		candidates = append(candidates, filepath.Join(sshDir, keyFileName+"-cert.pub"))
+	}
+
+	var certFiles []opkSSHCertFile
+	for _, path := range candidates {
+		cert, err := readOpkSSHCertFile(path)
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			readErrs = append(readErrs, err)
+		}
+		if cert != nil {
+			certFiles = append(certFiles, opkSSHCertFile{Path: path, Cert: cert})
+		}
+	}
+	sort.Slice(certFiles, func(a, b int) bool { return certFiles[a].Path < certFiles[b].Path })
+	return certFiles, readErrs
+}
+
+// readOpkSSHCertFile returns the certificate in path, or nil if path doesn't
+// hold an opkssh certificate.
+func readOpkSSHCertFile(path string) (*ssh.Certificate, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	// Reading a FIFO or device would block forever.
+	if !info.Mode().IsRegular() {
+		return nil, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	pubKey, _, _, _, err := ssh.ParseAuthorizedKey(data)
+	if err != nil {
+		return nil, nil
+	}
+	cert, isCert := pubKey.(*ssh.Certificate)
+	if !isCert || !isOpenpubkeyComment(data) {
+		return nil, nil
+	}
+	return cert, nil
 }

@@ -17,14 +17,17 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/openpubkey/openpubkey/client"
 	"github.com/openpubkey/openpubkey/jose"
@@ -33,6 +36,7 @@ import (
 	"github.com/openpubkey/openpubkey/providers/mocks"
 	"github.com/openpubkey/openpubkey/util"
 	"github.com/openpubkey/openpubkey/verifier"
+	"github.com/openpubkey/opkssh/commands/config"
 	"github.com/openpubkey/opkssh/policy"
 	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/openpubkey/opkssh/sshcert"
@@ -236,6 +240,152 @@ func TestAuthorizedKeysCommand(t *testing.T) {
 	}
 }
 
+// TestAuthorizedKeysCommandSameIssuer_TwoClientIDs checks a providers file with
+// two rows for one issuer that differ only in client ID, as when migrating from
+// one Google OAuth client to another:
+//
+//	https://accounts.google.com client-a never
+//	https://accounts.google.com client-b 12h
+func TestAuthorizedKeysCommandSameIssuer_TwoClientIDs(t *testing.T) {
+	t.Parallel()
+	issuer := "https://accounts.google.com"
+
+	alg := jose.ES256
+	signer, err := util.GenKeyPair(alg)
+	require.NoError(t, err)
+
+	providerOpts := providers.DefaultMockProviderOpts()
+	providerOpts.Issuer = issuer
+	providerOpts.ClientID = "client-a"
+
+	providerOpts.VerifierOpts.SkipClientIDCheck = true
+	op, backend, idtTemplate, err := providers.NewMockProvider(providerOpts)
+	require.NoError(t, err)
+
+	mockEmail := "arthur.aardvark@example.com"
+
+	// Two providers-file rows for the same issuer. Both trust the mock OP's
+	// signing keys, as two OAuth clients at one OP would.
+	newRow := func(clientID string, expiration verifier.ExpirationPolicy) verifier.ProviderVerifier {
+		return verifier.ProviderVerifierExpires{
+			ProviderVerifier: providers.NewProviderVerifier(issuer, providers.ProviderVerifierOpts{
+				CommitType:        providers.CommitTypesEnum.NONCE_CLAIM,
+				ClientID:          clientID,
+				DiscoverPublicKey: &backend.PublicKeyFinder,
+			}),
+			Expiration: expiration,
+		}
+	}
+	rowClientA := newRow("client-a", verifier.ExpirationPolicies.NEVER_EXPIRE)
+	rowClientB := newRow("client-b", verifier.ExpirationPolicies.MAX_AGE_12HOURS)
+
+	thirteenHoursAgo := time.Now().Add(-13 * time.Hour).Unix()
+
+	principals := []string{"guest", "dev"}
+	expectedLine := "cert-authority,principals=\"guest,dev\" ecdsa-sha2-nistp256"
+
+	tests := []struct {
+		name        string
+		aud         string
+		issuedAt    int64 // 0 means now
+		rows        []verifier.ProviderVerifier
+		errorString string
+	}{
+		{
+			name: "Token for first client ID (A then B)",
+			aud:  "client-a",
+			rows: []verifier.ProviderVerifier{rowClientA, rowClientB},
+		},
+		{
+			name: "Token for first client ID (B then A)",
+			aud:  "client-a",
+			rows: []verifier.ProviderVerifier{rowClientB, rowClientA},
+		},
+		{
+			name: "Token for second client ID (A then B)",
+			aud:  "client-b",
+			rows: []verifier.ProviderVerifier{rowClientA, rowClientB},
+		},
+		{
+			name: "Token for second client ID (B then A)",
+			aud:  "client-b",
+			rows: []verifier.ProviderVerifier{rowClientB, rowClientA},
+		},
+		{
+			name:        "Rejects token for unknown client ID",
+			aud:         "client-c",
+			rows:        []verifier.ProviderVerifier{rowClientA, rowClientB},
+			errorString: "rejected by all 2 provider verifiers",
+		},
+		{
+			name:     "Old token accepted by row with no max age",
+			aud:      "client-a",
+			issuedAt: thirteenHoursAgo,
+			rows:     []verifier.ProviderVerifier{rowClientB, rowClientA},
+		},
+		{
+			name:        "Old token rejected by row with 12h max age",
+			aud:         "client-b",
+			issuedAt:    thirteenHoursAgo,
+			rows:        []verifier.ProviderVerifier{rowClientA, rowClientB},
+			errorString: "expired",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			idtTemplate.Aud = tt.aud
+			idtTemplate.ExtraClaims = map[string]any{
+				"email": mockEmail,
+			}
+			if tt.issuedAt != 0 {
+				idtTemplate.ExtraClaims["iat"] = tt.issuedAt
+			}
+
+			client, err := client.New(op, client.WithSigner(signer, alg))
+			require.NoError(t, err)
+
+			pkt, err := client.Auth(context.Background())
+			require.NoError(t, err)
+
+			cert, err := sshcert.New(pkt, nil, principals)
+			require.NoError(t, err)
+
+			sshSigner, err := ssh.NewSignerFromSigner(signer)
+			require.NoError(t, err)
+
+			signerMas, err := ssh.NewSignerWithAlgorithms(sshSigner.(ssh.AlgorithmSigner),
+				[]string{ssh.KeyAlgoECDSA256})
+			require.NoError(t, err)
+
+			sshCert, err := cert.SignCert(signerMas)
+			require.NoError(t, err)
+
+			certTypeAndCertB64 := ssh.MarshalAuthorizedKey(sshCert)
+			typeArg := strings.Split(string(certTypeAndCertB64), " ")[0]
+			certB64Arg := strings.Split(string(certTypeAndCertB64), " ")[1]
+
+			verPkt, err := verifier.NewFromMany(tt.rows)
+			require.NoError(t, err)
+
+			userArg := "user"
+			ver := VerifyCmd{
+				PktVerifier: *verPkt,
+				CheckPolicy: AllowAllPolicyEnforcer,
+			}
+
+			pubkeyList, err := ver.AuthorizedKeysCommand(context.Background(), userArg, typeArg, certB64Arg, nil)
+
+			if tt.errorString != "" {
+				require.ErrorContains(t, err, tt.errorString)
+				require.Empty(t, pubkeyList)
+			} else {
+				require.NoError(t, err)
+				require.Contains(t, pubkeyList, expectedLine)
+			}
+		})
+	}
+}
+
 func TestEnvFromConfig(t *testing.T) {
 	// Do not run this test in parallel with other tests as it modifies environment variables
 
@@ -253,22 +403,25 @@ env_vars:
 		owner       string
 		group       string
 		errorString string
+		missing     bool
 	}{
 		{
-			name:        "Happy Path",
+			name:        "Happy Path with custom service group",
 			configFile:  map[string]string{"server_config.yml": configContent},
 			permission:  0640,
 			owner:       "root",
-			group:       "opksshuser",
+			group:       "ubuntu",
 			errorString: "",
 		},
 		{
+			// The config file is optional, so a missing file is an empty config.
 			name:        "Missing config",
 			configFile:  map[string]string{"wrong-filename.yml": configContent},
 			permission:  0640,
 			owner:       "root",
 			group:       "opksshuser",
-			errorString: "file does not exist",
+			errorString: "",
+			missing:     true,
 		},
 		{
 			name:        "Corrupted file",
@@ -307,16 +460,29 @@ env_vars:
 						return []byte(tt.owner + " " + tt.group), nil
 					},
 				},
+				// The verify process's own group, as defaultConfigGroups
+				// would report for an AuthorizedKeysCommandUser of ubuntu.
+				configGroups: []string{"opksshuser", "ubuntu"},
 			}
-			err := ver.ReadFromServerConfig()
+			var logs bytes.Buffer
+			log.SetOutput(&logs)
+			defer log.SetOutput(os.Stderr)
+			serverConfig, err := ver.ReadFromServerConfig()
 
 			if tt.errorString != "" {
 				require.ErrorContains(t, err, tt.errorString)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, "ABC", os.Getenv("OPKSSH_TEST_EXAMPLE_VAR1"))
-				require.Equal(t, "DEF", os.Getenv("OPKSSH_TEST_EXAMPLE_VAR2"))
+				return
 			}
+			require.NoError(t, err)
+			if tt.missing {
+				require.Equal(t, &config.ServerConfig{}, serverConfig)
+				require.Empty(t, os.Getenv("OPKSSH_TEST_EXAMPLE_VAR1"))
+				require.Contains(t, logs.String(), "No server config file at "+ver.ConfigPathArg+": running without deny lists, env_vars or a JWKS cache")
+				return
+			}
+			require.NotContains(t, logs.String(), "No server config file")
+			require.Equal(t, "ABC", os.Getenv("OPKSSH_TEST_EXAMPLE_VAR1"))
+			require.Equal(t, "DEF", os.Getenv("OPKSSH_TEST_EXAMPLE_VAR2"))
 		})
 	}
 

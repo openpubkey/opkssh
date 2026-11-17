@@ -397,7 +397,9 @@ func TestEndToEndSSH(t *testing.T) {
 	t.Log("Testing SFTP")
 	// Ensure the test file does not exist
 	remoteTestFilePath := "/home/test/testfile.txt"
-	localTestFilePath := "testfile.txt"
+	// Keep the file out of the repo: it is the Docker build context, and a new
+	// file there invalidates the cached opkssh build for every later test.
+	localTestFilePath := filepath.Join(t.TempDir(), "testfile.txt")
 
 	_, err = opkSshClient.Run("test -f " + remoteTestFilePath)
 	require.Error(t, err, "expected test file to not exist")

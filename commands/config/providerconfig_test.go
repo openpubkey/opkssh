@@ -239,6 +239,7 @@ func TestGitlabCiToProvider(t *testing.T) {
 	providerConfig := GitlabCiProviderConfig("https://gitlab.com")
 	provider, err := providerConfig.ToProvider(false)
 	require.NoError(t, err)
+	require.IsType(t, &providers.GitlabCiOp{}, provider)
 	require.Equal(t, "https://gitlab.com", provider.Issuer())
 }
 
@@ -354,5 +355,43 @@ func TestGenericProviderIsRefreshable(t *testing.T) {
 			require.Implements(t, (*providers.RefreshableOpenIdProvider)(nil), provider,
 				"provider must support the OIDC refresh flow")
 		})
+	}
+}
+
+func TestDeviceFlowConfig(t *testing.T) {
+	c, err := NewClientConfig([]byte(`
+providers:
+  - alias: dev
+    issuer: https://auth.example.com
+    client_id: abcde
+    device_flow: true
+  - alias: web
+    issuer: https://auth2.example.com
+    client_id: abcde
+`))
+	require.NoError(t, err)
+	require.True(t, c.Providers[0].DeviceFlow)
+	require.False(t, c.Providers[1].DeviceFlow)
+
+	issuers := []string{
+		"https://accounts.google.com",
+		"https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0",
+		"https://gitlab.com",
+		"https://issuer.hello.coop",
+		"https://auth.example.com",
+	}
+	for _, issuer := range issuers {
+		for _, deviceFlow := range []bool{true, false} {
+			pc := DefaultProviderConfig()
+			pc.Issuer = issuer
+			pc.ClientID = "abcde"
+			pc.ClientSecret = "secret"
+			pc.DeviceFlow = deviceFlow
+			op, err := pc.ToProvider(false)
+			require.NoError(t, err, issuer)
+			sop, ok := op.(*providers.StandardOp)
+			require.True(t, ok, "%s: unexpected provider type %T", issuer, op)
+			require.Equal(t, deviceFlow, sop.DeviceFlow, issuer)
+		}
 	}
 }

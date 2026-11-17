@@ -6,7 +6,7 @@ set -eou pipefail
 
 pushd $SCRIPT_DIR/../
 
-GO_VERSION=${GO_VERSION:-"1.25.11"}
+GO_VERSION=${GO_VERSION:-"1.26.10"}
 
 mkdir -p .cache
 mkdir -p .mod-cache

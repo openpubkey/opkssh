@@ -19,6 +19,7 @@ package commands
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -120,18 +121,26 @@ func (p *PermissionsCmd) CobraCommand() *cobra.Command {
 	return permissionsCmd
 }
 
-// checkResult is the JSON-serializable result of a permissions check.
+// checkReport is the JSON output of a permissions check.
+type checkReport struct {
+	Ok       bool          `json:"ok"`
+	Problems []string      `json:"problems"`
+	Files    []checkResult `json:"files"`
+}
+
+// checkResult is the JSON result of checking one file or directory.
 type checkResult struct {
-	Path     string `json:"path"`
-	Exists   bool   `json:"exists"`
-	PermsErr string `json:"permsErr,omitempty"`
-	ACLErr   string `json:"aclErr,omitempty"`
+	Path        string   `json:"path"`
+	Exists      bool     `json:"exists"`
+	PermsErr    string   `json:"perms_error,omitempty"`
+	ACLErr      string   `json:"acl_error,omitempty"`
+	ACLProblems []string `json:"acl_problems,omitempty"`
 }
 
 // Check verifies permissions and ownership for opkssh files.
 func (p *PermissionsCmd) Check() error {
-	var problems []string
-	var results []checkResult
+	problems := []string{}
+	results := []checkResult{}
 
 	// checkACLResult is a helper that processes ACL findings from
 	// CheckFilePermissions and appends them to problems/checkResult.
@@ -141,6 +150,17 @@ func (p *PermissionsCmd) Check() error {
 			cr.ACLErr = result.ACLErr.Error()
 		} else if result.ACLReport != nil {
 			report := result.ACLReport
+			cr.ACLProblems = report.Problems
+			// A file whose mode or owner is already wrong counts once; on Unix
+			// the ACL verifier repeats the same mode and owner checks.
+			if cr.PermsErr == "" {
+				for _, prob := range report.Problems {
+					problems = append(problems, fmt.Sprintf("%s: acl: %s", path, prob))
+				}
+			}
+			if p.JsonOutput {
+				return
+			}
 			if report.OwnerSIDStr != "" {
 				fmt.Fprintf(p.Out, "%s: owner=%s ownerSID=%s mode=%o\n", path, report.Owner, report.OwnerSIDStr, report.Mode)
 			} else {
@@ -226,13 +246,16 @@ func (p *PermissionsCmd) Check() error {
 	if p.JsonOutput {
 		enc := json.NewEncoder(p.Out)
 		enc.SetIndent("", "  ")
-		return enc.Encode(results)
-	}
-
-	if len(problems) > 0 {
+		if err := enc.Encode(checkReport{Ok: len(problems) == 0, Problems: problems, Files: results}); err != nil {
+			return err
+		}
+	} else {
 		for _, prob := range problems {
 			fmt.Fprintln(p.Out, "Problem:", prob)
 		}
+	}
+
+	if len(problems) > 0 {
 		return fmt.Errorf("permissions check failed: %d problems found", len(problems))
 	}
 	// Success: print nothing and return nil
@@ -243,11 +266,19 @@ func (p *PermissionsCmd) Check() error {
 type fixResult struct {
 	Planned []string `json:"planned"`
 	Errors  []string `json:"errors,omitempty"`
-	DryRun  bool     `json:"dryRun"`
+	DryRun  bool     `json:"dry_run"`
 }
+
+// errJsonNeedsYes is returned by fix when --json would need an interactive
+// confirmation, which can't share stdout with the JSON result.
+var errJsonNeedsYes = errors.New("--json requires --yes or --dry-run, because fix can't ask for confirmation while writing JSON")
 
 // Fix attempts to repair permissions/ownership for key paths.
 func (p *PermissionsCmd) Fix() error {
+	if p.JsonOutput && !p.Yes && !p.DryRun {
+		return errJsonNeedsYes
+	}
+
 	// Planning phase: determine actions without performing them
 	var planned []string
 
@@ -460,16 +491,21 @@ func (p *PermissionsCmd) Fix() error {
 	if p.JsonOutput {
 		enc := json.NewEncoder(p.Out)
 		enc.SetIndent("", "  ")
-		return enc.Encode(fixResult{Planned: planned, Errors: errorsFound})
-	}
-
-	if len(errorsFound) > 0 {
+		if err := enc.Encode(fixResult{Planned: planned, Errors: errorsFound}); err != nil {
+			return err
+		}
+	} else {
 		for _, e := range errorsFound {
 			fmt.Fprintln(p.Out, "Error:", e)
 		}
+	}
+
+	if len(errorsFound) > 0 {
 		return fmt.Errorf("fix completed with %d errors", len(errorsFound))
 	}
 
-	fmt.Fprintln(p.Out, "fix completed successfully")
+	if !p.JsonOutput {
+		fmt.Fprintln(p.Out, "fix completed successfully")
+	}
 	return nil
 }

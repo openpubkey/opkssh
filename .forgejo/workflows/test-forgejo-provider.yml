@@ -20,7 +20,7 @@ jobs:
     # Adjust the label to one your instance's runners offer.
     runs-on: codeberg-small-lazy
     container:
-      image: golang:1.26-bookworm
+      image: golang:1.27-bookworm
     timeout-minutes: 10
     steps:
       # Manual checkout instead of actions/checkout: JavaScript actions need

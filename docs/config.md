@@ -25,7 +25,7 @@ The client config can be used to configure the following values:
 
 - **default_provider** By default this is set to the webchooser, which opens a webpage and allows the user to select the OpenID Provider they want by clicking. However if you wish to always connect to one particular OpenID Provider you can set this to the alias of that OpenID Provider and it will skip the web chooser and automatically just open a browser window to that provider.
 
-- **agent_lifetime** How long ssh-agent retains the certificate that `opkssh login` adds to it, either as a duration (`12h`, `45m`) or in seconds (`28800`). The default client config ships this key commented out, so a config that omits it falls back to `24h`, matching the server's default certificate expiration policy. Note the client cannot know the expiration policy of every server it connects to, so this is a client-side bound to keep expired keys from accumulating in the agent rather than a statement of the certificate's validity. The `--lifetime` flag on `opkssh login` overrides this value. Under `--auto-refresh` each refreshed certificate replaces the previous one in the agent and restarts the lifetime, so the agent tracks the certificate on disk for as long as the command runs. On Windows the agent is not currently reachable (the native OpenSSH agent listens on a named pipe rather than a unix socket), so the certificate is not added there.
+- **agent_lifetime** How long ssh-agent retains the certificate that `opkssh login --ssh-agent` adds to it (opkssh does not touch the agent unless `--ssh-agent` is passed), either as a duration (`12h`, `45m`) or in seconds (`28800`). The default client config ships this key commented out, so a config that omits it falls back to `24h`, matching the server's default certificate expiration policy. Note the client cannot know the expiration policy of every server it connects to, so this is a client-side bound to keep expired keys from accumulating in the agent rather than a statement of the certificate's validity. The `--lifetime` flag on `opkssh login` overrides this value. Under `--auto-refresh` each refreshed certificate replaces the previous one in the agent and restarts the lifetime, so the agent tracks the certificate on disk for as long as the command runs. On Windows the agent is not currently reachable (the native OpenSSH agent listens on a named pipe rather than a unix socket), so the certificate is not added there.
 
 - **providers** This allows you to configure all the OpenID Providers you wish to use. See example below.
   - **send_access_token** Is a boolean value scoped to a particular provider. It determines if opkssh should put the user's access token into the SSH public key (SSH Certificate). This is useful for allowing the opkssh verifier to read claims not available in the ID Token that can only be read from the OpenID Provider's [userinfo endpoint](https://openid.net/specs/openid-connect-core-1_0.html#UserInfo). The opkssh verifier on the SSH server will use the access token to make a call to the OpenID Provider's userinfo endpoint. Configuration option false by default as SSH will send SSH Public Keys to any host you are attempting to SSH into. Before setting this to true carefully consider the security implications of including the access token in the SSH Public key.
@@ -60,7 +60,21 @@ providers:
       - http://localhost:10001/login-callback
       - http://localhost:11110/login-callback
 
+```
 
+On machines without a browser, set `device_flow: true` on a provider to use the OIDC device flow.
+With multiple provides available specify with `opkssh login [provider]`
+
+```yaml
+---
+default_provider: my-idp
+
+providers:
+  - alias: my-idp
+    issuer: https://idp.example.com
+    client_id: <CLIENT-ID>
+    scopes: openid email
+    device_flow: true
 ```
 
 ## Server config `/etc/opk/config.yml` (Linux) or `%ProgramData%\opk\config.yml` (Windows)
@@ -75,7 +89,7 @@ env_vars:
   HTTPS_PROXY: http://yourproxy:3128
 ```
 
-It also supports a `deny_emails` field. This field is a YAML array of strings, where each string is an email address opkssh should never allow. An ID Token has a claim for an email on this list it will reject it.
+It also supports a `deny_emails` field. This field is a YAML array of strings, where each string is an email address opkssh should never allow. An ID Token has a claim for an email on this list it will reject it. If `deny_emails` has at least one email, policy will reject any ID Token without an email claim. This is done to prevent bypassing the denylist by requesting an ID Token without the email scope.
 
 ```yml
 ---
@@ -91,14 +105,36 @@ It also supports a `deny_users` field. This field is a YAML array of strings, wh
 
 Both `deny_emails` and `deny_users` are evaluated before policy.
 
+### JWKS cache
+
+`opkssh verify` can cache each provider's JWKS on disk. Most logins then don't contact the provider, and logins keep working for a while if the provider is unreachable. The cache is off by default; to turn it on, add:
+
+```yml
+cache:
+  base_dir: /var/cache/opkssh
+  max_age: 1h
+  fallback_max_age: 2h
+```
+
+`base_dir` must be an absolute path owned by the `AuthorizedKeysCommandUser` account, not writable by others, and labelled `opkssh_cache_t` if SELinux is enabled. The installer sets all of this up when you set `OPKSSH_INSTALL_CACHE_DIR`. A cache problem never blocks a login: opkssh logs it and verifies without the cache. The cache is supported on Linux and macOS, not on Windows.
+
+See [docs/cache.md](cache.md) for how the cache works, all settings, debugging with `opkssh verify --cache`, SELinux and security considerations.
+
 ### Server config permissions
 
-The server config file requires the following permissions be set:
+The server config file is optional. If it exists, it must be owned by `root`
+with mode `640`, and its group must be either `opksshuser` or the primary group
+of the account configured as `AuthorizedKeysCommandUser`. Any other group is
+rejected, because the file can contain `env_vars` such as proxy credentials.
+For example, if verification runs as `ubuntu`:
 
 ```bash
-sudo chown root:opksshuser /etc/opk/config.yml
+sudo chown root:ubuntu /etc/opk/config.yml
 sudo chmod 640 /etc/opk/config.yml
 ```
+
+If the file has the wrong permissions or can't be parsed, `opkssh verify` logs
+the error and continues without it: no cache, deny lists or `env_vars`.
 
 ## Allowed OpenID Providers: `/etc/opk/providers` (Linux) or `%ProgramData%\opk\providers` (Windows)
 
@@ -114,14 +150,17 @@ The client ID must match the aud (audience) claim in the PK Token.
 
 ### Examples
 
-The file lives at `/etc/opk/providers`. The default values are:
+The file lives at `/etc/opk/providers`. The installers write these default values:
 
 ```bash
 # Issuer Client-ID expiration-policy 
 https://accounts.google.com 206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com 24h
 https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0 096ce0a3-5e72-4da8-9c86-12924b294a01 24h
 https://gitlab.com 8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923 24h
+https://issuer.hello.coop app_xejobTKEsDNSRd5vofKB2iay_2rN 24h
 ```
+
+These default client IDs are intended for testing and should not be used in production: register your own client IDs for production (see [Default client IDs](audit.md#default-client-ids)).
 
 ## Authorized identities files: `/etc/opk/auth_id` and `/home/{USER}/.opk/auth_id` (Linux) or `%ProgramData%\opk\auth_id` (Windows)
 

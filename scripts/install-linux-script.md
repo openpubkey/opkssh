@@ -296,6 +296,7 @@ Creates/checks the opskssh configuration
 
 **Outputs:**
 -   Writes to stdout the configration progress
+-   Sets global variable DEFAULT_PROVIDERS_WRITTEN to true if it wrote the default providers
 
 
 **Returns:**
@@ -358,6 +359,7 @@ Log the installation details to /var/log/opkssh.log to help with debugging
 
 Output:
   Writes to stdout that installation is successful
+  Writes to stdout a notice about the default client IDs if DEFAULT_PROVIDERS_WRITTEN is true
   Writes installation debug information to /var/log/opkssh.log
 
 

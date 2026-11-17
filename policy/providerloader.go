@@ -17,9 +17,14 @@
 package policy
 
 import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strings"
 
+	"github.com/openpubkey/openpubkey/discover"
+	"github.com/openpubkey/openpubkey/pktoken/clientinstance"
 	"github.com/openpubkey/openpubkey/providers"
 	"github.com/openpubkey/openpubkey/verifier"
 	"github.com/openpubkey/opkssh/policy/files"
@@ -72,7 +77,7 @@ func (p *ProviderPolicy) GetRows() []ProvidersRow {
 // providerVerifierFromRow selects the OP verifier to use for a row in the
 // providers file. The OP type is determined by the configured issuer alone,
 // never by anything in the token being verified.
-func providerVerifierFromRow(row ProvidersRow) verifier.ProviderVerifier {
+func providerVerifierFromRow(row ProvidersRow, cacheCfg discover.DiscoveryCacheConfig) verifier.ProviderVerifier {
 	// TODO: We should handle this issuer matching in a more generic way
 	// oidc.local and localhost: are a test issuers
 	if row.Issuer == "https://accounts.google.com" ||
@@ -82,34 +87,52 @@ func providerVerifierFromRow(row ProvidersRow) verifier.ProviderVerifier {
 		opts := providers.GetDefaultGoogleOpOptions()
 		opts.Issuer = row.Issuer
 		opts.ClientID = row.ClientID
+		opts.CacheConfig = cacheCfg
+		opts.HttpClient = NewProviderHTTPClient()
 		return providers.NewGoogleOpWithOptions(opts)
 	} else if strings.HasPrefix(row.Issuer, "https://login.microsoftonline.com") {
 		opts := providers.GetDefaultAzureOpOptions()
 		opts.Issuer = row.Issuer
 		opts.ClientID = row.ClientID
+		opts.CacheConfig = cacheCfg
+		opts.HttpClient = NewProviderHTTPClient()
 		return providers.NewAzureOpWithOptions(opts)
+	} else if row.Issuer == "https://token.actions.githubusercontent.com" {
+		return cachedActionsProviderVerifier{issuer: row.Issuer, publicKeyFinder: newCachedPublicKeyFinder(cacheCfg)}
+	} else if providers.IsForgejoIssuer(row.Issuer) {
+		return cachedActionsProviderVerifier{issuer: strings.TrimSuffix(row.Issuer, "/"), publicKeyFinder: newCachedPublicKeyFinder(cacheCfg)}
+	} else if strings.HasPrefix(row.ClientID, "OPENPUBKEY-PKTOKEN:GITLAB-CI:") {
+		// Do the gitlab checks last so that github or forgejo issuers
+		// checks happen first. This is to avoid a case where someone has
+		// a github issuer but sets the client ID prefix to "OPENPUBKEY-PKTOKEN:GITLAB-CI:"
+		return gitLabCiProviderVerifier{
+			issuer:          row.Issuer,
+			audience:        row.ClientID,
+			publicKeyFinder: newCachedPublicKeyFinder(cacheCfg),
+		}
 	} else if row.Issuer == "https://gitlab.com" {
 		opts := providers.GetDefaultGitlabOpOptions()
 		opts.Issuer = row.Issuer
 		opts.ClientID = row.ClientID
+		opts.CacheConfig = cacheCfg
+		opts.HttpClient = NewProviderHTTPClient()
 		return providers.NewGitlabOpWithOptions(opts)
-	} else if row.Issuer == "https://token.actions.githubusercontent.com" {
-		return providers.NewGithubOp(row.Issuer, "")
-	} else if providers.IsForgejoIssuer(row.Issuer) {
-		return providers.NewForgejoOp(row.Issuer, "", "")
 	}
+
 	opts := providers.GetDefaultGoogleOpOptions()
 	opts.Issuer = row.Issuer
 	opts.ClientID = row.ClientID
+	opts.CacheConfig = cacheCfg
+	opts.HttpClient = NewProviderHTTPClient()
 	return providers.NewGoogleOpWithOptions(opts)
 }
 
-func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
+func (p *ProviderPolicy) CreateVerifier(cacheCfg discover.DiscoveryCacheConfig) (*verifier.Verifier, error) {
 	pvs := []verifier.ProviderVerifier{}
 	var expirationPolicy verifier.ExpirationPolicy
 	var err error
 	for _, row := range p.rows {
-		provider := providerVerifierFromRow(row)
+		provider := providerVerifierFromRow(row, cacheCfg)
 
 		expirationPolicy, err = row.GetExpirationPolicy()
 		if err != nil {
@@ -133,6 +156,125 @@ func (p *ProviderPolicy) CreateVerifier() (*verifier.Verifier, error) {
 		return nil, err
 	}
 	return pktVerifier, nil
+}
+
+type gitLabCiProviderVerifier struct {
+	issuer          string
+	audience        string
+	publicKeyFinder *discover.PublicKeyFinder
+}
+
+func (g gitLabCiProviderVerifier) Issuer() string {
+	return g.issuer
+}
+
+func (g gitLabCiProviderVerifier) VerifyIDToken(ctx context.Context, idt []byte, cic *clientinstance.Claims) error {
+	if err := verifyGitLabCiTokenClaims(idt, g.audience); err != nil {
+		return err
+	}
+	return providers.NewProviderVerifier(g.issuer, providers.ProviderVerifierOpts{
+		CommitType:        providers.CommitTypesEnum.GQ_BOUND,
+		DiscoverPublicKey: g.publicKeyFinder,
+		GQOnly:            true,
+		SkipClientIDCheck: true,
+	}).VerifyIDToken(ctx, idt, cic)
+}
+
+// cachedActionsProviderVerifier preserves the GitHub Actions and Forgejo
+// aud-as-commitment verification rules while using the configured persistent
+// JWKS cache. The upstream constructors currently expose no cache option.
+type cachedActionsProviderVerifier struct {
+	issuer          string
+	publicKeyFinder *discover.PublicKeyFinder
+}
+
+func (p cachedActionsProviderVerifier) Issuer() string {
+	return p.issuer
+}
+
+func (p cachedActionsProviderVerifier) VerifyIDToken(ctx context.Context, idt []byte, cic *clientinstance.Claims) error {
+	return providers.NewProviderVerifier(p.issuer, providers.ProviderVerifierOpts{
+		CommitType:        providers.CommitTypesEnum.AUD_CLAIM,
+		DiscoverPublicKey: p.publicKeyFinder,
+		GQOnly:            true,
+		SkipClientIDCheck: true,
+	}).VerifyIDToken(ctx, idt, cic)
+}
+
+func newCachedPublicKeyFinder(cacheCfg discover.DiscoveryCacheConfig) *discover.PublicKeyFinder {
+	httpClient := NewProviderHTTPClient()
+	return &discover.PublicKeyFinder{
+		JwksFunc: func(ctx context.Context, issuer string) ([]byte, error) {
+			return discover.GetJwksByIssuer(ctx, issuer, httpClient)
+		},
+		CacheConfig: cacheCfg,
+	}
+}
+
+func verifyGitLabCiTokenClaims(idt []byte, audience string) error {
+	claims, err := decodeJwtPayload(idt)
+	if err != nil {
+		return err
+	}
+
+	if !audienceMatches(claims["aud"], audience) {
+		return fmt.Errorf("gitlab-ci token audience does not match expected audience %q", audience)
+	}
+
+	for _, claimName := range []string{"ci_config_ref_uri", "job_id", "job_project_path", "pipeline_id"} {
+		if !claimIsPresent(claims[claimName]) {
+			return fmt.Errorf("gitlab-ci token missing required claim %q", claimName)
+		}
+	}
+	return nil
+}
+
+func decodeJwtPayload(idt []byte) (map[string]any, error) {
+	parts := strings.Split(string(idt), ".")
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("invalid jwt: expected at least two parts")
+	}
+
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		payload, err = base64.URLEncoding.DecodeString(parts[1])
+		if err != nil {
+			return nil, fmt.Errorf("error decoding jwt payload: %w", err)
+		}
+	}
+
+	var claims map[string]any
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return nil, fmt.Errorf("error unmarshalling jwt payload: %w", err)
+	}
+	return claims, nil
+}
+
+func audienceMatches(rawAudience any, expectedAudience string) bool {
+	switch audience := rawAudience.(type) {
+	case string:
+		return audience == expectedAudience
+	case []any:
+		for _, value := range audience {
+			if audienceValue, ok := value.(string); ok && audienceValue == expectedAudience {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func claimIsPresent(value any) bool {
+	switch v := value.(type) {
+	case nil:
+		return false
+	case string:
+		return v != ""
+	case []any:
+		return len(v) > 0
+	default:
+		return true
+	}
 }
 
 func (p ProviderPolicy) ToString() string {

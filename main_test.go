@@ -19,6 +19,7 @@ package main
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -305,6 +306,18 @@ func TestRun(t *testing.T) {
 			wantExit:   1,
 		},
 		{
+			name:       "Inspect with two paths",
+			args:       []string{"opkssh", "inspect", "a", "b"},
+			wantOutput: "Error: accepts at most 1 arg(s), received 2",
+			wantExit:   1,
+		},
+		{
+			name:       "Inspect missing file",
+			args:       []string{"opkssh", "inspect", "does-not-exist-cert.pub"},
+			wantOutput: "failed to parse SSH key",
+			wantExit:   1,
+		},
+		{
 			name: "Client provider list",
 			args: []string{"opkssh", "client", "provider", "list", "--config-path=commands/config/default-client-config.yml"},
 			wantOutput: "" +
@@ -324,6 +337,21 @@ func TestRun(t *testing.T) {
 
 		})
 	}
+}
+
+// TestInspectNoPath is outside TestRun because it sets HOME, which a parallel
+// test can't.
+func TestInspectNoPath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("SSH_AUTH_SOCK", "")
+	sshDir := filepath.Join(home, ".ssh")
+
+	output, exitCode := RunCliAndCaptureResult(t, []string{"opkssh", "inspect"})
+	require.Equal(t, 0, exitCode)
+	require.Contains(t, output, "No opkssh certificates found in "+filepath.Join(sshDir, "opkssh")+" or "+sshDir+"\n")
+
 }
 
 func TestWithEnvVars(t *testing.T) {
@@ -389,4 +417,48 @@ func TestWithEnvVars(t *testing.T) {
 			require.Equal(t, tt.wantExit, exitCode, "Incorrect Exit code")
 		})
 	}
+}
+
+// TestClientProviderAdd runs `opkssh client provider add` and `list` on a
+// client config file, the way a user replaces a default client ID with
+// their own. Not parallel: RunCliAndCaptureResult redirects os.Stdout.
+func TestClientProviderAdd(t *testing.T) {
+	defaultConfig, err := os.ReadFile(filepath.Join("commands", "config", "default-client-config.yml"))
+	require.NoError(t, err)
+	configPath := filepath.Join(t.TempDir(), "config.yml")
+	require.NoError(t, os.WriteFile(configPath, defaultConfig, 0o600))
+	configPathArg := "--config-path=" + configPath
+
+	steps := []struct {
+		args       []string
+		wantOutput string
+		wantExit   int
+	}{
+		{
+			args:       []string{"opkssh", "client", "provider", "add", "google", "https://accounts.google.com", "my-id.apps.googleusercontent.com", "--client-secret", "my-secret", "--replace", configPathArg},
+			wantOutput: "Replaced provider google (https://accounts.google.com) in " + configPath,
+		},
+		{
+			args:       []string{"opkssh", "client", "provider", "add", "mykeycloak", "https://keycloak.example.com/realms/opkssh", "opkssh", configPathArg},
+			wantOutput: "  https://keycloak.example.com/realms/opkssh opkssh 24h",
+		},
+		{
+			args:       []string{"opkssh", "client", "provider", "list", configPathArg},
+			wantOutput: "hello      https://issuer.hello.coop\nmykeycloak https://keycloak.example.com/realms/opkssh\n",
+		},
+		{
+			args:       []string{"opkssh", "client", "provider", "add", "mykeycloak", "https://keycloak.example.com/realms/other", "opkssh", configPathArg},
+			wantOutput: "provider mykeycloak already exists; use --replace to replace it",
+			wantExit:   1,
+		},
+	}
+	for _, step := range steps {
+		cmdOutput, exitCode := RunCliAndCaptureResult(t, step.args)
+		require.Contains(t, cmdOutput, step.wantOutput, "opkssh %v", step.args[1:])
+		require.Equal(t, step.wantExit, exitCode, "opkssh %v", step.args[1:])
+	}
+
+	content, err := os.ReadFile(configPath)
+	require.NoError(t, err)
+	require.Contains(t, string(content), "client_id: my-id.apps.googleusercontent.com")
 }
