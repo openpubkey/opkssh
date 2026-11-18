@@ -154,19 +154,22 @@ func validateClaim(claims *checkedClaims, user *User) bool {
 	// Should we match on an oidc claim?
 	if strings.HasPrefix(user.IdentityAttribute, OIDC_CLAIMS) {
 		oidcGroupSections := EscapedSplit(user.IdentityAttribute, ':')
-		// A well formed row is oidc:<claim>:<value>. EscapedSplit drops empty
-		// fields, so "oidc:" and "oidc::" come back as a single section and
-		// indexing into them panics. Treat a short row as no match.
-		if len(oidcGroupSections) < 3 {
+		// A well formed row is oidc:<claim>:<value>. A claim name or value
+		// containing ':' must reach here in double quotes, written as \" in the
+		// policy file. Any other number of sections is malformed: the policy
+		// file parser removes plain double quotes, and matching one section of
+		// a value such as org:admins would grant a different group.
+		var oidcGroupsName, oidcGroupValue string
+		if len(oidcGroupSections) == 3 {
+			oidcGroupsName = strings.Trim(oidcGroupSections[1], "\"")
+			oidcGroupValue = strings.Trim(oidcGroupSections[2], "\"")
+		}
+		if oidcGroupValue == "" {
 			log.Printf("warning: malformed oidc identity attribute %q in policy, expected oidc:<claim>:<value>", user.IdentityAttribute)
 			return false
 		}
-		oidcGroupsName := strings.Trim(oidcGroupSections[1], "\"")
 
-		return slices.Contains(
-			claims.ExtraClaims[oidcGroupsName],
-			oidcGroupSections[len(oidcGroupSections)-1],
-		)
+		return slices.Contains(claims.ExtraClaims[oidcGroupsName], oidcGroupValue)
 	}
 
 	// Should we match on the email wildcard claim?
