@@ -197,6 +197,24 @@ type MockSource struct{}
 
 func (MockSource) Source() string { return "<mock data>" }
 
+// policyFileLoader returns a loader for content parsed by the policy file
+// parser, as opkssh verify reads /etc/opk/auth_id.
+func policyFileLoader(t *testing.T, content string) *MockPolicyLoader {
+	loaded, problems := policy.FromTable([]byte(content), "test-policy")
+	require.Empty(t, problems)
+	return &MockPolicyLoader{Policy: loaded}
+}
+
+// addedPolicyLoader returns a loader for a rule written to the policy file the
+// way opkssh add writes it, then read back.
+func addedPolicyLoader(t *testing.T, identityAttribute string) *MockPolicyLoader {
+	written := &policy.Policy{}
+	written.AddAllowedPrincipal("test", identityAttribute, "https://accounts.example.com")
+	content, err := written.ToTable()
+	require.NoError(t, err)
+	return policyFileLoader(t, string(content))
+}
+
 func TestPolicyApproved(t *testing.T) {
 	t.Parallel()
 
@@ -684,6 +702,117 @@ func TestEnforcerTableTest(t *testing.T) {
 				},
 			},
 			expectedError: `no policy to allow arthur.aardvark@example.com with (issuer=https://accounts.example.com) to assume test`,
+		},
+		{
+			name:          "oidc value with a colon, quotes removed by the parser, last-segment group",
+			op:            NewMockOpenIdProviderGroups(t, "groups", []string{"admins"}),
+			policyLoader:  policyFileLoader(t, `test oidc:groups:"org:admins" https://accounts.example.com`),
+			expectedError: "no policy to allow",
+		},
+		{
+			name:          "oidc value with a colon, quotes removed by the parser, member",
+			op:            NewMockOpenIdProviderGroups(t, "groups", []string{"org:admins"}),
+			policyLoader:  policyFileLoader(t, `test oidc:groups:"org:admins" https://accounts.example.com`),
+			expectedError: "no policy to allow",
+		},
+		{
+			name:          "oidc value with a colon, unquoted, last-segment group",
+			op:            NewMockOpenIdProviderGroups(t, "groups", []string{"admins"}),
+			policyLoader:  policyFileLoader(t, `test oidc:groups:org:admins https://accounts.example.com`),
+			expectedError: "no policy to allow",
+		},
+		{
+			name:          "oidc value with a colon, unquoted, first-segment group",
+			op:            NewMockOpenIdProviderGroups(t, "groups", []string{"org"}),
+			policyLoader:  policyFileLoader(t, `test oidc:groups:org:admins https://accounts.example.com`),
+			expectedError: "no policy to allow",
+		},
+		{
+			name:         "oidc value with a colon, backslash-escaped in the file, member",
+			op:           NewMockOpenIdProviderGroups(t, "groups", []string{"org:admins"}),
+			policyLoader: policyFileLoader(t, `test oidc:groups:\"org:admins\" https://accounts.example.com`),
+		},
+		{
+			name:          "oidc value with a colon, backslash-escaped in the file, last-segment group",
+			op:            NewMockOpenIdProviderGroups(t, "groups", []string{"admins"}),
+			policyLoader:  policyFileLoader(t, `test oidc:groups:\"org:admins\" https://accounts.example.com`),
+			expectedError: "no policy to allow",
+		},
+		{
+			name:         "oidc value with a colon, written by opkssh add, member",
+			op:           NewMockOpenIdProviderGroups(t, "groups", []string{"org:admins"}),
+			policyLoader: addedPolicyLoader(t, `oidc:groups:"org:admins"`),
+		},
+		{
+			name:          "oidc value with a colon, written by opkssh add, last-segment group",
+			op:            NewMockOpenIdProviderGroups(t, "groups", []string{"admins"}),
+			policyLoader:  addedPolicyLoader(t, `oidc:groups:"org:admins"`),
+			expectedError: "no policy to allow",
+		},
+		{
+			name:          "oidc value with an empty segment",
+			op:            NewMockOpenIdProviderGroups(t, "groups", []string{"admins"}),
+			policyLoader:  policyFileLoader(t, `test oidc:groups:org::admins https://accounts.example.com`),
+			expectedError: "no policy to allow",
+		},
+		{
+			name:         "oidc URI claim, written by opkssh add",
+			op:           NewMockOpenIdProviderGroups(t, "https://acme.com/groups", []string{"ssh-users"}),
+			policyLoader: addedPolicyLoader(t, `oidc:"https://acme.com/groups":ssh-users`),
+		},
+		{
+			name:         "oidc URI claim, backslash-escaped in the file",
+			op:           NewMockOpenIdProviderGroups(t, "https://acme.com/groups", []string{"ssh-users"}),
+			policyLoader: policyFileLoader(t, `test oidc:\"https://acme.com/groups\":ssh-users https://accounts.example.com`),
+		},
+		{
+			name:          "oidc URI claim, quotes removed by the parser",
+			op:            NewMockOpenIdProviderGroups(t, "https://acme.com/groups", []string{"ssh-users"}),
+			policyLoader:  policyFileLoader(t, `test oidc:"https://acme.com/groups":ssh-users https://accounts.example.com`),
+			expectedError: "no policy to allow",
+		},
+		{
+			name:         "oidc URI claim and value with a colon, written by opkssh add, member",
+			op:           NewMockOpenIdProviderGroups(t, "https://acme.com/groups", []string{"org:ssh-users"}),
+			policyLoader: addedPolicyLoader(t, `oidc:"https://acme.com/groups":"org:ssh-users"`),
+		},
+		{
+			name:          "oidc URI claim and value with a colon, written by opkssh add, last-segment group",
+			op:            NewMockOpenIdProviderGroups(t, "https://acme.com/groups", []string{"ssh-users"}),
+			policyLoader:  addedPolicyLoader(t, `oidc:"https://acme.com/groups":"org:ssh-users"`),
+			expectedError: "no policy to allow",
+		},
+		{
+			name:         "oidc claim with a space, quoted in the file",
+			op:           NewMockOpenIdProviderGroups(t, "best groups", []string{"ssh-users"}),
+			policyLoader: policyFileLoader(t, `test oidc:"best groups":ssh-users https://accounts.example.com`),
+		},
+		{
+			name:         "oidc claim with a space, written by opkssh add",
+			op:           NewMockOpenIdProviderGroups(t, "best groups", []string{"ssh-users"}),
+			policyLoader: addedPolicyLoader(t, `oidc:"best groups":ssh-users`),
+		},
+		{
+			name:         "oidc value with a space, quoted in the file",
+			op:           NewMockOpenIdProviderGroups(t, "groups", []string{"Domain Admins"}),
+			policyLoader: policyFileLoader(t, `test oidc:groups:"Domain Admins" https://accounts.example.com`),
+		},
+		{
+			name:          "oidc value with a space, quoted in the file, last-word group",
+			op:            NewMockOpenIdProviderGroups(t, "groups", []string{"Admins"}),
+			policyLoader:  policyFileLoader(t, `test oidc:groups:"Domain Admins" https://accounts.example.com`),
+			expectedError: "no policy to allow",
+		},
+		{
+			name:         "oidc value with a space, written by opkssh add",
+			op:           NewMockOpenIdProviderGroups(t, "groups", []string{"Domain Admins"}),
+			policyLoader: addedPolicyLoader(t, `oidc:groups:"Domain Admins"`),
+		},
+		{
+			name:          "oidc quoted empty value, token has an empty group",
+			op:            NewMockOpenIdProviderGroups(t, "groups", []string{""}),
+			policyLoader:  addedPolicyLoader(t, `oidc:groups:""`),
+			expectedError: "no policy to allow",
 		},
 	}
 
