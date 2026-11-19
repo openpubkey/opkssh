@@ -266,17 +266,21 @@ This file functions as an access control list that enables admins to determine t
   - `48h` - user's ssh public key expires after 48 hours,
   - `1week` - user's ssh public key expires after 1 week,
   - `oidc` - user's ssh public key expires when the ID Token expires
-  - `oidc-refreshed` - user's ssh public key expires when their refreshed ID Token expires.
+  - `oidc_refreshed` - user's ssh public key expires when their refreshed ID Token expires.
 
-By default we use `24h` as it requires that the user authenticate to their OP once a day. Most OPs expire ID Tokens every one to two hours, so if `oidc` the user will have to sign multiple times a day. `oidc-refreshed` is supported but complex and not currently recommended unless you know what you are doing.
+By default we use `24h` as it requires that the user authenticate to their OP once a day. Most OPs expire ID Tokens every one to two hours, so if `oidc` the user will have to sign multiple times a day. `oidc_refreshed` is supported but complex and not currently recommended unless you know what you are doing.
 
-The default values for `/etc/opk/providers` are:
+The installers write these default values to `/etc/opk/providers`:
 
 ```bash
 # Issuer Client-ID expiration-policy
 https://accounts.google.com 206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com 24h
 https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0 096ce0a3-5e72-4da8-9c86-12924b294a01 24h
+https://gitlab.com 8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923 24h
+https://issuer.hello.coop app_xejobTKEsDNSRd5vofKB2iay_2rN 24h
 ```
+
+These default client IDs are intended for testing and development. They should not be used in production. Register your own client IDs for production (see [Default client IDs](docs/audit.md#default-client-ids)).
 
 `/etc/opk/providers` requires the following permissions (by default we create all configuration files with the correct permissions):
 
@@ -538,6 +542,9 @@ Do not reuse a client ID between opkssh and other OpenID Connect services.
 If the same client ID is used for opkssh as another OpenID Connect authentication service, then an SSH server could replay the ID Token sent in an opkssh SSH key to authenticate to that service.
 Such replay attacks can be ruled out by simply using a new client ID with opkssh.
 
+The default client IDs that opkssh ships with should not be used in production: register your own client ID for production.
+We have guides for [Google](docs/providers/google.md), [Azure](docs/providers/azure.md), [AWS Cognito](docs/providers/cognito.md) and [Keycloak](docs/providers/keycloak.md).
+
 Note that this requirement of using different client IDs for different audiences and uses is not unique to opkssh and is a best practice in OpenID Connect.
 
 ### Provider Server Configuration
@@ -562,8 +569,11 @@ opkssh add root alice@example.com https://authentik.local/application/o/opkssh/
 | [Authentik](https://goauthentik.io/)           | ✅     | Do not add a certificate in the encryption section of the provider                                      |
 | [AWS Cognito](https://aws.amazon.com/cognito/) | ✅     | [Amazon Cognito Integration Guide](docs/providers/cognito.md)                                           |
 | [Azure](https://www.azure.com/)                | ✅     | [Entra ID (Azure) Integration Guide](docs/providers/azure.md)                                           |
-| [GitHub Actions](https://github.com/features/actions) | ✅ | [GitHub Actions Guide](docs/github-actions.md)                                                          |
+| [Forgejo Actions / Codeberg](https://forgejo.org/) | ✅ | [Forgejo Actions Guide](docs/forgejo-actions.md), requires Forgejo v15.0+                               |
+| [GitHub Actions](https://github.com/features/actions) | ✅ | [GitHub Actions Guide](docs/github-actions.md)                                                          |                                   |
+| [GitLab CI/CD](https://docs.gitlab.com/ci/)    | ✅     | [GitLab CI Guide](docs/gitlab-ci.md)                                                                    |
 | [Gitlab Self-hosted](https://gitlab.com/)      | ✅     | [Configuration guide](docs/gitlab-selfhosted.md)                                                        |
+| [Google](https://developers.google.com/identity/openid-connect/openid-connect) | ✅ | [Google Integration Guide](docs/providers/google.md)
 | [Kanidm](https://kanidm.com/)                  | ✅ | [Kanidm Integration Guide](https://kanidm.github.io/kanidm/master/integrations/oauth2/examples.html#opkssh)|
 | [Keycloak](https://www.keycloak.org)           | ✅     | [Keycloak Integration Guide](docs/providers/keycloak.md)                                                |
 | [PocketID](https://pocket-id.org/)             | ✅     | Create a new OIDC Client and inside the new client, check "Public client" on OIDC Client Settings       |
@@ -646,13 +656,16 @@ For integration tests run:
 ### Documentation
 - [docs/cli/](docs/cli/opkssh.md) CLI reference documentation for all opkssh commands.
 - [docs/config.md](docs/config.md) Documentation of opkssh configuration files.
+- [docs/cache.md](docs/cache.md) Documentation of the persistent JWKS cache used by `opkssh verify`.
 - [docs/audit.md](docs/audit.md) Documentation of the audit command.
 - [docs/policyplugins.md](docs/policyplugins.md) Documentation of opkssh policy plugins and how to use them to implement complex policies.
 - [scripts/installing.md](scripts/installing.md) Documentation of the server install script that opkssh uses to configure an SSH server to accept opkssh SSH certificates. Explains how to manually install opkssh on a server.
 
 ### Guides
 - [CONTRIBUTING.md](https://github.com/openpubkey/opkssh/blob/main/CONTRIBUTING.md) Guide to contributing to opkssh (includes developer help).
+- [docs/gitlab-ci.md](docs/gitlab-ci.md) Guide to SSHing via GitLab CI/CD.
 - [docs/gitlab-selfhosted.md](docs/gitlab-selfhosted.md) Guide on configuring and using a self hosted GitLab instance with opkssh.
+- [docs/forgejo-actions.md](docs/forgejo-actions.md) Guide to SSHing via Forgejo Actions (e.g. Codeberg).
 - [docs/paramiko.md](docs/paramiko.md) Guide to using the Python SSH paramiko library with opkssh.
 - [docs/putty.md](docs/putty.md) Guide to using PuTTY with opkssh.
 - [docs/aws-ec2.md](docs/aws-ec2.md) Guide to get opkssh working on AWS EC2.

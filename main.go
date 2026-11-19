@@ -127,19 +127,33 @@ Arguments:
 
 	inspectCmd := &cobra.Command{
 		SilenceUsage: true,
-		Use:          "inspect <path>",
+		Use:          "inspect [path]",
 		Short:        "Inspect and view details of an opkssh generated SSH key",
-		Example:      "  opkssh inspect ~/.ssh/id_ecdsa_sk-cert.pub",
+		Long: `Inspect and view details of an opkssh generated SSH key or certificate.
+
+With no path, inspect prints every opkssh certificate in ~/.ssh/opkssh, under
+default key names in ~/.ssh (id_ecdsa, id_ed25519, ...) and in ssh-agent.
+Certificates written elsewhere with "opkssh login -i <path>" are not
+searched; pass their path instead.`,
+		Example: `  opkssh inspect
+  opkssh inspect ~/.ssh/id_ecdsa_sk-cert.pub`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			keyPathArg := args[0]
-			inspect := commands.NewInspectCmd(keyPathArg, cmd.OutOrStdout())
-			if err := inspect.Run(); err != nil {
+			inspect := commands.NewInspectCmd("", cmd.OutOrStdout())
+			inspect.ErrOutput = cmd.ErrOrStderr()
+			var err error
+			if len(args) == 0 {
+				err = inspect.RunDiscovery()
+			} else {
+				inspect.KeyOrCert = args[0]
+				err = inspect.Run()
+			}
+			if err != nil {
 				log.Println("Error executing inspect command:", err)
 				return err
 			}
 			return nil
 		},
-		Args: cobra.ExactArgs(1),
+		Args: cobra.MaximumNArgs(1),
 	}
 	rootCmd.AddCommand(inspectCmd)
 
@@ -159,6 +173,8 @@ Arguments:
 	var keyTypeArg commands.KeyType
 	var remoteRedirectURIArg string
 	var principalsArg []string
+	var agentLifetimeArg string
+	var sshAgentArg bool
 
 	loginCmd := &cobra.Command{
 		SilenceUsage: true,
@@ -169,6 +185,11 @@ Arguments:
 Login generates a key pair, then opens a browser to authenticate the user with the OpenID Provider. Upon successful authentication, opkssh creates an SSH public key (~/.ssh/id_ecdsa) containing the user's PK token. By default, this SSH key expires after 24 hours, after which the user must run "opkssh login" again to generate a new key.
 
 Users can then SSH into servers configured to use opkssh as the AuthorizedKeysCommand. The server verifies the PK token and grants access if the token is valid and the user is authorized per the auth_id policy.
+
+Device flow:
+  For machines without a browser. To turn on device flow, set "device_flow: true" on a provider in the client config (~/.opk/config.yml). If multiple providers, select one with "opkssh login <alias>".
+  The OpenID Provider must allow the device grant for the client ID and return a nonce in the ID token. If it does not, login fails with "missing commitment claim nonce".
+
 Arguments:
   alias      The provider alias to use. If not specified, the OPKSSH_DEFAULT provider will be used. The aliases are defined by the OPKSSH_PROVIDERS environment variable. The format is <alias>,<issuer>,<client_id>,<client_secret>,<scopes>
 `,
@@ -196,7 +217,9 @@ Arguments:
 
 			login := commands.NewLogin(autoRefreshArg, configPathArg, createConfigArg, configureArg, logDirArg,
 				sendAccessTokenArg, disableBrowserOpenArg, printIdTokenArg, providerArg, printKeyArg, keyPathArg,
-				providerAliasArg, keyTypeArg, remoteRedirectURIArg, inspectCertArg, principalsArg)
+				providerAliasArg, keyTypeArg, remoteRedirectURIArg, inspectCertArg, principalsArg, agentLifetimeArg)
+			// Loading the certificate into ssh-agent is opt-in via --ssh-agent.
+			login.AddKeyToAgent = sshAgentArg
 			if err := login.Run(ctx); err != nil {
 				log.Println("Error executing login command:", err)
 				return err
@@ -223,6 +246,8 @@ Arguments:
 	loginCmd.Flags().StringVar(&remoteRedirectURIArg, "remote-redirect-uri", "", "Remote redirect URI used for non-localhost redirects. This is an advanced option for embedding opkssh in server-side logic.")
 	loginCmd.Flags().VarP(enumflag.New(&keyTypeArg, "Key Type", map[commands.KeyType][]string{commands.ECDSA: {commands.ECDSA.String()}, commands.ED25519: {commands.ED25519.String()}}, enumflag.EnumCaseInsensitive), "key-type", "t", "Type of key to generate")
 	loginCmd.Flags().StringSliceVar(&principalsArg, "principals", nil, "Comma separated list of principals to include in the generated SSH certificate. If not specified it will work for any principal. Do not use unless you know what you are doing.")
+	loginCmd.Flags().BoolVar(&sshAgentArg, "ssh-agent", false, "Use ssh-agent to manage opkssh ssh certs and private keys.")
+	loginCmd.Flags().StringVar(&agentLifetimeArg, "lifetime", "", "How long ssh-agent retains the certificate when added with --ssh-agent, as a duration (e.g. 12h, 45m) or in seconds (e.g. 28800). Overrides agent_lifetime in the client config. Defaults to 24h.")
 	rootCmd.AddCommand(loginCmd)
 
 	var logoutKeyPathArg string
@@ -279,6 +304,7 @@ You should not call this command directly. It is called by the opkssh verify com
 	rootCmd.AddCommand(readhomeCmd)
 
 	var serverConfigPathArg string
+	var cacheModeArg string
 	verifyCmd := &cobra.Command{
 		SilenceUsage: true,
 		Use:          "verify <principal> <cert> <key_type>",
@@ -351,16 +377,36 @@ Arguments:
 			printConfigProblems()
 			log.Println("Providers loaded: ", providerPolicy.ToString())
 
-			pktVerifier, err := providerPolicy.CreateVerifier()
+			v := commands.NewVerifyCmd(commands.OpkPolicyEnforcerFunc(userArg), serverConfigPathArg)
+			serverConfig, err := v.ReadFromServerConfig()
 			if err != nil {
-				log.Println("Failed to create pk token verifier (likely bad configuration):", err)
-				return err
+				log.Println("Failed to load server configuration, continuing without it:", err)
+				serverConfig = &config.ServerConfig{}
 			}
 
-			v := commands.NewVerifyCmd(*pktVerifier, commands.OpkPolicyEnforcerFunc(userArg), serverConfigPathArg)
-			if err := v.ReadFromServerConfig(); err != nil {
-				log.Println("Failed to set environment variables in config:", err)
+			cacheSettings, err := serverConfig.Cache.WithMode(cacheModeArg)
+			if err != nil {
+				log.Println(err)
+				return err
 			}
+			cacheCfg, cacheErr := cacheSettings.DiscoveryCacheConfig(v.Fs)
+			switch {
+			case cacheErr != nil:
+				// Caching is an availability optimization. A broken cache must
+				// not prevent authentication with freshly discovered keys.
+				log.Printf("Persistent JWKS cache disabled (--cache=%s): %v\n", cacheModeArg, cacheErr)
+			case cacheCfg.Cache == nil:
+				log.Printf("Persistent JWKS cache off (--cache=%s)\n", cacheModeArg)
+			default:
+				log.Printf("Persistent JWKS cache on (--cache=%s): %s, max_age %s, fallback_max_age %s\n",
+					cacheModeArg, cacheSettings.BaseDir, cacheCfg.StandardMaxAge, cacheCfg.FallbackMaxAge)
+			}
+			pktVerifier, err := providerPolicy.CreateVerifier(cacheCfg)
+			if err != nil {
+				log.Println("Failed to create pk token verifier (likely bad provider configuration):", err)
+				return err
+			}
+			v.PktVerifier = *pktVerifier
 
 			if authKey, err := v.AuthorizedKeysCommand(ctx, userArg, typArg, certB64Arg, extraArgs); err != nil {
 				log.Println("failed to verify:", err)
@@ -375,6 +421,9 @@ Arguments:
 	}
 	defaultConfigPath := filepath.Join(policy.GetSystemConfigBasePath(), "config.yml")
 	verifyCmd.Flags().StringVar(&serverConfigPathArg, "config-path", defaultConfigPath, fmt.Sprintf("Path to the server config file. Default: %s", defaultConfigPath))
+	verifyCmd.Flags().StringVar(&cacheModeArg, "cache", config.CacheModeAuto,
+		fmt.Sprintf("Persistent JWKS cache: %q uses the cache section of the server config, %q enables the cache even if the config doesn't (default directory %s), %q disables it.",
+			config.CacheModeAuto, config.CacheModeOn, config.DefaultCacheBaseDir, config.CacheModeOff))
 	rootCmd.AddCommand(verifyCmd)
 
 	auditCmd := &cobra.Command{
@@ -387,6 +436,7 @@ The audit command checks that:
   - Each issuer in policy files is defined in the providers file
   - The protocol (http:// or https://) exactly matches between policy and provider files
   - The auth_id policy files do not throw parsing errors
+  - If the providers file uses one of opkssh's default client IDs, these client IDs are intended for testing (reported as a warning)
 
 Results are reported with the following status:
   SUCCESS  - Entry is valid
@@ -433,10 +483,11 @@ Exit code: 0 if all entries are valid, 1 if any warnings or errors are found.`,
 	}
 
 	providerCmd := &cobra.Command{
-		Use:     "provider [subcommand]",
-		Short:   "Interact with provider configuration",
-		Example: `  opkssh client provider list`,
-		Args:    cobra.ExactArgs(0),
+		Use:   "provider [subcommand]",
+		Short: "Interact with provider configuration",
+		Example: `  opkssh client provider list
+  opkssh client provider add google https://accounts.google.com <client-id> --client-secret <client-secret> --replace`,
+		Args: cobra.ExactArgs(0),
 	}
 
 	providerListCmd := &cobra.Command{
@@ -484,6 +535,30 @@ Exit code: 0 if all entries are valid, 1 if any warnings or errors are found.`,
 
 	providerCmd.AddCommand(providerListCmd)
 
+	providerAdd := commands.NewClientProviderAddCmd(os.Stdout)
+	providerAddCmd := &cobra.Command{
+		Use:   "add <alias> <issuer> <client-id>",
+		Short: "Add an OpenID Provider to the client config",
+		Long: `Add an OpenID Provider to the client config, so that
+"opkssh login <alias>" uses it. The client config is created from the default
+config if it does not exist. Note client ID and other values must match what
+is configured on the server at /etc/opk/providers.
+
+To replace an already configured provider pass --replace.`,
+		Example: `  opkssh client provider add google https://accounts.google.com <client-id> --client-secret <client-secret> --replace`,
+		Args:    cobra.ExactArgs(3),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			providerAdd.Alias, providerAdd.Issuer, providerAdd.ClientID = args[0], args[1], args[2]
+			providerAdd.ConfigPath = configPathArg
+			return providerAdd.Run()
+		},
+	}
+	providerAddCmd.Flags().StringVar(&configPathArg, "config-path", "", "Path to the client config file. Default: ~/.opk/config.yml on linux and %USERPROFILE%\\.opk\\config.yml on windows.")
+	providerAddCmd.Flags().StringVar(&providerAdd.ClientSecret, "client-secret", "", "Client secret, required by some OpenID Providers such as Google")
+	providerAddCmd.Flags().StringVar(&providerAdd.Scopes, "scopes", "", "Space separated scopes to request (default \"openid profile email\")")
+	providerAddCmd.Flags().BoolVar(&providerAdd.Replace, "replace", false, "Replace the client ID of the provider with this alias, keeping its other aliases and settings")
+	providerCmd.AddCommand(providerAddCmd)
+
 	clientCmd.AddCommand(providerCmd)
 
 	rootCmd.AddCommand(clientCmd)
@@ -491,6 +566,9 @@ Exit code: 0 if all entries are valid, 1 if any warnings or errors are found.`,
 	// permissions command for checking and fixing file permissions/ACLs
 	permsCmd := commands.NewPermissionsCmd(os.Stdout, os.Stderr)
 	rootCmd.AddCommand(permsCmd.CobraCommand())
+
+	cacheCmd := commands.NewCacheCmd()
+	rootCmd.AddCommand(cacheCmd.CobraCommand())
 
 	// genDocsCmd is a hidden command used as a helper for generating our
 	// command line reference documentation.

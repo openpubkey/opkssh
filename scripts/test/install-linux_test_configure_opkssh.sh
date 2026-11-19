@@ -12,6 +12,7 @@ TEST_TEMP_DIR=""
 setUp() {
     TEST_TEMP_DIR=$(mktemp -d /tmp/opkssh.XXXXXX)
     MOCK_LOG="$TEST_TEMP_DIR/mock.log"
+    DEFAULT_PROVIDERS_WRITTEN=false
 }
 
 tearDown() {
@@ -36,13 +37,21 @@ test_configure_opkssh_no_previous_configuration() {
     local provider_gitlab="https://gitlab.com 8d8b7024572c7fd501f64374dec6bba37096783dfcd792b3988104be08cb6923 24h"
     local provider_hello="https://issuer.hello.coop app_xejobTKEsDNSRd5vofKB2iay_2rN 24h"
 
-    output=$(configure_opkssh "$TEST_TEMP_DIR")
+    # Not in $(...), which would run it in a subshell and hide the
+    # DEFAULT_PROVIDERS_WRITTEN global it sets
+    configure_opkssh "$TEST_TEMP_DIR" > "$TEST_TEMP_DIR/output"
     result=$?
+    output=$(< "$TEST_TEMP_DIR/output")
     readarray -t mock_log < "$MOCK_LOG"
     readarray -t providers < "$TEST_TEMP_DIR/opk/providers"
 
     assertEquals "Expected to return 0 on success" 0 "$result"
-    assertEquals "Output was not expected" "Configuring opkssh:" "$output"
+    readarray -t output_lines <<< "$output"
+    assertEquals "Output was not expected" "Configuring opkssh:" "${output_lines[0]}"
+    assertEquals "Expected output to say the default providers were written" "  Wrote the default providers to $TEST_TEMP_DIR/opk/providers" "${output_lines[1]}"
+    assertEquals "Expected output to include the default providers notice" "  $DEFAULT_PROVIDERS_NOTICE" "${output_lines[2]}"
+    assertEquals "Expected three lines of output" 3 "${#output_lines[@]}"
+    assertEquals "Expected DEFAULT_PROVIDERS_WRITTEN to be set" true "$DEFAULT_PROVIDERS_WRITTEN"
     assertTrue "Expected /etc/opk direcotry to be created" "[ -d \"$TEST_TEMP_DIR\"/opk ]"
     assertContains "Expected /etc/opk to set the correct ownership" "${mock_log[*]}" "chown root:${AUTH_CMD_GROUP} $TEST_TEMP_DIR/opk"
     assertContains "Expected /etc/opk to set the correct permission" "${mock_log[*]}" "chmod 750 $TEST_TEMP_DIR/opk"
@@ -74,12 +83,15 @@ test_configure_opkssh_existing_providers() {
     mkdir -p "$TEST_TEMP_DIR/opk"
     echo "provider foo" >> "$TEST_TEMP_DIR/opk/providers"
     echo "provider bar" >> "$TEST_TEMP_DIR/opk/providers"
-    output=$(configure_opkssh "$TEST_TEMP_DIR")
+    configure_opkssh "$TEST_TEMP_DIR" > "$TEST_TEMP_DIR/output"
     result=$?
+    output=$(< "$TEST_TEMP_DIR/output")
 
     readarray -t providers < "$TEST_TEMP_DIR/opk/providers"
     assertEquals "Expected to return 0 on success" 0 "$result"
     assertContains "Expected output to inform about not adding providers" "$output" "Keeping existing values"
+    assertNotContains "Expected no default providers notice" "$output" "$DEFAULT_PROVIDERS_NOTICE"
+    assertEquals "Expected DEFAULT_PROVIDERS_WRITTEN to stay unset" false "$DEFAULT_PROVIDERS_WRITTEN"
     assertEquals "Expected to have two providers" 2 "${#providers[@]}"
     assertEquals "Expected first provider to be foo" "provider foo" "${providers[0]}"
     assertEquals "Expected first provider to be bar" "provider bar" "${providers[1]}"

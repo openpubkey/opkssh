@@ -1,0 +1,15 @@
+# The integration test images build from the repo root. Anything here that
+# changes between builds (git objects, local build output, test leftovers)
+# would invalidate the cached `COPY . ./` + `go build` layers.
+.git
+dist/
+tmp/
+.cache
+.mod-cache
+.direnv
+.envrc
+.vscode/
+.idea/
+*.test
+*.out
+test/integration/testfile.txt

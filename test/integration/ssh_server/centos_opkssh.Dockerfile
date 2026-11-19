@@ -1,5 +1,5 @@
 # Stage 1: Build the Go binary
-FROM golang:1.26.5@sha256:d52df9c279840adf958d017ebb275651ed8338b953d39817bc3633a2e6b1bbcc as builder
+FROM golang:1.27.4@sha256:205c7636d74e0ffbe3d007162df7d74f859f5a8c8322dfb9f907977686c126cf as builder
 
 # Set destination for COPY
 WORKDIR /app
@@ -12,7 +12,6 @@ RUN go mod download
 COPY . ./
 
 # Copy the source code and build the binary
-ARG ISSUER_PORT="9998"
 RUN go build -v -o opksshbuild
 
 # Stage 2: Create a minimal CentOS-based image

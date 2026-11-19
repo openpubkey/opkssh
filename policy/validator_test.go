@@ -234,6 +234,11 @@ func TestValidationSummaryNoErrors(t *testing.T) {
 	require.Equal(t, 0, summary.Errors)
 	require.False(t, summary.HasErrors())
 	require.Equal(t, 0, summary.GetExitCode())
+
+	// A providers file warning alone makes the audit fail
+	summary.ProviderWarnings = 1
+	require.True(t, summary.HasErrors())
+	require.Equal(t, 1, summary.GetExitCode())
 }
 
 // TestPolicyValidatorAliasResolution tests that aliases resolve correctly

@@ -17,8 +17,12 @@
 package policy_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"log"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/openpubkey/openpubkey/client"
@@ -120,6 +124,11 @@ var policyTest = &policy.Policy{
 			Principals:        []string{"test"},
 			Issuer:            "http://127.0.0.1:8090/accounts",
 		},
+		{
+			IdentityAttribute: "sub12345",
+			Principals:        []string{"test"},
+			Issuer:            "https://accounts.example.com",
+		},
 	},
 }
 
@@ -187,6 +196,24 @@ var _ policy.Source = &MockSource{}
 type MockSource struct{}
 
 func (MockSource) Source() string { return "<mock data>" }
+
+// policyFileLoader returns a loader for content parsed by the policy file
+// parser, as opkssh verify reads /etc/opk/auth_id.
+func policyFileLoader(t *testing.T, content string) *MockPolicyLoader {
+	loaded, problems := policy.FromTable([]byte(content), "test-policy")
+	require.Empty(t, problems)
+	return &MockPolicyLoader{Policy: loaded}
+}
+
+// addedPolicyLoader returns a loader for a rule written to the policy file the
+// way opkssh add writes it, then read back.
+func addedPolicyLoader(t *testing.T, identityAttribute string) *MockPolicyLoader {
+	written := &policy.Policy{}
+	written.AddAllowedPrincipal("test", identityAttribute, "https://accounts.example.com")
+	content, err := written.ToTable()
+	require.NoError(t, err)
+	return policyFileLoader(t, string(content))
+}
 
 func TestPolicyApproved(t *testing.T) {
 	t.Parallel()
@@ -426,6 +453,123 @@ func TestPolicyDeniedMissingOidcGroupsClaim(t *testing.T) {
 	require.Error(t, err, "user should not as the token is missing the groups claim")
 }
 
+func NewMockOpenIdProviderEmailVerified(t *testing.T, emailVerified any) providers.OpenIdProvider {
+	providerOpts := providers.DefaultMockProviderOpts()
+	op, _, idTokenTemplate, err := providers.NewMockProvider(providerOpts)
+	require.NoError(t, err)
+	extraClaims := map[string]any{"email": "arthur.aardvark@example.com"}
+	if emailVerified != nil {
+		extraClaims["email_verified"] = emailVerified
+	}
+	idTokenTemplate.ExtraClaims = extraClaims
+	return op
+}
+
+// A policy row matching on email should still be allowed when the ID Token
+// does not assert email_verified, but the admin should see a warning.
+func TestEmailVerifiedWarning(t *testing.T) {
+	// Some OPs send email_verified as a string rather than a bool, so both
+	// shapes have to be handled. See oauth2-proxy/oauth2-proxy#629.
+	tests := []struct {
+		name          string
+		emailVerified any
+		wantWarning   string
+	}{
+		{name: "claim absent", emailVerified: nil, wantWarning: "no email_verified claim"},
+		{name: "bool false", emailVerified: false, wantWarning: `email_verified to "false"`},
+		{name: "bool true", emailVerified: true, wantWarning: ""},
+		{name: "string false", emailVerified: "false", wantWarning: `email_verified to "false"`},
+		{name: "string true", emailVerified: "true", wantWarning: ""},
+		{name: "string True", emailVerified: "True", wantWarning: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op := NewMockOpenIdProviderEmailVerified(t, tt.emailVerified)
+			opkClient, err := client.New(op)
+			require.NoError(t, err)
+			pkt, err := opkClient.Auth(context.Background())
+			require.NoError(t, err)
+
+			policyEnforcer := &policy.Enforcer{
+				PolicyLoader: &MockPolicyLoader{Policy: policyTest},
+			}
+
+			var logs bytes.Buffer
+			log.SetOutput(&logs)
+			defer log.SetOutput(os.Stderr)
+
+			err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa", policy.DenyList{}, nil)
+			require.NoError(t, err, "email match should still be allowed")
+
+			if tt.wantWarning == "" {
+				require.NotContains(t, logs.String(), "consider matching on sub")
+			} else {
+				require.Contains(t, logs.String(), tt.wantWarning)
+			}
+		})
+	}
+}
+
+// Matching on sub should not produce an email_verified warning.
+func TestEmailVerifiedNoWarningOnSubMatch(t *testing.T) {
+	op := NewMockOpenIdSubProvider(t, "repo:organization/repository:ref:refs/heads/main")
+	opkClient, err := client.New(op)
+	require.NoError(t, err)
+	pkt, err := opkClient.Auth(context.Background())
+	require.NoError(t, err)
+
+	policyEnforcer := &policy.Enforcer{
+		PolicyLoader: &MockPolicyLoader{Policy: &policy.Policy{
+			Users: []policy.User{
+				{
+					IdentityAttribute: "repo:organization/repository:ref:refs/heads/main",
+					Principals:        []string{"test"},
+					Issuer:            "https://accounts.example.com",
+				},
+			},
+		}},
+	}
+
+	var logs bytes.Buffer
+	log.SetOutput(&logs)
+	defer log.SetOutput(os.Stderr)
+
+	err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa", policy.DenyList{}, nil)
+	require.NoError(t, err)
+	require.False(t, strings.Contains(logs.String(), "consider matching on sub"))
+}
+
+func TestPolicyDeniedMalformedOidcRow(t *testing.T) {
+	t.Parallel()
+
+	op := NewMockOpenIdProviderGroups(t, "groups", []string{"a", "b", "c"})
+
+	opkClient, err := client.New(op)
+	require.NoError(t, err)
+	pkt, err := opkClient.Auth(context.Background())
+	require.NoError(t, err)
+
+	// EscapedSplit drops empty fields, so these rows used to produce a
+	// single section and panic on oidcGroupSections[1].
+	for _, identityAttribute := range []string{"oidc:", "oidc::", "oidc:::"} {
+		policyEnforcer := &policy.Enforcer{
+			PolicyLoader: &MockPolicyLoader{Policy: &policy.Policy{
+				Users: []policy.User{
+					{
+						IdentityAttribute: identityAttribute,
+						Principals:        []string{"test"},
+						Issuer:            "https://accounts.example.com",
+					},
+				},
+			}},
+		}
+
+		err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa", policy.DenyList{}, nil)
+		require.Error(t, err, "malformed row %q should deny, not panic", identityAttribute)
+	}
+}
+
 func TestEnforcerTableTest(t *testing.T) {
 	t.Parallel()
 
@@ -470,13 +614,30 @@ func TestEnforcerTableTest(t *testing.T) {
 			expectedError: "denied user test",
 		},
 		{
-			name:          "DenyList Match (user)",
+			name:          "DenyList Match (email)",
 			op:            NewMockOpenIdProvider(t),
 			principal:     "test",
 			userInfoJson:  "",
 			policyLoader:  &MockPolicyLoader{Policy: policyTest},
 			denyList:      policy.DenyList{Emails: []string{"bob@example.com", "arthur.aardvark@example.com"}, Users: []string{"guest", "test"}},
 			expectedError: "denied email arthur.aardvark@example.com",
+		},
+		{
+			name:          "Email Denylist, no email claim ",
+			op:            NewMockOpenIdSubProvider(t, "sub12345"), // Use the sub provider so no email claim is set
+			principal:     "test",
+			userInfoJson:  "",
+			policyLoader:  &MockPolicyLoader{Policy: policyTest},
+			denyList:      policy.DenyList{Emails: []string{"bob@example.com", "arthur.aardvark@example.com"}, Users: []string{"guest", "test"}},
+			expectedError: "email claim is empty and email deny list is set",
+		},
+		{
+			name:         "No email denylist, no email claim",
+			op:           NewMockOpenIdSubProvider(t, "sub12345"), // Use the sub provider so no email claim is set
+			principal:    "test",
+			userInfoJson: "",
+			policyLoader: &MockPolicyLoader{Policy: policyTest},
+			denyList:     policy.DenyList{},
 		},
 		{
 			name:          "No groups claim in ID Token",
@@ -526,6 +687,133 @@ func TestEnforcerTableTest(t *testing.T) {
 			policyLoader:  &MockPolicyLoader{Error: fmt.Errorf("error loading policy")},
 			expectedError: "error loading policy",
 		},
+		{
+			name: "policy email wildcard rejects policies that allow any value",
+			op:   NewMockOpenIdProvider(t),
+			policyLoader: &MockPolicyLoader{
+				Policy: &policy.Policy{
+					[]policy.User{
+						{
+							IdentityAttribute: "oidc-match-end:email:",
+							Issuer:            "https://accounts.example.com",
+							Principals:        []string{"test"},
+						},
+					},
+				},
+			},
+			expectedError: `no policy to allow arthur.aardvark@example.com with (issuer=https://accounts.example.com) to assume test`,
+		},
+		{
+			name:          "oidc value with a colon, quotes removed by the parser, last-segment group",
+			op:            NewMockOpenIdProviderGroups(t, "groups", []string{"admins"}),
+			policyLoader:  policyFileLoader(t, `test oidc:groups:"org:admins" https://accounts.example.com`),
+			expectedError: "no policy to allow",
+		},
+		{
+			name:          "oidc value with a colon, quotes removed by the parser, member",
+			op:            NewMockOpenIdProviderGroups(t, "groups", []string{"org:admins"}),
+			policyLoader:  policyFileLoader(t, `test oidc:groups:"org:admins" https://accounts.example.com`),
+			expectedError: "no policy to allow",
+		},
+		{
+			name:          "oidc value with a colon, unquoted, last-segment group",
+			op:            NewMockOpenIdProviderGroups(t, "groups", []string{"admins"}),
+			policyLoader:  policyFileLoader(t, `test oidc:groups:org:admins https://accounts.example.com`),
+			expectedError: "no policy to allow",
+		},
+		{
+			name:          "oidc value with a colon, unquoted, first-segment group",
+			op:            NewMockOpenIdProviderGroups(t, "groups", []string{"org"}),
+			policyLoader:  policyFileLoader(t, `test oidc:groups:org:admins https://accounts.example.com`),
+			expectedError: "no policy to allow",
+		},
+		{
+			name:         "oidc value with a colon, backslash-escaped in the file, member",
+			op:           NewMockOpenIdProviderGroups(t, "groups", []string{"org:admins"}),
+			policyLoader: policyFileLoader(t, `test oidc:groups:\"org:admins\" https://accounts.example.com`),
+		},
+		{
+			name:          "oidc value with a colon, backslash-escaped in the file, last-segment group",
+			op:            NewMockOpenIdProviderGroups(t, "groups", []string{"admins"}),
+			policyLoader:  policyFileLoader(t, `test oidc:groups:\"org:admins\" https://accounts.example.com`),
+			expectedError: "no policy to allow",
+		},
+		{
+			name:         "oidc value with a colon, written by opkssh add, member",
+			op:           NewMockOpenIdProviderGroups(t, "groups", []string{"org:admins"}),
+			policyLoader: addedPolicyLoader(t, `oidc:groups:"org:admins"`),
+		},
+		{
+			name:          "oidc value with a colon, written by opkssh add, last-segment group",
+			op:            NewMockOpenIdProviderGroups(t, "groups", []string{"admins"}),
+			policyLoader:  addedPolicyLoader(t, `oidc:groups:"org:admins"`),
+			expectedError: "no policy to allow",
+		},
+		{
+			name:          "oidc value with an empty segment",
+			op:            NewMockOpenIdProviderGroups(t, "groups", []string{"admins"}),
+			policyLoader:  policyFileLoader(t, `test oidc:groups:org::admins https://accounts.example.com`),
+			expectedError: "no policy to allow",
+		},
+		{
+			name:         "oidc URI claim, written by opkssh add",
+			op:           NewMockOpenIdProviderGroups(t, "https://acme.com/groups", []string{"ssh-users"}),
+			policyLoader: addedPolicyLoader(t, `oidc:"https://acme.com/groups":ssh-users`),
+		},
+		{
+			name:         "oidc URI claim, backslash-escaped in the file",
+			op:           NewMockOpenIdProviderGroups(t, "https://acme.com/groups", []string{"ssh-users"}),
+			policyLoader: policyFileLoader(t, `test oidc:\"https://acme.com/groups\":ssh-users https://accounts.example.com`),
+		},
+		{
+			name:          "oidc URI claim, quotes removed by the parser",
+			op:            NewMockOpenIdProviderGroups(t, "https://acme.com/groups", []string{"ssh-users"}),
+			policyLoader:  policyFileLoader(t, `test oidc:"https://acme.com/groups":ssh-users https://accounts.example.com`),
+			expectedError: "no policy to allow",
+		},
+		{
+			name:         "oidc URI claim and value with a colon, written by opkssh add, member",
+			op:           NewMockOpenIdProviderGroups(t, "https://acme.com/groups", []string{"org:ssh-users"}),
+			policyLoader: addedPolicyLoader(t, `oidc:"https://acme.com/groups":"org:ssh-users"`),
+		},
+		{
+			name:          "oidc URI claim and value with a colon, written by opkssh add, last-segment group",
+			op:            NewMockOpenIdProviderGroups(t, "https://acme.com/groups", []string{"ssh-users"}),
+			policyLoader:  addedPolicyLoader(t, `oidc:"https://acme.com/groups":"org:ssh-users"`),
+			expectedError: "no policy to allow",
+		},
+		{
+			name:         "oidc claim with a space, quoted in the file",
+			op:           NewMockOpenIdProviderGroups(t, "best groups", []string{"ssh-users"}),
+			policyLoader: policyFileLoader(t, `test oidc:"best groups":ssh-users https://accounts.example.com`),
+		},
+		{
+			name:         "oidc claim with a space, written by opkssh add",
+			op:           NewMockOpenIdProviderGroups(t, "best groups", []string{"ssh-users"}),
+			policyLoader: addedPolicyLoader(t, `oidc:"best groups":ssh-users`),
+		},
+		{
+			name:         "oidc value with a space, quoted in the file",
+			op:           NewMockOpenIdProviderGroups(t, "groups", []string{"Domain Admins"}),
+			policyLoader: policyFileLoader(t, `test oidc:groups:"Domain Admins" https://accounts.example.com`),
+		},
+		{
+			name:          "oidc value with a space, quoted in the file, last-word group",
+			op:            NewMockOpenIdProviderGroups(t, "groups", []string{"Admins"}),
+			policyLoader:  policyFileLoader(t, `test oidc:groups:"Domain Admins" https://accounts.example.com`),
+			expectedError: "no policy to allow",
+		},
+		{
+			name:         "oidc value with a space, written by opkssh add",
+			op:           NewMockOpenIdProviderGroups(t, "groups", []string{"Domain Admins"}),
+			policyLoader: addedPolicyLoader(t, `oidc:groups:"Domain Admins"`),
+		},
+		{
+			name:          "oidc quoted empty value, token has an empty group",
+			op:            NewMockOpenIdProviderGroups(t, "groups", []string{""}),
+			policyLoader:  addedPolicyLoader(t, `oidc:groups:""`),
+			expectedError: "no policy to allow",
+		},
 	}
 
 	for _, tt := range tests {
@@ -554,6 +842,37 @@ func TestEnforcerTableTest(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A policy row with an empty identity attribute must never match. Tokens
+// from OPs that omit the email claim (e.g. Azure) would otherwise be matched
+// by the empty value.
+func TestPolicyDeniedEmptyIdentityAttribute(t *testing.T) {
+	t.Parallel()
+
+	// Token carries no email claim
+	op, _, err := NewMockOpenIdProvider2(false, "https://accounts.example.com", "test_client_no_email", map[string]any{})
+	require.NoError(t, err)
+
+	opkClient, err := client.New(op)
+	require.NoError(t, err)
+	pkt, err := opkClient.Auth(context.Background())
+	require.NoError(t, err)
+
+	policyEnforcer := &policy.Enforcer{
+		PolicyLoader: &MockPolicyLoader{Policy: &policy.Policy{
+			Users: []policy.User{
+				{
+					IdentityAttribute: "",
+					Principals:        []string{"test"},
+					Issuer:            "https://accounts.example.com",
+				},
+			},
+		}},
+	}
+
+	err = policyEnforcer.CheckPolicy("test", pkt, "", "example-base64Cert", "ssh-rsa", policy.DenyList{}, nil)
+	require.Error(t, err, "empty identity attribute should not match a token with no email claim")
 }
 
 func TestWildcardMatchEntry(t *testing.T) {

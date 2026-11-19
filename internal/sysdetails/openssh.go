@@ -28,31 +28,37 @@ func GetOpenSSHVersion() string {
 	osType := DetectOS()
 	log.Printf("Attempting OS-specific version detection for: %s", osType)
 
+	// rpm prints "package X is not installed" on stdout, not stderr, so each
+	// sed below prints only lines that parse as a version (sed -n ... /p).
+	// Without that, the message itself was reported as the OpenSSH version.
+
 	switch osType {
 	case OSTypeRHEL:
 		// For RedHat-based systems (CentOS, RHEL, Fedora)
-		cmd := exec.Command("/bin/sh", "-c", "version=$(/usr/bin/rpm -q --qf \"%{VERSION}\\n\" openssh-server 2>/dev/null | /bin/sed -E 's/^([0-9]+\\.[0-9]+).*/\\1/' | head -1); if [ -n \"$version\" ]; then /bin/echo \"OpenSSH_$version\"; fi")
+		cmd := exec.Command("/bin/sh", "-c", "version=$(/usr/bin/rpm -q --qf \"%{VERSION}\\n\" openssh-server 2>/dev/null | /bin/sed -nE 's/^([0-9]+\\.[0-9]+).*/\\1/p' | head -1); if [ -n \"$version\" ]; then /bin/echo \"OpenSSH_$version\"; fi")
 		if output, err := cmd.CombinedOutput(); err == nil && len(strings.TrimSpace(string(output))) > 0 {
 			return strings.TrimSpace(string(output))
 		}
 
 	case OSTypeDebian:
 		// For Debian-based systems (Debian, Ubuntu)
-		cmd := exec.Command("/bin/sh", "-c", "version=$(/usr/bin/dpkg-query -W -f='${Version}\\n' openssh-server 2>/dev/null | /bin/sed -E 's/^[0-9]*:?([0-9]+\\.[0-9]+).*/\\1/' | head -1); if [ -n \"$version\" ]; then /bin/echo \"OpenSSH_$version\"; fi")
+		cmd := exec.Command("/bin/sh", "-c", "version=$(/usr/bin/dpkg-query -W -f='${Version}\\n' openssh-server 2>/dev/null | /bin/sed -nE 's/^[0-9]*:?([0-9]+\\.[0-9]+).*/\\1/p' | head -1); if [ -n \"$version\" ]; then /bin/echo \"OpenSSH_$version\"; fi")
 		if output, err := cmd.CombinedOutput(); err == nil && len(strings.TrimSpace(string(output))) > 0 {
 			return strings.TrimSpace(string(output))
 		}
 
 	case OSTypeArch:
 		// For Arch Linux
-		cmd := exec.Command("/bin/sh", "-c", "version=$(/usr/bin/pacman -Qi openssh 2>/dev/null | /usr/bin/awk '/^Version/ {print $3}' | /bin/sed -E 's/^([0-9]+\\.[0-9]+).*/\\1/' | head -1); if [ -n \"$version\" ]; then /bin/echo \"OpenSSH_$version\"; fi")
+		cmd := exec.Command("/bin/sh", "-c", "version=$(/usr/bin/pacman -Qi openssh 2>/dev/null | /usr/bin/awk '/^Version/ {print $3}' | /bin/sed -nE 's/^([0-9]+\\.[0-9]+).*/\\1/p' | head -1); if [ -n \"$version\" ]; then /bin/echo \"OpenSSH_$version\"; fi")
 		if output, err := cmd.CombinedOutput(); err == nil && len(strings.TrimSpace(string(output))) > 0 {
 			return strings.TrimSpace(string(output))
 		}
 
 	case OSTypeSUSE:
-		// For SUSE-based systems
-		cmd := exec.Command("/bin/sh", "-c", "version=$(/usr/bin/rpm -q --qf \"%{VERSION}\\n\" openssh 2>/dev/null | /bin/sed -E 's/^([0-9]+\\.[0-9]+).*/\\1/' | head -1); if [ -n \"$version\" ]; then /bin/echo \"OpenSSH_$version\"; fi")
+		// For SUSE-based systems. Newer releases ship the server in
+		// openssh-server (openssh is then an optional metapackage); older ones
+		// ship it in openssh. Query both and take the first installed one.
+		cmd := exec.Command("/bin/sh", "-c", "version=$(/usr/bin/rpm -q --qf \"%{VERSION}\\n\" openssh-server openssh 2>/dev/null | /bin/sed -nE 's/^([0-9]+\\.[0-9]+).*/\\1/p' | head -1); if [ -n \"$version\" ]; then /bin/echo \"OpenSSH_$version\"; fi")
 		if output, err := cmd.CombinedOutput(); err == nil && len(strings.TrimSpace(string(output))) > 0 {
 			return strings.TrimSpace(string(output))
 		}

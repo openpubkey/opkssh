@@ -6,6 +6,8 @@ test_global_variables() {
     unset OPKSSH_INSTALL_AUTH_CMD_USER
     unset OPKSSH_INSTALL_AUTH_CMD_GROUP
     unset OPKSSH_INSTALL_SUDOERS_PATH
+    unset OPKSSH_INSTALL_CACHE_DIR
+    unset OPKSSH_INSTALL_CACHE_CLEAN_ON_CALENDAR
     unset OPKSSH_INSTALL_HOME_POLICY
     unset OPKSSH_INSTALL_RESTART_SSH
     unset OPKSSH_INSTALL_OVERWRITE_ACTIVE_CONFIG
@@ -22,6 +24,8 @@ test_global_variables() {
     assertEquals "Default AUTH_CMD_USER should be 'opksshuser'" "opksshuser" "$AUTH_CMD_USER"
     assertEquals "Default AUTH_CMD_GROUP should be 'opksshuser'" "opksshuser" "$AUTH_CMD_GROUP"
     assertEquals "Default SUDOERS_PATH should be '/etc/sudoers.d/opkssh'" "/etc/sudoers.d/opkssh" "$SUDOERS_PATH"
+    assertEquals "Default CACHE_DIR should be empty" "" "$CACHE_DIR"
+    assertEquals "Default CACHE_CLEAN_ON_CALENDAR should be 'daily'" "daily" "$CACHE_CLEAN_ON_CALENDAR"
     assertEquals "Default HOME_POLICY should be 'true'" "true" "$HOME_POLICY"
     assertEquals "Default RESTART_SSH should be 'true'" "true" "$RESTART_SSH"
     assertEquals "Default OVERWRITE_ACTIVE_CONFIG should be 'false'" "false" "$OVERWRITE_ACTIVE_CONFIG"
@@ -38,6 +42,8 @@ test_global_variables_env_override() {
     export OPKSSH_INSTALL_AUTH_CMD_USER="testuser"
     export OPKSSH_INSTALL_AUTH_CMD_GROUP="testgroup"
     export OPKSSH_INSTALL_SUDOERS_PATH="/tmp/sudoers"
+    export OPKSSH_INSTALL_CACHE_DIR="/tmp/opkssh-cache"
+    export OPKSSH_INSTALL_CACHE_CLEAN_ON_CALENDAR="weekly"
     export OPKSSH_INSTALL_HOME_POLICY="false"
     export OPKSSH_INSTALL_RESTART_SSH="false"
     export OPKSSH_INSTALL_OVERWRITE_ACTIVE_CONFIG="true"
@@ -54,6 +60,8 @@ test_global_variables_env_override() {
     assertEquals "AUTH_CMD_USER should be overridden to 'testuser'" "testuser" "$AUTH_CMD_USER"
     assertEquals "AUTH_CMD_GROUP should be overridden to 'testgroup'" "testgroup" "$AUTH_CMD_GROUP"
     assertEquals "SUDOERS_PATH should be overridden to '/tmp/sudoers'" "/tmp/sudoers" "$SUDOERS_PATH"
+    assertEquals "CACHE_DIR should be overridden to '/tmp/opkssh-cache'" "/tmp/opkssh-cache" "$CACHE_DIR"
+    assertEquals "CACHE_CLEAN_ON_CALENDAR should be overridden to 'weekly'" "weekly" "$CACHE_CLEAN_ON_CALENDAR"
     assertEquals "HOME_POLICY should be overridden to 'false'" "false" "$HOME_POLICY"
     assertEquals "RESTART_SSH should be overridden to 'false'" "false" "$RESTART_SSH"
     assertEquals "OVERWRITE_ACTIVE_CONFIG should be overridden to 'true'" "true" "$OVERWRITE_ACTIVE_CONFIG"

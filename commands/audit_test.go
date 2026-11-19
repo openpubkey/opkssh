@@ -19,10 +19,13 @@ package commands
 import (
 	"bytes"
 	_ "embed"
+	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/openpubkey/opkssh/commands/config"
 	"github.com/openpubkey/opkssh/policy"
 	"github.com/openpubkey/opkssh/policy/files"
 	"github.com/spf13/afero"
@@ -106,18 +109,27 @@ func SetupAuditCmdMocks(t *testing.T, etcPasswdContent string, providerContent s
 func TestAuditCmd(t *testing.T) {
 	t.Parallel()
 
+	defaultConfig, err := config.NewClientConfig(config.DefaultClientConfig)
+	require.NoError(t, err)
+	googleDefault, ok := defaultConfig.GetByIssuer("https://accounts.google.com")
+	require.True(t, ok)
+	gitlabDefault, ok := defaultConfig.GetByIssuer("https://gitlab.com")
+	require.True(t, ok)
+	providersPath := strings.ReplaceAll(policy.SystemDefaultProvidersPath, string(filepath.Separator), "/")
+
 	tests := []struct {
-		name                   string
-		providerContent        string
-		SystemPolicyContent    string
-		currentUsername        string
-		hasUserAuthID          bool
-		jsonOutput             bool
-		expectedSuccessCount   int
-		expectedWarningCount   int
-		expectedErrorCount     int
-		expectedStdOutContains []string
-		expectedStdErrContains []string
+		name                         string
+		providerContent              string
+		SystemPolicyContent          string
+		currentUsername              string
+		hasUserAuthID                bool
+		jsonOutput                   bool
+		expectedSuccessCount         int
+		expectedWarningCount         int
+		expectedErrorCount           int
+		expectedProviderWarningCount int
+		expectedStdOutContains       []string
+		expectedStdErrContains       []string
 	}{
 		{
 			name: "Valid configuration",
@@ -185,6 +197,54 @@ func TestAuditCmd(t *testing.T) {
 			},
 		},
 		{
+			name: "Provider with a default client ID",
+			providerContent: "https://accounts.google.com " + googleDefault.ClientID + " 24h\n" +
+				"https://auth.example.com example-client-id 24h",
+			SystemPolicyContent:          `root alice@mail.com https://accounts.google.com`,
+			currentUsername:              "testuser",
+			expectedSuccessCount:         1,
+			expectedProviderWarningCount: 1,
+			expectedStdOutContains: []string{
+				"[OK] SUCCESS",
+				"Warnings:              0",
+				"Provider Warnings:     1",
+				"(warnings detected)",
+			},
+			expectedStdErrContains: []string{
+				"warning: " + providersPath + " trusts https://accounts.google.com with opkssh's default client ID " + googleDefault.ClientID + "\n",
+				"intended for testing and should not be used in production",
+			},
+		},
+		{
+			name: "Providers with two default client IDs",
+			providerContent: "https://accounts.google.com " + googleDefault.ClientID + " 24h\n" +
+				"https://gitlab.com " + gitlabDefault.ClientID + " 24h",
+			SystemPolicyContent:          `root alice@mail.com https://accounts.google.com`,
+			currentUsername:              "testuser",
+			expectedSuccessCount:         1,
+			expectedProviderWarningCount: 2,
+			expectedStdOutContains: []string{
+				"Provider Warnings:     2",
+			},
+			expectedStdErrContains: []string{
+				"trusts https://accounts.google.com with opkssh's default client ID",
+				"trusts https://gitlab.com with opkssh's default client ID",
+			},
+		},
+		{
+			name:                         "Provider with a default client ID (Json Output)",
+			providerContent:              "https://accounts.google.com " + googleDefault.ClientID + " 24h",
+			SystemPolicyContent:          `root alice@mail.com https://accounts.google.com`,
+			currentUsername:              "testuser",
+			jsonOutput:                   true,
+			expectedSuccessCount:         1,
+			expectedProviderWarningCount: 1,
+			expectedStdOutContains: []string{
+				"{\n  \"ok\": false,",
+				"\"warnings\": [",
+			},
+		},
+		{
 			name: "Json Output (happy path)",
 			providerContent: `https://accounts.google.com google-client-id 24h
 		https://auth.example.com example-client-id 24h`,
@@ -222,10 +282,21 @@ func TestAuditCmd(t *testing.T) {
 			errOutput := errOut.String()
 
 			// Verify exit code is 0 for successful audit (no errors/warnings)
-			if tt.expectedErrorCount == 0 && tt.expectedWarningCount == 0 {
+			if tt.expectedErrorCount == 0 && tt.expectedWarningCount == 0 && tt.expectedProviderWarningCount == 0 {
 				require.NoError(t, runErr, "Expected no error when audit finds no errors or warnings")
-			} else if tt.expectedErrorCount > 0 || tt.expectedWarningCount > 0 {
+			} else {
 				require.Error(t, runErr, "Expected error when audit finds errors or warnings")
+			}
+
+			// In JSON mode stdout must be exactly one JSON document, so that
+			// `opkssh audit --json 2>/dev/null` can be piped to a parser
+			if tt.jsonOutput {
+				var parsed TotalResults
+				decoder := json.NewDecoder(bytes.NewReader(stdOut.Bytes()))
+				decoder.DisallowUnknownFields()
+				require.NoError(t, decoder.Decode(&parsed), "Expected stdOut to be valid JSON:\n%s", stdOut.String())
+				require.False(t, decoder.More(), "Expected nothing after the JSON document on stdOut:\n%s", stdOut.String())
+				require.Len(t, parsed.ProviderFile.Warnings, tt.expectedProviderWarningCount)
 			}
 
 			// Normalize paths in output for cross-platform compatibility
@@ -279,6 +350,16 @@ func TestAuditCmdJson(t *testing.T) {
 			expOk:                      false,
 			expUsername:                "testuser",
 			expSystemPolicyFileRowsLen: 2,
+		},
+		{
+			name:                       "Default client ID in providers",
+			passwordContent:            string(etcPasswdMock),
+			providerContent:            `https://accounts.google.com ` + googleDefaultClientID(t) + ` 24h`,
+			systemPolicyContent:        `root alice@mail.com https://accounts.google.com`,
+			currentUsername:            "testuser",
+			expOk:                      false,
+			expUsername:                "testuser",
+			expSystemPolicyFileRowsLen: 1,
 		},
 		{
 			name:            "Bad system policy",
@@ -356,4 +437,62 @@ func TestGetHomeDirsFromEtcPasswd(t *testing.T) {
 	require.Equal(t, "/home/bob", homeDirs[3].HomeDir)
 	require.Equal(t, "carol", homeDirs[4].Username)
 	require.Equal(t, "/home/carol", homeDirs[4].HomeDir)
+}
+
+func googleDefaultClientID(t *testing.T) string {
+	defaultConfig, err := config.NewClientConfig(config.DefaultClientConfig)
+	require.NoError(t, err)
+	google, ok := defaultConfig.GetByIssuer("https://accounts.google.com")
+	require.True(t, ok)
+	return google.ClientID
+}
+
+func TestDefaultClientIDWarnings(t *testing.T) {
+	t.Parallel()
+
+	defaultConfig, err := config.NewClientConfig(config.DefaultClientConfig)
+	require.NoError(t, err)
+	microsoft, ok := defaultConfig.GetByIssuer("https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0")
+	require.True(t, ok)
+
+	rows := []policy.ProvidersRow{
+		{Issuer: "https://accounts.google.com", ClientID: googleDefaultClientID(t), ExpirationPolicy: "24h"},
+		// opkssh's Microsoft client ID with another tenant's issuer
+		{Issuer: "https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/v2.0", ClientID: microsoft.ClientID, ExpirationPolicy: "24h"},
+		// Own client ID and a GitLab CI audience: not flagged
+		{Issuer: "https://accounts.google.com", ClientID: "own-id.apps.googleusercontent.com", ExpirationPolicy: "24h"},
+		{Issuer: "https://gitlab.com", ClientID: "OPENPUBKEY-PKTOKEN:GITLAB-CI:ssh-deploy-prod", ExpirationPolicy: "oidc"},
+	}
+	warnings := defaultClientIDWarnings("/etc/opk/providers", rows)
+	require.Equal(t, []string{
+		"/etc/opk/providers trusts https://accounts.google.com with opkssh's default client ID " + googleDefaultClientID(t),
+		"/etc/opk/providers trusts https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/v2.0 with opkssh's default client ID " + microsoft.ClientID,
+	}, warnings)
+
+	require.Empty(t, defaultClientIDWarnings("/etc/opk/providers", rows[2:]))
+}
+
+func TestAuditCmdDefaultClientIDExplanationOnce(t *testing.T) {
+	t.Parallel()
+
+	defaultConfig, err := config.NewClientConfig(config.DefaultClientConfig)
+	require.NoError(t, err)
+	var providerContent strings.Builder
+	for _, provider := range defaultConfig.Providers {
+		providerContent.WriteString(provider.Issuer + " " + provider.ClientID + " 24h\n")
+	}
+
+	stdOut := &bytes.Buffer{}
+	errOut := &bytes.Buffer{}
+	auditCmd := SetupAuditCmdMocks(t, string(etcPasswdMock), providerContent.String(), "")
+	auditCmd.Out = stdOut
+	auditCmd.ErrOut = errOut
+	auditCmd.CurrentUsername = "testuser"
+
+	err = auditCmd.Run("test_version")
+	require.EqualError(t, err, "audit completed and discovered warnings")
+	require.Equal(t, len(defaultConfig.Providers), strings.Count(errOut.String(), "warning: "))
+	require.Equal(t, 1, strings.Count(errOut.String(), defaultClientIDExplanation))
+	require.Contains(t, stdOut.String(), "Errors:                0")
+	require.Contains(t, stdOut.String(), fmt.Sprintf("Provider Warnings:     %d", len(defaultConfig.Providers)))
 }

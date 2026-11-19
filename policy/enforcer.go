@@ -34,6 +34,11 @@ import (
 const (
 	OIDC_CLAIMS         = "oidc:"
 	OIDC_WILDCARD_EMAIL = "oidc-match-end:email:"
+	REPO_CLAIM          = "repo:"
+
+	// EMAIL_VERIFIED_CLAIM is read out of ExtraClaims, where a bool and a
+	// string value both end up normalized to a string.
+	EMAIL_VERIFIED_CLAIM = "email_verified"
 )
 
 // DenyList represents the DenyLists in the server config
@@ -128,20 +133,43 @@ func EscapedSplit(s string, sep rune) []string {
 // Validates that the server defined identity attribute matches the
 // respective claim from the identity token
 func validateClaim(claims *checkedClaims, user *User) bool {
+	// An empty identity attribute must never match; otherwise a policy row
+	// with an empty value matches any token that carries no email claim
+	if user.IdentityAttribute == "" {
+		log.Printf("warning: skipping policy row with empty identity attribute")
+		return false
+	}
 	// Should we match on the email claim?
 	if strings.HasPrefix(claims.Email, OIDC_WILDCARD_EMAIL) {
+		return false
+	}
+	if strings.EqualFold(user.IdentityAttribute, OIDC_WILDCARD_EMAIL) ||
+		strings.EqualFold(user.IdentityAttribute, OIDC_CLAIMS) ||
+		strings.EqualFold(user.IdentityAttribute, REPO_CLAIM) {
+		// If the policy is set to match any value, this is unsafe and we should fail
+		log.Printf("error: rejecting unsafe match - policy (%q) matches any value:", user.IdentityAttribute)
 		return false
 	}
 
 	// Should we match on an oidc claim?
 	if strings.HasPrefix(user.IdentityAttribute, OIDC_CLAIMS) {
 		oidcGroupSections := EscapedSplit(user.IdentityAttribute, ':')
-		oidcGroupsName := strings.Trim(oidcGroupSections[1], "\"")
+		// A well formed row is oidc:<claim>:<value>. A claim name or value
+		// containing ':' must reach here in double quotes, written as \" in the
+		// policy file. Any other number of sections is malformed: the policy
+		// file parser removes plain double quotes, and matching one section of
+		// a value such as org:admins would grant a different group.
+		var oidcGroupsName, oidcGroupValue string
+		if len(oidcGroupSections) == 3 {
+			oidcGroupsName = strings.Trim(oidcGroupSections[1], "\"")
+			oidcGroupValue = strings.Trim(oidcGroupSections[2], "\"")
+		}
+		if oidcGroupValue == "" {
+			log.Printf("warning: malformed oidc identity attribute %q in policy, expected oidc:<claim>:<value>", user.IdentityAttribute)
+			return false
+		}
 
-		return slices.Contains(
-			claims.ExtraClaims[oidcGroupsName],
-			oidcGroupSections[len(oidcGroupSections)-1],
-		)
+		return slices.Contains(claims.ExtraClaims[oidcGroupsName], oidcGroupValue)
 	}
 
 	// Should we match on the email wildcard claim?
@@ -153,7 +181,7 @@ func validateClaim(claims *checkedClaims, user *User) bool {
 	}
 
 	// Should we match on a glob pattern for the sub claim?
-	if strings.HasPrefix(user.IdentityAttribute, "repo:") {
+	if strings.HasPrefix(user.IdentityAttribute, REPO_CLAIM) {
 		if matched, err := path.Match(user.IdentityAttribute, string(claims.Sub)); err != nil {
 			log.Printf("warning: invalid glob pattern %q in policy: %v", user.IdentityAttribute, err)
 		} else if matched {
@@ -163,7 +191,34 @@ func validateClaim(claims *checkedClaims, user *User) bool {
 
 	// email should be a case-insensitive check
 	// sub should be a case-sensitive check
-	return wildCardEmailMatch || strings.EqualFold(claims.Email, user.IdentityAttribute) || string(claims.Sub) == user.IdentityAttribute
+	emailMatch := wildCardEmailMatch || strings.EqualFold(claims.Email, user.IdentityAttribute)
+	if emailMatch {
+		// We still allow the match. An OP that is authoritative for a domain
+		// may leave email_verified out, or set it to false, and still be the
+		// right source of truth for that email, so this is the admin's call.
+		// Surface it so the choice is visible.
+		warnIfEmailUnverified(claims, user.IdentityAttribute)
+	}
+
+	return emailMatch || string(claims.Sub) == user.IdentityAttribute
+}
+
+// warnIfEmailUnverified logs when a policy row matched on the email claim but
+// the ID Token does not assert that the email was verified. Admins who want
+// this enforced rather than logged should match on sub or use a policy plugin.
+//
+// The value is read from ExtraClaims rather than a typed struct field because
+// some OPs send email_verified as the string "true" rather than a bool, and
+// unmarshalling that into a bool would fail the whole token. ExtraClaims
+// normalizes both shapes to a string.
+func warnIfEmailUnverified(claims *checkedClaims, identityAttribute string) {
+	values, ok := claims.ExtraClaims[EMAIL_VERIFIED_CLAIM]
+	switch {
+	case !ok || len(values) == 0:
+		log.Printf("warning: policy %q matched on email %q but the ID Token has no email_verified claim, consider matching on sub instead", identityAttribute, claims.Email)
+	case !strings.EqualFold(values[0], "true"):
+		log.Printf("warning: policy %q matched on email %q but the ID Token sets email_verified to %q, consider matching on sub instead", identityAttribute, claims.Email, values[0])
+	}
 }
 
 // CheckPolicy loads opkssh policy and checks to see if there is a policy
@@ -188,6 +243,14 @@ func (p *Enforcer) CheckPolicy(principalDesired string, pkt *pktoken.PKToken, us
 
 	// Enforce deny list first
 	for _, email := range denyList.Emails {
+		if claims.Email == "" {
+			// If the email denylist is non-empty, clearly the admin wants to reject
+			// particular emails. To prevent a user with a denied email from
+			// bypassing the check by simply requesting an ID Token without
+			// the email scope we must reject all ID Tokens with an empty email
+			// if the email denylist has any entries.
+			return fmt.Errorf("email claim is empty and email deny list is set")
+		}
 		if strings.EqualFold(claims.Email, email) {
 			return fmt.Errorf("denied email %s", email)
 		}
