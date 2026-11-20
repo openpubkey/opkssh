@@ -13,7 +13,7 @@ To ssh with opkssh you first need to download the opkssh binary and then run:
 opkssh login
 ```
 
-This opens a browser window where you can authenticate to your OpenID Provider. This will generate an SSH key in `~/.ssh/id_ecdsa` which contains your OpenID Connect identity.
+This opens a browser window where you can authenticate to your OpenID Provider. This will generate an SSH certificate in `~/.ssh/id_ecdsa-cert.pub` which contains your OpenID Connect identity.
 Then you can ssh under this identity to any ssh server which is configured to use opkssh to authenticate users using their OpenID Connect identities.
 
 ```bash
@@ -115,7 +115,7 @@ Since your PK Token has been saved as an SSH key you can SSH as normal:
 ssh root@example.com
 ```
 
-This works because SSH sends the public key written by opkssh in `~/.ssh/id_ecdsa` to the server and sshd running on the server will send the public key to the opkssh command to verify. This also works for other protocols that build on ssh like [sftp](https://en.wikipedia.org/wiki/SSH_File_Transfer_Protocol) or ssh tunnels.
+This works because SSH sends the certificate written by opkssh in `~/.ssh/id_ecdsa-cert.pub` containing the public key to the server and sshd running on the server will send this to the opkssh command to verify. This also works for other protocols that build on ssh like [sftp](https://en.wikipedia.org/wiki/SSH_File_Transfer_Protocol) or ssh tunnels.
 
 ```bash
 sftp root@example.com
